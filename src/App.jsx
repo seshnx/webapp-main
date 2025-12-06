@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, updateDoc } from 'firebase/firestore';
-import { ConvexProvider } from "convex/react";
+import { ConvexProvider, useQuery, useMutation  } from "convex/react";
 import { app, appId } from './config/firebase';
 import { convex } from './config/convex';
 import { Loader2 } from 'lucide-react';
