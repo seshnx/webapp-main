@@ -1,11 +1,18 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { ConvexProvider } from "convex/react"
 import App from './App.jsx'
+import { convex } from './config/convex'
+import ErrorBoundary from './components/shared/ErrorBoundary'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <App />
+    <ErrorBoundary name="Root">
+      <ConvexProvider client={convex}>
+        <App />
+      </ConvexProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 )
 

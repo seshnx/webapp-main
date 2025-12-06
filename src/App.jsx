@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, updateDoc } from 'firebase/firestore';
-import { ConvexProvider, useQuery, useMutation  } from "convex/react";
 import { app, appId } from './config/firebase';
-import { convex } from './config/convex';
 import { Loader2 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
@@ -165,6 +163,7 @@ export default function App() {
   };
 
   // --- RENDER HELPERS ---
+  // ConvexProvider is now at root level in main.jsx, so hooks work everywhere
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
   if (!user) return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} />;
   if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} />;
@@ -312,18 +311,7 @@ export default function App() {
     </SchoolProvider>
   );
 
-  // Always wrap with ConvexProvider - hooks require it even if Convex isn't configured
-  // The client will be created with a placeholder URL if CONVEX_DEPLOY_KEY isn't set
-  return (
-    <ErrorBoundary 
-      name="App" 
-      context={{ 
-        userId: user?.uid, 
-        activeTab,
-        userAccountTypes: userData?.accountTypes 
-      }}
-    >
-      <ConvexProvider client={convex}>{appContent}</ConvexProvider>
-    </ErrorBoundary>
-  );
+  // ConvexProvider is now at root level in main.jsx
+  // ErrorBoundary is also at root, so we just return the app content
+  return appContent;
 }
