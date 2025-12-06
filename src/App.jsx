@@ -176,144 +176,72 @@ export default function App() {
   if (!user) return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} />;
   if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} />;
 
-  // Render Logic with Suspense for lazy-loaded components
-  const renderContent = () => {
+  // Render Logic - determine which component to render
+  const getContentComponent = () => {
     // 1. EDU Routing (Handles all edu-* sub-routes)
     if (activeTab.startsWith('edu-')) {
         if (activeTab === 'edu-enroll') {
-          return (
-            <Suspense fallback={<RouteLoader />}>
-              <StudentEnrollment user={user} userData={userData} />
-            </Suspense>
-          );
+          return <StudentEnrollment user={user} userData={userData} />;
         }
         
         if (userData?.accountTypes?.includes('Admin')) {
-          return (
-            <Suspense fallback={<RouteLoader />}>
-              <EduAdminDashboard user={user} userData={userData} currentView={activeTab} />
-            </Suspense>
-          );
+          return <EduAdminDashboard user={user} userData={userData} currentView={activeTab} />;
         }
         if (userData?.accountTypes?.includes('Instructor')) {
-          return (
-            <Suspense fallback={<RouteLoader />}>
-              <EduStaffDashboard user={user} userData={userData} currentView={activeTab} />
-            </Suspense>
-          );
+          return <EduStaffDashboard user={user} userData={userData} currentView={activeTab} />;
         }
         if (userData?.accountTypes?.includes('Intern')) {
-          return (
-            <Suspense fallback={<RouteLoader />}>
-              <EduInternDashboard user={user} userData={userData} currentView={activeTab} />
-            </Suspense>
-          );
+          return <EduInternDashboard user={user} userData={userData} currentView={activeTab} />;
         }
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <EduStudentDashboard user={user} userData={userData} />
-          </Suspense>
-        );
+        return <EduStudentDashboard user={user} userData={userData} />;
     }
 
     // 2. Main App Routing
     switch (activeTab) {
       case 'dashboard': 
       case 'home': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <Dashboard 
-              user={user} 
-              userData={userData} 
-              subProfiles={subProfiles} 
-              notifications={notifications} 
-              setActiveTab={setActiveTab} 
-              tokenBalance={tokenBalance}
-            />
-          </Suspense>
-        );
+        return <Dashboard 
+                  user={user} 
+                  userData={userData} 
+                  subProfiles={subProfiles} 
+                  notifications={notifications} 
+                  setActiveTab={setActiveTab} 
+                  tokenBalance={tokenBalance}
+                />;
       
       case 'feed': 
       case 'social': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />
-          </Suspense>
-        );
+        return <SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />;
       
       case 'bookings': 
       case 'find-talent': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />
-          </Suspense>
-        );
+        return <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />;
       
       case 'marketplace': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />
-          </Suspense>
-        );
+        return <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />;
       case 'messages': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <ChatInterface user={user} userData={userData} openPublicProfile={openPublicProfile} />
-          </Suspense>
-        );
+        return <ChatInterface user={user} userData={userData} openPublicProfile={openPublicProfile} />;
       case 'tech': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <TechServices user={user} userData={userData} />
-          </Suspense>
-        );
+        return <TechServices user={user} userData={userData} />;
       
       case 'studio-ops': 
       case 'studio-manager': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <StudioManager user={user} userData={userData} />
-          </Suspense>
-        );
+        return <StudioManager user={user} userData={userData} />;
       
       case 'label-manager': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <LabelManager user={user} userData={userData} />
-          </Suspense>
-        );
+        return <LabelManager user={user} userData={userData} />;
       case 'payments': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <PaymentsManager user={user} userData={userData} />
-          </Suspense>
-        );
+        return <PaymentsManager user={user} userData={userData} />;
       
       case 'profile': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />
-          </Suspense>
-        );
+        return <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />;
       case 'settings': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />
-          </Suspense>
-        );
+        return <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />;
       case 'legal': 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <LegalDocs />
-          </Suspense>
-        );
+        return <LegalDocs />;
 
       default: 
-        return (
-          <Suspense fallback={<RouteLoader />}>
-            <Dashboard user={user} userData={userData} setActiveTab={setActiveTab} subProfiles={subProfiles} notifications={notifications} />
-          </Suspense>
-        );
+        return <Dashboard user={user} userData={userData} setActiveTab={setActiveTab} subProfiles={subProfiles} notifications={notifications} />;
     }
   };
 
@@ -375,7 +303,9 @@ export default function App() {
             <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth" id="main-scroll">
                 <AnimatePresence mode="wait">
                     <PageTransition key={activeTab} className="max-w-7xl mx-auto">
-                        {renderContent()}
+                        <Suspense fallback={<RouteLoader />}>
+                            {getContentComponent()}
+                        </Suspense>
                     </PageTransition>
                 </AnimatePresence>
             </main>
