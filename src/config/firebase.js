@@ -1,9 +1,11 @@
-import { initializeApp } from 'firebase/app';
+{
+type: "file",
+fileName: "seshnx/webapp-main/webapp-main-236ddb9004a501645414af15ee480926c0cb06e0/src/config/firebase.js",
+content: import { initializeApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
-import { getStripePayments } from '@stripe/firestore-stripe-payments';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -48,10 +50,6 @@ try {
   rtdb = null;
 }
 export { rtdb }; 
-export const payments = getStripePayments(app, {
-  productsCollection: 'products',
-  customersCollection: 'customers',
-});
 
 export const appId = firebaseConfig.projectId;
 
@@ -103,3 +101,4 @@ export const getPaths = (uid) => ({
   notifications: `artifacts/${appId}/users/${uid}/notifications`,
   savedPosts: `artifacts/${appId}/users/${uid}/savedPosts`,
 });
+}
