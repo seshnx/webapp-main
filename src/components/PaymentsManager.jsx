@@ -1,7 +1,4 @@
-{
-type: "file",
-fileName: "seshnx/webapp-main/webapp-main-236ddb9004a501645414af15ee480926c0cb06e0/src/components/PaymentsManager.jsx",
-content: import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { Check, Plus, Zap, TrendingUp, DollarSign, Loader2, Shield, Star, Lock, ArrowRight, AlertCircle } from 'lucide-react';
@@ -264,5 +261,4 @@ export default function PaymentsManager({ user, userData }) {
           )}
       </div>
   );
-}
 }
