@@ -17,7 +17,6 @@
     "react-router-dom": "^6.22.1",
     "wavesurfer.js": "^7.7.0",
     "framer-motion": "^11.0.0",
-    "@stripe/firestore-stripe-payments": "^0.0.6",
     "@stripe/react-stripe-js": "^2.5.0",
     "@stripe/stripe-js": "^3.0.7",
     "react-hook-form": "^7.51.0",
