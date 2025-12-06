@@ -13,16 +13,15 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Stub convex/server for browser builds (it's only used in generated API files)
+      'convex/server': path.resolve(__dirname, './convex/_generated/server-stub.js'),
     },
   },
   build: {
     rollupOptions: {
       external: (id) => {
-        // Only exclude Convex server-side code from bundling
-        // convex/react is client-side and MUST be bundled
-        if (id.includes('convex/server')) {
-          return true;
-        }
+        // Don't externalize convex/server - we're using a stub instead
+        // Only externalize if it's a different pattern
         return false;
       },
     },
