@@ -40,84 +40,37 @@ export const db = firestoreDb;
 // export const functions = null; // Removed export to prevent null access errors
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
-// Use lazy initialization with Object.defineProperty to prevent Firebase validation errors
-// Services are only created when actually accessed, avoiding _checkNotDeleted errors
-let _storageInstance = null;
-let _rtdbInstance = null;
-let _storageInitialized = false;
-let _rtdbInitialized = false;
+// Only initialize if services are properly configured to avoid Firebase validation errors
+// Export null if services are not available - consuming code must check for null
+let storageInstance = null;
+let rtdbInstance = null;
 
-// Lazy initialization for Storage
-const getStorageInstance = () => {
-  if (_storageInitialized) return _storageInstance;
-  _storageInitialized = true;
-  
-  if (!firebaseConfig.storageBucket || firebaseConfig.storageBucket.trim() === '') {
-    _storageInstance = null;
-    return null;
-  }
-  
+// Initialize Storage only if storageBucket is configured
+// Don't attempt initialization if config is missing to prevent Firebase errors
+if (firebaseConfig.storageBucket && firebaseConfig.storageBucket.trim() !== '') {
   try {
-    _storageInstance = getStorage(app);
-    return _storageInstance;
+    storageInstance = getStorage(app);
   } catch (error) {
-    _storageInstance = null;
-    return null;
+    // Service not available - expected if Storage is not enabled in Firebase project
+    storageInstance = null;
   }
-};
+}
 
-// Lazy initialization for RTDB
-const getRtdbInstance = () => {
-  if (_rtdbInitialized) return _rtdbInstance;
-  _rtdbInitialized = true;
-  
-  if (!firebaseConfig.projectId || firebaseConfig.projectId.trim() === '') {
-    _rtdbInstance = null;
-    return null;
-  }
-  
+// Initialize RTDB only if projectId is configured
+// Don't attempt initialization if config is missing to prevent Firebase errors
+if (firebaseConfig.projectId && firebaseConfig.projectId.trim() !== '') {
   try {
-    _rtdbInstance = getDatabase(app);
-    return _rtdbInstance;
+    rtdbInstance = getDatabase(app);
   } catch (error) {
-    _rtdbInstance = null;
-    return null;
+    // Service not available - expected if RTDB is not enabled in Firebase project
+    rtdbInstance = null;
   }
-};
+}
 
-// Export with Proxy for lazy initialization
-// This prevents Firebase from validating services until they're actually used
-export const storage = new Proxy({}, {
-  get(target, prop) {
-    // Skip special properties
-    if (prop === 'constructor' || prop === '__proto__' || prop === Symbol.toStringTag) {
-      return undefined;
-    }
-    const instance = getStorageInstance();
-    if (!instance) {
-      return undefined;
-    }
-    const value = instance[prop];
-    // Bind methods to the instance to maintain 'this' context
-    return typeof value === 'function' ? value.bind(instance) : value;
-  }
-});
-
-export const rtdb = new Proxy({}, {
-  get(target, prop) {
-    // Skip special properties
-    if (prop === 'constructor' || prop === '__proto__' || prop === Symbol.toStringTag) {
-      return undefined;
-    }
-    const instance = getRtdbInstance();
-    if (!instance) {
-      return undefined;
-    }
-    const value = instance[prop];
-    // Bind methods to the instance to maintain 'this' context
-    return typeof value === 'function' ? value.bind(instance) : value;
-  }
-});
+// Export services - will be null if not available
+// All consuming code must check for null before using these services
+export const storage = storageInstance;
+export const rtdb = rtdbInstance;
 export const appId = firebaseConfig.projectId;
 
 export const getPaths = (uid) => ({
