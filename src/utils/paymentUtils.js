@@ -1,6 +1,6 @@
 import { loadStripe } from '@stripe/stripe-js';
 // import { httpsCallable } from 'firebase/functions';
-import { functions } from '../config/firebase'; 
+// import { functions } from '../config/firebase'; // TEMPORARILY DISABLED
 import { STRIPE_PUBLIC_KEY } from '../config/constants';
 
 let stripePromise;

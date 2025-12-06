@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 // import { httpsCallable } from 'firebase/functions';
 import { Check, Plus, Zap, TrendingUp, DollarSign, Loader2, Shield, Star, Lock, ArrowRight, AlertCircle } from 'lucide-react';
-import { db, getPaths, functions } from '../config/firebase'; 
+import { db, getPaths } from '../config/firebase';
+// import { functions } from '../config/firebase'; // TEMPORARILY DISABLED 
 import { SUBSCRIPTION_PLAN_KEYS } from '../config/constants';
 import { useDynamicConfig } from '../hooks/useDynamicConfig';
 import { handlePayout } from '../utils/paymentUtils';

@@ -37,7 +37,7 @@ export const db = firestoreDb;
 // Export functions globally again, now that app is guaranteed to be stable
 // TEMPORARILY DISABLED: Firebase Functions service not available
 // export const functions = getFunctions(app);
-export const functions = null;
+// export const functions = null; // Removed export to prevent null access errors
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
 let storageInstance = null;

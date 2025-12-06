@@ -169,10 +169,10 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             link.href = url;
             link.download = `seshnx_data_export_${new Date().toISOString().slice(0,10)}.json`;
             document.body.appendChild(link);
-            link.click(); */
+            link.click();
             document.body.removeChild(link);
             
-            alert("Your data has been downloaded successfully.");
+            alert("Your data has been downloaded successfully."); */
         } catch (e) {
             console.error(e);
             alert("Failed to export data. Please try again later.");
