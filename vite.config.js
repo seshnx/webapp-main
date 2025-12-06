@@ -18,8 +18,9 @@ export default defineConfig({
   build: {
     rollupOptions: {
       external: (id) => {
-        // Exclude all Convex server-side code from bundling
-        if (id.includes('convex/server') || (id.startsWith('convex/') && !id.includes('_generated/api'))) {
+        // Only exclude Convex server-side code from bundling
+        // convex/react is client-side and MUST be bundled
+        if (id.includes('convex/server')) {
           return true;
         }
         return false;
@@ -28,6 +29,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['convex/server'],
+    include: ['convex/react'],
   },
   plugins: [
     react(),
