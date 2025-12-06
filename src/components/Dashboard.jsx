@@ -51,7 +51,11 @@ export default function Dashboard({
 
   // 1. Fetch Recent Conversations
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid || !rtdb) {
+      // RTDB not available - set empty conversations
+      setRecentConvos([]);
+      return;
+    }
     
     const convosRef = rtdbQuery(
         ref(rtdb, `conversations/${user.uid}`),
@@ -78,7 +82,7 @@ export default function Dashboard({
     });
 
     return () => unsubscribe();
-  }, [user?.uid]);
+  }, [user?.uid, rtdb]);
 
   // 2. Fetch Trending Marketplace Item
   useEffect(() => {
