@@ -1,4 +1,7 @@
-const functions = require('firebase-functions');
+{
+type: "file",
+fileName: "seshnx/webapp-main/webapp-main-236ddb9004a501645414af15ee480926c0cb06e0/functions/index.js",
+content: const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 
@@ -660,3 +663,36 @@ exports.fanOutInboxUpdates = functions.database
 
         return admin.database().ref().update(updates);
     });
+
+exports.createStripeCheckoutSession = functions.https.onCall(async (data, context) => {
+    if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'User must be logged in.');
+
+    const { price, mode, success_url, cancel_url } = data;
+    const userId = context.auth.uid;
+    const email = context.auth.token.email;
+
+    try {
+        const session = await stripe.checkout.sessions.create({
+            mode: mode,
+            payment_method_types: ['card'],
+            customer_email: email,
+            line_items: [
+                {
+                    price: price,
+                    quantity: 1,
+                },
+            ],
+            success_url: success_url,
+            cancel_url: cancel_url,
+            metadata: {
+                userId: userId
+            }
+        });
+        
+        return { url: session.url };
+    } catch (error) {
+        console.error("Stripe Checkout Error:", error);
+        throw new functions.https.HttpsError('internal', error.message);
+    }
+});
+}
