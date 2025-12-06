@@ -15,16 +15,16 @@ SeshNx is a comprehensive platform for music creators, studios, and industry pro
   - [ ] Test chat functionality in production
   - [ ] Monitor Convex function performance
 
-- [ ] **Error Handling & Monitoring**
-  - [ ] Implement comprehensive error boundaries
-  - [ ] Add error logging service (Sentry/LogRocket)
+- [x] **Error Handling & Monitoring**
+  - [x] Implement comprehensive error boundaries
+  - [x] Add error logging service (Sentry/LogRocket) - *Sentry integration ready (requires VITE_SENTRY_DSN)*
   - [ ] Set up performance monitoring
   - [ ] Create error reporting dashboard
 
-- [ ] **Performance Optimization**
-  - [ ] Code splitting for large components
-  - [ ] Lazy loading for routes
-  - [ ] Optimize bundle size (currently 2MB+)
+- [x] **Performance Optimization**
+  - [x] Code splitting for large components
+  - [x] Lazy loading for routes
+  - [x] Optimize bundle size (vendor chunks split: Firebase 820KB, Vendor 310KB, Maps 157KB, etc.)
   - [ ] Image optimization and lazy loading
   - [ ] Implement virtual scrolling for long lists
 

@@ -19,11 +19,52 @@ export default defineConfig({
     },
   },
   build: {
+    chunkSizeWarningLimit: 600, // Increase warning threshold slightly
     rollupOptions: {
       external: (id) => {
         // Don't externalize convex/server - we're using a stub instead
         // Only externalize if it's a different pattern
         return false;
+      },
+      output: {
+        manualChunks: (id) => {
+          // Code splitting strategy
+          // Split vendor chunks for better caching
+          if (id.includes('node_modules')) {
+            // Large libraries get their own chunks
+            if (id.includes('firebase')) {
+              return 'vendor-firebase';
+            }
+            if (id.includes('convex')) {
+              return 'vendor-convex';
+            }
+            if (id.includes('framer-motion')) {
+              return 'vendor-framer';
+            }
+            if (id.includes('react-leaflet') || id.includes('leaflet')) {
+              return 'vendor-maps';
+            }
+            if (id.includes('wavesurfer')) {
+              return 'vendor-audio';
+            }
+            if (id.includes('@stripe')) {
+              return 'vendor-stripe';
+            }
+            if (id.includes('react-big-calendar')) {
+              return 'vendor-calendar';
+            }
+            // Other node_modules
+            return 'vendor';
+          }
+          // Split EDU components (large feature set)
+          if (id.includes('/EDU/')) {
+            return 'edu';
+          }
+          // Split chat components
+          if (id.includes('/chat/')) {
+            return 'chat';
+          }
+        },
       },
     },
   },

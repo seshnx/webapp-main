@@ -13,3 +13,8 @@ VITE_FIREBASE_MEASUREMENT_ID=G-7SP53NK9FM
 # Note: Vercel uses CONVEX_DEPLOY_KEY (not VITE_CONVEX_URL)
 CONVEX_DEPLOY_KEY=https://your-project.convex.cloud
 
+# Error Monitoring (Optional - Sentry)
+# Get your DSN from: https://sentry.io/settings/projects/
+# Leave empty if not using Sentry
+VITE_SENTRY_DSN=
+

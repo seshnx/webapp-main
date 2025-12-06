@@ -2,11 +2,50 @@
  * Error Reporting Utility
  * 
  * Centralized error logging and reporting service.
- * Currently logs to console, but can be extended to integrate with:
- * - Sentry
- * - LogRocket
- * - Custom error tracking service
+ * Supports:
+ * - Sentry (optional, if VITE_SENTRY_DSN is set)
+ * - Local storage for debugging
+ * - Console logging in development
  */
+
+// Lazy load Sentry to avoid bundling if not used
+let Sentry = null;
+const initSentry = async () => {
+  if (Sentry !== null) return Sentry; // Already initialized or attempted
+  
+  const dsn = import.meta.env.VITE_SENTRY_DSN;
+  if (!dsn) {
+    Sentry = false; // Mark as not available
+    return null;
+  }
+
+  try {
+    // Dynamic import to avoid bundling Sentry if not configured
+    const sentryModule = await import('@sentry/react');
+    Sentry = sentryModule;
+    
+    // Initialize Sentry if not already initialized
+    if (!sentryModule.getCurrentHub().getClient()) {
+      sentryModule.init({
+        dsn,
+        environment: import.meta.env.MODE || 'development',
+        tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0, // 10% in prod, 100% in dev
+        replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
+        replaysOnErrorSampleRate: 1.0, // Always capture replays on errors
+        integrations: [
+          new sentryModule.BrowserTracing(),
+          new sentryModule.Replay(),
+        ],
+      });
+    }
+    
+    return Sentry;
+  } catch (e) {
+    console.warn('Failed to initialize Sentry:', e);
+    Sentry = false; // Mark as failed
+    return null;
+  }
+};
 
 /**
  * Log an error with context
@@ -31,9 +70,23 @@ export const logError = (error, errorInfo = {}, context = {}) => {
     console.error('🚨 Error Reported:', errorData);
   }
 
-  // TODO: Integrate with error reporting service
-  // Example: Sentry.captureException(error, { extra: errorData });
-  // Example: LogRocket.captureException(error, { extra: errorData });
+  // Send to Sentry if available (async, non-blocking)
+  initSentry().then(sentry => {
+    if (sentry && sentry.captureException) {
+      sentry.captureException(error, {
+        extra: errorData,
+        tags: {
+          component: context.component || 'Unknown',
+          errorBoundary: context.errorBoundary || 'None',
+        },
+        contexts: {
+          custom: context,
+        },
+      });
+    }
+  }).catch(() => {
+    // Ignore Sentry errors
+  });
 
   // Store errors locally for debugging (limited to last 10)
   try {
@@ -70,7 +123,18 @@ export const reportEvent = (message, level = 'info', context = {}) => {
     );
   }
 
-  // TODO: Send to analytics/error tracking service
+  // Send to Sentry if available (async, non-blocking)
+  initSentry().then(sentry => {
+    if (sentry && sentry.captureMessage) {
+      sentry.captureMessage(message, {
+        level: level === 'error' ? 'error' : level === 'warning' ? 'warning' : 'info',
+        extra: eventData,
+      });
+    }
+  }).catch(() => {
+    // Ignore Sentry errors
+  });
+
   return eventData;
 };
 
