@@ -156,17 +156,36 @@ const initializeRTDB = () => {
     
     // More specific troubleshooting
     if (error.message.includes('Service database is not available')) {
-      console.error('🔍 DIAGNOSIS: Firebase cannot find the Realtime Database service');
-      console.error('   Possible causes:');
-      console.error('   1. Realtime Database API not enabled in Google Cloud Console');
-      console.error('   2. App was initialized before databaseURL was added (cache issue)');
-      console.error('   3. databaseURL mismatch between config and Firebase Console');
       console.error('');
-      console.error('   SOLUTIONS:');
-      console.error('   A. Enable Realtime Database API:');
-      console.error('      https://console.cloud.google.com/apis/library/firebasedatabase.googleapis.com?project=seshnx-db');
-      console.error('   B. Clear browser cache and hard refresh (Ctrl+Shift+R)');
-      console.error('   C. Verify databaseURL in Firebase Console matches:', dbURL);
+      console.error('🔍 DIAGNOSIS: Firebase SDK cannot access Realtime Database service');
+      console.error('   Configuration is correct ✓');
+      console.error('   App has databaseURL ✓');
+      console.error('   But service is not accessible ✗');
+      console.error('');
+      console.error('   MOST LIKELY CAUSES:');
+      console.error('   1. Database not fully provisioned (wait 5-10 minutes after creation)');
+      console.error('   2. Billing not enabled (RTDB requires billing account)');
+      console.error('   3. API key lacks RTDB permissions');
+      console.error('   4. Database region/state issue');
+      console.error('');
+      console.error('   VERIFICATION STEPS:');
+      console.error('   A. Check Firebase Console → Realtime Database:');
+      console.error('      https://console.firebase.google.com/project/seshnx-db/database');
+      console.error('      → Database should show as "Active" (not "Creating")');
+      console.error('      → URL should match:', dbURL);
+      console.error('');
+      console.error('   B. Check Google Cloud Console → Billing:');
+      console.error('      https://console.cloud.google.com/billing?project=seshnx-db');
+      console.error('      → Billing account must be linked (required for RTDB)');
+      console.error('');
+      console.error('   C. Check API Key permissions:');
+      console.error('      Firebase Console → Project Settings → General → Your apps');
+      console.error('      → Verify API key restrictions allow RTDB');
+      console.error('');
+      console.error('   D. If database was just created:');
+      console.error('      → Wait 5-10 minutes for full provisioning');
+      console.error('      → Try accessing database in Firebase Console first');
+      console.error('      → Then refresh this app');
     }
     
     return null;
