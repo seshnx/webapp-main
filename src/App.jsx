@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, updateDoc } from 'firebase/firestore';
 import { app, appId } from './config/firebase';
@@ -177,23 +177,24 @@ export default function App() {
   if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} />;
 
   // Render Logic - determine which component to render
-  const getContentComponent = () => {
+  // Using useMemo to ensure stable component reference
+  const contentComponent = useMemo(() => {
     // 1. EDU Routing (Handles all edu-* sub-routes)
     if (activeTab.startsWith('edu-')) {
         if (activeTab === 'edu-enroll') {
-          return <StudentEnrollment user={user} userData={userData} />;
+          return <StudentEnrollment key="edu-enroll" user={user} userData={userData} />;
         }
         
         if (userData?.accountTypes?.includes('Admin')) {
-          return <EduAdminDashboard user={user} userData={userData} currentView={activeTab} />;
+          return <EduAdminDashboard key="edu-admin" user={user} userData={userData} currentView={activeTab} />;
         }
         if (userData?.accountTypes?.includes('Instructor')) {
-          return <EduStaffDashboard user={user} userData={userData} currentView={activeTab} />;
+          return <EduStaffDashboard key="edu-staff" user={user} userData={userData} currentView={activeTab} />;
         }
         if (userData?.accountTypes?.includes('Intern')) {
-          return <EduInternDashboard user={user} userData={userData} currentView={activeTab} />;
+          return <EduInternDashboard key="edu-intern" user={user} userData={userData} currentView={activeTab} />;
         }
-        return <EduStudentDashboard user={user} userData={userData} />;
+        return <EduStudentDashboard key="edu-student" user={user} userData={userData} />;
     }
 
     // 2. Main App Routing
@@ -201,6 +202,7 @@ export default function App() {
       case 'dashboard': 
       case 'home': 
         return <Dashboard 
+                  key="dashboard"
                   user={user} 
                   userData={userData} 
                   subProfiles={subProfiles} 
@@ -211,39 +213,39 @@ export default function App() {
       
       case 'feed': 
       case 'social': 
-        return <SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />;
+        return <SocialFeed key="social" user={user} userData={userData} openPublicProfile={openPublicProfile} />;
       
       case 'bookings': 
       case 'find-talent': 
-        return <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />;
+        return <BookingSystem key="bookings" user={user} userData={userData} openPublicProfile={openPublicProfile} />;
       
       case 'marketplace': 
-        return <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />;
+        return <Marketplace key="marketplace" user={user} userData={userData} tokenBalance={tokenBalance} />;
       case 'messages': 
-        return <ChatInterface user={user} userData={userData} openPublicProfile={openPublicProfile} />;
+        return <ChatInterface key="messages" user={user} userData={userData} openPublicProfile={openPublicProfile} />;
       case 'tech': 
-        return <TechServices user={user} userData={userData} />;
+        return <TechServices key="tech" user={user} userData={userData} />;
       
       case 'studio-ops': 
       case 'studio-manager': 
-        return <StudioManager user={user} userData={userData} />;
+        return <StudioManager key="studio" user={user} userData={userData} />;
       
       case 'label-manager': 
-        return <LabelManager user={user} userData={userData} />;
+        return <LabelManager key="label" user={user} userData={userData} />;
       case 'payments': 
-        return <PaymentsManager user={user} userData={userData} />;
+        return <PaymentsManager key="payments" user={user} userData={userData} />;
       
       case 'profile': 
-        return <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />;
+        return <ProfileManager key="profile" user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />;
       case 'settings': 
-        return <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />;
+        return <SettingsTab key="settings" user={user} userData={userData} handleLogout={handleLogout} />;
       case 'legal': 
-        return <LegalDocs />;
+        return <LegalDocs key="legal" />;
 
       default: 
-        return <Dashboard user={user} userData={userData} setActiveTab={setActiveTab} subProfiles={subProfiles} notifications={notifications} />;
+        return <Dashboard key="default" user={user} userData={userData} setActiveTab={setActiveTab} subProfiles={subProfiles} notifications={notifications} />;
     }
-  };
+  }, [activeTab, user, userData, subProfiles, notifications, tokenBalance, openPublicProfile, handleLogout, setActiveTab]);
 
   const isEduMode = activeTab.startsWith('edu-');
   const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('Admin') || userData?.accountTypes?.includes('Instructor'));
@@ -303,8 +305,8 @@ export default function App() {
             <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth" id="main-scroll">
                 <AnimatePresence mode="wait">
                     <PageTransition key={activeTab} className="max-w-7xl mx-auto">
-                        <Suspense fallback={<RouteLoader />}>
-                            {getContentComponent()}
+                        <Suspense key={activeTab} fallback={<RouteLoader />}>
+                            {contentComponent}
                         </Suspense>
                     </PageTransition>
                 </AnimatePresence>
