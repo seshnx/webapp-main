@@ -4,6 +4,7 @@ import { ref, push, update, set, serverTimestamp, remove } from 'firebase/databa
 import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { rtdb, db } from '../../config/firebase';
 import ConversationItem from './ConversationItem';
+import UserAvatar from '../shared/UserAvatar';
 
 export default function ChatSidebar({ user, conversations = [], activeChat, onSelectChat }) {
     // ... (State logic unchanged) ...
