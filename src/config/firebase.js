@@ -50,12 +50,17 @@ let rtdbInstance = null;
 // Initialize RTDB if databaseURL is configured (indicates RTDB is enabled)
 if (firebaseConfig.databaseURL && firebaseConfig.databaseURL.trim() !== '') {
   try {
+    console.log('Initializing RTDB with URL:', firebaseConfig.databaseURL);
     rtdbInstance = getDatabase(app);
+    console.log('✅ RTDB initialized successfully');
   } catch (error) {
-    // Service not available - log error for debugging
-    console.error('RTDB initialization error:', error);
+    // Service not available - this means RTDB is not enabled in Firebase Console
+    console.error('❌ RTDB initialization error:', error.message);
+    console.warn('💡 To enable RTDB: Go to Firebase Console → Build → Realtime Database → Create Database');
     rtdbInstance = null;
   }
+} else {
+  console.warn('⚠️ databaseURL not found in config. RTDB will not be available.');
 }
 
 // Initialize Storage if storageBucket is configured
