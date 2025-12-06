@@ -187,3 +187,82 @@ export default function PaymentsManager({ user, userData }) {
                                     {processing ? <Loader2 className="animate-spin" size={18}/> : `Buy for $${pack.price}`}
                                   </button>
                               </div>
+                          ))}
+                      </div>
+                  )}
+              </div>
+          )}
+
+          {activeTab === 'plans' && (
+              <div className="space-y-8 animate-in fade-in duration-300">
+                  <div className="text-center max-w-2xl mx-auto mb-8">
+                      <h3 className="text-2xl font-bold dark:text-white mb-2">Upgrade Your Workflow</h3>
+                      <p className="text-gray-500 dark:text-gray-400">Unlock lower fees, unlimited bookings, and premium visibility.</p>
+                  </div>
+
+                  {loadingConfig ? (
+                      <div className="text-center py-10"><Loader2 className="animate-spin text-brand-blue mx-auto" size={24}/></div>
+                  ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                          {sortedPlans.map(plan => {
+                              const isCurrent = plan.id === currentTierId;
+                              return (
+                                  <div key={plan.id} className={`bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border flex flex-col ${isCurrent ? 'border-brand-blue ring-1 ring-brand-blue' : 'dark:border-gray-700'} shadow-sm`}>
+                                      {isCurrent && <div className="text-xs font-bold text-brand-blue uppercase tracking-wide mb-2 flex items-center gap-1"><Star size={12} fill="currentColor"/> Current Plan</div>}
+                                      <h3 className="text-xl font-bold dark:text-white mb-1">{plan.name}</h3>
+                                      <div className="text-3xl font-extrabold mb-6 dark:text-white">
+                                          ${plan.price}<span className="text-sm font-normal text-gray-500">/mo</span>
+                                      </div>
+                                      <div className="space-y-3 mb-8 flex-1">
+                                          <div className="flex items-center gap-2 text-sm font-bold text-gray-700 dark:text-gray-200">
+                                              <DollarSign size={16} className={plan.feeMultiplier <= 1.0 ? 'text-green-500' : 'text-gray-400'} />
+                                              {formatFee(plan.feeMultiplier)}
+                                          </div>
+                                          {plan.features.map((feat, i) => (
+                                              <div key={i} className="flex items-start gap-2 text-xs text-gray-600 dark:text-gray-400">
+                                                  <Check size={14} className="text-green-500 shrink-0 mt-0.5" />
+                                                  <span>{feat}</span>
+                                              </div>
+                                          ))}
+                                      </div>
+                                      <button onClick={() => subscribeToPlan(plan)} className={`w-full py-2.5 rounded-lg font-bold text-sm transition-colors mt-auto ${isCurrent ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 cursor-default' : 'bg-brand-blue text-white hover:bg-blue-600 shadow-lg shadow-blue-500/20'}`} disabled={isCurrent || processing}>
+                                          {isCurrent ? 'Active' : (processing ? <Loader2 className="animate-spin mx-auto"/> : 'Upgrade')}
+                                      </button>
+                                  </div>
+                              );
+                          })}
+                      </div>
+                  )}
+              </div>
+          )}
+
+          {activeTab === 'earnings' && isTalent && (
+              <div className="space-y-6 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm relative overflow-hidden">
+                          <div className="flex items-center gap-3 mb-4">
+                              <div className="p-2 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg"><Lock size={24}/></div>
+                              <div><h3 className="font-bold dark:text-white">Escrow Balance</h3><p className="text-xs text-gray-500 dark:text-gray-400">Funds held for active sessions</p></div>
+                          </div>
+                          <div className="text-4xl font-extrabold dark:text-white mb-4">${walletData.escrowBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                          <div className="text-xs bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300 p-3 rounded-lg flex items-start gap-2"><AlertCircle size={14} className="mt-0.5 shrink-0"/> Funds are released to "Available" 24 hours after a session is successfully completed.</div>
+                      </div>
+
+                      <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border border-green-500/30 shadow-lg relative overflow-hidden">
+                          <div className="flex items-center gap-3 mb-4">
+                              <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg"><DollarSign size={24}/></div>
+                              <div><h3 className="font-bold dark:text-white">Available for Payout</h3><p className="text-xs text-gray-500 dark:text-gray-400">Cleared funds ready to transfer</p></div>
+                          </div>
+                          <div className="text-4xl font-extrabold text-green-600 dark:text-green-400 mb-6">${walletData.payoutBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                          <button onClick={initCashOut} disabled={processing || walletData.payoutBalance <= 0} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg hover:shadow-green-500/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:shadow-none">
+                              {processing ? <Loader2 className="animate-spin" size={20}/> : <>Cash Out Now <ArrowRight size={20}/></>}
+                          </button>
+                          <div className="text-[10px] text-center text-gray-400 mt-3">Transfers handled securely via Stripe Connect.</div>
+                      </div>
+                  </div>
+              </div>
+          )}
+      </div>
+  );
+}
+}
