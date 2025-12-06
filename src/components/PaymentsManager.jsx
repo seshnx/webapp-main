@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { httpsCallable } from 'firebase/functions';
+// import { httpsCallable } from 'firebase/functions';
 import { Check, Plus, Zap, TrendingUp, DollarSign, Loader2, Shield, Star, Lock, ArrowRight, AlertCircle } from 'lucide-react';
 import { db, getPaths, functions } from '../config/firebase'; 
 import { SUBSCRIPTION_PLAN_KEYS } from '../config/constants';
@@ -39,7 +39,10 @@ export default function PaymentsManager({ user, userData }) {
   const handleCheckout = async (priceId, mode = 'payment') => {
       setProcessing(true);
       try {
-          // Use exported functions instance
+          // TEMPORARILY DISABLED: Firebase Functions not available
+          throw new Error("Checkout functionality is temporarily unavailable. Firebase Functions service is not configured.");
+          
+          /* // Use exported functions instance
           const createSession = httpsCallable(functions, 'createStripeCheckoutSession');
           const { data } = await createSession({
               price: priceId,
@@ -52,7 +55,7 @@ export default function PaymentsManager({ user, userData }) {
             window.location.assign(data.url);
           } else {
              throw new Error("Failed to create checkout session.");
-          }
+          } */
 
       } catch (error) {
           console.error("Checkout Error:", error);

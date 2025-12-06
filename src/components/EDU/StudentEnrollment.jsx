@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
-import { httpsCallable, getFunctions } from 'firebase/functions';
+// import { httpsCallable, getFunctions } from 'firebase/functions';
 import { Search } from 'lucide-react';
 import { db } from '../../config/firebase';
 
@@ -31,20 +31,21 @@ export default function StudentEnrollment({ user, onComplete, onSkip }) {
         setIsLoading(true);
 
         try {
-            const functions = getFunctions();
+            // TEMPORARILY DISABLED: Firebase Functions not available
+            // Using direct Firestore update as fallback
+            /* const functions = getFunctions();
             // Note: Ensure you have deployed the 'enrollStudent' cloud function
             const enrollStudent = httpsCallable(functions, 'enrollStudent');
             
-            // Fallback for development if cloud function isn't ready:
+            // If using Cloud Function:
+            // await enrollStudent({ schoolId: selectedSchool.id, enrollmentId: studentEnrollmentId }); */
+            
             // Direct update (Secure only if rules allow, otherwise use Cloud Function)
             await updateDoc(doc(db, 'users', user.uid), {
                 schoolId: selectedSchool.id,
                 studentId: studentEnrollmentId,
                 accountTypes: ['user', 'student'] 
             });
-            
-            // If using Cloud Function:
-            // await enrollStudent({ schoolId: selectedSchool.id, enrollmentId: studentEnrollmentId });
             
             onComplete(); 
         } catch (e) {

@@ -1,5 +1,5 @@
 import { loadStripe } from '@stripe/stripe-js';
-import { httpsCallable } from 'firebase/functions';
+// import { httpsCallable } from 'firebase/functions';
 import { functions } from '../config/firebase'; 
 import { STRIPE_PUBLIC_KEY } from '../config/constants';
 
@@ -21,7 +21,10 @@ export const getStripe = () => {
 export const handleTokenPurchase = async (pack, userId) => {
   if (!userId) throw new Error("User not authenticated.");
   
-  try {
+  // TEMPORARILY DISABLED: Firebase Functions not available
+  throw new Error("Payment functionality is temporarily unavailable. Firebase Functions service is not configured.");
+  
+  /* try {
     const createIntent = httpsCallable(functions, 'createTokenPurchaseIntent');
     const { data } = await createIntent({ packId: pack.id });
 
@@ -34,14 +37,17 @@ export const handleTokenPurchase = async (pack, userId) => {
   } catch (error) {
     console.error("Token purchase error:", error);
     throw error;
-  }
+  } */
 };
 
 /**
  * Initiates the Stripe Connect onboarding flow for talent.
  */
 export const handleConnectOnboarding = async () => {
-  try {
+  // TEMPORARILY DISABLED: Firebase Functions not available
+  throw new Error("Stripe Connect onboarding is temporarily unavailable. Firebase Functions service is not configured.");
+  
+  /* try {
     const createAccount = httpsCallable(functions, 'createConnectAccount');
     const { data } = await createAccount();
     
@@ -53,7 +59,7 @@ export const handleConnectOnboarding = async () => {
   } catch (error) {
     console.error("Connect onboarding error:", error);
     throw error;
-  }
+  } */
 };
 
 /**
@@ -63,7 +69,10 @@ export const handleConnectOnboarding = async () => {
 export const handlePayout = async (amount) => {
     if (amount <= 0) throw new Error("No funds available to cash out.");
     
-    try {
+    // TEMPORARILY DISABLED: Firebase Functions not available
+    throw new Error("Payout functionality is temporarily unavailable. Firebase Functions service is not configured.");
+    
+    /* try {
         const payoutFunc = httpsCallable(functions, 'initiatePayout');
         const { data } = await payoutFunc({ amount });
         return data;
@@ -73,5 +82,5 @@ export const handlePayout = async (amount) => {
             throw new Error("Payout system is currently in maintenance mode. Please try again later.");
         }
         throw error;
-    }
+    } */
 };

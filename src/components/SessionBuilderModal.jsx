@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, DollarSign, Users, Trash2, Zap, CheckCircle, Loader2 } from 'lucide-react';
-import { httpsCallable, getFunctions } from 'firebase/functions';
+// import { httpsCallable, getFunctions } from 'firebase/functions';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db, appId } from '../config/firebase';
 import { useForm } from 'react-hook-form';
@@ -64,9 +64,12 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
         const toastId = toast.loading('Initializing Session...');
 
         try {
-            const functions = getFunctions();
-            // Optional: Check if payment is needed (if total > 0)
+            // TEMPORARILY DISABLED: Firebase Functions not available
+            // Payment functionality disabled - sessions can still be created without payment
             let paymentIntentId = null;
+            
+            /* const functions = getFunctions();
+            // Optional: Check if payment is needed (if total > 0)
             
             if (finalTotal > 0) {
                 const createSplitPayment = httpsCallable(functions, 'createSplitPayment');
@@ -82,7 +85,7 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
                 const { data: paymentResult } = await createSplitPayment(paymentPayload);
                 if (!paymentResult.clientSecret) throw new Error("Payment initialization failed");
                 paymentIntentId = paymentResult.paymentIntentId;
-            }
+            } */
 
             const groupId = `session_${Date.now()}`;
             const bookingPromises = lineItems.map(item => {

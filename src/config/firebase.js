@@ -3,7 +3,7 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore as getExistingFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
-import { getFunctions } from 'firebase/functions';
+// import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -35,7 +35,9 @@ try {
 export const db = firestoreDb;
 
 // Export functions globally again, now that app is guaranteed to be stable
-export const functions = getFunctions(app);
+// TEMPORARILY DISABLED: Firebase Functions service not available
+// export const functions = getFunctions(app);
+export const functions = null;
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
 let storageInstance = null;

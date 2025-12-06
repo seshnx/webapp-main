@@ -7,7 +7,7 @@ import {
     updatePassword, 
     updateEmail 
 } from 'firebase/auth';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+// import { getFunctions, httpsCallable } from 'firebase/functions';
 import { 
     X, Loader2, Settings, Bell, Shield, Moon, Users, RefreshCw, Star, 
     Filter, Lock, AlertTriangle, Key, Mail, CheckCircle, Eye, MapPin, 
@@ -153,7 +153,10 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     const handleDataExport = async () => {
         setExporting(true);
         try {
-            const functions = getFunctions();
+            // TEMPORARILY DISABLED: Firebase Functions not available
+            throw new Error("Data export functionality is temporarily unavailable. Firebase Functions service is not configured.");
+            
+            /* const functions = getFunctions();
             const exportFn = httpsCallable(functions, 'exportUserData');
             
             const result = await exportFn();
@@ -166,7 +169,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             link.href = url;
             link.download = `seshnx_data_export_${new Date().toISOString().slice(0,10)}.json`;
             document.body.appendChild(link);
-            link.click();
+            link.click(); */
             document.body.removeChild(link);
             
             alert("Your data has been downloaded successfully.");
