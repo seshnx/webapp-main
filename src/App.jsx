@@ -311,10 +311,7 @@ export default function App() {
     </SchoolProvider>
   );
 
-  // Wrap with ConvexProvider if available
-  if (convex) {
-    return <ConvexProvider client={convex}>{appContent}</ConvexProvider>;
-  }
-
-  return appContent;
+  // Always wrap with ConvexProvider - hooks require it even if Convex isn't configured
+  // The client will be created with a placeholder URL if CONVEX_DEPLOY_KEY isn't set
+  return <ConvexProvider client={convex}>{appContent}</ConvexProvider>;
 }
