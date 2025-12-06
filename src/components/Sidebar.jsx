@@ -55,7 +55,12 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
 
   const handleNavigation = (id) => {
     setActiveTab(id);
-    if (setSidebarOpen) setSidebarOpen(false);
+    // Always close sidebar after navigation (especially on mobile)
+    // Check if we're on mobile screen size
+    const isMobile = window.innerWidth < 1024;
+    if (setSidebarOpen && (isMobile || sidebarOpen)) {
+      setSidebarOpen(false);
+    }
   };
 
   const SidebarContent = ({ isMobile }) => (
