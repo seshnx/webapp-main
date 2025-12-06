@@ -97,12 +97,22 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
     }, [messages]);
 
     // Mark messages as read when viewing
+    // Use a ref to track the last message count to prevent infinite loops
+    const lastMarkedCountRef = useRef(0);
+    
     useEffect(() => {
         if (chatId && user?.uid && messages.length > 0) {
-            // Mark all messages as read for current user
-            markAsRead(messages.map(m => m.id));
+            // Only mark as read if the message count actually changed
+            // This prevents infinite loops from markAsRead triggering re-renders
+            const currentMessageIds = messages.map(m => m.id);
+            const currentCount = currentMessageIds.length;
+            
+            if (currentCount !== lastMarkedCountRef.current) {
+                lastMarkedCountRef.current = currentCount;
+                markAsRead(currentMessageIds);
+            }
         }
-    }, [chatId, user?.uid, messages.length]);
+    }, [chatId, user?.uid, messages.length, markAsRead]);
 
     // Fetch link previews for messages
     useEffect(() => {

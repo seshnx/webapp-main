@@ -51,7 +51,7 @@ export function usePresence(userId) {
                 isOnlineRef.current = false;
             }
         };
-    }, [userId, updatePresenceMutation]);
+    }, [userId]); // Remove updatePresenceMutation from deps - it's stable from useMutation
 }
 
 /**
