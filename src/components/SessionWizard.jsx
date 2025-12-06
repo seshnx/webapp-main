@@ -3,7 +3,7 @@ import { Calendar, Clock, MapPin, AlertCircle, ChevronRight, Search, Loader2 } f
 import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import LocationPicker from './shared/LocationPicker';
-import { getDistanceFromLatLonInKm } from '../utils/geocode'; // Assuming this utility exists or inline it
+// Distance calculation is handled by inline calcDist function
 import StudioMap from './shared/StudioMap';
 
 // Inline Geo Utility if not imported
