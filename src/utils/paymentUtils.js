@@ -1,6 +1,6 @@
 import { loadStripe } from '@stripe/stripe-js';
-import { httpsCallable } from 'firebase/functions';
-import { functions } from '../config/firebase'; // Import the centralized instance
+import { httpsCallable, getFunctions } from 'firebase/functions';
+import { app } from '../config/firebase'; 
 import { STRIPE_PUBLIC_KEY } from '../config/constants';
 
 let stripePromise;
@@ -22,6 +22,7 @@ export const handleTokenPurchase = async (pack, userId) => {
   if (!userId) throw new Error("User not authenticated.");
   
   try {
+    const functions = getFunctions(app);
     const createIntent = httpsCallable(functions, 'createTokenPurchaseIntent');
     const { data } = await createIntent({ packId: pack.id });
 
@@ -42,6 +43,7 @@ export const handleTokenPurchase = async (pack, userId) => {
  */
 export const handleConnectOnboarding = async () => {
   try {
+    const functions = getFunctions(app);
     const createAccount = httpsCallable(functions, 'createConnectAccount');
     const { data } = await createAccount();
     
@@ -64,6 +66,7 @@ export const handlePayout = async (amount) => {
     if (amount <= 0) throw new Error("No funds available to cash out.");
     
     try {
+        const functions = getFunctions(app);
         const payoutFunc = httpsCallable(functions, 'initiatePayout');
         const { data } = await payoutFunc({ amount });
         return data;
