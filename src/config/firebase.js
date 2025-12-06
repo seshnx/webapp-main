@@ -19,6 +19,11 @@ const firebaseConfig = {
 };
 
 // 1. Singleton Pattern for App (Fixes HMR/Re-init issues and _checkNotDeleted error)
+// Ensure databaseURL is in config before initializing
+if (!firebaseConfig.databaseURL) {
+  firebaseConfig.databaseURL = import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://seshnx-db-default-rtdb.firebaseio.com";
+}
+
 export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // 2. Initialize Core Services
@@ -47,21 +52,49 @@ export const db = firestoreDb;
 let storageInstance = null;
 let rtdbInstance = null;
 
-// Initialize RTDB if databaseURL is configured (indicates RTDB is enabled)
-if (firebaseConfig.databaseURL && firebaseConfig.databaseURL.trim() !== '') {
-  try {
-    console.log('Initializing RTDB with URL:', firebaseConfig.databaseURL);
-    rtdbInstance = getDatabase(app);
-    console.log('✅ RTDB initialized successfully');
-  } catch (error) {
-    // Service not available - this means RTDB is not enabled in Firebase Console
-    console.error('❌ RTDB initialization error:', error.message);
-    console.warn('💡 To enable RTDB: Go to Firebase Console → Build → Realtime Database → Create Database');
-    rtdbInstance = null;
+// Initialize RTDB - Rebuilt initialization pattern
+const initializeRTDB = () => {
+  const dbURL = firebaseConfig.databaseURL;
+  
+  if (!dbURL || dbURL.trim() === '') {
+    console.warn('⚠️ databaseURL not found in config. RTDB will not be available.');
+    return null;
   }
-} else {
-  console.warn('⚠️ databaseURL not found in config. RTDB will not be available.');
-}
+
+  try {
+    console.log('🔄 Initializing RTDB...');
+    console.log('📍 Database URL:', dbURL);
+    console.log('📍 Project ID:', firebaseConfig.projectId);
+    
+    // Get database instance - Firebase uses databaseURL from app config
+    const db = getDatabase(app);
+    
+    // Test if database is accessible by checking the app's options
+    if (db && app.options?.databaseURL) {
+      console.log('✅ RTDB initialized successfully');
+      console.log('✅ Database URL confirmed:', app.options.databaseURL);
+      return db;
+    }
+    
+    console.warn('⚠️ RTDB instance created but may not be properly configured');
+    return db;
+  } catch (error) {
+    console.error('❌ RTDB initialization failed:', error.message);
+    console.error('Error details:', {
+      name: error.name,
+      code: error.code,
+      message: error.message,
+      stack: error.stack
+    });
+    console.warn('💡 Troubleshooting:');
+    console.warn('   1. Verify RTDB is enabled in Firebase Console');
+    console.warn('   2. Check databaseURL matches Firebase Console');
+    console.warn('   3. Ensure environment variables are set in Vercel');
+    return null;
+  }
+};
+
+rtdbInstance = initializeRTDB();
 
 // Initialize Storage if storageBucket is configured
 if (firebaseConfig.storageBucket && firebaseConfig.storageBucket.trim() !== '') {

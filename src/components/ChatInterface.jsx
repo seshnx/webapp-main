@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ref, onValue, query, orderByChild } from 'firebase/database';
 import { rtdb } from '../config/firebase';
+import { isRTDBAvailable, withRTDB, logRTDBStatus } from '../utils/rtdbHelpers';
 import ChatSidebar from './chat/ChatSidebar';
 import ChatWindow from './chat/ChatWindow';
 import ChatDetailsPane from './chat/ChatDetailsPane';
@@ -12,40 +13,55 @@ export default function ChatInterface({ user, userData, openPublicProfile }) {
     const [showDetails, setShowDetails] = useState(false);
     const [conversations, setConversations] = useState([]); // Default to empty array
 
+    // Log RTDB status on mount
+    useEffect(() => {
+        logRTDBStatus();
+    }, []);
+
     // Initialize presence tracking for current user
     usePresence(user?.uid);
 
-    // Fetch Conversations from Realtime DB
+    // Fetch Conversations from Realtime DB - Rebuilt with helper
     useEffect(() => {
-        if (!user?.uid || !rtdb) {
-            if (!rtdb) {
-                console.warn('Realtime Database is not available. Chat functionality is disabled.');
-            }
+        if (!user?.uid) {
             return;
         }
 
-        // Query conversations ordered by Last Message Timestamp (lmt)
-        const convosRef = query(
-            ref(rtdb, `conversations/${user.uid}`), 
-            orderByChild('lmt')
-        );
-        
-        const unsubscribe = onValue(convosRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                // Convert to array WITH IDs and sort descending (newest first)
-                // FIX: Use Object.entries to preserve the conversation ID (Firebase key)
-                const convosList = Object.entries(data)
-                    .map(([id, val]) => ({ id, ...val }))
-                    .sort((a, b) => (b.lmt || 0) - (a.lmt || 0));
-                setConversations(convosList);
-            } else {
-                setConversations([]);
-            }
-        });
+        if (!isRTDBAvailable()) {
+            console.warn('Realtime Database is not available. Chat functionality is disabled.');
+            setConversations([]);
+            return;
+        }
 
-        return () => unsubscribe();
-    }, [user?.uid, rtdb]);
+        return withRTDB((db) => {
+            // Query conversations ordered by Last Message Timestamp (lmt)
+            const convosRef = query(
+                ref(db, `conversations/${user.uid}`), 
+                orderByChild('lmt')
+            );
+            
+            const unsubscribe = onValue(convosRef, (snapshot) => {
+                const data = snapshot.val();
+                if (data) {
+                    // Convert to array WITH IDs and sort descending (newest first)
+                    const convosList = Object.entries(data)
+                        .map(([id, val]) => ({ id, ...val }))
+                        .sort((a, b) => (b.lmt || 0) - (a.lmt || 0));
+                    setConversations(convosList);
+                } else {
+                    setConversations([]);
+                }
+            }, (error) => {
+                console.error('Error fetching conversations:', error);
+                setConversations([]);
+            });
+
+            return () => unsubscribe();
+        }, () => {
+            setConversations([]);
+            return () => {}; // Return empty cleanup function
+        });
+    }, [user?.uid]);
 
     return (
         <div className="flex h-[calc(100vh-100px)] bg-white dark:bg-[#1f2128] rounded-2xl overflow-hidden border dark:border-gray-800 shadow-xl">
