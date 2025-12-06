@@ -65,53 +65,32 @@ export default function ChatInterface({ user, userData, openPublicProfile }) {
             </motion.div>
 
             {/* Main Chat Window */}
+            {/* Always render ChatWindow to maintain consistent hook calls (React rules) */}
             <div className={`flex-1 flex flex-col relative ${!activeChat ? 'hidden md:flex' : 'flex'}`}>
-                <AnimatePresence mode="wait">
-                    {activeChat ? (
+                <ChatWindow 
+                    activeChat={activeChat} 
+                    user={user} 
+                    userData={userData}
+                    conversations={conversations}
+                    onBack={() => setActiveChat(null)}
+                    toggleDetails={() => setShowDetails(!showDetails)}
+                    openPublicProfile={openPublicProfile}
+                />
+                
+                {/* Slide-out Details Pane */}
+                <AnimatePresence>
+                    {showDetails && activeChat && (
                         <motion.div 
-                            key={activeChat.id}
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                            className="flex-1 flex"
+                            initial={{ width: 0, opacity: 0 }} 
+                            animate={{ width: 300, opacity: 1 }} 
+                            exit={{ width: 0, opacity: 0 }}
+                            className="border-l dark:border-gray-800 bg-gray-50 dark:bg-[#23262f] overflow-hidden relative z-20"
                         >
-                            <div className="flex-1 flex flex-col">
-                            <ChatWindow 
+                            <ChatDetailsPane 
                                 activeChat={activeChat} 
-                                user={user} 
-                                userData={userData}
-                                conversations={conversations}
-                                onBack={() => setActiveChat(null)}
-                                toggleDetails={() => setShowDetails(!showDetails)}
-                                openPublicProfile={openPublicProfile}
+                                currentUser={userData} 
+                                onClose={() => setShowDetails(false)} 
                             />
-                            </div>
-                            
-                            {/* Slide-out Details Pane */}
-                            <AnimatePresence>
-                                {showDetails && (
-                                    <motion.div 
-                                        initial={{ width: 0, opacity: 0 }} 
-                                        animate={{ width: 300, opacity: 1 }} 
-                                        exit={{ width: 0, opacity: 0 }}
-                                        className="border-l dark:border-gray-800 bg-gray-50 dark:bg-[#23262f] overflow-hidden relative z-20"
-                                    >
-                                        <ChatDetailsPane 
-                                            activeChat={activeChat} 
-                                            currentUser={userData} 
-                                            onClose={() => setShowDetails(false)} 
-                                        />
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </motion.div>
-                    ) : (
-                        <motion.div 
-                            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                            className="flex-1 flex items-center justify-center text-gray-400 flex-col"
-                        >
-                            <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                                <span className="text-4xl">💬</span>
-                            </div>
-                            <p>Select a conversation to start chatting</p>
                         </motion.div>
                     )}
                 </AnimatePresence>
