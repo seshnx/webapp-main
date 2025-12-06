@@ -14,7 +14,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
       // Stub convex/server for browser builds (it's only used in generated API files)
-      'convex/server': path.resolve(__dirname, './convex/_generated/server-stub.js'),
+      // Use src/utils location which is always available in builds
+      'convex/server': path.resolve(__dirname, './src/utils/convex-server-stub.js'),
     },
   },
   build: {
