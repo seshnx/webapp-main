@@ -40,37 +40,37 @@ export const db = firestoreDb;
 // export const functions = null; // Removed export to prevent null access errors
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
-// Only initialize if services are properly configured to avoid Firebase validation errors
-// Export null if services are not available - consuming code must check for null
+// TEMPORARILY DISABLED: Don't initialize these services to prevent Firebase validation errors
+// Services will be null - all consuming code must check for null before use
+// If you need these services, enable them in your Firebase project and uncomment the initialization code below
+
+export const storage = null;
+export const rtdb = null;
+
+// Uncomment below if Storage and RTDB are enabled in your Firebase project:
+/*
 let storageInstance = null;
 let rtdbInstance = null;
 
-// Initialize Storage only if storageBucket is configured
-// Don't attempt initialization if config is missing to prevent Firebase errors
 if (firebaseConfig.storageBucket && firebaseConfig.storageBucket.trim() !== '') {
   try {
     storageInstance = getStorage(app);
   } catch (error) {
-    // Service not available - expected if Storage is not enabled in Firebase project
     storageInstance = null;
   }
 }
 
-// Initialize RTDB only if projectId is configured
-// Don't attempt initialization if config is missing to prevent Firebase errors
 if (firebaseConfig.projectId && firebaseConfig.projectId.trim() !== '') {
   try {
     rtdbInstance = getDatabase(app);
   } catch (error) {
-    // Service not available - expected if RTDB is not enabled in Firebase project
     rtdbInstance = null;
   }
 }
 
-// Export services - will be null if not available
-// All consuming code must check for null before using these services
 export const storage = storageInstance;
 export const rtdb = rtdbInstance;
+*/
 export const appId = firebaseConfig.projectId;
 
 export const getPaths = (uid) => ({
