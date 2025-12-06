@@ -81,85 +81,37 @@ CREATE TABLE IF NOT EXISTS chat_members (
 CREATE INDEX IF NOT EXISTS idx_chat_members_user_id ON chat_members(user_id);
 
 -- Enable Row Level Security (RLS)
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE presence ENABLE ROW LEVEL SECURITY;
-ALTER TABLE read_receipts ENABLE ROW LEVEL SECURITY;
-ALTER TABLE chat_members ENABLE ROW LEVEL SECURITY;
+-- NOTE: Since we're using Firebase Auth (not Supabase Auth), RLS policies
+-- that use auth.uid() won't work. We'll handle auth in application code instead.
+-- For now, we'll use a simpler approach with service role or disable RLS for testing.
 
--- RLS Policies (adjust based on your auth system)
--- For now, allow authenticated users to read/write their own data
--- You'll need to adjust these based on your Firebase Auth integration
+-- Option 1: Disable RLS for now (handle auth in app code)
+-- ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE presence ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE read_receipts ENABLE ROW LEVEL SECURITY;
+-- ALTER TABLE chat_members ENABLE ROW LEVEL SECURITY;
 
--- Messages: Users can read messages from chats they're in
-CREATE POLICY "Users can read messages from their chats"
-  ON messages FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM conversations 
-      WHERE conversations.chat_id = messages.chat_id 
-      AND conversations.user_id = auth.uid()::text
-    )
-  );
+-- Option 2: Enable RLS but use service role key (not recommended for production)
+-- You'll need to create a server-side API to handle authenticated requests
 
--- Messages: Users can insert their own messages
-CREATE POLICY "Users can insert their own messages"
-  ON messages FOR INSERT
-  WITH CHECK (sender_id = auth.uid()::text);
+-- For development/testing: RLS is disabled, auth handled in application code
+-- Firebase Auth validates users, then app code checks user_id matches Firebase UID
 
--- Messages: Users can update their own messages
-CREATE POLICY "Users can update their own messages"
-  ON messages FOR UPDATE
-  USING (sender_id = auth.uid()::text);
+-- RLS Policies
+-- NOTE: Since we're using Firebase Auth (not Supabase Auth), RLS policies
+-- that use auth.uid() won't work. We'll handle auth in application code instead.
 
--- Conversations: Users can read their own conversations
-CREATE POLICY "Users can read their own conversations"
-  ON conversations FOR SELECT
-  USING (user_id = auth.uid()::text);
+-- RLS is DISABLED - Auth handled in application code
+-- Firebase Auth validates users, then app code ensures:
+-- - All queries filter by user_id (Firebase UID)
+-- - Insert operations require matching sender_id/user_id  
+-- - Update/delete operations verify ownership
 
--- Conversations: Users can insert/update their own conversations
-CREATE POLICY "Users can manage their own conversations"
-  ON conversations FOR ALL
-  USING (user_id = auth.uid()::text);
-
--- Presence: Users can read all presence, update their own
-CREATE POLICY "Users can read all presence"
-  ON presence FOR SELECT
-  USING (true);
-
-CREATE POLICY "Users can update their own presence"
-  ON presence FOR UPDATE
-  USING (user_id = auth.uid()::text);
-
-CREATE POLICY "Users can insert their own presence"
-  ON presence FOR INSERT
-  WITH CHECK (user_id = auth.uid()::text);
-
--- Read Receipts: Users can read receipts for their chats, insert their own
-CREATE POLICY "Users can read receipts for their chats"
-  ON read_receipts FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM conversations 
-      WHERE conversations.chat_id = read_receipts.chat_id 
-      AND conversations.user_id = auth.uid()::text
-    )
-  );
-
-CREATE POLICY "Users can insert their own read receipts"
-  ON read_receipts FOR INSERT
-  WITH CHECK (user_id = auth.uid()::text);
-
--- Chat Members: Users can read members of their chats
-CREATE POLICY "Users can read members of their chats"
-  ON chat_members FOR SELECT
-  USING (
-    EXISTS (
-      SELECT 1 FROM conversations 
-      WHERE conversations.chat_id = chat_members.chat_id 
-      AND conversations.user_id = auth.uid()::text
-    )
-  );
+-- If you want to enable RLS later, you'll need to:
+-- 1. Create a Supabase Edge Function that validates Firebase tokens
+-- 2. Use that function to set a custom claim in Supabase
+-- 3. Then uncomment and use the policies below
 
 -- Enable Realtime for tables
 ALTER PUBLICATION supabase_realtime ADD TABLE messages;

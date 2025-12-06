@@ -1,13 +1,20 @@
 # Migration from Firebase RTDB to Supabase
 
-## Why Supabase?
+## Architecture Overview
+**Hybrid Setup:**
+- **Firebase**: Firestore (main database), Auth, Storage
+- **Supabase**: Chat/RTDB replacement only (real-time messaging)
+
+This keeps your existing Firebase infrastructure while replacing only the problematic RTDB service.
+
+## Why Supabase for Chat?
 - ✅ Postgres database (more powerful than RTDB)
-- ✅ Real-time subscriptions (similar to Firebase)
+- ✅ Real-time subscriptions (similar to Firebase RTDB)
 - ✅ Free tier: 500MB database, 2GB bandwidth, 50K monthly active users
-- ✅ Built-in Auth (can keep Firebase Auth or migrate)
-- ✅ Storage included
+- ✅ No billing required (unlike RTDB which needs Blaze plan)
 - ✅ Easy Vercel integration
-- ✅ Similar API to Firebase
+- ✅ Similar API to Firebase RTDB
+- ✅ Better reliability than RTDB
 
 ## Setup Steps
 

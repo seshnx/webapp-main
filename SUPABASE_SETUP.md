@@ -49,16 +49,21 @@ npm install
 
 ## Authentication Setup
 
-Since you're using Firebase Auth, you'll need to:
+**You're keeping Firebase Auth** - this is the recommended approach.
 
-### Option A: Keep Firebase Auth (Recommended)
-- Use Firebase Auth for authentication
-- Pass Firebase user ID to Supabase queries
-- Adjust RLS policies to work with Firebase UIDs
+### How It Works:
+- Firebase Auth handles all authentication
+- Firebase user IDs (UIDs) are stored as strings in Supabase
+- RLS policies use Firebase UIDs for access control
+- No need to migrate auth - everything stays in Firebase
 
-### Option B: Migrate to Supabase Auth
-- More integrated but requires more migration work
-- Better long-term if you want to fully move off Firebase
+### RLS Policy Notes:
+The schema includes RLS policies that reference `auth.uid()`. Since you're using Firebase Auth, you'll need to:
+1. Either disable RLS temporarily for testing, OR
+2. Create a Supabase function that validates Firebase tokens, OR
+3. Use service role key for server-side operations (not recommended for client)
+
+For now, we'll use a simpler approach: store Firebase UIDs and handle auth checks in application code.
 
 ## Next Steps
 
