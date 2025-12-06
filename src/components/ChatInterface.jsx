@@ -16,6 +16,7 @@ export default function ChatInterface({ user, userData, openPublicProfile }) {
     usePresence(user?.uid);
 
     // Fetch Conversations from Convex (automatically reactive)
+    // Hook must always be called (React rules), but we skip if Convex not available
     const conversationsData = useQuery(
         api.conversations.getConversations,
         user?.uid && isConvexAvailable() ? { userId: user.uid } : "skip"

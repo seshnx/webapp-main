@@ -1,3 +1,5 @@
 serviceAccountKey.json
 .env
 functions/.env
+# Convex generated files should be committed (they're needed for builds)
+# convex/_generated/

@@ -11,10 +11,10 @@ import { isConvexAvailable } from '../config/convex';
  */
 export function usePresence(userId) {
     const isOnlineRef = useRef(false);
-    const updatePresenceMutation = useMutation(api.presence.updatePresence);
+    const updatePresenceMutation = isConvexAvailable() ? useMutation(api.presence.updatePresence) : null;
 
     useEffect(() => {
-        if (!userId || !isConvexAvailable()) return;
+        if (!userId || !isConvexAvailable() || !updatePresenceMutation) return;
 
         // Set user as online
         updatePresenceMutation({
@@ -66,7 +66,7 @@ export function useUserPresence(userId) {
     );
 
     if (!presenceData) {
-        return { online: false, lastSeen: null, loading: true };
+        return { online: false, lastSeen: null, loading: !isConvexAvailable() };
     }
 
     return {

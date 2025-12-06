@@ -12,6 +12,7 @@ import { isConvexAvailable } from '../config/convex';
  */
 export function useReadReceipts(chatId, currentUserId) {
     // Fetch read receipts from Convex
+    // Hook must always be called, but we skip if Convex not available
     const readReceiptsData = useQuery(
         api.readReceipts.getReadReceipts,
         chatId && currentUserId && isConvexAvailable() ? { chatId } : "skip"
@@ -51,7 +52,7 @@ export function useReadReceipts(chatId, currentUserId) {
      * Mark a message (or all messages up to a message) as read
      */
     const markAsRead = useCallback(async (messageIds) => {
-        if (!chatId || !currentUserId || !messageIds || !isConvexAvailable()) return;
+        if (!chatId || !currentUserId || !messageIds || !isConvexAvailable() || !markAsReadMutation || !markMultipleAsReadMutation) return;
 
         try {
             const messageIdArray = Array.isArray(messageIds) ? messageIds : [messageIds];

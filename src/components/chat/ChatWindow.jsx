@@ -47,6 +47,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
     } = useReadReceipts(chatId, user?.uid);
 
     // Fetch messages from Convex (automatically reactive)
+    // Hook must always be called, but we skip if Convex not available
     const messagesData = useQuery(
         api.messages.getMessages,
         chatId && isConvexAvailable() ? { chatId, limit: 100 } : "skip"
@@ -137,7 +138,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
     // --- FORWARD HANDLER ---
     const handleForward = async (message, targetChatIds) => {
-        if (!isConvexAvailable()) {
+        if (!isConvexAvailable() || !sendMessageMutation || !updateConversationMutation) {
             alert("Chat functionality is not available. Convex is not configured.");
             return;
         }
@@ -179,7 +180,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
     // --- SEND LOGIC ---
     const sendMessage = async (text, mediaData) => {
-        if (!chatId || (!text?.trim() && !mediaData) || !isConvexAvailable()) return;
+        if (!chatId || (!text?.trim() && !mediaData) || !isConvexAvailable() || !sendMessageMutation || !editMessageMutation || !updateConversationMutation || !updateUnreadCountMutation) return;
         
         let msgText = text ? text.trim() : '';
         if (msgText.length === 0 && mediaData) {
@@ -277,7 +278,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
     // --- DELETE HANDLER ---
     const handleDelete = async (messageId, forEveryone = false) => {
-        if (!chatId || !user?.uid || !isConvexAvailable()) return;
+        if (!chatId || !user?.uid || !isConvexAvailable() || !deleteMessageMutation) return;
 
         try {
             await deleteMessageMutation({

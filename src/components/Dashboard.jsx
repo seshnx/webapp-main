@@ -52,6 +52,7 @@ export default function Dashboard({
   const showCompletionWarning = avgCompletion < 60;
 
   // 1. Fetch Recent Conversations from Convex
+  // Hook must always be called, but we skip if Convex not available
   const conversationsData = useQuery(
     api.conversations.getConversations,
     user?.uid && isConvexAvailable() ? { userId: user.uid } : "skip"

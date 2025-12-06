@@ -1,38 +1,36 @@
 // Stub API file for build-time
 // This file is replaced by the real generated API when running `npx convex dev`
 // During Vercel builds, this stub prevents import errors
-// The actual API will be generated when you run `npx convex dev` locally
 
-// Create stub function references that match Convex's API structure
-const createStub = (path) => {
-  const stub = () => {};
-  stub._functionName = path;
-  stub._functionType = 'query';
-  return stub;
-};
+// IMPORTANT: This stub should NOT be used at runtime when Convex is configured
+// The hooks will validate function references, so we need to ensure components
+// check isConvexAvailable() before using these
+
+// For build-time only - these will be replaced by real function references
+// when npx convex dev is run
 
 export const api = {
   conversations: {
-    getConversations: createStub('conversations/getConversations'),
-    updateConversation: createStub('conversations/updateConversation'),
-    updateUnreadCount: createStub('conversations/updateUnreadCount'),
+    getConversations: undefined,
+    updateConversation: undefined,
+    updateUnreadCount: undefined,
   },
   messages: {
-    getMessages: createStub('messages/getMessages'),
-    sendMessage: createStub('messages/sendMessage'),
-    editMessage: createStub('messages/editMessage'),
-    deleteMessage: createStub('messages/deleteMessage'),
-    addReaction: createStub('messages/addReaction'),
-    removeReaction: createStub('messages/removeReaction'),
+    getMessages: undefined,
+    sendMessage: undefined,
+    editMessage: undefined,
+    deleteMessage: undefined,
+    addReaction: undefined,
+    removeReaction: undefined,
   },
   presence: {
-    getPresence: createStub('presence/getPresence'),
-    updatePresence: createStub('presence/updatePresence'),
+    getPresence: undefined,
+    updatePresence: undefined,
   },
   readReceipts: {
-    getReadReceipts: createStub('readReceipts/getReadReceipts'),
-    markAsRead: createStub('readReceipts/markAsRead'),
-    markMultipleAsRead: createStub('readReceipts/markMultipleAsRead'),
+    getReadReceipts: undefined,
+    markAsRead: undefined,
+    markMultipleAsRead: undefined,
   },
 };
 
