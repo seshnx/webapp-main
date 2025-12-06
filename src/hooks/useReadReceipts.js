@@ -11,11 +11,17 @@ import { isConvexAvailable } from '../config/convex';
  * @param {string} currentUserId - Current user's UID
  */
 export function useReadReceipts(chatId, currentUserId) {
+    // Memoize Convex availability to ensure stable hook calls
+    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+    const readReceiptsQuery = useMemo(() => {
+        return chatId && currentUserId && convexAvailable ? { chatId } : "skip";
+    }, [chatId, currentUserId, convexAvailable]);
+    
     // Fetch read receipts from Convex
     // Hook must always be called, but we skip if Convex not available
     const readReceiptsData = useQuery(
         api.readReceipts.getReadReceipts,
-        chatId && currentUserId && isConvexAvailable() ? { chatId } : "skip"
+        readReceiptsQuery
     );
 
     // Hooks must be called unconditionally (React rules)

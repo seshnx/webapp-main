@@ -46,11 +46,17 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         myLastRead 
     } = useReadReceipts(chatId, user?.uid);
 
+    // Memoize Convex availability to ensure stable hook calls
+    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+    const messagesQuery = useMemo(() => {
+        return chatId && convexAvailable ? { chatId, limit: 100 } : "skip";
+    }, [chatId, convexAvailable]);
+
     // Fetch messages from Convex (automatically reactive)
     // Hook must always be called, but we skip if Convex not available
     const messagesData = useQuery(
         api.messages.getMessages,
-        chatId && isConvexAvailable() ? { chatId, limit: 100 } : "skip"
+        messagesQuery
     );
 
     // Transform Convex messages to match existing format

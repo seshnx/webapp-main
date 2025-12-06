@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
@@ -61,9 +61,15 @@ export function usePresence(userId) {
  * @returns {object} { online, lastSeen, loading }
  */
 export function useUserPresence(userId) {
+    // Memoize Convex availability to ensure stable hook calls
+    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+    const presenceQuery = useMemo(() => {
+        return userId && convexAvailable ? { userId } : "skip";
+    }, [userId, convexAvailable]);
+    
     const presenceData = useQuery(
         api.presence.getPresence,
-        userId && isConvexAvailable() ? { userId } : "skip"
+        presenceQuery
     );
 
     if (!presenceData) {

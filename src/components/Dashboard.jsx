@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Calendar, User, MessageCircle, Search, Edit2, Zap, Sliders, 
   ArrowRight, Bell, Music, TrendingUp, Clock, AlertTriangle, 
@@ -51,11 +51,17 @@ export default function Dashboard({
   const avgCompletion = roleCount > 0 ? Math.round((totalPct / roleCount) * 100) : 100;
   const showCompletionWarning = avgCompletion < 60;
 
+  // Memoize Convex availability to ensure stable hook calls
+  const convexAvailable = useMemo(() => isConvexAvailable(), []);
+  const conversationsQuery = useMemo(() => {
+    return user?.uid && convexAvailable ? { userId: user.uid } : "skip";
+  }, [user?.uid, convexAvailable]);
+
   // 1. Fetch Recent Conversations from Convex
   // Hook must always be called, but we skip if Convex not available
   const conversationsData = useQuery(
     api.conversations.getConversations,
-    user?.uid && isConvexAvailable() ? { userId: user.uid } : "skip"
+    conversationsQuery
   );
 
   useEffect(() => {
