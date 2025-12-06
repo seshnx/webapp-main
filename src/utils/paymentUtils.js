@@ -1,9 +1,8 @@
 import { loadStripe } from '@stripe/stripe-js';
-import { httpsCallable, getFunctions } from 'firebase/functions';
-import { app } from '../config/firebase';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../config/firebase'; // Import the centralized instance
 import { STRIPE_PUBLIC_KEY } from '../config/constants';
 
-const functions = getFunctions(app);
 let stripePromise;
 
 export const getStripe = () => {
@@ -66,12 +65,10 @@ export const handlePayout = async (amount) => {
     
     try {
         const payoutFunc = httpsCallable(functions, 'initiatePayout');
-        // Assuming backend handles the transfer logic to the connected Stripe account
         const { data } = await payoutFunc({ amount });
         return data;
     } catch (error) {
         console.error("Payout failed:", error);
-        // Since backend might not be deployed, throw a friendly error for demo
         if (error.message.includes('not found')) {
             throw new Error("Payout system is currently in maintenance mode. Please try again later.");
         }
