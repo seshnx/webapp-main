@@ -1,8 +1,9 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore as getExistingFirestore } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,17 +15,29 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// 1. Initialize App
-export const app = initializeApp(firebaseConfig);
+// 1. Singleton Pattern for App (Fixes HMR/Re-init issues and _checkNotDeleted error)
+export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
-// 2. Initialize & Export Core Services
+// 2. Initialize Core Services
 export const auth = getAuth(app);
-export const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
+
+// Initialize Firestore safely
+// initializeFirestore throws if called twice on the same app with different settings.
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+  });
+} catch (e) {
+  // If already initialized (e.g. during HMR), just get the existing instance
+  firestoreDb = getExistingFirestore(app);
+}
+export const db = firestoreDb;
+
+// Export functions globally again, now that app is guaranteed to be stable
+export const functions = getFunctions(app);
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
-// We attempt to initialize these but catch errors if they aren't available/configured
 let storageInstance = null;
 let rtdbInstance = null;
 
@@ -33,7 +46,7 @@ try {
     storageInstance = getStorage(app);
   }
 } catch (error) {
-  console.warn('Storage initialization deferred/failed:', error.message);
+  console.warn('Storage initialization error:', error);
 }
 
 try {
@@ -41,7 +54,7 @@ try {
     rtdbInstance = getDatabase(app);
   }
 } catch (error) {
-  console.warn('RTDB initialization deferred/failed:', error.message);
+  console.warn('RTDB initialization error:', error);
 }
 
 export const storage = storageInstance;
