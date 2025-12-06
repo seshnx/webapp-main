@@ -40,23 +40,26 @@ export const db = firestoreDb;
 // export const functions = null; // Removed export to prevent null access errors
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
+// Only initialize if config values are present to avoid null service errors
 let storageInstance = null;
 let rtdbInstance = null;
 
 try {
-  if (firebaseConfig.storageBucket) {
+  if (firebaseConfig.storageBucket && firebaseConfig.storageBucket.trim() !== '') {
     storageInstance = getStorage(app);
   }
 } catch (error) {
   console.warn('Storage initialization error:', error);
+  storageInstance = null;
 }
 
 try {
-  if (firebaseConfig.projectId) {
+  if (firebaseConfig.projectId && firebaseConfig.projectId.trim() !== '') {
     rtdbInstance = getDatabase(app);
   }
 } catch (error) {
   console.warn('RTDB initialization error:', error);
+  rtdbInstance = null;
 }
 
 export const storage = storageInstance;
