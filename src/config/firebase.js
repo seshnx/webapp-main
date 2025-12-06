@@ -40,30 +40,84 @@ export const db = firestoreDb;
 // export const functions = null; // Removed export to prevent null access errors
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
-// Only initialize if config values are present to avoid null service errors
-let storageInstance = null;
-let rtdbInstance = null;
+// Use lazy initialization with Object.defineProperty to prevent Firebase validation errors
+// Services are only created when actually accessed, avoiding _checkNotDeleted errors
+let _storageInstance = null;
+let _rtdbInstance = null;
+let _storageInitialized = false;
+let _rtdbInitialized = false;
 
-try {
-  if (firebaseConfig.storageBucket && firebaseConfig.storageBucket.trim() !== '') {
-    storageInstance = getStorage(app);
+// Lazy initialization for Storage
+const getStorageInstance = () => {
+  if (_storageInitialized) return _storageInstance;
+  _storageInitialized = true;
+  
+  if (!firebaseConfig.storageBucket || firebaseConfig.storageBucket.trim() === '') {
+    _storageInstance = null;
+    return null;
   }
-} catch (error) {
-  console.warn('Storage initialization error:', error);
-  storageInstance = null;
-}
-
-try {
-  if (firebaseConfig.projectId && firebaseConfig.projectId.trim() !== '') {
-    rtdbInstance = getDatabase(app);
+  
+  try {
+    _storageInstance = getStorage(app);
+    return _storageInstance;
+  } catch (error) {
+    _storageInstance = null;
+    return null;
   }
-} catch (error) {
-  console.warn('RTDB initialization error:', error);
-  rtdbInstance = null;
-}
+};
 
-export const storage = storageInstance;
-export const rtdb = rtdbInstance;
+// Lazy initialization for RTDB
+const getRtdbInstance = () => {
+  if (_rtdbInitialized) return _rtdbInstance;
+  _rtdbInitialized = true;
+  
+  if (!firebaseConfig.projectId || firebaseConfig.projectId.trim() === '') {
+    _rtdbInstance = null;
+    return null;
+  }
+  
+  try {
+    _rtdbInstance = getDatabase(app);
+    return _rtdbInstance;
+  } catch (error) {
+    _rtdbInstance = null;
+    return null;
+  }
+};
+
+// Export with Proxy for lazy initialization
+// This prevents Firebase from validating services until they're actually used
+export const storage = new Proxy({}, {
+  get(target, prop) {
+    // Skip special properties
+    if (prop === 'constructor' || prop === '__proto__' || prop === Symbol.toStringTag) {
+      return undefined;
+    }
+    const instance = getStorageInstance();
+    if (!instance) {
+      return undefined;
+    }
+    const value = instance[prop];
+    // Bind methods to the instance to maintain 'this' context
+    return typeof value === 'function' ? value.bind(instance) : value;
+  }
+});
+
+export const rtdb = new Proxy({}, {
+  get(target, prop) {
+    // Skip special properties
+    if (prop === 'constructor' || prop === '__proto__' || prop === Symbol.toStringTag) {
+      return undefined;
+    }
+    const instance = getRtdbInstance();
+    if (!instance) {
+      return undefined;
+    }
+    const value = instance[prop];
+    // Bind methods to the instance to maintain 'this' context
+    return typeof value === 'function' ? value.bind(instance) : value;
+  }
+});
 export const appId = firebaseConfig.projectId;
 
 export const getPaths = (uid) => ({
