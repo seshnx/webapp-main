@@ -44,7 +44,7 @@ export const db = firestoreDb;
 let storageInstance = null;
 let rtdbInstance = null;
 
-// Step 1: Try initializing RTDB only (Storage disabled for now)
+// Step 1: RTDB initialization (working - error caught gracefully)
 if (firebaseConfig.projectId && firebaseConfig.projectId.trim() !== '') {
   try {
     console.log('Attempting to initialize RTDB...');
@@ -56,16 +56,19 @@ if (firebaseConfig.projectId && firebaseConfig.projectId.trim() !== '') {
   }
 }
 
-// Step 2: Storage still disabled - we'll enable it next if RTDB works
-// if (firebaseConfig.storageBucket && firebaseConfig.storageBucket.trim() !== '') {
-//   try {
-//     storageInstance = getStorage(app);
-//   } catch (error) {
-//     storageInstance = null;
-//   }
-// }
+// Step 2: Try initializing Storage
+if (firebaseConfig.storageBucket && firebaseConfig.storageBucket.trim() !== '') {
+  try {
+    console.log('Attempting to initialize Storage...');
+    storageInstance = getStorage(app);
+    console.log('Storage initialized successfully');
+  } catch (error) {
+    console.error('Storage initialization error:', error);
+    storageInstance = null;
+  }
+}
 
-export const storage = null; // Still disabled
+export const storage = storageInstance;
 export const rtdb = rtdbInstance;
 export const appId = firebaseConfig.projectId;
 
