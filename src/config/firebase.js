@@ -3,7 +3,6 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
-import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -20,34 +19,29 @@ export const app = initializeApp(firebaseConfig);
 
 // 2. Initialize & Export Core Services
 export const auth = getAuth(app);
-export const functions = getFunctions(app); // Centralized initialization
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
-// We assign these to exported variables so they can be imported elsewhere
+// We attempt to initialize these but catch errors if they aren't available/configured
 let storageInstance = null;
 let rtdbInstance = null;
 
 try {
   if (firebaseConfig.storageBucket) {
     storageInstance = getStorage(app);
-  } else {
-    console.warn('Firebase Storage config missing');
   }
 } catch (error) {
-  console.error('Failed to initialize Storage:', error);
+  console.warn('Storage initialization deferred/failed:', error.message);
 }
 
 try {
   if (firebaseConfig.projectId) {
     rtdbInstance = getDatabase(app);
-  } else {
-    console.warn('Firebase RTDB config missing');
   }
 } catch (error) {
-  console.error('Failed to initialize RTDB:', error);
+  console.warn('RTDB initialization deferred/failed:', error.message);
 }
 
 export const storage = storageInstance;
