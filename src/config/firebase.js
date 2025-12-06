@@ -3,6 +3,7 @@ import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
+import { getFunctions } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -14,40 +15,43 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
+// 1. Initialize App
 export const app = initializeApp(firebaseConfig);
+
+// 2. Initialize & Export Core Services
 export const auth = getAuth(app);
+export const functions = getFunctions(app); // Centralized initialization
 export const db = initializeFirestore(app, {
   localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
 });
 
-// Initialize Storage only if storageBucket is configured
-let storage = null;
+// 3. Initialize Optional Services (Storage & Realtime DB)
+// We assign these to exported variables so they can be imported elsewhere
+let storageInstance = null;
+let rtdbInstance = null;
+
 try {
   if (firebaseConfig.storageBucket) {
-    storage = getStorage(app);
+    storageInstance = getStorage(app);
   } else {
-    console.warn('Firebase Storage is not configured. VITE_FIREBASE_STORAGE_BUCKET is missing.');
+    console.warn('Firebase Storage config missing');
   }
 } catch (error) {
-  console.error('Failed to initialize Firebase Storage:', error);
-  storage = null;
+  console.error('Failed to initialize Storage:', error);
 }
-export { storage };
 
-// Initialize Realtime Database with error handling
-let rtdb = null;
 try {
   if (firebaseConfig.projectId) {
-    rtdb = getDatabase(app);
+    rtdbInstance = getDatabase(app);
   } else {
-    console.warn('Firebase Realtime Database is not configured. VITE_FIREBASE_PROJECT_ID is missing.');
+    console.warn('Firebase RTDB config missing');
   }
 } catch (error) {
-  console.error('Failed to initialize Firebase Realtime Database:', error);
-  rtdb = null;
+  console.error('Failed to initialize RTDB:', error);
 }
-export { rtdb }; 
 
+export const storage = storageInstance;
+export const rtdb = rtdbInstance;
 export const appId = firebaseConfig.projectId;
 
 export const getPaths = (uid) => ({
@@ -91,7 +95,6 @@ export const getPaths = (uid) => ({
   gearListings: `artifacts/${appId}/public/data/gear_listings`,
   
   // --- SOCIAL GRAPH (Phase 1) ---
-  // Note: Collections need odd segments, documents need even segments
   followers: `artifacts/${appId}/users/${uid}/followers`,
   following: `artifacts/${appId}/users/${uid}/following`,
   socialStats: `artifacts/${appId}/users/${uid}/stats/social`,
