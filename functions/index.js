@@ -1,7 +1,4 @@
-{
-type: "file",
-fileName: "seshnx/webapp-main/webapp-main-236ddb9004a501645414af15ee480926c0cb06e0/functions/index.js",
-content: const functions = require('firebase-functions');
+const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
 
@@ -695,4 +692,3 @@ exports.createStripeCheckoutSession = functions.https.onCall(async (data, contex
         throw new functions.https.HttpsError('internal', error.message);
     }
 });
-}
