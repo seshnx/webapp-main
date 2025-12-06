@@ -10,39 +10,61 @@
 
 // Lazy load Sentry to avoid bundling if not used
 let Sentry = null;
+let sentryLoadAttempted = false;
+
 const initSentry = async () => {
-  if (Sentry !== null) return Sentry; // Already initialized or attempted
+  // Return cached result
+  if (Sentry !== null) return Sentry;
+  if (sentryLoadAttempted) return null;
   
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   if (!dsn) {
+    sentryLoadAttempted = true;
     Sentry = false; // Mark as not available
     return null;
   }
 
+  sentryLoadAttempted = true;
+
   try {
-    // Dynamic import to avoid bundling Sentry if not configured
+    // Import Sentry - will use stub if package not installed (via vite.config.js alias)
     const sentryModule = await import('@sentry/react');
-    Sentry = sentryModule;
     
-    // Initialize Sentry if not already initialized
-    if (!sentryModule.getCurrentHub().getClient()) {
-      sentryModule.init({
+    // Check if this is the real Sentry or our stub
+    // Our stub has a __SENTRY_STUB__ marker property
+    const isStub = sentryModule.__SENTRY_STUB__ === true || 
+                   sentryModule.default?.__SENTRY_STUB__ === true;
+    
+    if (isStub) {
+      // Using stub - Sentry not installed, skip initialization
+      Sentry = false;
+      return null;
+    }
+    
+    // Real Sentry - proceed with initialization
+    Sentry = sentryModule;
+    const { init, BrowserTracing, Replay } = sentryModule;
+    
+    // Check if already initialized
+    const hub = sentryModule.getCurrentHub?.();
+    if (!hub?.getClient?.()) {
+      init({
         dsn,
         environment: import.meta.env.MODE || 'development',
         tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0, // 10% in prod, 100% in dev
         replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
         replaysOnErrorSampleRate: 1.0, // Always capture replays on errors
         integrations: [
-          new sentryModule.BrowserTracing(),
-          new sentryModule.Replay(),
+          new BrowserTracing(),
+          new Replay(),
         ],
       });
     }
     
     return Sentry;
   } catch (e) {
-    console.warn('Failed to initialize Sentry:', e);
-    Sentry = false; // Mark as failed
+    // Package not installed or other error - silently fail
+    Sentry = false;
     return null;
   }
 };

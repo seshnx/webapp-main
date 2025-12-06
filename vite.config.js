@@ -16,6 +16,8 @@ export default defineConfig({
       // Stub convex/server for browser builds (it's only used in generated API files)
       // Use src/utils location which is always available in builds
       'convex/server': path.resolve(__dirname, './src/utils/convex-server-stub.js'),
+      // Stub @sentry/react when not installed (optional dependency)
+      '@sentry/react': path.resolve(__dirname, './src/utils/sentry-stub.js'),
     },
   },
   build: {
