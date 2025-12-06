@@ -33,7 +33,10 @@ git commit -m "Add Convex generated API files"
 git push
 ```
 
-**Important**: The `_generated` folder should be committed (it's not in `.gitignore`) so Vercel can use the real API files during builds.
+**Important**: 
+- ✅ **DO commit** `convex/_generated/` folder (needed for Vercel builds)
+- ❌ **DON'T commit** `node_modules/` (Vercel installs dependencies automatically)
+- Vercel runs `npm install` during builds, so it will install `convex` package automatically
 
 ### 3. Deploy to Vercel
 
