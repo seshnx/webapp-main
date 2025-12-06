@@ -28,7 +28,7 @@ export default defineSchema({
         sender: v.string(),
       })
     ),
-    reactions: v.optional(v.record(v.array(v.string()))), // emoji -> [userIds]
+    reactions: v.optional(v.any()), // emoji -> [userIds] - using v.any() for flexibility
   })
     .index("by_chat", ["chatId", "timestamp"])
     .index("by_sender", ["senderId"]),

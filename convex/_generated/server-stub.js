@@ -36,3 +36,4 @@ export const anyApi = createApiStub();
 export function componentsGeneric() {
   return {};
 }
+
