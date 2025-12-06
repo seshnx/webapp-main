@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { ref, onValue, query, orderByChild } from 'firebase/database';
-import { rtdb } from '../config/firebase';
-import { isRTDBAvailable, withRTDB, logRTDBStatus } from '../utils/rtdbHelpers';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { isConvexAvailable } from '../config/convex';
 import ChatSidebar from './chat/ChatSidebar';
 import ChatWindow from './chat/ChatWindow';
 import ChatDetailsPane from './chat/ChatDetailsPane';
@@ -11,57 +11,40 @@ import { motion, AnimatePresence } from 'framer-motion';
 export default function ChatInterface({ user, userData, openPublicProfile }) {
     const [activeChat, setActiveChat] = useState(null);
     const [showDetails, setShowDetails] = useState(false);
-    const [conversations, setConversations] = useState([]); // Default to empty array
-
-    // Log RTDB status on mount
-    useEffect(() => {
-        logRTDBStatus();
-    }, []);
 
     // Initialize presence tracking for current user
     usePresence(user?.uid);
 
-    // Fetch Conversations from Realtime DB - Rebuilt with helper
+    // Fetch Conversations from Convex (automatically reactive)
+    const conversationsData = useQuery(
+        api.conversations.getConversations,
+        user?.uid && isConvexAvailable() ? { userId: user.uid } : "skip"
+    );
+
+    // Transform Convex data to match existing format
+    const conversations = useMemo(() => {
+        if (!conversationsData) return [];
+        
+        return conversationsData.map(conv => ({
+            id: conv.chatId,
+            uid: conv.otherUserId || conv.chatId,
+            name: conv.chatName || 'Unknown',
+            n: conv.chatName || 'Unknown',
+            photo: conv.chatPhoto || '',
+            type: conv.chatType || 'direct',
+            lm: conv.lastMessage || '',
+            lmt: conv.lastMessageTime || 0,
+            ls: conv.lastSenderId || '',
+            uc: conv.unreadCount || 0,
+        })).sort((a, b) => (b.lmt || 0) - (a.lmt || 0));
+    }, [conversationsData]);
+
+    // Check if Convex is available
     useEffect(() => {
-        if (!user?.uid) {
-            return;
+        if (!isConvexAvailable()) {
+            console.warn('Convex is not available. Chat functionality is disabled.');
         }
-
-        if (!isRTDBAvailable()) {
-            console.warn('Realtime Database is not available. Chat functionality is disabled.');
-            setConversations([]);
-            return;
-        }
-
-        return withRTDB((db) => {
-            // Query conversations ordered by Last Message Timestamp (lmt)
-            const convosRef = query(
-                ref(db, `conversations/${user.uid}`), 
-                orderByChild('lmt')
-            );
-            
-            const unsubscribe = onValue(convosRef, (snapshot) => {
-                const data = snapshot.val();
-                if (data) {
-                    // Convert to array WITH IDs and sort descending (newest first)
-                    const convosList = Object.entries(data)
-                        .map(([id, val]) => ({ id, ...val }))
-                        .sort((a, b) => (b.lmt || 0) - (a.lmt || 0));
-                    setConversations(convosList);
-                } else {
-                    setConversations([]);
-                }
-            }, (error) => {
-                console.error('Error fetching conversations:', error);
-                setConversations([]);
-            });
-
-            return () => unsubscribe();
-        }, () => {
-            setConversations([]);
-            return () => {}; // Return empty cleanup function
-        });
-    }, [user?.uid]);
+    }, []);
 
     return (
         <div className="flex h-[calc(100vh-100px)] bg-white dark:bg-[#1f2128] rounded-2xl overflow-hidden border dark:border-gray-800 shadow-xl">
@@ -74,9 +57,9 @@ export default function ChatInterface({ user, userData, openPublicProfile }) {
                 <ChatSidebar 
                     user={user} 
                     userData={userData}
-                    conversations={conversations} // Pass the fetched conversations
+                    conversations={conversations}
                     activeChat={activeChat} 
-                    onSelectChat={setActiveChat}  // Correct prop name is onSelectChat, not setActiveChat
+                    onSelectChat={setActiveChat}
                 />
             </motion.div>
 

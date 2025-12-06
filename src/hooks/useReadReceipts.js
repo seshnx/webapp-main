@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { ref, set, onValue, serverTimestamp } from 'firebase/database';
-import { rtdb } from '../config/firebase';
+import { useMemo, useCallback } from 'react';
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { isConvexAvailable } from '../config/convex';
 
 /**
  * Hook for managing read receipts in a chat
@@ -10,59 +11,71 @@ import { rtdb } from '../config/firebase';
  * @param {string} currentUserId - Current user's UID
  */
 export function useReadReceipts(chatId, currentUserId) {
-    const [readReceipts, setReadReceipts] = useState({});
-    const [myLastRead, setMyLastRead] = useState(null);
+    // Fetch read receipts from Convex
+    const readReceiptsData = useQuery(
+        api.readReceipts.getReadReceipts,
+        chatId && currentUserId && isConvexAvailable() ? { chatId } : "skip"
+    );
 
-    // Subscribe to read receipts for this chat
-    useEffect(() => {
-        if (!chatId || !currentUserId || !rtdb) return;
+    const markAsReadMutation = useMutation(api.readReceipts.markAsRead);
+    const markMultipleAsReadMutation = useMutation(api.readReceipts.markMultipleAsRead);
 
-        const receiptsRef = ref(rtdb, `chats/${chatId}/readBy`);
-        const unsubscribe = onValue(receiptsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                setReadReceipts(data);
-                
-                // Get current user's last read
-                if (data[currentUserId]) {
-                    setMyLastRead(data[currentUserId].lastReadMessageId);
-                }
+    // Transform Convex data to match existing format
+    const readReceipts = useMemo(() => {
+        if (!readReceiptsData) return {};
+        
+        const receipts = {};
+        readReceiptsData.forEach(receipt => {
+            if (!receipts[receipt.userId]) {
+                receipts[receipt.userId] = {
+                    lastReadMessageId: receipt.messageId,
+                    readAt: receipt.readAt,
+                };
             } else {
-                setReadReceipts({});
-                setMyLastRead(null);
+                // Keep the latest read message
+                if (receipt.readAt > receipts[receipt.userId].readAt) {
+                    receipts[receipt.userId] = {
+                        lastReadMessageId: receipt.messageId,
+                        readAt: receipt.readAt,
+                    };
+                }
             }
-        }, (error) => {
-            console.error('Read receipts listener error:', error);
         });
+        return receipts;
+    }, [readReceiptsData]);
 
-        return () => unsubscribe();
-    }, [chatId, currentUserId, rtdb]);
+    // Get current user's last read
+    const myLastRead = readReceipts[currentUserId]?.lastReadMessageId || null;
 
     /**
      * Mark a message (or all messages up to a message) as read
      */
-    const markAsRead = useCallback(async (messageId) => {
-        if (!chatId || !currentUserId || !messageId || !rtdb) return;
+    const markAsRead = useCallback(async (messageIds) => {
+        if (!chatId || !currentUserId || !messageIds || !isConvexAvailable()) return;
 
         try {
-            const receiptRef = ref(rtdb, `chats/${chatId}/readBy/${currentUserId}`);
-            await set(receiptRef, {
-                lastReadMessageId: messageId,
-                readAt: serverTimestamp()
-            });
+            const messageIdArray = Array.isArray(messageIds) ? messageIds : [messageIds];
+            
+            if (messageIdArray.length === 1) {
+                await markAsReadMutation({
+                    chatId,
+                    messageId: messageIdArray[0],
+                    userId: currentUserId,
+                });
+            } else {
+                await markMultipleAsReadMutation({
+                    chatId,
+                    messageIds: messageIdArray,
+                    userId: currentUserId,
+                });
+            }
         } catch (error) {
             console.error('Mark as read error:', error);
         }
-    }, [chatId, currentUserId, rtdb]);
+    }, [chatId, currentUserId, markAsReadMutation, markMultipleAsReadMutation]);
 
     /**
      * Check if a specific message has been read by a user
-     * A message is considered read if its timestamp is <= the last read message's timestamp
-     * 
-     * @param {string} messageId - Message ID to check
-     * @param {string} userId - User ID to check read status for
-     * @param {Array} messages - Optional messages array for timestamp comparison
-     * @returns {boolean} True if message was read
      */
     const isMessageRead = useCallback((messageId, userId, messages = null) => {
         if (!messageId || !userId) return false;
@@ -83,16 +96,13 @@ export function useReadReceipts(chatId, currentUserId) {
             const lastReadMessage = messages.find(m => m.id === lastReadMessageId);
             
             if (message && lastReadMessage && message.t && lastReadMessage.t) {
-                // Message is read if its timestamp is <= last read message timestamp
                 return message.t <= lastReadMessage.t;
             }
         }
 
-        // Fallback: Compare message IDs lexicographically
-        // Firebase push keys are lexicographically sortable
-        // If lastReadMessageId > messageId (lexicographically), message was read
-        // This works because Firebase push keys maintain chronological order
-        return lastReadMessageId > messageId;
+        // For Convex, we can compare IDs directly
+        // Convex IDs are sortable and maintain order
+        return lastReadMessageId >= messageId;
     }, [readReceipts]);
 
     /**
@@ -106,7 +116,7 @@ export function useReadReceipts(chatId, currentUserId) {
      * Check if current user has read a message
      */
     const hasCurrentUserRead = useCallback((messageId) => {
-        return myLastRead === messageId;
+        return myLastRead === messageId || (myLastRead && myLastRead >= messageId);
     }, [myLastRead]);
 
     return {
@@ -118,4 +128,3 @@ export function useReadReceipts(chatId, currentUserId) {
         hasCurrentUserRead
     };
 }
-

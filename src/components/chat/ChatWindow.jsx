@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { ArrowLeft, Info, MessageSquare } from 'lucide-react';
-import { ref, onValue, push, update, set, remove, serverTimestamp, query, limitToLast, get } from 'firebase/database';
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { isConvexAvailable } from '../../config/convex';
 import ChatInput from './ChatInput';
 import SeshNxEmbedModal from '../SeshNxEmbedModal'; 
 import MessageBubble from './message/MessageBubble';
@@ -9,11 +11,9 @@ import PresenceIndicator, { StatusBadge } from './PresenceIndicator';
 import { useUserPresence } from '../../hooks/usePresence';
 import { useReadReceipts } from '../../hooks/useReadReceipts';
 import getLinkPreview from '../../utils/linkPreview'; 
-import { rtdb } from '../../config/firebase'; 
 import UserAvatar from '../shared/UserAvatar';
 
 export default function ChatWindow({ user, userData, activeChat, conversations, onBack, toggleDetails, openPublicProfile }) {
-    const [messages, setMessages] = useState([]);
     const [linkPreviewData, setLinkPreviewData] = useState({});
     const [embedModal, setEmbedModal] = useState({ isOpen: false, url: '', previewData: null }); 
     const [replyingTo, setReplyingTo] = useState(null);
@@ -46,222 +46,131 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         myLastRead 
     } = useReadReceipts(chatId, user?.uid);
 
+    // Fetch messages from Convex (automatically reactive)
+    const messagesData = useQuery(
+        api.messages.getMessages,
+        chatId && isConvexAvailable() ? { chatId, limit: 100 } : "skip"
+    );
+
+    // Transform Convex messages to match existing format
+    const messages = useMemo(() => {
+        if (!messagesData) return [];
+        
+        return messagesData.map(msg => ({
+            id: msg._id,
+            b: msg.content || '',
+            s: msg.senderId,
+            n: msg.senderName,
+            photo: msg.senderPhoto || '',
+            t: msg.timestamp,
+            edited: msg.edited || false,
+            editedAt: msg.editedAt,
+            deleted: msg.deleted || false,
+            deletedForAll: msg.deletedForAll || false,
+            media: msg.media,
+            replyTo: msg.replyTo,
+            reactions: msg.reactions || {},
+        }));
+    }, [messagesData]);
+
+    // Mutations
+    const sendMessageMutation = useMutation(api.messages.sendMessage);
+    const editMessageMutation = useMutation(api.messages.editMessage);
+    const deleteMessageMutation = useMutation(api.messages.deleteMessage);
+    const addReactionMutation = useMutation(api.messages.addReaction);
+    const removeReactionMutation = useMutation(api.messages.removeReaction);
+    const updateConversationMutation = useMutation(api.conversations.updateConversation);
+    const updateUnreadCountMutation = useMutation(api.conversations.updateUnreadCount);
+
     // Auto-scroll to bottom and mark messages as read
     useEffect(() => { 
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" }); 
-        
-        // Mark latest message as read when viewing chat
-        if (messages.length > 0 && chatId) {
-            const latestMessage = messages[messages.length - 1];
-            // Only mark as read if it's not from current user and not already read
-            if (latestMessage.s !== user?.uid && !hasCurrentUserRead(latestMessage.id)) {
-                markAsRead(latestMessage.id);
-            }
+        if (messagesEndRef.current && messages.length > 0) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
-    }, [messages, chatId, markAsRead, hasCurrentUserRead, user?.uid]);
+    }, [messages]);
 
-    // Mark messages as read when scrolling (intersection observer for better UX)
-    const messageObserverRef = useRef(null);
-    
+    // Mark messages as read when viewing
     useEffect(() => {
-        if (!chatId || !messages.length) return;
+        if (chatId && user?.uid && messages.length > 0) {
+            // Mark all messages as read for current user
+            markAsRead(messages.map(m => m.id));
+        }
+    }, [chatId, user?.uid, messages.length]);
 
-        // Create intersection observer to mark messages as read when in view
-        const observerOptions = {
-            root: null,
-            rootMargin: '0px',
-            threshold: 0.5
-        };
-
-        messageObserverRef.current = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    const messageId = entry.target.dataset.messageId;
-                    if (messageId) {
-                        const message = messages.find(m => m.id === messageId);
-                        // Mark as read if message is from other user
-                        if (message && message.s !== user?.uid && !hasCurrentUserRead(messageId)) {
-                            markAsRead(messageId);
-                        }
-                    }
-                }
-            });
-        }, observerOptions);
-
-        // Observe all messages from other users
+    // Fetch link previews for messages
+    useEffect(() => {
         messages.forEach(msg => {
-            if (msg.s !== user?.uid) {
-                const element = document.querySelector(`[data-message-id="${msg.id}"]`);
-                if (element) {
-                    messageObserverRef.current.observe(element);
+            if (msg.b) {
+                const urlMatch = msg.b.match(/(https?:\/\/[^\s]+)/);
+                if (urlMatch) {
+                    const url = urlMatch[0];
+                    if (!linkPreviewData[msg.id]) {
+                        getLinkPreview(url)
+                            .then(data => setLinkPreviewData(prev => ({ ...prev, [msg.id]: data })))
+                            .catch(e => console.error(e));
+                    }
                 }
             }
         });
-
-        return () => {
-            if (messageObserverRef.current) {
-                messageObserverRef.current.disconnect();
-            }
-        };
-    }, [messages, chatId, user?.uid, markAsRead, hasCurrentUserRead]);
-
-    const handleSeshNxLinkClick = (previewData) => { 
-        setEmbedModal({ isOpen: true, url: previewData.url, previewData: previewData }); 
-    };
-
-    // --- RTDB LISTENER ---
-    useEffect(() => {
-        if (!chatId || !rtdb) {
-            if (!rtdb) {
-                console.warn('Realtime Database is not available. Chat messages cannot be loaded.');
-            }
-            return;
-        }
-        const messagesRef = query(ref(rtdb, `messages/${chatId}`), limitToLast(100));
-        const unsubscribe = onValue(messagesRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                const loadedMessages = Object.entries(data).map(([key, val]) => ({ id: key, ...val }));
-                loadedMessages.sort((a, b) => a.t - b.t);
-                setMessages(loadedMessages);
-                
-                // Fetch link previews
-                loadedMessages.forEach(msg => {
-                    if (msg.b) {
-                        const urlMatch = msg.b.match(/(https?:\/\/[^\s]+)/);
-                        if (urlMatch) {
-                            const url = urlMatch[0];
-                            if (!linkPreviewData[msg.id]) {
-                                getLinkPreview(url)
-                                    .then(data => setLinkPreviewData(prev => ({ ...prev, [msg.id]: data })))
-                                    .catch(e => console.error(e));
-                            }
-                        }
-                    }
-                });
-            } else { 
-                setMessages([]); 
-            }
-        });
-        return () => unsubscribe();
-    }, [chatId, rtdb]); 
+    }, [messages]);
 
     // --- REACTION HANDLER ---
     const handleReaction = async (messageId, emoji) => {
-        if (!chatId || !user?.uid || !rtdb) return;
-
-        const reactionPath = `messages/${chatId}/${messageId}/reactions/${emoji}/${user.uid}`;
-        const currentReactionRef = ref(rtdb, reactionPath);
+        if (!chatId || !user?.uid || !isConvexAvailable()) return;
 
         try {
             // Check if user already has this reaction
-            const snapshot = await get(currentReactionRef);
+            const message = messages.find(m => m.id === messageId);
+            if (!message) return;
+
+            const hasReaction = message.reactions?.[emoji]?.includes(user.uid);
             
-            if (snapshot.exists()) {
-                // Remove reaction
-                await remove(currentReactionRef);
+            if (hasReaction) {
+                await removeReactionMutation({ messageId, userId: user.uid, emoji });
             } else {
-                // First, remove any existing reaction from this user
-                const allReactionsRef = ref(rtdb, `messages/${chatId}/${messageId}/reactions`);
-                const reactionsSnap = await get(allReactionsRef);
-                
-                if (reactionsSnap.exists()) {
-                    const reactions = reactionsSnap.val();
-                    for (const [existingEmoji, users] of Object.entries(reactions)) {
-                        if (users[user.uid]) {
-                            await remove(ref(rtdb, `messages/${chatId}/${messageId}/reactions/${existingEmoji}/${user.uid}`));
-                        }
-                    }
-                }
-                
-                // Add new reaction
-                await set(currentReactionRef, true);
+                await addReactionMutation({ messageId, userId: user.uid, emoji });
             }
         } catch (error) {
             console.error('Reaction error:', error);
         }
     };
 
-    // --- DELETE HANDLER ---
-    const handleDelete = async (message, deleteType) => {
-        if (!chatId || !rtdb) return;
-
-        const confirmMsg = deleteType === 'everyone' 
-            ? 'Delete this message for everyone? This cannot be undone.'
-            : 'Delete this message for yourself?';
-        
-        if (!window.confirm(confirmMsg)) return;
-
-        try {
-            const msgRef = ref(rtdb, `messages/${chatId}/${message.id}`);
-            
-            if (deleteType === 'everyone') {
-                // Mark as deleted for everyone
-                await update(msgRef, { 
-                    deletedForAll: true, 
-                    deleted: true,
-                    deletedAt: serverTimestamp() 
-                });
-            } else {
-                // Mark as deleted for current user only
-                await update(msgRef, { 
-                    [`deletedFor/${user.uid}`]: true 
-                });
-            }
-        } catch (error) {
-            console.error('Delete error:', error);
-            alert('Failed to delete message');
-        }
-    };
-
     // --- FORWARD HANDLER ---
     const handleForward = async (message, targetChatIds) => {
-        if (!rtdb) {
-            alert("Chat functionality is not available. Realtime Database is not configured.");
+        if (!isConvexAvailable()) {
+            alert("Chat functionality is not available. Convex is not configured.");
             return;
         }
-        const timestamp = serverTimestamp();
+
         const forwardText = message.b || '';
         const forwardMedia = message.media || null;
 
         for (const targetChatId of targetChatIds) {
             try {
-                const newMsgKey = push(ref(rtdb, `messages/${targetChatId}`)).key;
-                const updates = {};
-                
-                updates[`messages/${targetChatId}/${newMsgKey}`] = {
-                    b: forwardText,
-                    s: user.uid,
-                    t: timestamp,
-                    n: userData.firstName || 'User',
-                    forwarded: true,
-                    forwardedFrom: chatName,
-                    ...(forwardMedia && { media: forwardMedia })
-                };
+                await sendMessageMutation({
+                    chatId: targetChatId,
+                    senderId: user.uid,
+                    senderName: userData.firstName || 'User',
+                    senderPhoto: userData.photoURL || null,
+                    content: `↪ Forwarded: ${forwardText}`,
+                    media: forwardMedia,
+                });
 
-                // Update conversation metadata
+                // Update conversation
                 const targetConvo = conversations?.find(c => c.id === targetChatId);
                 const summary = forwardText || (forwardMedia ? `Forwarded ${forwardMedia.type}` : 'Forwarded message');
                 
-                // Get recipients
-                let recipientIds = [user.uid];
-                if (targetConvo?.type === 'group') {
-                    const membersSnap = await get(ref(rtdb, `chats/${targetChatId}/members`));
-                    if (membersSnap.exists()) {
-                        recipientIds = Object.keys(membersSnap.val());
-                    }
-                } else if (targetConvo?.uid) {
-                    recipientIds = [user.uid, targetConvo.uid];
-                }
-
-                recipientIds.forEach(recipientUid => {
-                    const userPath = `conversations/${recipientUid}/${targetChatId}`;
-                    updates[`${userPath}/lm`] = `↪ ${summary}`;
-                    updates[`${userPath}/lmt`] = timestamp;
-                    updates[`${userPath}/ls`] = user.uid;
+                await updateConversationMutation({
+                    userId: user.uid,
+                    chatId: targetChatId,
+                    lastMessage: `↪ ${summary}`,
+                    lastMessageTime: Date.now(),
+                    lastSenderId: user.uid,
+                    chatName: targetConvo?.name || targetConvo?.n,
+                    chatPhoto: targetConvo?.photo || '',
+                    chatType: targetConvo?.type || 'direct',
+                    otherUserId: targetConvo?.uid,
                 });
-
-                await update(ref(rtdb), updates);
             } catch (error) {
                 console.error('Forward error for chat:', targetChatId, error);
             }
@@ -270,9 +179,8 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
     // --- SEND LOGIC ---
     const sendMessage = async (text, mediaData) => {
-        if (!chatId || (!text?.trim() && !mediaData) || !rtdb) return;
+        if (!chatId || (!text?.trim() && !mediaData) || !isConvexAvailable()) return;
         
-        const timestamp = serverTimestamp();
         let msgText = text ? text.trim() : '';
         if (msgText.length === 0 && mediaData) {
             msgText = mediaData.type === 'image' ? '📷 Image' : 
@@ -283,10 +191,10 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         // Handle edit mode
         if (editingMessage) {
             try {
-                await update(ref(rtdb, `messages/${chatId}/${editingMessage.id}`), {
-                    b: msgText,
-                    edited: true,
-                    editedAt: serverTimestamp()
+                await editMessageMutation({
+                    messageId: editingMessage.id,
+                    content: msgText,
+                    senderId: user.uid,
                 });
                 setEditingMessage(null);
                 return;
@@ -296,226 +204,226 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
             }
         }
 
-        const newMsgKey = push(ref(rtdb, `messages/${chatId}`)).key;
-        const updates = {};
-        
-        // Build message object
-        const messageData = {
-            b: msgText,
-            s: user.uid,
-            t: timestamp,
-            n: userData.firstName || 'User',
-            photo: userData.photoURL || null,
-            ...(mediaData && { media: mediaData })
-        };
+        try {
+            // Send message
+            await sendMessageMutation({
+                chatId,
+                senderId: user.uid,
+                senderName: userData.firstName || 'User',
+                senderPhoto: userData.photoURL || null,
+                content: msgText,
+                media: mediaData,
+                replyTo: replyingTo ? {
+                    messageId: replyingTo.id,
+                    text: replyingTo.b?.substring(0, 100) || 'Media',
+                    sender: replyingTo.n || 'User',
+                } : undefined,
+            });
 
-        // Add reply reference if replying
-        if (replyingTo) {
-            messageData.replyTo = {
-                id: replyingTo.id,
-                text: replyingTo.b?.substring(0, 100) || 'Media',
-                sender: replyingTo.n || 'User'
-            };
-        }
-
-        updates[`messages/${chatId}/${newMsgKey}`] = messageData;
-
-        const summary = msgText || (mediaData ? `Sent ${mediaData.type}` : 'Message');
-        
-        // Determine recipients
-        let recipientIds = [];
-        let otherUid = activeChat.uid;
-        
-        if (!otherUid && activeChat.type !== 'group' && chatId && chatId.includes('_')) {
-            const parts = chatId.split('_');
-            otherUid = parts.find(id => id !== user.uid);
-        }
-        
-        if (activeChat.type === 'group') {
-            try {
-                const membersSnap = await get(ref(rtdb, `chats/${chatId}/members`));
-                if (membersSnap.exists()) recipientIds = Object.keys(membersSnap.val());
-            } catch (e) { 
-                console.error(e); 
-                recipientIds = [user.uid]; 
+            // Update conversation for all recipients
+            const summary = msgText || (mediaData ? `Sent ${mediaData.type}` : 'Message');
+            let recipientIds = [];
+            let otherUid = activeChat.uid;
+            
+            if (!otherUid && activeChat.type !== 'group' && chatId && chatId.includes('_')) {
+                const parts = chatId.split('_');
+                otherUid = parts.find(id => id !== user.uid);
             }
-        } else if (otherUid) {
-            recipientIds = [user.uid, otherUid];
-        } else {
-            recipientIds = [user.uid];
-        }
-
-        // Update conversation metadata for all recipients
-        recipientIds.forEach(recipientUid => {
-            const userPath = `conversations/${recipientUid}/${chatId}`;
-            updates[`${userPath}/lm`] = summary;
-            updates[`${userPath}/lmt`] = timestamp;
-            updates[`${userPath}/ls`] = user.uid;
-            if (recipientUid === user.uid) updates[`${userPath}/uc`] = 0; 
             
             if (activeChat.type === 'group') {
-                updates[`${userPath}/n`] = chatName;
-                updates[`${userPath}/type`] = 'group';
-                updates[`${userPath}/uid`] = chatId;
+                // For group chats, get members from conversations or chat_members table
+                recipientIds = [user.uid]; // TODO: Get actual group members
+            } else if (otherUid) {
+                recipientIds = [user.uid, otherUid];
             } else {
-                const isMe = recipientUid === user.uid;
-                const otherName = activeChat.name || activeChat.n;
-                const myName = userData.displayName || `${userData.firstName} ${userData.lastName}`;
-                updates[`${userPath}/n`] = isMe ? otherName : myName;
-                updates[`${userPath}/photo`] = isMe ? (activeChat.photo || '') : (userData.photoURL || '');
-                updates[`${userPath}/uid`] = isMe ? (otherUid || chatId) : user.uid;
-                updates[`${userPath}/type`] = 'direct';
+                recipientIds = [user.uid];
             }
-        });
 
-        try { 
-            await update(ref(rtdb), updates);
+            // Update conversations for all recipients
+            for (const recipientUid of recipientIds) {
+                await updateConversationMutation({
+                    userId: recipientUid,
+                    chatId,
+                    lastMessage: summary,
+                    lastMessageTime: Date.now(),
+                    lastSenderId: user.uid,
+                    chatName: activeChat.type === 'group' ? chatName : (activeChat.name || activeChat.n),
+                    chatPhoto: activeChat.photo || '',
+                    chatType: activeChat.type || 'direct',
+                    otherUserId: activeChat.type === 'direct' ? (recipientUid === user.uid ? otherUid : user.uid) : undefined,
+                });
+
+                // Update unread count (increment for others, reset for sender)
+                if (recipientUid === user.uid) {
+                    await updateUnreadCountMutation({
+                        userId: recipientUid,
+                        chatId,
+                        setTo: 0,
+                    });
+                } else {
+                    await updateUnreadCountMutation({
+                        userId: recipientUid,
+                        chatId,
+                        increment: 1,
+                    });
+                }
+            }
+
             setReplyingTo(null);
-        } catch (error) { 
-            console.error(error); 
+        } catch (error) {
+            console.error('Send message error:', error);
+        }
+    };
+
+    // --- DELETE HANDLER ---
+    const handleDelete = async (messageId, forEveryone = false) => {
+        if (!chatId || !user?.uid || !isConvexAvailable()) return;
+
+        try {
+            await deleteMessageMutation({
+                messageId,
+                senderId: user.uid,
+                forEveryone,
+            });
+        } catch (error) {
+            console.error('Delete error:', error);
         }
     };
 
     // --- HEADER ---
     const ChatHeader = useMemo(() => (
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1f2128] sticky top-0 z-10 shadow-sm">
-            <div className="flex items-center">
-                <button 
-                    onClick={onBack} 
-                    className="p-2 mr-2 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition md:hidden"
+        <div className="flex items-center justify-between p-4 border-b dark:border-gray-800 bg-white dark:bg-[#1f2128]">
+            <div className="flex items-center gap-3 flex-1 min-w-0">
+                <button
+                    onClick={onBack}
+                    className="md:hidden p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </button>
+                
                 <div 
-                    className="flex items-center gap-3 cursor-pointer"
-                    onClick={() => {
-                        // For group chats, don't open profile (or use chatId if needed)
-                        // For direct chats, use activeChat.uid with fallback to otherUserId
-                        if (activeChat.type === 'group') {
-                            // Groups don't have a single profile to open
-                            return;
-                        }
-                        openPublicProfile?.(activeChat.uid || otherUserId);
-                    }}
+                    className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
+                    onClick={() => openPublicProfile?.(otherUserId ? { uid: otherUserId } : null)}
                 >
                     <UserAvatar 
-                        src={activeChat.photo} 
-                        name={chatName} 
-                        size="md" 
-                        isGroup={activeChat.type === 'group'} 
+                        src={activeChat?.photo || activeChat?.n?.photo || ''} 
+                        name={chatName}
+                        size="md"
                     />
-                    <div className="flex flex-col">
-                        <span className="font-bold text-gray-900 dark:text-white truncate max-w-[150px] md:max-w-xs text-sm">
-                            {chatName}
-                        </span>
-                        {activeChat.type !== 'group' && !presenceLoading && (
-                            <StatusBadge 
-                                online={online} 
-                                lastSeen={lastSeen}
-                                showLastSeen={!online}
-                            />
-                        )}
-                        {activeChat.type === 'group' && (
-                            <span className="text-xs text-gray-500">
-                                Group chat
-                            </span>
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-gray-900 dark:text-white truncate">
+                                {chatName}
+                            </h3>
+                            {activeChat?.type !== 'group' && (
+                                <PresenceIndicator 
+                                    online={online} 
+                                    lastSeen={lastSeen} 
+                                    loading={presenceLoading}
+                                />
+                            )}
+                        </div>
+                        {activeChat?.type !== 'group' && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {online ? 'Online' : lastSeen ? `Last seen ${formatLastSeen(lastSeen)}` : 'Offline'}
+                            </p>
                         )}
                     </div>
                 </div>
             </div>
-            <button 
-                onClick={toggleDetails} 
-                className="p-2 text-gray-500 hover:text-brand-blue dark:text-gray-400 dark:hover:text-white rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+
+            <button
+                onClick={toggleDetails}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors"
             >
-                <Info className="w-5 h-5" />
+                <Info className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             </button>
         </div>
-    ), [activeChat, chatName, onBack, toggleDetails, openPublicProfile, otherUserId, online, lastSeen, presenceLoading]);
+    ), [activeChat, chatName, online, lastSeen, presenceLoading, otherUserId, onBack, toggleDetails, openPublicProfile]);
+
+    // Format last seen helper
+    const formatLastSeen = (timestamp) => {
+        if (!timestamp) return 'Never';
+        const lastSeenMs = typeof timestamp === 'number' ? timestamp : timestamp;
+        const now = Date.now();
+        const diffMs = now - lastSeenMs;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return new Date(lastSeenMs).toLocaleDateString();
+    };
 
     return (
-        <div className="flex flex-col h-full bg-gray-50 dark:bg-[#1f2128]">
+        <div className="flex flex-col h-full bg-white dark:bg-[#1f2128]">
             {ChatHeader}
-            
-            {/* Messages area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar bg-gray-50 dark:bg-[#1f2128]">
+
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
                 {messages.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-center text-gray-400">
-                        <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                            <MessageSquare className="w-8 h-8 text-gray-300 dark:text-gray-600" />
-                        </div>
-                        <p className="font-bold text-gray-600 dark:text-gray-300">No messages yet</p>
-                        <p className="text-sm">Say hello to start the conversation!</p>
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                        <p>No messages yet. Start the conversation!</p>
                     </div>
                 ) : (
-                    messages.map((msg, index) => {
-                        // Determine message status for current user's messages
-                        let messageStatus = 'sent';
-                        if (msg.s === user.uid) {
-                            // Check if message has been read by recipient
-                            // Pass messages array for accurate timestamp comparison
-                            if (otherUserId && isMessageRead(msg.id, otherUserId, messages)) {
-                                messageStatus = 'read';
-                            } else {
-                                messageStatus = 'delivered';
-                            }
-                        }
-                        
+                    messages.map((message, index) => {
+                        const previousMessage = index > 0 ? messages[index - 1] : null;
+                        const isCurrentUser = message.s === user?.uid;
+                        const isRead = isMessageRead(message.id);
+                        const hasRead = hasCurrentUserRead(message.id);
+
                         return (
                             <MessageBubble
-                                key={msg.id}
-                                data-message-id={msg.id}
-                                message={msg}
-                                isCurrentUser={msg.s === user.uid}
-                                previousMessage={messages[index - 1]}
-                                currentUserId={user.uid}
+                                key={message.id}
+                                message={message}
+                                isCurrentUser={isCurrentUser}
+                                previousMessage={previousMessage}
+                                currentUserId={user?.uid}
                                 chatId={chatId}
-                                linkPreviewData={linkPreviewData[msg.id]}
-                                messageStatus={messageStatus}
-                                onReaction={handleReaction}
-                                onReply={(msg) => setReplyingTo(msg)}
-                                onEdit={(msg) => setEditingMessage(msg)}
-                                onDelete={handleDelete}
-                                onForward={(msg) => setForwardingMessage(msg)}
-                                onSeshNxLinkClick={handleSeshNxLinkClick}
-                                onUserClick={openPublicProfile}
+                                linkPreviewData={linkPreviewData[message.id]}
+                                messageStatus={isRead ? 'read' : hasRead ? 'delivered' : 'sent'}
+                                onReaction={(emoji) => handleReaction(message.id, emoji)}
+                                onReply={() => setReplyingTo(message)}
+                                onEdit={() => setEditingMessage(message)}
+                                onDelete={(forEveryone) => handleDelete(message.id, forEveryone)}
+                                onForward={() => setForwardingMessage(message)}
+                                onSeshNxLinkClick={(url) => setEmbedModal({ isOpen: true, url, previewData: null })}
+                                onUserClick={() => openPublicProfile?.({ uid: message.s })}
                             />
                         );
                     })
                 )}
                 <div ref={messagesEndRef} />
             </div>
-            
-            {/* Input area */}
-            <div className="sticky bottom-0 z-20">
-                <ChatInput 
-                    activeChatId={chatId} 
-                    uid={user.uid} 
-                    onSend={sendMessage} 
-                    typingUsers={[]}
-                    replyingTo={replyingTo}
-                    editingMessage={editingMessage}
-                    onCancelReply={() => {
-                        setReplyingTo(null);
-                        setEditingMessage(null);
-                    }}
-                />
-            </div>
-            
-            {/* Modals */}
-            <SeshNxEmbedModal 
-                url={embedModal.url} 
-                isOpen={embedModal.isOpen} 
-                onClose={() => setEmbedModal({ isOpen: false, url: '', previewData: null })} 
-                previewData={embedModal.previewData} 
+
+            {/* Chat Input */}
+            <ChatInput
+                onSend={sendMessage}
+                replyingTo={replyingTo}
+                editingMessage={editingMessage}
+                onCancelReply={() => setReplyingTo(null)}
+                onCancelEdit={() => setEditingMessage(null)}
             />
-            
+
+            {/* Forward Modal */}
             {forwardingMessage && (
                 <ForwardMessageModal
                     message={forwardingMessage}
-                    conversations={conversations || []}
-                    currentUserId={user.uid}
-                    onForward={handleForward}
+                    conversations={conversations}
                     onClose={() => setForwardingMessage(null)}
+                    onForward={handleForward}
+                />
+            )}
+
+            {/* Embed Modal */}
+            {embedModal.isOpen && (
+                <SeshNxEmbedModal
+                    url={embedModal.url}
+                    previewData={embedModal.previewData}
+                    onClose={() => setEmbedModal({ isOpen: false, url: '', previewData: null })}
                 />
             )}
         </div>

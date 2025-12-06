@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
-import { ref, onDisconnect, set, serverTimestamp, onValue, get } from 'firebase/database';
-import { rtdb } from '../config/firebase';
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { isConvexAvailable } from '../config/convex';
 
 /**
  * Hook for managing user online/offline presence
@@ -10,56 +11,46 @@ import { rtdb } from '../config/firebase';
  */
 export function usePresence(userId) {
     const isOnlineRef = useRef(false);
+    const updatePresenceMutation = useMutation(api.presence.updatePresence);
 
     useEffect(() => {
-        if (!userId || !rtdb) return;
+        if (!userId || !isConvexAvailable()) return;
 
-        const userStatusRef = ref(rtdb, `presence/${userId}`);
-        const userStatusDatabaseRef = ref(rtdb, `presence/${userId}`);
-        
         // Set user as online
-        set(userStatusDatabaseRef, {
+        updatePresenceMutation({
+            userId,
             online: true,
-            lastSeen: null
+            lastSeen: Date.now(),
         }).then(() => {
             isOnlineRef.current = true;
         }).catch((error) => {
             console.error('Presence online error:', error);
         });
 
-        // Handle disconnect
-        const disconnectRef = ref(rtdb, '.info/connected');
-        const disconnectUnsubscribe = onValue(disconnectRef, (snapshot) => {
-            if (snapshot.val() === false) {
-                // Client lost connection
-                return;
-            }
-
-            // When client disconnects, set offline
-            onDisconnect(userStatusDatabaseRef).set({
-                online: false,
-                lastSeen: serverTimestamp()
-            }).then(() => {
-                // Connection restored
-                set(userStatusDatabaseRef, {
+        // Set up interval to update lastSeen periodically
+        const interval = setInterval(() => {
+            if (isOnlineRef.current) {
+                updatePresenceMutation({
+                    userId,
                     online: true,
-                    lastSeen: null
-                });
-            });
-        });
+                    lastSeen: Date.now(),
+                }).catch(console.error);
+            }
+        }, 30000); // Update every 30 seconds
 
         // Cleanup: Set offline when component unmounts
         return () => {
-            disconnectUnsubscribe();
+            clearInterval(interval);
             if (isOnlineRef.current) {
-                set(userStatusDatabaseRef, {
+                updatePresenceMutation({
+                    userId,
                     online: false,
-                    lastSeen: serverTimestamp()
+                    lastSeen: Date.now(),
                 }).catch(console.error);
                 isOnlineRef.current = false;
             }
         };
-    }, [userId, rtdb]);
+    }, [userId, updatePresenceMutation]);
 }
 
 /**
@@ -69,43 +60,20 @@ export function usePresence(userId) {
  * @returns {object} { online, lastSeen, loading }
  */
 export function useUserPresence(userId) {
-    const [presence, setPresence] = useState({ online: false, lastSeen: null });
-    const [loading, setLoading] = useState(true);
+    const presenceData = useQuery(
+        api.presence.getPresence,
+        userId && isConvexAvailable() ? { userId } : "skip"
+    );
 
-    useEffect(() => {
-        if (!userId) {
-            setLoading(false);
-            return;
-        }
+    if (!presenceData) {
+        return { online: false, lastSeen: null, loading: true };
+    }
 
-        if (!rtdb) {
-            setPresence({ online: false, lastSeen: null });
-            setLoading(false);
-            return;
-        }
-
-        const presenceRef = ref(rtdb, `presence/${userId}`);
-        const unsubscribe = onValue(presenceRef, (snapshot) => {
-            if (snapshot.exists()) {
-                const data = snapshot.val();
-                setPresence({
-                    online: data.online === true,
-                    lastSeen: data.lastSeen
-                });
-            } else {
-                setPresence({ online: false, lastSeen: null });
-            }
-            setLoading(false);
-        }, (error) => {
-            console.error('Presence listener error:', error);
-            setPresence({ online: false, lastSeen: null });
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [userId, rtdb]);
-
-    return { ...presence, loading };
+    return {
+        online: presenceData.online === true,
+        lastSeen: presenceData.lastSeen,
+        loading: false,
+    };
 }
 
 /**
@@ -128,4 +96,3 @@ export function formatLastSeen(timestamp) {
     
     return new Date(lastSeenMs).toLocaleDateString();
 }
-

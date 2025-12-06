@@ -40,8 +40,9 @@ Copy this URL.
 1. Go to Vercel Dashboard → Your Project → **Settings** → **Environment Variables**
 2. Add:
    ```
-   VITE_CONVEX_URL=https://your-project.convex.cloud
+   CONVEX_DEPLOY_KEY=https://your-project.convex.cloud
    ```
+   **Note**: Vercel uses `CONVEX_DEPLOY_KEY` (not `VITE_CONVEX_URL`)
 3. Redeploy your project
 
 ### 6. Configure Convex

@@ -10,5 +10,6 @@ VITE_FIREBASE_MEASUREMENT_ID=G-7SP53NK9FM
 # Convex Configuration (for Chat/RTDB replacement)
 # Get this by running: npx convex dev
 # After running, you'll get a deployment URL like: https://xxxxx.convex.cloud
-VITE_CONVEX_URL=https://your-project.convex.cloud
+# Note: Vercel uses CONVEX_DEPLOY_KEY (not VITE_CONVEX_URL)
+CONVEX_DEPLOY_KEY=https://your-project.convex.cloud
 

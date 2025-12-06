@@ -5,8 +5,10 @@ import {
   CheckCircle, XCircle, ShoppingBag, ChevronRight
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, limit, getDocs } from 'firebase/firestore';
-import { ref, query as rtdbQuery, orderByChild, limitToLast, onValue } from 'firebase/database';
-import { db, rtdb, getPaths, appId } from '../config/firebase'; 
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { isConvexAvailable } from '../config/convex';
+import { db, getPaths, appId } from '../config/firebase'; 
 import StatCard from './shared/StatCard';
 import { PROFILE_SCHEMAS, BOOKING_THRESHOLD } from '../config/constants';
 
@@ -49,40 +51,32 @@ export default function Dashboard({
   const avgCompletion = roleCount > 0 ? Math.round((totalPct / roleCount) * 100) : 100;
   const showCompletionWarning = avgCompletion < 60;
 
-  // 1. Fetch Recent Conversations
+  // 1. Fetch Recent Conversations from Convex
+  const conversationsData = useQuery(
+    api.conversations.getConversations,
+    user?.uid && isConvexAvailable() ? { userId: user.uid } : "skip"
+  );
+
   useEffect(() => {
-    if (!user?.uid || !rtdb) {
-      // RTDB not available - set empty conversations
+    if (!conversationsData) {
       setRecentConvos([]);
       return;
     }
-    
-    const convosRef = rtdbQuery(
-        ref(rtdb, `conversations/${user.uid}`),
-        orderByChild('lmt'), 
-        limitToLast(3)       
-    );
 
-    const unsubscribe = onValue(convosRef, (snapshot) => {
-        const data = snapshot.val();
-        if (!data) {
-            setRecentConvos([]);
-            return;
-        }
+    // Transform and get top 3 most recent
+    const convos = conversationsData
+      .map(conv => ({
+        uid: conv.otherUserId || conv.chatId,
+        name: conv.chatName || 'Unknown',
+        lastMessage: conv.lastMessage || '',
+        timestamp: conv.lastMessageTime || 0,
+        isMe: conv.lastSenderId === user.uid
+      }))
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 3); // Get top 3
 
-        const convos = Object.entries(data).map(([key, val]) => ({
-            uid: val.uid,
-            name: val.n,           
-            lastMessage: val.lm,   
-            timestamp: val.lmt,    
-            isMe: val.ls === user.uid 
-        })).sort((a, b) => b.timestamp - a.timestamp);
-
-        setRecentConvos(convos);
-    });
-
-    return () => unsubscribe();
-  }, [user?.uid, rtdb]);
+    setRecentConvos(convos);
+  }, [conversationsData, user?.uid]);
 
   // 2. Fetch Trending Marketplace Item
   useEffect(() => {

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, updateDoc } from 'firebase/firestore';
+import { ConvexProvider } from "convex/react";
 import { app, appId } from './config/firebase';
+import { convex } from './config/convex';
 import { Loader2 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
@@ -228,7 +230,7 @@ export default function App() {
   const isEduMode = activeTab.startsWith('edu-');
   const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('Admin') || userData?.accountTypes?.includes('Instructor'));
 
-  return (
+  const appContent = (
     <SchoolProvider user={user} userData={userData}>
       <div className="flex h-screen flex-col bg-gray-50 dark:bg-[#1a1d21] overflow-hidden selection:bg-brand-blue selection:text-white">
         <Toaster 
@@ -308,4 +310,11 @@ export default function App() {
       </div>
     </SchoolProvider>
   );
+
+  // Wrap with ConvexProvider if available
+  if (convex) {
+    return <ConvexProvider client={convex}>{appContent}</ConvexProvider>;
+  }
+
+  return appContent;
 }

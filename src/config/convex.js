@@ -1,10 +1,11 @@
 import { ConvexReactClient } from "convex/react";
 
-const convexUrl = import.meta.env.VITE_CONVEX_URL;
+// Support both VITE_CONVEX_URL and CONVEX_DEPLOY_KEY (Vercel uses CONVEX_DEPLOY_KEY)
+const convexUrl = import.meta.env.CONVEX_DEPLOY_KEY || import.meta.env.VITE_CONVEX_URL;
 
 if (!convexUrl) {
   console.warn('⚠️ Convex URL not found. Chat functionality will be disabled.');
-  console.warn('   Set VITE_CONVEX_URL in Vercel environment variables.');
+  console.warn('   Set CONVEX_DEPLOY_KEY in Vercel environment variables.');
 }
 
 export const convex = convexUrl 
