@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
+import { httpsCallable } from 'firebase/functions';
 import { Check, Plus, Zap, TrendingUp, DollarSign, Loader2, Shield, Star, Lock, ArrowRight, AlertCircle } from 'lucide-react';
-import { db, getPaths, app } from '../config/firebase'; 
+import { db, getPaths, functions } from '../config/firebase'; 
 import { SUBSCRIPTION_PLAN_KEYS } from '../config/constants';
 import { useDynamicConfig } from '../hooks/useDynamicConfig';
 import { handlePayout } from '../utils/paymentUtils';
@@ -39,10 +39,8 @@ export default function PaymentsManager({ user, userData }) {
   const handleCheckout = async (priceId, mode = 'payment') => {
       setProcessing(true);
       try {
-          // Initialize functions here to avoid race conditions
-          const functions = getFunctions(app);
+          // Use exported functions instance
           const createSession = httpsCallable(functions, 'createStripeCheckoutSession');
-          
           const { data } = await createSession({
               price: priceId,
               mode: mode,
