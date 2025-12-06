@@ -74,7 +74,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         }));
     }, [messagesData]);
 
-    // Mutations
+    // Mutations - hooks must be called unconditionally (React rules)
     const sendMessageMutation = useMutation(api.messages.sendMessage);
     const editMessageMutation = useMutation(api.messages.editMessage);
     const deleteMessageMutation = useMutation(api.messages.deleteMessage);

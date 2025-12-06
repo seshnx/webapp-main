@@ -11,10 +11,11 @@ import { isConvexAvailable } from '../config/convex';
  */
 export function usePresence(userId) {
     const isOnlineRef = useRef(false);
-    const updatePresenceMutation = isConvexAvailable() ? useMutation(api.presence.updatePresence) : null;
+    // Hook must be called unconditionally (React rules)
+    const updatePresenceMutation = useMutation(api.presence.updatePresence);
 
     useEffect(() => {
-        if (!userId || !isConvexAvailable() || !updatePresenceMutation) return;
+        if (!userId || !isConvexAvailable()) return;
 
         // Set user as online
         updatePresenceMutation({

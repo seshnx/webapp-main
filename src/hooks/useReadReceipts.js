@@ -18,6 +18,7 @@ export function useReadReceipts(chatId, currentUserId) {
         chatId && currentUserId && isConvexAvailable() ? { chatId } : "skip"
     );
 
+    // Hooks must be called unconditionally (React rules)
     const markAsReadMutation = useMutation(api.readReceipts.markAsRead);
     const markMultipleAsReadMutation = useMutation(api.readReceipts.markMultipleAsRead);
 
