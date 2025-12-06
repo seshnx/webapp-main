@@ -1,0 +1,156 @@
+import React, { useState, useEffect } from 'react';
+import { useSchool } from '../../contexts/SchoolContext';
+import { doc, updateDoc, arrayUnion, arrayRemove, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { MapPin, Search, CheckCircle, Clock, School } from 'lucide-react';
+
+export default function EduStudentDashboard({ user, userData }) {
+    const { schoolData, studentProfile } = useSchool();
+    
+    const [newInterest, setNewInterest] = useState('');
+    const [studios, setStudios] = useState([]);
+    const [loadingStudios, setLoadingStudios] = useState(false);
+
+    const interests = userData?.internshipCities || [];
+    
+    const handleAddInterest = async () => {
+        const trimmed = newInterest.trim();
+        if (trimmed && interests.length < 3) {
+            try {
+                await updateDoc(doc(db, 'users', user.uid), {
+                    internshipCities: arrayUnion(trimmed)
+                });
+                setNewInterest('');
+            } catch (e) { console.error("Error adding interest:", e); }
+        }
+    };
+
+    const handleRemoveInterest = async (interest) => {
+        try {
+            await updateDoc(doc(db, 'users', user.uid), {
+                internshipCities: arrayRemove(interest)
+            });
+        } catch (e) { console.error("Error removing interest:", e); }
+    };
+
+    useEffect(() => {
+        if (userData?.programComplete) {
+            fetchAvailableStudios();
+        }
+    }, [userData?.programComplete, interests]);
+
+    const fetchAvailableStudios = async () => {
+        setLoadingStudios(true);
+        try {
+            const q = query(collection(db, 'studios'), where('allowInternship', '==', true));
+            const snap = await getDocs(q);
+            let results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+            if (interests.length > 0) {
+                results = results.filter(studio => 
+                    interests.some(interest => 
+                        studio.city?.toLowerCase().includes(interest.toLowerCase()) || 
+                        studio.zipCode?.includes(interest)
+                    )
+                );
+            }
+            setStudios(results);
+        } catch (e) { console.error("Error fetching studios:", e); } 
+        finally { setLoadingStudios(false); }
+    };
+    
+    const progress = (studentProfile?.hoursLogged || 0) / (schoolData?.requiredHours || 100);
+
+    return (
+        <div className="max-w-5xl mx-auto space-y-8 pb-20">
+            
+            {/* --- SCHOOL IDENTITY HEADER --- */}
+            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm flex flex-col md:flex-row items-center gap-6">
+                <div className="h-24 w-24 bg-gray-100 dark:bg-gray-800 rounded-xl flex items-center justify-center overflow-hidden border-2 border-gray-200 dark:border-gray-600 shrink-0 p-2">
+                    {schoolData?.logoURL ? (
+                        <img src={schoolData.logoURL} className="h-full w-full object-contain" alt="School Logo" />
+                    ) : (
+                        <School size={32} className="text-gray-400"/>
+                    )}
+                </div>
+                <div className="flex-1 text-center md:text-left">
+                    <h1 className="text-3xl font-extrabold dark:text-white tracking-tight mb-1">
+                        {schoolData?.name || 'Student Dashboard'}
+                    </h1>
+                    <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-sm font-medium text-gray-500 dark:text-gray-400">
+                        <span className="bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 px-2 py-0.5 rounded text-xs uppercase font-bold tracking-wide">
+                            Student Portal
+                        </span>
+                        <span>•</span>
+                        <span>ID: {userData?.studentId || 'N/A'}</span>
+                        <span>•</span>
+                        <span>Cohort: {studentProfile?.cohort || 'General'}</span>
+                    </div>
+                </div>
+                
+                {/* Progress Stats */}
+                <div className="w-full md:w-64 bg-gray-50 dark:bg-black/20 p-4 rounded-xl border dark:border-gray-700">
+                    <div className="flex justify-between text-sm font-bold mb-2">
+                        <span className="dark:text-gray-300">Progress</span>
+                        <span className="text-indigo-600">{Math.round(progress * 100)}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden mb-2">
+                        <div className="h-full bg-indigo-600" style={{ width: `${Math.min(100, progress * 100)}%` }}></div>
+                    </div>
+                    <p className="text-xs text-gray-500 text-right">{studentProfile?.hoursLogged || 0} / {schoolData?.requiredHours || 100} Hours</p>
+                </div>
+            </div>
+            
+            {/* Internship Interests */}
+            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-6">
+                <h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><MapPin size={20} className="text-indigo-500" /> Internship Locations</h2>
+                <p className="text-gray-500 text-sm">Add up to 3 target locations (City, Zip, or County) to find matched studios.</p>
+                
+                <div className="flex flex-wrap gap-2">
+                    {interests.map(interest => (
+                        <span key={interest} className="bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300 text-sm font-medium px-3 py-1 rounded-full flex items-center gap-1">
+                            {interest}
+                            <button onClick={() => handleRemoveInterest(interest)} className="ml-1 hover:text-indigo-800">&times;</button>
+                        </span>
+                    ))}
+                </div>
+
+                {interests.length < 3 && (
+                    <div className="flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="Enter City or Zip Code"
+                            value={newInterest}
+                            onChange={(e) => setNewInterest(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleAddInterest()}
+                            className="flex-1 p-2 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-indigo-500 outline-none"
+                        />
+                        <button onClick={handleAddInterest} disabled={!newInterest.trim()} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold disabled:opacity-50">Add</button>
+                    </div>
+                )}
+            </div>
+            
+            {/* Available Studios */}
+            {userData?.programComplete && (
+                <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
+                    <h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><Search size={20} className="text-indigo-500" /> Available Studios</h2>
+                    {loadingStudios ? <p className="text-gray-500 flex items-center gap-2"><Clock className="animate-spin" size={16}/> Searching...</p> : (
+                        studios.length > 0 ? (
+                            <div className="space-y-3">
+                                {studios.map(studio => (
+                                    <div key={studio.id} className="p-4 border rounded-lg dark:border-gray-700 flex justify-between items-center hover:bg-gray-50 dark:hover:bg-white/5 transition">
+                                        <div>
+                                            <p className="font-bold dark:text-white text-lg">{studio.name}</p>
+                                            <p className="text-sm text-gray-500 flex items-center gap-1"><MapPin size={12}/> {studio.city}, {studio.state}</p>
+                                        </div>
+                                        <button className="text-indigo-600 font-bold text-sm hover:underline">View Details</button>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : <p className="text-gray-500 flex items-center gap-2"><CheckCircle size={16}/> No studios found matching your criteria yet.</p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}

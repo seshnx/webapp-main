@@ -1,0 +1,128 @@
+import React from 'react';
+import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, GraduationCap, ShieldCheck, Wrench } from 'lucide-react';
+import { signOut } from 'firebase/auth';
+import { auth } from '../config/firebase';
+import { useSchool } from '../contexts/SchoolContext';
+
+export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) {
+  const { isStudent, isStaff } = useSchool(); // Use Context Flags
+
+  const links = [
+    { id: 'dashboard', icon: <User size={18} />, label: 'Dashboard' },
+    { id: 'feed', icon: <MessageSquare size={18} />, label: 'SocialNx' },
+    { id: 'marketplace', icon: <ShoppingBag size={18} />, label: 'Marketplace' },
+    { id: 'tech', icon: <Wrench size={18} />, label: 'Tech Services' }, 
+    { id: 'bookings', icon: <Calendar size={18} />, label: 'Bookings' },
+    { id: 'messages', icon: <MessageCircle size={18} />, label: 'Messages' },
+    { id: 'payments', icon: <CreditCard size={18} />, label: 'Billing' },
+    { id: 'profile', icon: <Settings size={18} />, label: 'Profile' },
+  ];
+
+  // Insert Studio Ops if Studio
+  if (userData?.accountTypes?.includes('Studio')) {
+    const insertIdx = links.findIndex(l => l.id === 'profile');
+    if (insertIdx !== -1) {
+        links.splice(insertIdx, 0, { id: 'studio-ops', icon: <Sliders size={18} />, label: 'Studio Ops', highlight: true });
+    }
+  }
+
+  // --- UPDATED: EDU Panel Logic ---
+  // Now checks for Students OR Staff (Instructors/Admins)
+  const isIntern = userData?.accountTypes?.includes('Intern');
+  
+  if (isStudent || isIntern || isStaff || userData?.accountTypes?.includes('student')) {
+      const insertIdx = links.findIndex(l => l.id === 'payments');
+      
+      // Determine label based on role
+      let label = 'EDU Panel';
+      if (isIntern) label = 'Internship';
+      else if (isStaff) label = 'School Admin';
+
+      // Determine routing ID
+      let routeId = 'edu-overview'; // Default for staff/students
+      if (isIntern) routeId = 'edu-intern';
+      else if (isStudent) routeId = 'edu-student';
+
+      links.splice(insertIdx, 0, { 
+          id: routeId,
+          icon: <GraduationCap size={18} />, 
+          label: label, 
+          highlight: true 
+      });
+  }
+
+  const onLogout = handleLogout || (() => signOut(auth));
+
+  const handleNavigation = (id) => {
+    setActiveTab(id);
+    if (setSidebarOpen) setSidebarOpen(false);
+  };
+
+  const SidebarContent = ({ isMobile }) => (
+    <>
+      <div className="flex-1 py-4 overflow-y-auto scrollbar-hide">
+        {isMobile && (
+            <div className="px-4 mb-6 flex items-center justify-between">
+                <div className="text-xs font-bold text-gray-400 uppercase">Menu</div>
+                <button onClick={() => setSidebarOpen(false)} className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
+                    <X size={20} />
+                </button>
+            </div>
+        )}
+        
+        <nav className="space-y-1 px-2">
+            {links.map(link => (
+            <button
+                key={link.id}
+                onClick={() => handleNavigation(link.id)}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
+                ${activeTab === link.id 
+                    ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' 
+                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
+                ${link.highlight ? 'text-amber-600 dark:text-amber-500' : ''}
+                `}
+            >
+                {link.icon}
+                {link.label}
+            </button>
+            ))}
+        </nav>
+
+        <div className="mt-auto px-2 pt-4">
+            <button onClick={() => handleNavigation('legal')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${activeTab === 'legal' ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+                <ShieldCheck size={18} />
+                Legal Center
+            </button>
+        </div>
+      </div>
+
+      <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-white dark:bg-[#1f2128]">
+        <button onClick={onLogout} className="flex items-center gap-2 text-red-500 text-sm font-medium hover:opacity-80 px-2 w-full py-2 rounded hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+          <LogOut size={16} /> Sign Out
+        </button>
+      </div>
+    </>
+  );
+
+  const isLabelOrAgent = userData?.accountTypes?.some(t => ['Label', 'Agent'].includes(t));
+  if (isLabelOrAgent) {
+      const insertIdx = links.findIndex(l => l.id === 'bookings');
+      if (insertIdx !== -1) {
+          links.splice(insertIdx, 0, { id: 'roster', icon: <ShieldCheck size={18} />, label: 'Label Roster', highlight: true });
+      }
+  }
+
+  return (
+    <>
+      <aside className="hidden lg:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-30">
+         <SidebarContent isMobile={false} />
+      </aside>
+
+      <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-opacity duration-300 lg:hidden ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setSidebarOpen(false)} />
+
+      <aside className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-transform duration-300 cubic-bezier(0.4, 0, 0.2, 1) flex flex-col h-full lg:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+         <SidebarContent isMobile={true} />
+      </aside>
+    </>
+  );
+}

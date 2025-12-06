@@ -1,0 +1,45 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to check auth
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // 1. Users & Private Data
+    match /artifacts/{appId}/users/{userId}/{document=**} {
+      allow read, write: if isAuthenticated(); // Simplified for beta: any user can read any user data (public profiles)
+    }
+
+    // 2. Public Feed
+    match /artifacts/{appId}/public/data/posts/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // 3. Public Profiles (Search Directory)
+    match /artifacts/{appId}/public/data/profiles/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // 4. Marketplace Items
+    match /artifacts/{appId}/public/data/market_items/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // 5. Service Requests
+    match /artifacts/{appId}/public/data/service_requests/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // 6. Direct Messages
+    match /artifacts/{appId}/public/data/direct_messages/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+    
+    // 7. Bookings
+    match /artifacts/{appId}/public/data/bookings/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}

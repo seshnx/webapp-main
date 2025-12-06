@@ -1,0 +1,68 @@
+{
+  "rules": {
+    "conversations": {
+      "$uid": {
+        // 1. READ: Only the user can see their own inbox
+        ".read": "auth !== null && auth.uid === $uid",
+        
+        "$convId": {
+          // 2. WRITE: Allow if User is the owner ($uid) OR a participant in the chat ID (for fan-out updates)
+          // We assume convId is format "uid1_uid2" (sorted). 
+          ".write": "auth !== null && $convId.contains(auth.uid)",
+          
+          // 3. VALIDATION: Enforce Schema & Types
+          ".validate": "newData.hasChildren(['uid', 'n', 'lm', 'lmt'])",
+          
+          // Partner ID
+          "uid": { ".validate": "newData.isString()" },
+          
+          // Name (n)
+          "n": { ".validate": "newData.isString()" },
+          
+          // Last Message (lm)
+          "lm": { ".validate": "newData.isString()" },
+          
+          // Last Message Timestamp (lmt)
+          "lmt": { ".validate": "newData.isNumber()" },
+          
+          // Last Sender ID (ls) - Needed for 'You:' prefix logic
+          "ls": { ".validate": "newData.isString()" },
+          
+          // Unread Count (uc)
+          "uc": { ".validate": "newData.isNumber()" },
+          
+          // Is Pinned (ip) - Optional, Boolean
+          "ip": { ".validate": "newData.isBoolean()" },
+          
+          // Prevent unknown fields (like the old long keys) from being written
+          "$other": { ".validate": false }
+        }
+      }
+    },
+    
+    "messages": {
+      "$convId": {
+        // 4. SECURITY: Only allow access if auth.uid is part of the conversation ID string
+        ".read": "auth !== null && $convId.contains(auth.uid)",
+        ".write": "auth !== null && $convId.contains(auth.uid)",
+        
+        "$msgId": {
+          // 5. MESSAGE SCHEMA: Enforce short keys
+          ".validate": "newData.hasChildren(['b', 's', 't'])",
+          
+          // Body (b): Must be a string and not empty
+          "b": { ".validate": "newData.isString() && newData.val().length > 0" },
+          
+          // Sender (s): Must match the authenticated user
+          "s": { ".validate": "newData.val() === auth.uid" },
+          
+          // Timestamp (t): Must be a number and not in the future
+          "t": { ".validate": "newData.isNumber() && newData.val() <= now" },
+          
+          // Block old keys or junk data
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}

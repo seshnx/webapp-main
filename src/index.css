@@ -1,0 +1,54 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom Scrollbar */
+@layer utilities {
+  /* Chrome, Safari, Edge */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent; 
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-300 dark:bg-gray-700 rounded-full hover:bg-gray-400 dark:hover:bg-gray-600 transition-colors;
+  }
+
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.gray.300') transparent;
+  }
+
+  .dark * {
+    scrollbar-color: theme('colors.gray.700') transparent;
+  }
+}
+
+/* Base Styles */
+body {
+  @apply bg-gray-50 text-gray-900 dark:bg-[#1a1d21] dark:text-white transition-colors duration-300 antialiased;
+  /* Prevent bounce on iOS/Mac */
+  overscroll-behavior-y: none; 
+}
+
+/* Animations Utility Classes (Optional fallback if Framer fails) */
+.fade-in {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Mobile Touch Optimization */
+@media (max-width: 640px) {
+  input, select, textarea {
+    font-size: 16px; /* Prevents zoom on focus */
+  }
+}

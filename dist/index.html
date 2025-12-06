@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en" style="background-color: #1f2128;">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    
+    <link rel="icon" type="image/png" href="/assets/Fevicon-TMLO4Pj9.png" />
+    
+    <title>SeshNx | Dashboard</title>
+    
+    <style>
+      html, body {
+        background-color: #1f2128 !important;
+        color: #ffffff;
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        font-family: 'Inter', sans-serif;
+        overflow: hidden;
+        /* Disables browser touch gestures (zoom/pan) for a native app feel */
+        touch-action: none;
+      }
+      /* Fallback UI Styling */
+      #loading-fallback {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100vh;
+        width: 100vw;
+        background-color: #1f2128; /* Ensure it has its own background */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        padding: 20px;
+        z-index: 9999; /* Sit on top of everything */
+        transition: opacity 0.5s ease-out; /* Smooth fade out */
+      }
+      #loading-fallback.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+    </style>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="/assets/index-Dfvy0qTY.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-gAE08GBI.css">
+  <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
+  <body>
+    
+    <div id="loading-fallback">
+      <h1 style="font-size: 3rem; margin-bottom: 1rem; color: #3D84ED; line-height: 1.1;">
+        One sec...
+      </h1>
+      <p id="meme-text" style="font-size: 1.2rem; margin-bottom: 0.5rem; opacity: 0.9; max-width: 600px;">
+        Loading Studio...
+      </p>
+      <p style="opacity: 0.5; font-size: 0.8rem; margin-top: 2rem;">
+        (If this hangs, we're probably troubleshooting a ground loop.)
+      </p>
+    </div>
+
+    <div id="root"></div>
+
+    <script>
+      (function() {
+        try {
+          const phrases = [
+            "We'll fix it in the mix.",
+            "Did you check the signal flow?",
+            "It sounds better with the plugin bypassed.",
+            "Just waiting for the drummer to show up.",
+            "Troubleshooting a sample rate mismatch...",
+            "Applying more compression...",
+            "The client wants it 'warmer'.",
+            "Searching for the iLok dongle...",
+            "Phase cancellation detected.",
+            "Buffering... classic latency issues.",
+            "One more take. For safety.",
+            "Is the phantom power on?",
+            "We're just clocking the converters.",
+            "Updating the firmware on the coffee machine.",
+            "Trying to find 400Hz.",
+            "The intern deleted the click track.",
+            "Checking the null test.",
+            "Comping the vocals...",
+            "Printing the stems..."
+          ];
+          const el = document.getElementById('meme-text');
+          if (el) el.innerText = phrases[Math.floor(Math.random() * phrases.length)];
+        } catch (e) {}
+      })();
+    </script>
+
+  </body>
+</html>
