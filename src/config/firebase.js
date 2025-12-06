@@ -5,14 +5,17 @@ import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 // import { getFunctions } from 'firebase/functions';
 
+// Firebase Configuration
+// NEW PROJECT: seshnx-db (fresh start to clear misconfigurations)
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCmGxvXX2D11Jo3NZlD0jO1vQpskaG0sCU",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "seshnx-db.firebaseapp.com",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://seshnx-db-default-rtdb.firebaseio.com", // RTDB URL
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "seshnx-db",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "seshnx-db.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "718084970004",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:718084970004:web:d68ba48c5eb493af9db901",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-7SP53NK9FM"
 };
 
 // 1. Singleton Pattern for App (Fixes HMR/Re-init issues and _checkNotDeleted error)
@@ -40,30 +43,27 @@ export const db = firestoreDb;
 // export const functions = null; // Removed export to prevent null access errors
 
 // 3. Initialize Optional Services (Storage & Realtime DB)
-// Testing incrementally to find crash causer
+// Services are initialized with error handling - if not available, they'll be null
 let storageInstance = null;
 let rtdbInstance = null;
 
-// Step 1: RTDB initialization (working - error caught gracefully)
-if (firebaseConfig.projectId && firebaseConfig.projectId.trim() !== '') {
+// Initialize RTDB if databaseURL is configured (indicates RTDB is enabled)
+if (firebaseConfig.databaseURL && firebaseConfig.databaseURL.trim() !== '') {
   try {
-    console.log('Attempting to initialize RTDB...');
     rtdbInstance = getDatabase(app);
-    console.log('RTDB initialized successfully');
   } catch (error) {
+    // Service not available - log error for debugging
     console.error('RTDB initialization error:', error);
     rtdbInstance = null;
   }
 }
 
-// Step 2: Try initializing Storage
+// Initialize Storage if storageBucket is configured
 if (firebaseConfig.storageBucket && firebaseConfig.storageBucket.trim() !== '') {
   try {
-    console.log('Attempting to initialize Storage...');
     storageInstance = getStorage(app);
-    console.log('Storage initialized successfully');
   } catch (error) {
-    console.error('Storage initialization error:', error);
+    // Service not available - expected if Storage is not enabled in Firebase project
     storageInstance = null;
   }
 }
