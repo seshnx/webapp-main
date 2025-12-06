@@ -1,9 +1,14 @@
+# Firebase Configuration (for Auth and Firestore)
 VITE_FIREBASE_API_KEY=AIzaSyCmGxvXX2D11Jo3NZlD0jO1vQpskaG0sCU
 VITE_FIREBASE_AUTH_DOMAIN=seshnx-db.firebaseapp.com
-VITE_FIREBASE_DATABASE_URL=https://seshnx-db-default-rtdb.firebaseio.com
 VITE_FIREBASE_PROJECT_ID=seshnx-db
 VITE_FIREBASE_STORAGE_BUCKET=seshnx-db.firebasestorage.app
 VITE_FIREBASE_MESSAGING_SENDER_ID=718084970004
 VITE_FIREBASE_APP_ID=1:718084970004:web:d68ba48c5eb493af9db901
 VITE_FIREBASE_MEASUREMENT_ID=G-7SP53NK9FM
+
+# Supabase Configuration (for Chat/RTDB replacement)
+# Get these from: https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
 
