@@ -15,6 +15,20 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      external: (id) => {
+        // Exclude all Convex server-side code from bundling
+        if (id.includes('convex/server') || (id.startsWith('convex/') && !id.includes('_generated/api'))) {
+          return true;
+        }
+        return false;
+      },
+    },
+  },
+  optimizeDeps: {
+    exclude: ['convex/server'],
+  },
   plugins: [
     react(),
     VitePWA({
