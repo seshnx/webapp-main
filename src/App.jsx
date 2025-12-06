@@ -36,6 +36,7 @@ import StudentEnrollment from './components/EDU/StudentEnrollment';
 
 import { SchoolProvider } from './contexts/SchoolContext';
 import PageTransition from './components/shared/PageTransition';
+import ErrorBoundary from './components/shared/ErrorBoundary';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -313,5 +314,16 @@ export default function App() {
 
   // Always wrap with ConvexProvider - hooks require it even if Convex isn't configured
   // The client will be created with a placeholder URL if CONVEX_DEPLOY_KEY isn't set
-  return <ConvexProvider client={convex}>{appContent}</ConvexProvider>;
+  return (
+    <ErrorBoundary 
+      name="App" 
+      context={{ 
+        userId: user?.uid, 
+        activeTab,
+        userAccountTypes: userData?.accountTypes 
+      }}
+    >
+      <ConvexProvider client={convex}>{appContent}</ConvexProvider>
+    </ErrorBoundary>
+  );
 }

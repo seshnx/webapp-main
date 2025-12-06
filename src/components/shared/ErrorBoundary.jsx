@@ -1,5 +1,6 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home, Copy, Check } from 'lucide-react';
+import { logError } from '../../utils/errorReporting';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -7,18 +8,39 @@ class ErrorBoundary extends React.Component {
     this.state = { 
       hasError: false, 
       error: null,
-      meme: "Unexpected signal chain failure." 
+      errorInfo: null,
+      meme: "Unexpected signal chain failure.",
+      errorId: null,
+      copied: false
     };
   }
 
   static getDerivedStateFromError(error) {
     // Update state so the next render will show the fallback UI.
-    return { hasError: true, error };
+    return { 
+      hasError: true, 
+      error,
+      errorId: `ERR-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    };
   }
 
   componentDidCatch(error, errorInfo) {
-    // You can also log the error to an error reporting service here
-    console.error("SeshNx Error Boundary Caught:", error, errorInfo);
+    // Log error with full context
+    const context = {
+      componentStack: errorInfo.componentStack,
+      errorBoundary: this.props.name || 'Default',
+      props: this.props.context || {},
+    };
+
+    const loggedError = logError(error, errorInfo, context);
+    
+    // Store error info for display
+    this.setState({ 
+      errorInfo: {
+        ...errorInfo,
+        errorId: this.state.errorId || loggedError.timestamp,
+      }
+    });
   }
 
   componentDidMount() {
@@ -39,12 +61,44 @@ class ErrorBoundary extends React.Component {
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ 
+      hasError: false, 
+      error: null, 
+      errorInfo: null,
+      errorId: null,
+      copied: false
+    });
     // Optional: Redirect to home/dashboard if recovery isn't possible
     if (this.props.onReset) {
       this.props.onReset();
     } else {
-      window.location.href = '/';
+      // Try to reset to a safe state
+      const currentPath = window.location.pathname;
+      if (currentPath !== '/' && currentPath !== '/dashboard') {
+        window.location.href = '/?tab=dashboard';
+      } else {
+        window.location.reload();
+      }
+    }
+  };
+
+  handleCopyError = async () => {
+    const errorText = `
+Error ID: ${this.state.errorId}
+Message: ${this.state.error?.message || 'Unknown error'}
+Stack: ${this.state.error?.stack || 'No stack trace'}
+Component Stack: ${this.state.errorInfo?.componentStack || 'No component stack'}
+URL: ${window.location.href}
+User Agent: ${navigator.userAgent}
+Timestamp: ${new Date().toISOString()}
+    `.trim();
+
+    try {
+      await navigator.clipboard.writeText(errorText);
+      this.setState({ copied: true });
+      setTimeout(() => this.setState({ copied: false }), 2000);
+    } catch (err) {
+      console.error('Failed to copy error:', err);
     }
   };
 
@@ -69,11 +123,48 @@ class ErrorBoundary extends React.Component {
                 "{this.state.meme}"
               </p>
 
-              <div className="bg-[#1f2128] p-4 rounded-lg w-full mb-8 text-left border border-gray-700">
-                <p className="text-xs text-gray-500 uppercase font-bold mb-1 tracking-wider">Error Log</p>
-                <code className="text-sm text-red-400 font-mono break-words line-clamp-3">
-                  {this.state.error && this.state.error.toString()}
-                </code>
+              <div className="bg-[#1f2128] p-4 rounded-lg w-full mb-6 text-left border border-gray-700">
+                <div className="flex justify-between items-center mb-2">
+                  <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Error Details</p>
+                  <button
+                    onClick={this.handleCopyError}
+                    className="text-xs text-gray-400 hover:text-white flex items-center gap-1 transition-colors"
+                    title="Copy error details"
+                  >
+                    {this.state.copied ? (
+                      <>
+                        <Check size={12} />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy size={12} />
+                        Copy
+                      </>
+                    )}
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {this.state.errorId && (
+                    <div>
+                      <span className="text-xs text-gray-500">Error ID: </span>
+                      <code className="text-xs text-blue-400 font-mono">{this.state.errorId}</code>
+                    </div>
+                  )}
+                  <code className="text-sm text-red-400 font-mono break-words block">
+                    {this.state.error?.message || 'Unknown error occurred'}
+                  </code>
+                  {this.state.error?.stack && (
+                    <details className="mt-2">
+                      <summary className="text-xs text-gray-500 cursor-pointer hover:text-gray-400">
+                        Stack Trace
+                      </summary>
+                      <pre className="text-xs text-gray-400 font-mono mt-2 overflow-auto max-h-32">
+                        {this.state.error.stack}
+                      </pre>
+                    </details>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-4 w-full">
