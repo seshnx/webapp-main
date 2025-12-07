@@ -1,4 +1,5 @@
-import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, updateDoc } from 'firebase/firestore';
 import { app, appId } from './config/firebase';
@@ -12,37 +13,10 @@ import Sidebar from './components/Sidebar';
 import EDUSidebar from './components/EDUSidebar';
 import AuthWizard from './components/AuthWizard';
 import PublicProfileModal from './components/PublicProfileModal';
+import AppRoutes from './routes/AppRoutes';
 import { SchoolProvider } from './contexts/SchoolContext';
 import PageTransition from './components/shared/PageTransition';
 import ErrorBoundary from './components/shared/ErrorBoundary';
-
-// Lazy load route-based components for code splitting
-const Dashboard = lazy(() => import('./components/Dashboard'));
-const SocialFeed = lazy(() => import('./components/SocialFeed'));
-const BookingSystem = lazy(() => import('./components/BookingSystem'));
-const Marketplace = lazy(() => import('./components/Marketplace'));
-const ChatInterface = lazy(() => import('./components/ChatInterface'));
-const StudioManager = lazy(() => import('./components/StudioManager'));
-const ProfileManager = lazy(() => import('./components/ProfileManager'));
-const SettingsTab = lazy(() => import('./components/SettingsTab'));
-const TechServices = lazy(() => import('./components/TechServices'));
-const LegalDocs = lazy(() => import('./components/LegalDocs'));
-const PaymentsManager = lazy(() => import('./components/PaymentsManager'));
-const LabelManager = lazy(() => import('./components/LabelManager'));
-
-// EDU Components (lazy loaded)
-const EduStudentDashboard = lazy(() => import('./components/EDU/EduStudentDashboard'));
-const EduStaffDashboard = lazy(() => import('./components/EDU/EduStaffDashboard'));
-const EduAdminDashboard = lazy(() => import('./components/EDU/EduAdminDashboard'));
-const EduInternDashboard = lazy(() => import('./components/EDU/EduInternDashboard'));
-const StudentEnrollment = lazy(() => import('./components/EDU/StudentEnrollment'));
-
-// Loading component for lazy-loaded routes
-const RouteLoader = () => (
-  <div className="flex items-center justify-center min-h-[400px]">
-    <Loader2 className="animate-spin text-brand-blue" size={32} />
-  </div>
-);
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -51,35 +25,61 @@ export default function App() {
   const [notifications, setNotifications] = useState([]); 
   const [loading, setLoading] = useState(true);
   
-  // --- NAVIGATION SYNC ENGINE ---
-  const [activeTab, setActiveTabState] = useState(() => {
-    if (typeof window !== 'undefined') {
-        const params = new URLSearchParams(window.location.search);
-        return params.get('tab') || 'dashboard'; 
+  // React Router navigation
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Map route paths to tab IDs for sidebar compatibility
+  const getActiveTab = () => {
+    const path = location.pathname;
+    if (path === '/' || path === '/dashboard' || path === '/home') return 'dashboard';
+    if (path === '/feed' || path === '/social') return 'feed';
+    if (path === '/bookings' || path === '/find-talent') return 'bookings';
+    if (path.startsWith('/edu')) {
+      if (path === '/edu/enroll') return 'edu-enroll';
+      return 'edu-overview'; // Default EDU tab
     }
-    return 'dashboard';
-  });
-
-  const setActiveTab = (newTab) => {
-    setActiveTabState(newTab);
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('tab') !== newTab) {
-        const newUrl = `${window.location.pathname}?tab=${newTab}`;
-        window.history.pushState({ tab: newTab }, '', newUrl);
-    }
+    return path.substring(1) || 'dashboard';
   };
 
-  useEffect(() => {
-    const handlePopState = () => {
-        const params = new URLSearchParams(window.location.search);
-        const tab = params.get('tab') || 'dashboard';
-        setActiveTabState(tab);
+  const activeTab = getActiveTab();
+  
+  // Wrapper for setActiveTab to use React Router
+  const setActiveTab = (newTab) => {
+    // Map tab IDs to routes
+    const routeMap = {
+      'dashboard': '/',
+      'home': '/',
+      'feed': '/feed',
+      'social': '/feed',
+      'bookings': '/bookings',
+      'find-talent': '/bookings',
+      'marketplace': '/marketplace',
+      'messages': '/messages',
+      'tech': '/tech',
+      'studio-ops': '/studio-ops',
+      'studio-manager': '/studio-ops',
+      'label-manager': '/label-manager',
+      'payments': '/payments',
+      'profile': '/profile',
+      'settings': '/settings',
+      'legal': '/legal',
+      'edu-enroll': '/edu/enroll',
+      'edu-overview': '/edu',
     };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
-  // --- END NAVIGATION SYNC ---
+    
+    // Handle EDU sub-routes
+    if (newTab.startsWith('edu-')) {
+      if (newTab === 'edu-enroll') {
+        navigate('/edu/enroll');
+      } else {
+        navigate(`/edu/${newTab.replace('edu-', '')}`);
+      }
+    } else {
+      const route = routeMap[newTab] || '/';
+      navigate(route);
+    }
+  };
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
@@ -176,76 +176,7 @@ export default function App() {
   if (!user) return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} />;
   if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} />;
 
-  // Render Logic - render component directly with proper isolation
-  // Each component gets a unique key based on activeTab to ensure proper mount/unmount
-  const renderRouteContent = () => {
-    // 1. EDU Routing (Handles all edu-* sub-routes)
-    if (activeTab.startsWith('edu-')) {
-        if (activeTab === 'edu-enroll') {
-          return <StudentEnrollment key={`route-${activeTab}`} user={user} userData={userData} />;
-        }
-        
-        if (userData?.accountTypes?.includes('Admin')) {
-          return <EduAdminDashboard key={`route-${activeTab}`} user={user} userData={userData} currentView={activeTab} />;
-        }
-        if (userData?.accountTypes?.includes('Instructor')) {
-          return <EduStaffDashboard key={`route-${activeTab}`} user={user} userData={userData} currentView={activeTab} />;
-        }
-        if (userData?.accountTypes?.includes('Intern')) {
-          return <EduInternDashboard key={`route-${activeTab}`} user={user} userData={userData} currentView={activeTab} />;
-        }
-        return <EduStudentDashboard key={`route-${activeTab}`} user={user} userData={userData} />;
-    }
-
-    // 2. Main App Routing
-    switch (activeTab) {
-      case 'dashboard': 
-      case 'home': 
-        return <Dashboard 
-                  key={`route-${activeTab}`}
-                  user={user} 
-                  userData={userData} 
-                  subProfiles={subProfiles} 
-                  notifications={notifications} 
-                  setActiveTab={setActiveTab} 
-                  tokenBalance={tokenBalance}
-                />;
-      
-      case 'feed': 
-      case 'social': 
-        return <SocialFeed key={`route-${activeTab}`} user={user} userData={userData} openPublicProfile={openPublicProfile} />;
-      
-      case 'bookings': 
-      case 'find-talent': 
-        return <BookingSystem key={`route-${activeTab}`} user={user} userData={userData} openPublicProfile={openPublicProfile} />;
-      
-      case 'marketplace': 
-        return <Marketplace key={`route-${activeTab}`} user={user} userData={userData} tokenBalance={tokenBalance} />;
-      case 'messages': 
-        return <ChatInterface key={`route-${activeTab}`} user={user} userData={userData} openPublicProfile={openPublicProfile} />;
-      case 'tech': 
-        return <TechServices key={`route-${activeTab}`} user={user} userData={userData} />;
-      
-      case 'studio-ops': 
-      case 'studio-manager': 
-        return <StudioManager key={`route-${activeTab}`} user={user} userData={userData} />;
-      
-      case 'label-manager': 
-        return <LabelManager key={`route-${activeTab}`} user={user} userData={userData} />;
-      case 'payments': 
-        return <PaymentsManager key={`route-${activeTab}`} user={user} userData={userData} />;
-      
-      case 'profile': 
-        return <ProfileManager key={`route-${activeTab}`} user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />;
-      case 'settings': 
-        return <SettingsTab key={`route-${activeTab}`} user={user} userData={userData} handleLogout={handleLogout} />;
-      case 'legal': 
-        return <LegalDocs key={`route-${activeTab}`} />;
-
-      default: 
-        return <Dashboard key={`route-${activeTab}`} user={user} userData={userData} setActiveTab={setActiveTab} subProfiles={subProfiles} notifications={notifications} />;
-    }
-  };
+  // React Router handles all routing - no need for custom render logic
 
   const isEduMode = activeTab.startsWith('edu-');
   const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('Admin') || userData?.accountTypes?.includes('Instructor'));
@@ -304,10 +235,17 @@ export default function App() {
 
             <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth" id="main-scroll">
                 <AnimatePresence mode="wait">
-                    <PageTransition key={activeTab} className="max-w-7xl mx-auto">
-                        <Suspense key={`suspense-${activeTab}`} fallback={<RouteLoader />}>
-                            {renderRouteContent()}
-                        </Suspense>
+                    <PageTransition key={location.pathname} className="max-w-7xl mx-auto">
+                        <AppRoutes
+                          user={user}
+                          userData={userData}
+                          subProfiles={subProfiles}
+                          notifications={notifications}
+                          tokenBalance={tokenBalance}
+                          setActiveTab={setActiveTab}
+                          handleLogout={handleLogout}
+                          openPublicProfile={openPublicProfile}
+                        />
                     </PageTransition>
                 </AnimatePresence>
             </main>

@@ -1,5 +1,6 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import { ConvexProvider } from "convex/react"
 import App from './App.jsx'
 import { convex } from './config/convex'
@@ -9,7 +10,9 @@ import './index.css'
 ReactDOM.createRoot(document.getElementById('root')).render(
   <ErrorBoundary name="Root">
     <ConvexProvider client={convex}>
-      <App />
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
     </ConvexProvider>
   </ErrorBoundary>
 )
