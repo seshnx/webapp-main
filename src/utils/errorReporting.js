@@ -3,7 +3,7 @@
  * 
  * Centralized error logging and reporting service.
  * Supports:
- * - Sentry (optional, if VITE_SENTRY_DSN is set)
+ * - Sentry (optional, requires @sentry/react package and VITE_SENTRY_DSN)
  * - Local storage for debugging
  * - Console logging in development
  */
@@ -12,6 +12,10 @@
 let Sentry = null;
 let sentryLoadAttempted = false;
 
+/**
+ * Initialize Sentry if available
+ * @returns {Promise<Object|null>} Sentry module or null if not available
+ */
 const initSentry = async () => {
   // Return cached result
   if (Sentry !== null) return Sentry;
@@ -20,26 +24,15 @@ const initSentry = async () => {
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   if (!dsn) {
     sentryLoadAttempted = true;
-    Sentry = false; // Mark as not available
+    Sentry = false;
     return null;
   }
 
   sentryLoadAttempted = true;
 
   try {
-    // Import Sentry - will use stub if package not installed (via vite.config.js alias)
+    // Dynamic import - will fail gracefully if package not installed
     const sentryModule = await import('@sentry/react');
-    
-    // Check if this is the real Sentry or our stub
-    // Our stub has a __SENTRY_STUB__ marker property
-    const isStub = sentryModule.__SENTRY_STUB__ === true || 
-                   sentryModule.default?.__SENTRY_STUB__ === true;
-    
-    if (isStub) {
-      // Using stub - Sentry not installed, skip initialization
-      Sentry = false;
-      return null;
-    }
     
     // Real Sentry - proceed with initialization
     Sentry = sentryModule;
@@ -51,9 +44,9 @@ const initSentry = async () => {
       init({
         dsn,
         environment: import.meta.env.MODE || 'development',
-        tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0, // 10% in prod, 100% in dev
+        tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
         replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
-        replaysOnErrorSampleRate: 1.0, // Always capture replays on errors
+        replaysOnErrorSampleRate: 1.0,
         integrations: [
           new BrowserTracing(),
           new Replay(),
@@ -64,6 +57,9 @@ const initSentry = async () => {
     return Sentry;
   } catch (e) {
     // Package not installed or other error - silently fail
+    if (import.meta.env.DEV) {
+      console.debug('Sentry not available:', e.message);
+    }
     Sentry = false;
     return null;
   }

@@ -7,19 +7,16 @@ import { convex } from './config/convex'
 import ErrorBoundary from './components/shared/ErrorBoundary'
 import './index.css'
 
-// Development: Add hook validation
+// Development: Enhanced error logging for React hook errors
 if (import.meta.env.DEV) {
   const originalError = console.error;
   console.error = (...args) => {
-    if (args[0]?.includes?.('Rendered more hooks') || args[0]?.includes?.('301')) {
-      console.group('🔴 React Hook Error #301 Detected');
-      console.error('This error means a component rendered with a different number of hooks than the previous render.');
-      console.error('Check the component stack above to identify the problematic component.');
-      console.error('Common causes:');
-      console.error('1. Conditional hook calls (hooks inside if statements)');
-      console.error('2. Hooks after early returns');
-      console.error('3. Different components rendered in the same position with different hook counts');
-      console.error('4. Lazy-loaded components with inconsistent hook structures');
+    const errorMessage = args[0]?.toString() || '';
+    if (errorMessage.includes('Rendered more hooks') || errorMessage.includes('301')) {
+      console.group('🔴 React Hook Error #301');
+      console.error('Component rendered with different hook count than previous render.');
+      console.error('Check component stack above for the problematic component.');
+      console.error('Common causes: conditional hooks, hooks after early returns, or lazy-loading issues.');
       console.groupEnd();
     }
     originalError.apply(console, args);

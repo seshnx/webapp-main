@@ -22,18 +22,17 @@ import EduAdminDashboard from '../components/EDU/EduAdminDashboard';
 import EduInternDashboard from '../components/EDU/EduInternDashboard';
 import StudentEnrollment from '../components/EDU/StudentEnrollment';
 
-// Component wrapper for EDU dashboard - ensures consistent hook calls
-// This component must always render the same structure to maintain hook count
-// IMPORTANT: This component must NOT call any hooks itself to avoid hook count issues
+/**
+ * EDU Dashboard Wrapper
+ * 
+ * Routes to the appropriate EDU dashboard based on user role.
+ * Uses keys to ensure proper component remounting when roles change.
+ */
 function EduDashboardWrapper({ user, userData }) {
-  // Determine which dashboard to show - but always render a component
-  // Use key prop to force remount when role changes, ensuring clean hook state
   const role = userData?.accountTypes?.find(role => 
     ['Admin', 'Instructor', 'Intern'].includes(role)
   ) || 'Student';
   
-  // Always render a component - React Router will handle mounting/unmounting
-  // NO HOOKS in this wrapper - only conditional rendering
   switch (role) {
     case 'Admin':
       return <EduAdminDashboard key={`admin-${user?.uid}`} user={user} userData={userData} />;
@@ -47,15 +46,12 @@ function EduDashboardWrapper({ user, userData }) {
 }
 
 /**
- * AppRoutes - Handles all routing with React Router
- * This ensures proper component lifecycle and eliminates hook count issues
+ * AppRoutes - Main routing component using React Router
  * 
- * IMPORTANT: This component must NOT call any hooks to ensure consistent hook counts
+ * Handles all application routes with proper component lifecycle management.
+ * React Router ensures components are properly mounted/unmounted on route changes.
  */
 export default function AppRoutes({ user, userData, subProfiles, notifications, tokenBalance, setActiveTab, handleLogout, openPublicProfile }) {
-  // NO HOOKS HERE - All hooks must be in child components
-  // This ensures consistent hook counts across route changes
-  // React Router handles component mounting/unmounting automatically
 
   return (
     <Routes>

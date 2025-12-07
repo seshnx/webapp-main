@@ -13,11 +13,9 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // Stub convex/server for browser builds (it's only used in generated API files)
-      // Use src/utils location which is always available in builds
-      'convex/server': path.resolve(__dirname, './src/utils/convex-server-stub.js'),
-      // Stub @sentry/react when not installed (optional dependency)
-      '@sentry/react': path.resolve(__dirname, './src/utils/sentry-stub.js'),
+      // Use browser-safe API for client-side builds
+      // The generated api.js imports from convex/server which is server-side only
+      "convex/_generated/api": path.resolve(__dirname, "./convex/_generated/api-browser.js"),
     },
   },
   build: {
@@ -30,49 +28,29 @@ export default defineConfig({
       },
       output: {
         manualChunks: (id) => {
-          // Code splitting strategy
-          // Split vendor chunks for better caching
+          // Code splitting strategy for better caching and performance
           if (id.includes('node_modules')) {
-            // Large libraries get their own chunks
-            if (id.includes('firebase')) {
-              return 'vendor-firebase';
-            }
-            if (id.includes('convex')) {
-              return 'vendor-convex';
-            }
-            if (id.includes('framer-motion')) {
-              return 'vendor-framer';
-            }
-            if (id.includes('react-leaflet') || id.includes('leaflet')) {
-              return 'vendor-maps';
-            }
-            if (id.includes('wavesurfer')) {
-              return 'vendor-audio';
-            }
-            if (id.includes('@stripe')) {
-              return 'vendor-stripe';
-            }
-            if (id.includes('react-big-calendar')) {
-              return 'vendor-calendar';
-            }
-            // Other node_modules
+            // Large libraries get their own chunks for better caching
+            if (id.includes('firebase')) return 'vendor-firebase';
+            if (id.includes('convex/react')) return 'vendor-convex';
+            if (id.includes('framer-motion')) return 'vendor-framer';
+            if (id.includes('react-leaflet') || id.includes('leaflet')) return 'vendor-maps';
+            if (id.includes('wavesurfer')) return 'vendor-audio';
+            if (id.includes('@stripe')) return 'vendor-stripe';
+            if (id.includes('react-big-calendar')) return 'vendor-calendar';
+            // Other vendor dependencies
             return 'vendor';
           }
-          // Split EDU components (large feature set)
-          if (id.includes('/EDU/')) {
-            return 'edu';
-          }
-          // Split chat components
-          if (id.includes('/chat/')) {
-            return 'chat';
-          }
+          // Feature-based code splitting
+          if (id.includes('/EDU/')) return 'edu';
+          if (id.includes('/chat/')) return 'chat';
         },
       },
     },
   },
   optimizeDeps: {
     exclude: ['convex/server'],
-    include: ['convex/react'],
+    include: ['convex/react', '@sentry/react'],
   },
   plugins: [
     react(),
