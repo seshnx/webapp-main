@@ -1,7 +1,6 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
-import RouteWrapper from './RouteWrapper';
 
 // Lazy load route-based components for code splitting
 const Dashboard = lazy(() => import('../components/Dashboard'));
@@ -59,11 +58,12 @@ function EduDashboardWrapper({ user, userData }) {
  * AppRoutes - Handles all routing with React Router
  * This ensures proper component lifecycle and eliminates hook count issues
  * 
- * IMPORTANT: This component must call ALL hooks unconditionally before any conditional rendering
+ * IMPORTANT: This component must NOT call any hooks to ensure consistent hook counts
  */
 export default function AppRoutes({ user, userData, subProfiles, notifications, tokenBalance, setActiveTab, handleLogout, openPublicProfile }) {
   // NO HOOKS HERE - All hooks must be in child components
   // This ensures consistent hook counts across route changes
+  // React Router handles component mounting/unmounting automatically
 
   return (
     <Suspense fallback={<RouteLoader />}>
@@ -72,16 +72,14 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         <Route 
           path="/" 
           element={
-            <RouteWrapper name="Dashboard">
-              <Dashboard 
-                user={user} 
-                userData={userData} 
-                subProfiles={subProfiles} 
-                notifications={notifications} 
-                setActiveTab={setActiveTab} 
-                tokenBalance={tokenBalance}
-              />
-            </RouteWrapper>
+            <Dashboard 
+              user={user} 
+              userData={userData} 
+              subProfiles={subProfiles} 
+              notifications={notifications} 
+              setActiveTab={setActiveTab} 
+              tokenBalance={tokenBalance}
+            />
           } 
         />
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
@@ -89,20 +87,14 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         
         <Route 
           path="/feed" 
-          element={
-            <RouteWrapper name="SocialFeed">
-              <SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />
-            </RouteWrapper>
-          } 
+          element={<SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />} 
         />
         <Route path="/social" element={<Navigate to="/feed" replace />} />
         
         <Route 
           path="/bookings" 
           element={
-            <RouteWrapper name="BookingSystem">
-              <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />
-            </RouteWrapper>
+            <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />
           } 
         />
         <Route path="/find-talent" element={<Navigate to="/bookings" replace />} />
@@ -110,36 +102,28 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         <Route 
           path="/marketplace" 
           element={
-            <RouteWrapper name="Marketplace">
-              <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />
-            </RouteWrapper>
+            <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />
           } 
         />
         
         <Route 
           path="/messages" 
           element={
-            <RouteWrapper name="ChatInterface">
-              <ChatInterface user={user} userData={userData} openPublicProfile={openPublicProfile} />
-            </RouteWrapper>
+            <ChatInterface user={user} userData={userData} openPublicProfile={openPublicProfile} />
           } 
         />
         
         <Route 
           path="/tech" 
           element={
-            <RouteWrapper name="TechServices">
-              <TechServices user={user} userData={userData} />
-            </RouteWrapper>
+            <TechServices user={user} userData={userData} />
           } 
         />
         
         <Route 
           path="/studio-ops" 
           element={
-            <RouteWrapper name="StudioManager">
-              <StudioManager user={user} userData={userData} />
-            </RouteWrapper>
+            <StudioManager user={user} userData={userData} />
           } 
         />
         <Route path="/studio-manager" element={<Navigate to="/studio-ops" replace />} />
@@ -147,45 +131,35 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         <Route 
           path="/label-manager" 
           element={
-            <RouteWrapper name="LabelManager">
-              <LabelManager user={user} userData={userData} />
-            </RouteWrapper>
+            <LabelManager user={user} userData={userData} />
           } 
         />
         
         <Route 
           path="/payments" 
           element={
-            <RouteWrapper name="PaymentsManager">
-              <PaymentsManager user={user} userData={userData} />
-            </RouteWrapper>
+            <PaymentsManager user={user} userData={userData} />
           } 
         />
         
         <Route 
           path="/profile" 
           element={
-            <RouteWrapper name="ProfileManager">
-              <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />
-            </RouteWrapper>
+            <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />
           } 
         />
         
         <Route 
           path="/settings" 
           element={
-            <RouteWrapper name="SettingsTab">
-              <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />
-            </RouteWrapper>
+            <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />
           } 
         />
         
         <Route 
           path="/legal" 
           element={
-            <RouteWrapper name="LegalDocs">
-              <LegalDocs />
-            </RouteWrapper>
+            <LegalDocs />
           } 
         />
 
@@ -193,25 +167,19 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         <Route 
           path="/edu" 
           element={
-            <RouteWrapper name="EduDashboard">
-              <EduDashboardWrapper user={user} userData={userData} />
-            </RouteWrapper>
+            <EduDashboardWrapper user={user} userData={userData} />
           } 
         />
         <Route 
           path="/edu/enroll" 
           element={
-            <RouteWrapper name="StudentEnrollment">
-              <StudentEnrollment user={user} userData={userData} />
-            </RouteWrapper>
+            <StudentEnrollment user={user} userData={userData} />
           } 
         />
         <Route 
           path="/edu/:view" 
           element={
-            <RouteWrapper name="EduDashboard">
-              <EduDashboardWrapper user={user} userData={userData} />
-            </RouteWrapper>
+            <EduDashboardWrapper user={user} userData={userData} />
           } 
         />
 

@@ -237,9 +237,7 @@ export default function App() {
             <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth" id="main-scroll">
                 <AnimatePresence mode="wait">
                     <PageTransition key={location.pathname} className="max-w-7xl mx-auto">
-                        {/* Key Routes by location to ensure complete remount on route change */}
                         <AppRoutes
-                          key={location.pathname}
                           user={user}
                           userData={userData}
                           subProfiles={subProfiles}
