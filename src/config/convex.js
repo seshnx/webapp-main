@@ -6,26 +6,30 @@ import { ConvexReactClient } from "convex/react";
  * Supports both VITE_CONVEX_URL and CONVEX_DEPLOY_KEY environment variables.
  * CONVEX_DEPLOY_KEY is used by Vercel's Convex integration.
  * 
- * If no URL is provided, the client will be created but won't connect.
- * This allows the app to run without Convex, but chat features will be disabled.
+ * If no URL is provided, a placeholder client is created to satisfy ConvexProvider requirements.
+ * Hooks will work but won't connect until a real URL is provided.
  */
 const convexUrl = import.meta.env.CONVEX_DEPLOY_KEY || import.meta.env.VITE_CONVEX_URL;
 
-if (!convexUrl && import.meta.env.PROD) {
-  console.warn(
-    '⚠️ Convex URL not configured. Chat functionality will be disabled.\n' +
-    'Set VITE_CONVEX_URL or CONVEX_DEPLOY_KEY environment variable to enable Convex features.'
-  );
-}
+// Always create a client - use placeholder URL if not configured
+// This ensures ConvexProvider always has a client, even if Convex isn't configured
+// The placeholder URL won't connect, but satisfies the URL format requirement
+const clientUrl = convexUrl && typeof convexUrl === 'string' && convexUrl.trim() !== ''
+  ? convexUrl.trim()
+  : 'https://placeholder.convex.cloud';
 
-// Create client with provided URL or empty string (Convex will handle gracefully)
-export const convex = new ConvexReactClient(convexUrl || '');
+export const convex = new ConvexReactClient(clientUrl);
 
 /**
- * Check if Convex is properly configured
- * @returns {boolean} True if Convex URL is configured
+ * Check if Convex is properly configured with a real URL
+ * @returns {boolean} True if Convex URL is configured (not placeholder)
  */
 export const isConvexAvailable = () => {
-  return Boolean(convexUrl && convexUrl.trim() !== '');
+  return Boolean(
+    convexUrl && 
+    typeof convexUrl === 'string' && 
+    convexUrl.trim() !== '' &&
+    clientUrl !== 'https://placeholder.convex.cloud'
+  );
 };
 
