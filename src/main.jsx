@@ -33,24 +33,25 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </ErrorBoundary>
 )
 
-// CLEANUP: Remove the loading screen once React has mounted
-// We use a small timeout to ensure the paint has occurred and to allow the transition to play
+// Remove the loading screen once React has mounted
+// Uses fade-out animation for smooth transition
 const removeLoader = () => {
   const loader = document.getElementById('loading-fallback');
   if (loader) {
-    // 1. Start Fade Out
+    // Start fade-out animation
     loader.classList.add('fade-out');
     
-    // 2. Remove from DOM after transition (0.5s)
+    // Remove from DOM after animation completes (400ms)
     setTimeout(() => {
       if (loader && loader.parentNode) {
         loader.parentNode.removeChild(loader);
       }
       // Restore scrolling to body
       document.body.style.overflow = 'auto';
-    }, 500);
+    }, 400);
   }
 };
 
-// Execute cleanup shortly after render
-setTimeout(removeLoader, 800);
+// Execute cleanup after React has mounted and initial render completes
+// Small delay ensures smooth transition
+setTimeout(removeLoader, 600);

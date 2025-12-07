@@ -235,7 +235,7 @@ export default function App() {
             </div>
 
             <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth" id="main-scroll">
-                <AnimatePresence mode="wait">
+                <AnimatePresence mode="wait" initial={false}>
                     <PageTransition key={location.pathname} className="max-w-7xl mx-auto">
                         <AppRoutes
                           user={user}
