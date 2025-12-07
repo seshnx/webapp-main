@@ -7,6 +7,25 @@ import { convex } from './config/convex'
 import ErrorBoundary from './components/shared/ErrorBoundary'
 import './index.css'
 
+// Development: Add hook validation
+if (import.meta.env.DEV) {
+  const originalError = console.error;
+  console.error = (...args) => {
+    if (args[0]?.includes?.('Rendered more hooks') || args[0]?.includes?.('301')) {
+      console.group('🔴 React Hook Error #301 Detected');
+      console.error('This error means a component rendered with a different number of hooks than the previous render.');
+      console.error('Check the component stack above to identify the problematic component.');
+      console.error('Common causes:');
+      console.error('1. Conditional hook calls (hooks inside if statements)');
+      console.error('2. Hooks after early returns');
+      console.error('3. Different components rendered in the same position with different hook counts');
+      console.error('4. Lazy-loaded components with inconsistent hook structures');
+      console.groupEnd();
+    }
+    originalError.apply(console, args);
+  };
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <ErrorBoundary name="Root">
     <ConvexProvider client={convex}>

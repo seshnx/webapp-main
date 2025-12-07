@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
+import RouteWrapper from './RouteWrapper';
 
 // Lazy load route-based components for code splitting
 const Dashboard = lazy(() => import('../components/Dashboard'));
@@ -32,6 +33,7 @@ const RouteLoader = () => (
 
 // Component wrapper for EDU dashboard - ensures consistent hook calls
 // This component must always render the same structure to maintain hook count
+// IMPORTANT: This component must NOT call any hooks itself to avoid hook count issues
 function EduDashboardWrapper({ user, userData }) {
   // Determine which dashboard to show - but always render a component
   // Use key prop to force remount when role changes, ensuring clean hook state
@@ -40,6 +42,7 @@ function EduDashboardWrapper({ user, userData }) {
   ) || 'Student';
   
   // Always render a component - React Router will handle mounting/unmounting
+  // NO HOOKS in this wrapper - only conditional rendering
   switch (role) {
     case 'Admin':
       return <EduAdminDashboard key={`admin-${user?.uid}`} user={user} userData={userData} />;
@@ -55,8 +58,12 @@ function EduDashboardWrapper({ user, userData }) {
 /**
  * AppRoutes - Handles all routing with React Router
  * This ensures proper component lifecycle and eliminates hook count issues
+ * 
+ * IMPORTANT: This component must call ALL hooks unconditionally before any conditional rendering
  */
 export default function AppRoutes({ user, userData, subProfiles, notifications, tokenBalance, setActiveTab, handleLogout, openPublicProfile }) {
+  // NO HOOKS HERE - All hooks must be in child components
+  // This ensures consistent hook counts across route changes
 
   return (
     <Suspense fallback={<RouteLoader />}>
@@ -65,14 +72,16 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         <Route 
           path="/" 
           element={
-            <Dashboard 
-              user={user} 
-              userData={userData} 
-              subProfiles={subProfiles} 
-              notifications={notifications} 
-              setActiveTab={setActiveTab} 
-              tokenBalance={tokenBalance}
-            />
+            <RouteWrapper name="Dashboard">
+              <Dashboard 
+                user={user} 
+                userData={userData} 
+                subProfiles={subProfiles} 
+                notifications={notifications} 
+                setActiveTab={setActiveTab} 
+                tokenBalance={tokenBalance}
+              />
+            </RouteWrapper>
           } 
         />
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
@@ -97,7 +106,11 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         
         <Route 
           path="/messages" 
-          element={<ChatInterface user={user} userData={userData} openPublicProfile={openPublicProfile} />} 
+          element={
+            <RouteWrapper name="ChatInterface">
+              <ChatInterface user={user} userData={userData} openPublicProfile={openPublicProfile} />
+            </RouteWrapper>
+          } 
         />
         
         <Route 
@@ -136,15 +149,27 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         {/* EDU Routes */}
         <Route 
           path="/edu" 
-          element={<EduDashboardWrapper user={user} userData={userData} />} 
+          element={
+            <RouteWrapper name="EduDashboard">
+              <EduDashboardWrapper user={user} userData={userData} />
+            </RouteWrapper>
+          } 
         />
         <Route 
           path="/edu/enroll" 
-          element={<StudentEnrollment user={user} userData={userData} />} 
+          element={
+            <RouteWrapper name="StudentEnrollment">
+              <StudentEnrollment user={user} userData={userData} />
+            </RouteWrapper>
+          } 
         />
         <Route 
           path="/edu/:view" 
-          element={<EduDashboardWrapper user={user} userData={userData} />} 
+          element={
+            <RouteWrapper name="EduDashboard">
+              <EduDashboardWrapper user={user} userData={userData} />
+            </RouteWrapper>
+          } 
         />
 
         {/* Fallback - redirect to dashboard */}
