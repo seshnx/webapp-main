@@ -89,19 +89,31 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         
         <Route 
           path="/feed" 
-          element={<SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />} 
+          element={
+            <RouteWrapper name="SocialFeed">
+              <SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />
+            </RouteWrapper>
+          } 
         />
         <Route path="/social" element={<Navigate to="/feed" replace />} />
         
         <Route 
           path="/bookings" 
-          element={<BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />} 
+          element={
+            <RouteWrapper name="BookingSystem">
+              <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />
+            </RouteWrapper>
+          } 
         />
         <Route path="/find-talent" element={<Navigate to="/bookings" replace />} />
         
         <Route 
           path="/marketplace" 
-          element={<Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />} 
+          element={
+            <RouteWrapper name="Marketplace">
+              <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />
+            </RouteWrapper>
+          } 
         />
         
         <Route 
@@ -115,36 +127,67 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         
         <Route 
           path="/tech" 
-          element={<TechServices user={user} userData={userData} />} 
+          element={
+            <RouteWrapper name="TechServices">
+              <TechServices user={user} userData={userData} />
+            </RouteWrapper>
+          } 
         />
         
         <Route 
           path="/studio-ops" 
-          element={<StudioManager user={user} userData={userData} />} 
+          element={
+            <RouteWrapper name="StudioManager">
+              <StudioManager user={user} userData={userData} />
+            </RouteWrapper>
+          } 
         />
         <Route path="/studio-manager" element={<Navigate to="/studio-ops" replace />} />
         
         <Route 
           path="/label-manager" 
-          element={<LabelManager user={user} userData={userData} />} 
+          element={
+            <RouteWrapper name="LabelManager">
+              <LabelManager user={user} userData={userData} />
+            </RouteWrapper>
+          } 
         />
         
         <Route 
           path="/payments" 
-          element={<PaymentsManager user={user} userData={userData} />} 
+          element={
+            <RouteWrapper name="PaymentsManager">
+              <PaymentsManager user={user} userData={userData} />
+            </RouteWrapper>
+          } 
         />
         
         <Route 
           path="/profile" 
-          element={<ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />} 
+          element={
+            <RouteWrapper name="ProfileManager">
+              <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />
+            </RouteWrapper>
+          } 
         />
         
         <Route 
           path="/settings" 
-          element={<SettingsTab user={user} userData={userData} handleLogout={handleLogout} />} 
+          element={
+            <RouteWrapper name="SettingsTab">
+              <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />
+            </RouteWrapper>
+          } 
         />
         
-        <Route path="/legal" element={<LegalDocs />} />
+        <Route 
+          path="/legal" 
+          element={
+            <RouteWrapper name="LegalDocs">
+              <LegalDocs />
+            </RouteWrapper>
+          } 
+        />
 
         {/* EDU Routes */}
         <Route 
