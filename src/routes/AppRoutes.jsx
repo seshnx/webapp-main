@@ -1,34 +1,26 @@
-import React, { Suspense, lazy } from 'react';
+import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
 
-// Lazy load route-based components for code splitting
-const Dashboard = lazy(() => import('../components/Dashboard'));
-const SocialFeed = lazy(() => import('../components/SocialFeed'));
-const BookingSystem = lazy(() => import('../components/BookingSystem'));
-const Marketplace = lazy(() => import('../components/Marketplace'));
-const ChatInterface = lazy(() => import('../components/ChatInterface'));
-const StudioManager = lazy(() => import('../components/StudioManager'));
-const ProfileManager = lazy(() => import('../components/ProfileManager'));
-const SettingsTab = lazy(() => import('../components/SettingsTab'));
-const TechServices = lazy(() => import('../components/TechServices'));
-const LegalDocs = lazy(() => import('../components/LegalDocs'));
-const PaymentsManager = lazy(() => import('../components/PaymentsManager'));
-const LabelManager = lazy(() => import('../components/LabelManager'));
+// Import components directly (no lazy loading) to avoid hook count issues
+import Dashboard from '../components/Dashboard';
+import SocialFeed from '../components/SocialFeed';
+import BookingSystem from '../components/BookingSystem';
+import Marketplace from '../components/Marketplace';
+import ChatInterface from '../components/ChatInterface';
+import StudioManager from '../components/StudioManager';
+import ProfileManager from '../components/ProfileManager';
+import SettingsTab from '../components/SettingsTab';
+import TechServices from '../components/TechServices';
+import LegalDocs from '../components/LegalDocs';
+import PaymentsManager from '../components/PaymentsManager';
+import LabelManager from '../components/LabelManager';
 
-// EDU Components (lazy loaded)
-const EduStudentDashboard = lazy(() => import('../components/EDU/EduStudentDashboard'));
-const EduStaffDashboard = lazy(() => import('../components/EDU/EduStaffDashboard'));
-const EduAdminDashboard = lazy(() => import('../components/EDU/EduAdminDashboard'));
-const EduInternDashboard = lazy(() => import('../components/EDU/EduInternDashboard'));
-const StudentEnrollment = lazy(() => import('../components/EDU/StudentEnrollment'));
-
-// Loading component for lazy-loaded routes
-const RouteLoader = () => (
-  <div className="flex items-center justify-center min-h-[400px]">
-    <Loader2 className="animate-spin text-brand-blue" size={32} />
-  </div>
-);
+// EDU Components
+import EduStudentDashboard from '../components/EDU/EduStudentDashboard';
+import EduStaffDashboard from '../components/EDU/EduStaffDashboard';
+import EduAdminDashboard from '../components/EDU/EduAdminDashboard';
+import EduInternDashboard from '../components/EDU/EduInternDashboard';
+import StudentEnrollment from '../components/EDU/StudentEnrollment';
 
 // Component wrapper for EDU dashboard - ensures consistent hook calls
 // This component must always render the same structure to maintain hook count
@@ -66,8 +58,7 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
   // React Router handles component mounting/unmounting automatically
 
   return (
-    <Suspense fallback={<RouteLoader />}>
-      <Routes>
+    <Routes>
         {/* Main App Routes */}
         <Route 
           path="/" 
@@ -186,7 +177,6 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         {/* Fallback - redirect to dashboard */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </Suspense>
   );
 }
 
