@@ -1,4 +1,4 @@
-import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, updateDoc } from 'firebase/firestore';
 import { app, appId } from './config/firebase';
@@ -177,8 +177,8 @@ export default function App() {
   if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} />;
 
   // Render Logic - determine which component to render
-  // Using useMemo to ensure stable component reference
-  const contentComponent = useMemo(() => {
+  // Don't use useMemo here - let React properly mount/unmount components when switching tabs
+  const getContentComponent = () => {
     // 1. EDU Routing (Handles all edu-* sub-routes)
     if (activeTab.startsWith('edu-')) {
         if (activeTab === 'edu-enroll') {
@@ -245,7 +245,7 @@ export default function App() {
       default: 
         return <Dashboard key="default" user={user} userData={userData} setActiveTab={setActiveTab} subProfiles={subProfiles} notifications={notifications} />;
     }
-  }, [activeTab, user, userData, subProfiles, notifications, tokenBalance, openPublicProfile, handleLogout, setActiveTab]);
+  };
 
   const isEduMode = activeTab.startsWith('edu-');
   const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('Admin') || userData?.accountTypes?.includes('Instructor'));
@@ -306,7 +306,7 @@ export default function App() {
                 <AnimatePresence mode="wait">
                     <PageTransition key={activeTab} className="max-w-7xl mx-auto">
                         <Suspense key={activeTab} fallback={<RouteLoader />}>
-                            {contentComponent}
+                            {getContentComponent()}
                         </Suspense>
                     </PageTransition>
                 </AnimatePresence>
