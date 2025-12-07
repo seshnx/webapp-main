@@ -25,7 +25,7 @@ export default function App() {
   const [notifications, setNotifications] = useState([]); 
   const [loading, setLoading] = useState(true);
   
-  // React Router navigation
+  // React Router navigation - MUST be called before any early returns
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -80,7 +80,8 @@ export default function App() {
       navigate(route);
     }
   };
-
+  
+  // All hooks must be called before any conditional returns
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [tokenBalance, setTokenBalance] = useState(0);

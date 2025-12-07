@@ -30,18 +30,26 @@ const RouteLoader = () => (
   </div>
 );
 
-// Component wrapper for EDU dashboard to ensure proper hook isolation
+// Component wrapper for EDU dashboard - ensures consistent hook calls
+// This component must always render the same structure to maintain hook count
 function EduDashboardWrapper({ user, userData }) {
-  if (userData?.accountTypes?.includes('Admin')) {
-    return <EduAdminDashboard user={user} userData={userData} />;
+  // Determine which dashboard to show - but always render a component
+  // Use key prop to force remount when role changes, ensuring clean hook state
+  const role = userData?.accountTypes?.find(role => 
+    ['Admin', 'Instructor', 'Intern'].includes(role)
+  ) || 'Student';
+  
+  // Always render a component - React Router will handle mounting/unmounting
+  switch (role) {
+    case 'Admin':
+      return <EduAdminDashboard key={`admin-${user?.uid}`} user={user} userData={userData} />;
+    case 'Instructor':
+      return <EduStaffDashboard key={`staff-${user?.uid}`} user={user} userData={userData} />;
+    case 'Intern':
+      return <EduInternDashboard key={`intern-${user?.uid}`} user={user} userData={userData} />;
+    default:
+      return <EduStudentDashboard key={`student-${user?.uid}`} user={user} userData={userData} />;
   }
-  if (userData?.accountTypes?.includes('Instructor')) {
-    return <EduStaffDashboard user={user} userData={userData} />;
-  }
-  if (userData?.accountTypes?.includes('Intern')) {
-    return <EduInternDashboard user={user} userData={userData} />;
-  }
-  return <EduStudentDashboard user={user} userData={userData} />;
 }
 
 /**
