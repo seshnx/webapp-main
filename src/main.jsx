@@ -7,13 +7,11 @@ import ErrorBoundary from './components/shared/ErrorBoundary'
 import './index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary name="Root">
-      <ConvexProvider client={convex}>
-        <App />
-      </ConvexProvider>
-    </ErrorBoundary>
-  </React.StrictMode>,
+  <ErrorBoundary name="Root">
+    <ConvexProvider client={convex}>
+      <App />
+    </ConvexProvider>
+  </ErrorBoundary>
 )
 
 // CLEANUP: Remove the loading screen once React has mounted
