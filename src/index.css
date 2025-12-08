@@ -112,6 +112,8 @@ body {
 /* Auth Wizard Background Animations */
 .background-pan-container {
   animation: backgroundFadeInOut 18s ease-in-out forwards;
+  transform: translateZ(0); /* Hardware acceleration */
+  will-change: opacity;
 }
 
 @keyframes backgroundFadeInOut {

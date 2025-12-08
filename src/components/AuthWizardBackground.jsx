@@ -128,6 +128,17 @@ export default function AuthWizardBackground({ onImagesLoaded }) {
 
   const currentImage = images[currentImageIndex];
   
+  // Calculate transform values for smooth GPU-accelerated animation
+  // When zoomed 1.5x, we need to move by 33.33% to pan across visible area
+  const getTransform = (x, y) => {
+    const translateX = x === 0 ? '0%' : x === 100 ? '-33.33%' : '-16.67%';
+    const translateY = y === 0 ? '0%' : y === 100 ? '-33.33%' : '-16.67%';
+    return `scale(1.5) translate(${translateX}, ${translateY}) translateZ(0)`;
+  };
+
+  const startTransform = getTransform(panDirection.startX, panDirection.startY);
+  const endTransform = getTransform(panDirection.endX, panDirection.endY);
+  
   // Generate unique animation name for this specific pan direction
   const animationName = `pan-${panDirection.startX}-${panDirection.startY}-${panDirection.endX}-${panDirection.endY}`;
 
@@ -136,10 +147,10 @@ export default function AuthWizardBackground({ onImagesLoaded }) {
       <style>{`
         @keyframes ${animationName} {
           0% {
-            background-position: ${panDirection.startX}% ${panDirection.startY}%;
+            transform: ${startTransform};
           }
           100% {
-            background-position: ${panDirection.endX}% ${panDirection.endY}%;
+            transform: ${endTransform};
           }
         }
       `}</style>
@@ -147,14 +158,22 @@ export default function AuthWizardBackground({ onImagesLoaded }) {
         <div
           key={currentImage.id}
           className="absolute inset-0 background-pan-container"
+          style={{
+            willChange: 'opacity',
+            transform: 'translateZ(0)',
+          }}
         >
           <div
             className="absolute inset-0 background-pan-image"
             style={{
               backgroundImage: `url(${currentImage.url})`,
               backgroundSize: 'cover',
-              transform: 'scale(1.5)',
-              animation: `${animationName} 18s ease-in-out forwards`,
+              backgroundPosition: 'center',
+              animation: `${animationName} 18s linear forwards`,
+              willChange: 'transform',
+              backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'translateZ(0)',
             }}
           />
           {/* Vignette overlay */}
@@ -162,18 +181,22 @@ export default function AuthWizardBackground({ onImagesLoaded }) {
             className="absolute inset-0"
             style={{
               background: 'radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.4) 70%, rgba(0,0,0,0.7) 100%)',
+              pointerEvents: 'none',
             }}
           />
-          {/* Blur overlay */}
+          {/* Minimal blur for better performance */}
           <div 
-            className="absolute inset-0 backdrop-blur-sm"
+            className="absolute inset-0"
             style={{
-              opacity: 0.3,
+              backdropFilter: 'blur(1px)',
+              WebkitBackdropFilter: 'blur(1px)',
+              opacity: 0.15,
+              pointerEvents: 'none',
             }}
           />
         </div>
         {/* Additional dark overlay for better contrast */}
-        <div className="absolute inset-0 bg-black/20" />
+        <div className="absolute inset-0 bg-black/20 pointer-events-none" />
       </div>
     </>
   );
