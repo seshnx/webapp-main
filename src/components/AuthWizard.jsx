@@ -8,6 +8,7 @@ import { auth, db, getPaths } from '../config/firebase';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { fetchZipLocation, fetchRegionalUserCount } from '../utils/geocode'; 
 import LegalDocs from './LegalDocs';
+import AuthWizardBackground from './AuthWizardBackground';
 
 // Assets
 import LogoLight from '../assets/SeshNx-PNG cCropped.png';
@@ -291,12 +292,18 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
   const Requirement = ({ met, text }) => (<div className={`flex items-center gap-1.5 text-xs transition-colors ${met ? 'text-green-600 dark:text-green-400' : 'text-gray-400 dark:text-gray-500'}`}>{met ? <Check size={12} strokeWidth={3} /> : <div className="w-3 h-3 rounded-full border border-gray-300 dark:border-gray-600" />}{text}</div>);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-200 p-4 dark:from-gray-900 dark:to-black transition-colors duration-500 relative">
+    <div className="min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-500 relative overflow-hidden">
+      {/* Animated Background */}
+      <AuthWizardBackground />
+      
+      {/* Fallback gradient overlay (only visible if no images load) */}
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-black z-0" />
+      
       <div className="absolute top-6 right-6 z-20">
           <button onClick={toggleTheme} className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:scale-110 transition-transform shadow-sm">{darkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
       </div>
 
-      <div className="bg-white dark:bg-dark-card dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden transition-[height] duration-500 z-10" style={{ height: cardHeight, minHeight: '500px' }}>
+      <div className="bg-white/95 dark:bg-dark-card/95 dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden transition-[height] duration-500 z-10 backdrop-blur-md" style={{ height: cardHeight, minHeight: '500px' }}>
         <div ref={contentRef} className="pt-12 px-8 pb-8">
             {/* Header Area */}
             <div className="relative w-full h-48 mb-6 flex justify-center shrink-0"> 

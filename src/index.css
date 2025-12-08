@@ -109,6 +109,26 @@ body {
   }
 }
 
+/* Auth Wizard Background Animations */
+.background-pan-container {
+  animation: backgroundFadeInOut 18s ease-in-out forwards;
+}
+
+@keyframes backgroundFadeInOut {
+  0% {
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  95% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes fadeIn {
   from { 
     opacity: 0;
