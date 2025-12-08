@@ -4,6 +4,7 @@ import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, updateDoc } from 'firebase/firestore';
 import { app, appId } from './config/firebase';
 import { Loader2 } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 
 // Core components (always needed - keep as static imports)
