@@ -2,28 +2,46 @@ import React from 'react';
 import { 
     Users, Clock, UserPlus, Key, Lock, Megaphone, 
     Briefcase, GraduationCap, Users as CohortIcon, 
-    Activity, Settings, LogOut, ArrowLeft, LayoutDashboard
+    Activity, Settings, LogOut, ArrowLeft, LayoutDashboard, BookOpen
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
+import { useSchool } from '../contexts/SchoolContext';
 
-export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, isGlobalAdmin }) {
+export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, eduRole = 'ADMIN', myPermissions = [] }) {
+
+    const { eduRole: contextRole, myPermissions: contextPerms } = useSchool() || {};
+    const effectiveRole = (eduRole || contextRole || 'ADMIN').toUpperCase();
+    const effectivePermissions = (myPermissions && myPermissions.length > 0) ? myPermissions : (contextPerms || []);
     
-    // Define the specific navigation items for the EDU Panel
     const adminLinks = [
-        { id: 'edu-overview', icon: LayoutDashboard, label: 'Overview' }, // NEW
-        { id: 'edu-roster', icon: Users, label: 'Student Roster' },
-        { id: 'edu-hours', icon: Clock, label: 'Internship Hours' },
-        { id: 'edu-instructors', icon: UserPlus, label: 'Staff Management' },
-        { id: 'edu-roles', icon: Key, label: 'Role Permissions' },
-        { id: 'edu-resources', icon: Lock, label: 'Resource Rules' },
+        { id: 'edu-overview', icon: LayoutDashboard, label: 'Overview' },
+        { id: 'edu-roster', icon: Users, label: 'Student Roster', required: 'VIEW_ROSTER' },
+        { id: 'edu-hours', icon: Clock, label: 'Internship Hours', required: 'APPROVE_HOURS' },
+        { id: 'edu-instructors', icon: UserPlus, label: 'Staff Management', required: 'MANAGE_STAFF' },
+        { id: 'edu-roles', icon: Key, label: 'Role Permissions', required: 'MANAGE_ROLES' },
+        { id: 'edu-resources', icon: Lock, label: 'Resource Rules', required: 'MANAGE_RESOURCES' },
         { id: 'edu-news', icon: Megaphone, label: 'Announcements' },
-        { id: 'edu-partners', icon: Briefcase, label: 'Partnerships' },
-        { id: 'edu-evaluations', icon: GraduationCap, label: 'Grading & Evals' },
-        { id: 'edu-cohorts', icon: CohortIcon, label: 'Cohorts' },
-        { id: 'edu-audit', icon: Activity, label: 'Audit Logs' },
-        { id: 'edu-settings', icon: Settings, label: 'School Settings' },
+        { id: 'edu-partners', icon: Briefcase, label: 'Partnerships', required: 'MANAGE_PARTNERS' },
+        { id: 'edu-evaluations', icon: GraduationCap, label: 'Grading & Evals', required: 'GRADE' },
+        { id: 'edu-cohorts', icon: CohortIcon, label: 'Cohorts', required: 'VIEW_ROSTER' },
+        { id: 'edu-audit', icon: Activity, label: 'Audit Logs', required: 'VIEW_AUDIT' },
+        { id: 'edu-settings', icon: Settings, label: 'School Settings', required: 'MANAGE_SETTINGS' },
     ];
+
+    const studentLinks = [
+        { id: 'edu-overview', icon: LayoutDashboard, label: 'Overview' },
+        { id: 'edu-hours', icon: Clock, label: 'My Hours' },
+        { id: 'edu-news', icon: Megaphone, label: 'Announcements' },
+        { id: 'edu-resources', icon: BookOpen, label: 'Resources' },
+    ];
+
+    const isStaffMode = ['ADMIN', 'INSTRUCTOR'].includes(effectiveRole);
+    const filteredAdminLinks = (effectivePermissions || []).includes('ALL')
+        ? adminLinks
+        : adminLinks.filter(link => !link.required || effectivePermissions.includes(link.required));
+
+    const navLinks = isStaffMode ? filteredAdminLinks : studentLinks;
 
     const handleNavigation = (id) => {
         setActiveTab(id);
@@ -41,13 +59,13 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
                     <ArrowLeft size={14}/> Back to Studio
                 </button>
                 <h2 className="text-lg font-extrabold dark:text-white tracking-tight px-1">
-                    EDU Control
+                    {isStaffMode ? 'EDU Control' : 'Student Portal'}
                 </h2>
             </div>
 
             {/* Navigation Links */}
             <div className="flex-1 py-4 overflow-y-auto custom-scrollbar px-3 space-y-1">
-                {adminLinks.map(link => (
+                {navLinks.map(link => (
                     <button
                         key={link.id}
                         onClick={() => handleNavigation(link.id)}
@@ -67,11 +85,11 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-gray-50 dark:bg-[#23262f]">
                 <div className="flex items-center gap-3 px-2">
                     <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs">
-                        EA
+                        {isStaffMode ? 'EA' : 'ST'}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold dark:text-white truncate">EDU Admin</p>
-                        <p className="text-[10px] text-gray-500 truncate">School Management</p>
+                        <p className="text-xs font-bold dark:text-white truncate">{isStaffMode ? 'EDU Staff' : 'Student'}</p>
+                        <p className="text-[10px] text-gray-500 truncate">{isStaffMode ? 'School Management' : 'Learning Access'}</p>
                     </div>
                     <button onClick={() => signOut(auth)} className="text-gray-400 hover:text-red-500">
                         <LogOut size={16}/>
