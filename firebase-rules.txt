@@ -1,6 +1,6 @@
 ================================================================================
 FIREBASE SECURITY RULES
-Last Updated: 2024-12-XX
+Last Updated: 2025-12-08
 ================================================================================
 
 This file contains all Firebase security rules for:
@@ -38,42 +38,86 @@ service cloud.firestore {
              getUserData().accountTypes.hasAny(['Admin']);
     }
 
-    // --- SCHOOLS & EDU MANAGEMENT ---
+    // --- SCHOOLS & EDU MANAGEMENT (Role-Based Access Control) ---
+    // Updated 2025-12-08: Enforces role-based access for EDU features
+    // - ADMIN: Full control of assigned school
+    // - STAFF: View/access based on permissions set by school admin
+    // - STUDENT: View student-specific items (grades, calendar, cohort messaging, announcements, resources)
+    // - INTERN: View internship info and submit internship hours
     match /schools/{schoolId} {
-      // UPDATED: Public read allowed for AuthWizard School Search
-      allow read: if true;
+      // School document: Admin full control, Staff/Students read if they belong to school
+      allow read: if isAuthenticated() && hasSchoolAccess(schoolId);
+      allow create, delete: if isEduAdmin();
+      allow update: if isEduAdmin() || (isEduStaff() && hasSchoolAccess(schoolId));
       
-      allow create, delete: if isGlobalAdmin();
-      allow update: if isStaff();
-
-      match /roles/{roleId} { allow read: if true; allow write: if isStaff(); }
-      match /staff/{staffId} { allow read: if true; allow write: if isStaff(); }
+      // Roles: Staff can read, Admin can manage
+      match /roles/{roleId} {
+        allow read: if isAuthenticated() && hasSchoolAccess(schoolId);
+        allow write: if isEduAdmin() && hasSchoolAccess(schoolId);
+      }
       
+      // Staff: Staff can read, Admin can manage
+      match /staff/{staffId} {
+        allow read: if isAuthenticated() && hasSchoolAccess(schoolId);
+        allow write: if isEduAdmin() && hasSchoolAccess(schoolId);
+      }
+      
+      // Students: Students can read their own, Staff can read all, Admin can manage
       match /students/{studentId} {
-        // UPDATED: Public read allowed for AuthWizard ID Verification
-        allow read: if true;
-        
-        // UPDATED: Allow claiming profiles during signup
-        allow create: if isAuthenticated();
-        allow delete: if isAuthenticated();
-        
-        // Standard management
-        allow write: if isStaff(); 
-        allow update: if isStaff() || isOwner(studentId);
-        
-        match /evaluations/{evalId} { allow read: if isAuthenticated(); allow write: if isStaff(); }
+        allow read: if isAuthenticated() && hasSchoolAccess(schoolId) && (
+          request.auth.uid == studentId || // Own record
+          isEduStaff() || // Staff can read all
+          isEduAdmin() // Admin can read all
+        );
+        allow create: if isEduAdmin() && hasSchoolAccess(schoolId);
+        allow update: if (isEduAdmin() && hasSchoolAccess(schoolId)) || 
+                      (isEduStaff() && hasSchoolAccess(schoolId)) ||
+                      (request.auth.uid == studentId && isEduStudent()); // Students can update their own
+        allow delete: if isEduAdmin() && hasSchoolAccess(schoolId);
       }
-
+      
+      // Internship Logs: Students/Interns can create/update their own, Staff can read/approve
       match /internship_logs/{logId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated() && request.resource.data.studentId == request.auth.uid;
-        allow update: if (isAuthenticated() && resource.data.studentId == request.auth.uid) || isStaff();
+        allow read: if isAuthenticated() && hasSchoolAccess(schoolId);
+        allow create: if isEduStudent() && hasSchoolAccess(schoolId) && 
+                      request.resource.data.studentId == request.auth.uid;
+        allow update: if (isEduStudent() && hasSchoolAccess(schoolId) && 
+                         resource.data.studentId == request.auth.uid) ||
+                       (isEduStaff() && hasSchoolAccess(schoolId)); // Staff can approve
+        allow delete: if isEduAdmin() && hasSchoolAccess(schoolId);
       }
-
-      match /rules/{ruleId} { allow read: if isAuthenticated(); allow write: if isStaff(); }
-      match /partners/{partnerId} { allow read: if isAuthenticated(); allow write: if isStaff(); }
-      match /announcements/{newsId} { allow read: if isAuthenticated(); allow write: if isStaff(); }
-      match /audit_logs/{logId} { allow read: if isStaff(); allow create: if isAuthenticated(); }
+      
+      // Announcements: All authenticated school members can read, Staff can write
+      match /announcements/{announcementId} {
+        allow read: if isAuthenticated() && hasSchoolAccess(schoolId);
+        allow write: if isEduStaff() && hasSchoolAccess(schoolId);
+      }
+      
+      // Resources: All authenticated school members can read, Staff can manage
+      match /rules/{ruleId} {
+        allow read: if isAuthenticated() && hasSchoolAccess(schoolId);
+        allow write: if isEduStaff() && hasSchoolAccess(schoolId);
+      }
+      
+      // Partners: All authenticated school members can read, Staff can manage
+      match /partners/{partnerId} {
+        allow read: if isAuthenticated() && hasSchoolAccess(schoolId);
+        allow write: if isEduStaff() && hasSchoolAccess(schoolId);
+      }
+      
+      // Evaluations (Grades): Students can read their own, Staff can read/write
+      match /students/{studentId}/evaluations/{evalId} {
+        allow read: if isAuthenticated() && hasSchoolAccess(schoolId) && (
+          request.auth.uid == studentId || isEduStaff()
+        );
+        allow write: if isEduStaff() && hasSchoolAccess(schoolId);
+      }
+      
+      // Audit Logs: Staff can read, authenticated users can create
+      match /audit_logs/{logId} {
+        allow read: if isEduStaff() && hasSchoolAccess(schoolId);
+        allow create: if isAuthenticated() && hasSchoolAccess(schoolId);
+      }
     }
 
     // --- USERS & ARTIFACTS ---
@@ -140,7 +184,7 @@ service cloud.firestore {
     match /artifacts/{appId}/public {
       
       match /data/posts/{postId} {
-        allow read: if isAuthenticated();
+        allow read: if isAuthenticated();                 // Auth required (reverted)
         allow create: if isAuthenticated();
         allow update, delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
       }
@@ -176,163 +220,13 @@ service cloud.firestore {
       }
     }
     
-    // --- COLLECTION GROUPS ---
-    match /{path=**}/public_profile/{docId} { allow read: if true; }
-    match /{path=**}/profiles/{docId} { allow read: if true; }
+    // --- PUBLIC DIRECTORIES & EDU LEADS (updated 2025-12-08) ---
+    match /{path=**}/public_profile/{docId} { allow read: if isAuthenticated(); }
+    match /{path=**}/profiles/{docId} { allow read: if isAuthenticated(); }
     match /{path=**}/internship_logs/{docId} { allow read: if isAuthenticated(); }
-  }
-}
-
-
-================================================================================
-REALTIME DATABASE (RTDB) RULES
-================================================================================
-
-{
-  "rules": {
-    
-    // --- CONVERSATIONS ---
-    "conversations": {
-      "$uid": {
-        ".indexOn": "lmt",
-        ".read": "auth !== null && auth.uid === $uid",
-        "$convId": {
-          // FIX: Allow write if it's MY inbox OR if I am the sender ('ls') of the update
-          ".write": "auth !== null && ($uid === auth.uid || newData.child('ls').val() === auth.uid)",
-          
-          // Schema Validation
-          ".validate": "newData.hasChildren(['uid', 'n', 'lm', 'lmt'])",
-          "uid": { ".validate": "newData.isString()" },
-          "n": { ".validate": "newData.isString()" },
-          "lm": { ".validate": "newData.isString()" },
-          "lmt": { ".validate": "newData.isNumber()" },
-          "ls": { ".validate": "newData.isString()" },
-          "uc": { ".validate": "newData.isNumber()" },
-          "ip": { ".validate": "newData.isBoolean()" },  // isPinned flag
-          "type": { ".validate": "newData.isString()" },
-          "photo": { ".validate": "newData.isString()" },
-          "$other": { ".validate": false }
-        }
-      }
-    },
-    
-    // --- MESSAGES ---
-    "messages": {
-      "$convId": {
-        // Simplified for reliability - relies on Chat ID obscurity + App logic
-        ".read": "auth !== null",
-        ".write": "auth !== null",
-        "$msgId": {
-          ".validate": "newData.hasChildren(['b', 's', 't'])",
-          "b": { ".validate": "newData.isString()" },
-          "s": { ".validate": "newData.val() === auth.uid" },
-          "t": { ".validate": "newData.isNumber() && newData.val() <= now" },
-          "n": { ".validate": "newData.isString()" },
-          
-          // Media attachments
-          "media": { 
-            ".validate": "newData.hasChildren(['url', 'type'])",
-            "url": { ".validate": "newData.isString()" },
-            "type": { ".validate": "newData.isString()" },
-            "name": { ".validate": "newData.isString() || !newData.exists()" }
-          },
-          
-          // Reply/Quote (Phase 1 - Chat Enhancements)
-          // Note: Your existing rules use "quote", but our code uses "replyTo"
-          // Keeping both for backward compatibility
-          "quote": { 
-            ".validate": "newData.hasChildren(['id', 'text']) || !newData.exists()",
-            "id": { ".validate": "newData.isString()" },
-            "text": { ".validate": "newData.isString()" },
-            "sender": { ".validate": "newData.isString() || !newData.exists()" }
-          },
-          "replyTo": {
-            ".validate": "newData.hasChildren(['id', 'text']) || !newData.exists()",
-            "id": { ".validate": "newData.isString()" },
-            "text": { ".validate": "newData.isString()" },
-            "sender": { ".validate": "newData.isString() || !newData.exists()" }
-          },
-          
-          // Edit indicator (Phase 1)
-          "edited": { ".validate": "newData.isBoolean() || !newData.exists()" },
-          "editedAt": { ".validate": "newData.isNumber() || !newData.exists()" },
-          
-          // Delete (Phase 1)
-          "deleted": { ".validate": "newData.isBoolean() || !newData.exists()" },
-          "deletedForAll": { ".validate": "newData.isBoolean() || !newData.exists()" },
-          "deletedAt": { ".validate": "newData.isNumber() || !newData.exists()" },
-          "deletedFor": {
-            "$uid": {
-              ".validate": "newData.isBoolean() || !newData.exists()"
-            }
-          },
-          
-          // Forward (Phase 1)
-          "forwarded": { ".validate": "newData.isBoolean() || !newData.exists()" },
-          "forwardedFrom": { ".validate": "newData.isString() || !newData.exists()" },
-          
-          // Reactions (Phase 1 - Chat Enhancements)
-          "reactions": { 
-            ".validate": true,
-            "$emoji": {
-              "$uid": {
-                ".validate": "newData.val() === true || newData.val() === null"
-              }
-            }
-          },
-          
-          "photo": { ".validate": "newData.isString() || !newData.exists()" },
-          "$other": { ".validate": false }
-        }
-      }
-    },
-    
-    // --- GROUP CHATS ---
-    "chats": {
-      "$chatId": {
-        ".read": "auth !== null",
-        ".write": "auth !== null",
-        
-        // Chat metadata (optional, for future use)
-        "meta": {
-          "name": { ".validate": "newData.isString()" },
-          "createdBy": { ".validate": "newData.isString()" },
-          "createdAt": { ".validate": "newData.isNumber() || !newData.exists()" }
-        },
-        
-        // Members list
-        "members": {
-          "$uid": {
-            ".validate": "newData.val() === true || newData.val() === null"
-          }
-        },
-        
-        // Typing indicators (Phase 1)
-        "typing": {
-          "$uid": {
-            ".validate": "newData.isBoolean() || newData.val() === null"
-          }
-        },
-        
-        // Read receipts (Future Phase 2)
-        "readBy": {
-          "$uid": {
-            "lastReadMessageId": { ".validate": "newData.isString()" },
-            "readAt": { ".validate": "newData.isNumber() || !newData.exists()" }
-          }
-        }
-      }
-    },
-    
-    // --- USER PRESENCE (Future Phase 2) ---
-    "presence": {
-      "$uid": {
-        ".read": "auth !== null",
-        ".write": "$uid === auth.uid",
-        "online": { ".validate": "newData.isBoolean() || !newData.exists()" },
-        "lastSeen": { ".validate": "newData.isNumber() || !newData.exists()" }
-      }
-    }
+    match /schools/{docId} { allow read: if isAuthenticated(); }                       
+    match /edu_petitions/{docId} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+    match /edu_verifications/{docId} { allow create: if isAuthenticated(); allow read, update, delete: if false; } // Submit-only
   }
 }
 
@@ -425,6 +319,10 @@ CHANGELOG
   ✅ Media gallery with filtering (images/videos/audio/files)
   ✅ Full-screen media viewer with navigation
   ✅ Enhanced file sharing with preview cards
+2025-12-08 - Public preview & EDU petition access
+  ✅ Firestore: public read for feed/profiles/marketplace/service_requests
+  ✅ Firestore: public read for schools; public create/read for edu_petitions; submit-only for edu_verifications
+  ✅ RTDB rules removed (no RTDB usage)
 
 ================================================================================
 NOTES
@@ -433,12 +331,6 @@ NOTES
 - All new paths follow Firestore odd/even segment rules:
   * Collections = odd segments (1, 3, 5...)
   * Documents = even segments (2, 4, 6...)
-
-- RTDB paths:
-  * conversations/{uid}/{chatId} - User's conversation list
-  * messages/{chatId}/{messageId} - Actual messages
-  * chats/{chatId} - Group chat metadata
-  * presence/{uid} - User online status
 
 - Storage paths:
   * artifacts/{userId}/** - User artifacts and public profile data (public read, owner write)

@@ -199,7 +199,52 @@ export default function App() {
   // ConvexProvider is now at root level in main.jsx, so hooks work everywhere
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
 
-  // React Router handles all routing - no need for custom render logic
+  // --- UNAUTHENTICATED LANDING ---
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-200 dark:from-gray-900 dark:to-black flex flex-col items-center justify-center p-6 text-center">
+        <div className="max-w-lg space-y-6">
+          <div className="inline-flex items-center px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100 dark:bg-blue-900/30 dark:text-blue-200 dark:border-blue-800">
+            Log in to get access to this and more
+          </div>
+          <h1 className="text-3xl md:text-4xl font-extrabold dark:text-white">Welcome to SeshNx</h1>
+          <p className="text-gray-600 dark:text-gray-400">Sign in to unlock social feed, marketplace, education dashboards, and messaging.</p>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            <button
+              className="px-6 py-3 rounded-xl bg-brand-blue text-white font-bold hover:bg-blue-600 transition"
+              onClick={() => { setAuthIntent({ intent: 'login' }); setAuthModalOpen(true); }}
+            >
+              Log in
+            </button>
+            <button
+              className="px-6 py-3 rounded-xl border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-200 font-bold hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+              onClick={() => { setAuthIntent({ intent: 'signup' }); setAuthModalOpen(true); }}
+            >
+              Create account
+            </button>
+          </div>
+        </div>
+
+        <AnimatePresence>
+          {authModalOpen && (
+            <div className="fixed inset-0 z-[12000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+              <AuthWizard 
+                user={user}
+                isNewUser={false}
+                darkMode={darkMode}
+                toggleTheme={toggleTheme}
+                onSuccess={closeAuthModal}
+                onClose={closeAuthModal}
+                intent={authIntent}
+              />
+            </div>
+          )}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} />;
 
   const isEduMode = activeTab.startsWith('edu-');
   const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('Admin') || userData?.accountTypes?.includes('Instructor'));

@@ -36,12 +36,24 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
         { id: 'edu-resources', icon: BookOpen, label: 'Resources' },
     ];
 
+    const internLinks = [
+        { id: 'edu-overview', icon: LayoutDashboard, label: 'Overview' },
+        { id: 'edu-hours', icon: Clock, label: 'Internship Hours' },
+        { id: 'edu-news', icon: Megaphone, label: 'Announcements' },
+        { id: 'edu-resources', icon: BookOpen, label: 'Resources' },
+    ];
+
     const isStaffMode = ['ADMIN', 'INSTRUCTOR'].includes(effectiveRole);
+    const isInternMode = effectiveRole === 'INTERN';
     const filteredAdminLinks = (effectivePermissions || []).includes('ALL')
         ? adminLinks
         : adminLinks.filter(link => !link.required || effectivePermissions.includes(link.required));
 
-    const navLinks = isStaffMode ? filteredAdminLinks : studentLinks;
+    const navLinks = isStaffMode 
+        ? filteredAdminLinks 
+        : isInternMode 
+            ? internLinks 
+            : studentLinks;
 
     const handleNavigation = (id) => {
         setActiveTab(id);
@@ -59,7 +71,7 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
                     <ArrowLeft size={14}/> Back to Studio
                 </button>
                 <h2 className="text-lg font-extrabold dark:text-white tracking-tight px-1">
-                    {isStaffMode ? 'EDU Control' : 'Student Portal'}
+                    {isStaffMode ? 'EDU Control' : isInternMode ? 'Internship Portal' : 'Student Portal'}
                 </h2>
             </div>
 
@@ -85,11 +97,15 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
             <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-gray-50 dark:bg-[#23262f]">
                 <div className="flex items-center gap-3 px-2">
                     <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs">
-                        {isStaffMode ? 'EA' : 'ST'}
+                        {isStaffMode ? 'EA' : isInternMode ? 'IN' : 'ST'}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold dark:text-white truncate">{isStaffMode ? 'EDU Staff' : 'Student'}</p>
-                        <p className="text-[10px] text-gray-500 truncate">{isStaffMode ? 'School Management' : 'Learning Access'}</p>
+                        <p className="text-xs font-bold dark:text-white truncate">
+                            {isStaffMode ? 'EDU Staff' : isInternMode ? 'Intern' : 'Student'}
+                        </p>
+                        <p className="text-[10px] text-gray-500 truncate">
+                            {isStaffMode ? 'School Management' : isInternMode ? 'Hours Tracking' : 'Learning Access'}
+                        </p>
                     </div>
                     <button onClick={() => signOut(auth)} className="text-gray-400 hover:text-red-500">
                         <LogOut size={16}/>
