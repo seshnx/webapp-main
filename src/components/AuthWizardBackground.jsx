@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { collection, query, limit, getDocs, orderBy } from 'firebase/firestore';
 import { db, appId } from '../config/firebase';
 
-export default function AuthWizardBackground() {
+export default function AuthWizardBackground({ onImagesLoaded }) {
   const [images, setImages] = useState([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [imagesReady, setImagesReady] = useState(false);
   const [panDirection, setPanDirection] = useState({ x: 0, y: 0, startX: 0, startY: 0 });
   const intervalRef = useRef(null);
 
@@ -102,6 +103,24 @@ export default function AuthWizardBackground() {
       }
     };
   }, [images.length, loading]);
+
+  // Track when first image is loaded and ready
+  useEffect(() => {
+    if (!loading && images.length > 0 && !imagesReady) {
+      // Preload first image to ensure it's ready
+      const img = new Image();
+      img.onload = () => {
+        setImagesReady(true);
+        if (onImagesLoaded) onImagesLoaded(true);
+      };
+      img.onerror = () => {
+        // Even if image fails, mark as ready to hide fallback
+        setImagesReady(true);
+        if (onImagesLoaded) onImagesLoaded(true);
+      };
+      img.src = images[0].url;
+    }
+  }, [loading, images, imagesReady, onImagesLoaded]);
 
   if (loading || images.length === 0) {
     return null;

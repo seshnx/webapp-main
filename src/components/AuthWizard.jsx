@@ -94,7 +94,8 @@ function ZipUserMap({ zip }) {
 export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
   // Steps: 1=Login, 2=Info, 3=SchoolSearch, 4=VerifyStudent, 5=Roles
   const [step, setStep] = useState(1);
-  const [mode, setMode] = useState('login'); 
+  const [mode, setMode] = useState('login');
+  const [backgroundImagesLoaded, setBackgroundImagesLoaded] = useState(false); 
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', zip: '', roles: [] });
   const [error, setError] = useState('');
@@ -295,11 +296,18 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-500 relative overflow-hidden">
       {/* Animated Background - Behind everything */}
       <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
-        <AuthWizardBackground />
+        <AuthWizardBackground onImagesLoaded={setBackgroundImagesLoaded} />
       </div>
       
-      {/* Fallback gradient overlay (only visible if no images load) */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-black" style={{ zIndex: 0 }} />
+      {/* Fallback gradient overlay (fades out when images load) */}
+      <div 
+        className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-black transition-opacity duration-1000" 
+        style={{ 
+          zIndex: 0,
+          opacity: backgroundImagesLoaded ? 0 : 1,
+          pointerEvents: backgroundImagesLoaded ? 'none' : 'auto'
+        }} 
+      />
       
       <div className="absolute top-6 right-6 z-20">
           <button onClick={toggleTheme} className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:scale-110 transition-transform shadow-sm">{darkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
