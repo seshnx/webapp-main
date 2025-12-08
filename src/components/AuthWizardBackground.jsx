@@ -38,10 +38,17 @@ export default function AuthWizardBackground() {
           ]);
         }
       } catch (error) {
-        console.error('Error loading background images:', error);
-        // Fallback images on error
+        // Handle network errors (including ERR_BLOCKED_BY_CLIENT from browser extensions)
+        if (error.message?.includes('BLOCKED_BY_CLIENT') || error.code === 'unavailable') {
+          console.warn('Firestore request blocked by browser extension. Using fallback images.');
+        } else {
+          console.error('Error loading background images:', error);
+        }
+        // Fallback images on error (including when blocked by extensions)
         setImages([
           { id: '1', url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1920&q=80', order: 0 },
+          { id: '2', url: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1920&q=80', order: 1 },
+          { id: '3', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1920&q=80', order: 2 },
         ]);
       } finally {
         setLoading(false);
@@ -117,7 +124,7 @@ export default function AuthWizardBackground() {
           }
         }
       `}</style>
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none" style={{ zIndex: -1 }}>
         <div
           key={currentImage.id}
           className="absolute inset-0 background-pan-container"

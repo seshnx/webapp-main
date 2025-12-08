@@ -1,12 +1,47 @@
 rules_version = '2';
 
-// Craft rules based on data in your Firestore database
-// allow write: if firestore.get(
-//    /databases/(default)/documents/users/$(request.auth.uid)).data.isAdmin;
 service firebase.storage {
   match /b/{bucket}/o {
+    
+    // 1. Auth Background Images (Public read for login page)
+    // Images stored at root level (e.g., 1502797.jpg, 2682798.jpg)
+    match /{imageFileName} {
+      // Allow public read for image files (jpg, jpeg, png, webp)
+      allow read: if imageFileName.matches('.*\\.(jpg|jpeg|png|webp)$');
+      allow write: if request.auth != null;
+    }
+    
+    // 2. User Artifacts & Public Profile Data
+    match /artifacts/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 3. User Personal Folder (Avatars, etc.)
+    match /users/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // 4. School Assets
+    match /schools/{schoolId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    // 5. Chat Attachments (Images/Audio)
+    match /chat_media/{chatId}/{allPaths=**} {
+       allow read, write: if request.auth != null;
+    }
+    
+    // 6. Chat Files (Documents)
+    match /chat_files/{chatId}/{allPaths=**} {
+       allow read, write: if request.auth != null;
+    }
+
+    // Default Deny
     match /{allPaths=**} {
-      allow read, write: if false;
+      allow read, write: if false; 
     }
   }
 }

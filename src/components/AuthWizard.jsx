@@ -293,11 +293,13 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 transition-colors duration-500 relative overflow-hidden">
-      {/* Animated Background */}
-      <AuthWizardBackground />
+      {/* Animated Background - Behind everything */}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
+        <AuthWizardBackground />
+      </div>
       
       {/* Fallback gradient overlay (only visible if no images load) */}
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-black z-0" />
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-black" style={{ zIndex: 0 }} />
       
       <div className="absolute top-6 right-6 z-20">
           <button onClick={toggleTheme} className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:scale-110 transition-transform shadow-sm">{darkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
