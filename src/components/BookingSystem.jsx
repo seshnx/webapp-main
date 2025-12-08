@@ -142,7 +142,7 @@ export default function BookingSystem({ user, userData, openPublicProfile }) {
 
       <AnimatePresence mode="wait">
           {subTab === 'broadcasts' && (
-              <motion.div key="broadcasts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div key="broadcasts" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ opacity: 0 }}>
                   {bookingMode === 'create_broadcast' ? (
                       <BroadcastRequest user={user} userData={userData} onBack={() => setBookingMode('list')} onSuccess={() => setBookingMode('list')} />
                   ) : (
@@ -155,13 +155,13 @@ export default function BookingSystem({ user, userData, openPublicProfile }) {
           )}
 
           {subTab === 'search' && (
-              <motion.div key="search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div key="search" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ opacity: 0 }}>
                   <TalentSearch user={user} userData={userData} openPublicProfile={openPublicProfile} onBook={handleDirectBook} mode="direct" />
               </motion.div>
           )}
 
           {subTab === 'requests' && (
-              <motion.div key="requests" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div key="requests" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ opacity: 0 }}>
                   <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                       <div><h2 className="text-2xl font-bold dark:text-white">Booking Management</h2><p className="text-gray-500 text-sm">Track your sessions and requests.</p></div>
                       <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex"><button onClick={() => setBookingView('outgoing')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${bookingView === 'outgoing' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>I Booked</button><button onClick={() => setBookingView('incoming')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${bookingView === 'incoming' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>Booked Me</button></div>
@@ -171,7 +171,7 @@ export default function BookingSystem({ user, userData, openPublicProfile }) {
           )}
 
           {subTab === 'planner' && (
-              <motion.div key="planner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <motion.div key="planner" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ opacity: 0 }}>
                   {plannerView === 'wizard' && <SessionWizard userData={userData} sessionParams={sessionParams} setSessionParams={setSessionParams} onNext={handlePlannerNext} />}
                   {plannerView === 'talent' && (
                       <div className="relative">

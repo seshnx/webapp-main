@@ -74,6 +74,11 @@ body {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
+/* Ensure tab content starts hidden before animation */
+.tab-content-initial {
+  opacity: 0;
+}
+
 @keyframes fadeIn {
   from { 
     opacity: 0;
