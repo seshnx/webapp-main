@@ -4,7 +4,6 @@ import { getAuth, onAuthStateChanged, signOut } from 'firebase/auth';
 import { getFirestore, doc, onSnapshot, collection, updateDoc } from 'firebase/firestore';
 import { app, appId } from './config/firebase';
 import { Loader2 } from 'lucide-react';
-import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 
 // Core components (always needed - keep as static imports)
@@ -235,20 +234,18 @@ export default function App() {
             </div>
 
             <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth" id="main-scroll">
-                <AnimatePresence mode="wait" initial={false}>
-                    <PageTransition key={location.pathname} className="max-w-7xl mx-auto">
-                        <AppRoutes
-                          user={user}
-                          userData={userData}
-                          subProfiles={subProfiles}
-                          notifications={notifications}
-                          tokenBalance={tokenBalance}
-                          setActiveTab={setActiveTab}
-                          handleLogout={handleLogout}
-                          openPublicProfile={openPublicProfile}
-                        />
-                    </PageTransition>
-                </AnimatePresence>
+                <PageTransition key={location.pathname} className="max-w-7xl mx-auto">
+                    <AppRoutes
+                      user={user}
+                      userData={userData}
+                      subProfiles={subProfiles}
+                      notifications={notifications}
+                      tokenBalance={tokenBalance}
+                      setActiveTab={setActiveTab}
+                      handleLogout={handleLogout}
+                      openPublicProfile={openPublicProfile}
+                    />
+                </PageTransition>
             </main>
         </div>
 

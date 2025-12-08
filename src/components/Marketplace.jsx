@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import DistributionManager from './marketplace/DistributionManager';
 import GearExchange from './marketplace/GearExchange';
 import SeshFxStore from './marketplace/SeshFxStore'; // Sample Pack Store
@@ -34,20 +33,23 @@ export default function Marketplace({ user, userData, tokenBalance }) {
                 </div>
             </div>
 
-            <AnimatePresence mode="wait">
-                <motion.div
-                    key={subTab}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                    style={{ opacity: 0 }}
-                >
-                    {subTab === 'distribution' && <DistributionManager user={user} userData={userData} />}
-                    {subTab === 'gear' && <GearExchange user={user} />}
-                    {subTab === 'fx' && <SeshFxStore user={user} tokenBalance={tokenBalance} />}
-                </motion.div>
-            </AnimatePresence>
+            <div className="tab-content-wrapper">
+                {subTab === 'distribution' && (
+                    <div key="distribution" className="tab-content">
+                        <DistributionManager user={user} userData={userData} />
+                    </div>
+                )}
+                {subTab === 'gear' && (
+                    <div key="gear" className="tab-content">
+                        <GearExchange user={user} />
+                    </div>
+                )}
+                {subTab === 'fx' && (
+                    <div key="fx" className="tab-content">
+                        <SeshFxStore user={user} tokenBalance={tokenBalance} />
+                    </div>
+                )}
+            </div>
         </div>
     );
 }

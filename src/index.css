@@ -74,9 +74,39 @@ body {
   animation: pulse 1.5s ease-in-out infinite;
 }
 
-/* Ensure tab content starts hidden before animation */
-.tab-content-initial {
+/* Tab Content Fade Animation */
+.tab-content-wrapper {
+  position: relative;
+  min-height: 200px;
+}
+
+.tab-content {
   opacity: 0;
+  animation: tabFadeIn 0.3s ease-out forwards;
+}
+
+@keyframes tabFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Module Fade In Animation - Applied to all page modules */
+.module-fade-in {
+  opacity: 0;
+  animation: moduleFadeIn 0.3s ease-out forwards;
+}
+
+@keyframes moduleFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes fadeIn {
