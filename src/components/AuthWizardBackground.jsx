@@ -83,8 +83,8 @@ export default function AuthWizardBackground({ onImagesLoaded }) {
   useEffect(() => {
     if (images.length === 0 || loading) return;
 
-    // Each image displays for 15-20 seconds (pan animation duration)
-    const displayDuration = 18000; // 18 seconds
+    // Each image displays for longer duration (slower pan animation)
+    const displayDuration = 30000; // 30 seconds - slower animation
 
     intervalRef.current = setInterval(() => {
       setCurrentImageIndex((prev) => {
@@ -129,11 +129,16 @@ export default function AuthWizardBackground({ onImagesLoaded }) {
   const currentImage = images[currentImageIndex];
   
   // Calculate transform values for smooth GPU-accelerated animation
-  // When zoomed 1.5x, we need to move by 33.33% to pan across visible area
+  // When zoomed 2x, we can move by 50% to pan across visible area
+  // But we limit to ~40% to ensure borders stay in frame
+  const zoomLevel = 2.2; // Increased zoom
+  const maxPanPercent = 40; // Limit pan to keep borders in frame
+  
   const getTransform = (x, y) => {
-    const translateX = x === 0 ? '0%' : x === 100 ? '-33.33%' : '-16.67%';
-    const translateY = y === 0 ? '0%' : y === 100 ? '-33.33%' : '-16.67%';
-    return `scale(1.5) translate(${translateX}, ${translateY}) translateZ(0)`;
+    // Convert 0-100% to -maxPanPercent to 0% (centered to edge)
+    const translateX = x === 0 ? '0%' : x === 100 ? `-${maxPanPercent}%` : `-${maxPanPercent / 2}%`;
+    const translateY = y === 0 ? '0%' : y === 100 ? `-${maxPanPercent}%` : `-${maxPanPercent / 2}%`;
+    return `scale(${zoomLevel}) translate(${translateX}, ${translateY}) translateZ(0)`;
   };
 
   const startTransform = getTransform(panDirection.startX, panDirection.startY);
@@ -169,7 +174,7 @@ export default function AuthWizardBackground({ onImagesLoaded }) {
               backgroundImage: `url(${currentImage.url})`,
               backgroundSize: 'cover',
               backgroundPosition: 'center',
-              animation: `${animationName} 18s linear forwards`,
+              animation: `${animationName} 30s linear forwards`,
               willChange: 'transform',
               backfaceVisibility: 'hidden',
               WebkitBackfaceVisibility: 'hidden',
