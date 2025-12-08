@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, MapPin, Briefcase, Music, Save, Loader2, DollarSign, Settings, Users, ChevronRight, Check, ToggleLeft, ToggleRight, GraduationCap, Search, X } from 'lucide-react';
-import { doc, updateDoc, setDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
+import { User, Mail, MapPin, Briefcase, Music, Save, Loader2, DollarSign, Settings, Users, ChevronRight, Check, ToggleLeft, ToggleRight } from 'lucide-react';
+import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db, appId, getPaths } from '../config/firebase';
 import { useForm, Controller } from 'react-hook-form'; // Added Controller
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -39,14 +39,6 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
 
     const [useLegalNameOnly, setUseLegalNameOnly] = useState(userData?.useLegalNameOnly || false);
     const [useUserNameOnly, setUseUserNameOnly] = useState(userData?.useUserNameOnly || false);
-    const [eduModalOpen, setEduModalOpen] = useState(false);
-    const [eduSearch, setEduSearch] = useState('');
-    const [eduResults, setEduResults] = useState([]);
-    const [eduSchool, setEduSchool] = useState(null);
-    const [eduStudentId, setEduStudentId] = useState('');
-    const [eduStudentEmail, setEduStudentEmail] = useState(userData?.email || user?.email || '');
-    const [eduSubmitting, setEduSubmitting] = useState(false);
-    const [eduError, setEduError] = useState('');
 
     useEffect(() => {
         setUseLegalNameOnly(userData?.useLegalNameOnly || false);
@@ -63,42 +55,6 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
         const newVal = !useUserNameOnly;
         setUseUserNameOnly(newVal);
         if (newVal) setUseLegalNameOnly(false);
-    };
-
-    const searchEduSchools = async (term) => {
-        if (!term || term.length < 2) {
-            setEduResults([]);
-            return;
-        }
-        const q = query(collection(db, 'schools'), where('name', '>=', term), where('name', '<=', term + '\uf8ff'));
-        const snap = await getDocs(q);
-        setEduResults(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    };
-
-    const submitEduVerification = async () => {
-        if (!eduSchool || !eduStudentId || !eduStudentEmail) {
-            setEduError('Please select a school and add your student ID and email.');
-            return;
-        }
-        setEduSubmitting(true);
-        setEduError('');
-        try {
-            await addDoc(collection(db, 'edu_verifications'), {
-                userId: user?.uid || null,
-                email: eduStudentEmail,
-                studentId: eduStudentId,
-                schoolId: eduSchool.id,
-                schoolName: eduSchool.name,
-                status: 'PENDING',
-                createdAt: serverTimestamp()
-            });
-            setEduModalOpen(false);
-        } catch (e) {
-            console.error('Edu verification failed', e);
-            setEduError('Could not submit verification. Please try again.');
-        } finally {
-            setEduSubmitting(false);
-        }
     };
 
     const {
@@ -183,20 +139,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                 <h1 className="text-3xl font-bold dark:text-white flex items-center gap-2">
                     <User className="text-brand-blue"/> {activeSubTab === 'details' ? 'Edit Profile' : 'Account Settings'}
                 </h1>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-100 dark:border-indigo-800 rounded-2xl p-4 flex flex-col gap-2 shadow-sm">
-                    <div className="text-xs font-bold uppercase text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
-                        <GraduationCap size={16}/> Education & Internships
-                    </div>
-                    <h3 className="text-lg font-bold dark:text-white">Verify student access</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Launch the EDU verification flow to connect your school ID, hours tracking, and announcements.</p>
-                    <div className="flex flex-wrap gap-2">
-                        <button onClick={() => setEduModalOpen(true)} className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700 transition">Start Verification</button>
-                        <button onClick={() => window.location.assign('/edu')} className="px-4 py-2 rounded-lg border border-indigo-200 dark:border-indigo-700 text-indigo-700 dark:text-indigo-300 font-bold hover:bg-indigo-100 dark:hover:bg-indigo-900/30 transition">Open EDU Portal</button>
-                    </div>
-                </div>
+                
                 <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex gap-1 self-start md:self-auto">
                     <button onClick={() => setActiveSubTab('details')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${activeSubTab === 'details' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>Edit Details</button>
                     <button onClick={() => setActiveSubTab('settings')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${activeSubTab === 'settings' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}><Settings size={14}/> Settings</button>
@@ -263,77 +206,6 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                 </div>
             ) : (
                 <div className="animate-in fade-in slide-in-from-right-2"><SettingsTab user={user} userData={userData} handleLogout={handleLogout} onUpdate={handleSettingsUpdate}/></div>
-            )}
-
-            {eduModalOpen && (
-                <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-[#1f2128] w-full max-w-xl rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 space-y-4 relative">
-                        <button onClick={() => setEduModalOpen(false)} className="absolute top-3 right-3 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-300 transition"><X size={18}/></button>
-                        <div>
-                            <p className="text-xs font-bold uppercase text-indigo-600">Education & Internships</p>
-                            <h3 className="text-xl font-extrabold dark:text-white">Verify student access</h3>
-                            <p className="text-sm text-gray-600 dark:text-gray-400">Search your school, enter your student ID and school email, and we’ll queue verification.</p>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div className="relative">
-                                <Search size={16} className="absolute left-3 top-3 text-gray-400" />
-                                <input 
-                                    className="w-full pl-10 p-3 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white"
-                                    value={eduSearch}
-                                    onChange={(e) => { setEduSearch(e.target.value); searchEduSchools(e.target.value); }}
-                                    placeholder="Search for your school"
-                                />
-                                {eduSearch.length > 1 && eduResults.length > 0 && (
-                                    <div className="absolute z-10 w-full mt-2 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl shadow-xl max-h-48 overflow-y-auto">
-                                        {eduResults.map(result => (
-                                            <div 
-                                                key={result.id}
-                                                className={`p-3 cursor-pointer hover:bg-indigo-50 dark:hover:bg-gray-700/50 ${eduSchool?.id === result.id ? 'bg-indigo-100 dark:bg-indigo-900/30' : ''}`}
-                                                onClick={() => { setEduSchool(result); setEduResults([]); setEduSearch(result.name); }}
-                                            >
-                                                <div className="font-medium dark:text-white">{result.name}</div>
-                                                <div className="text-xs text-gray-500">{result.city}, {result.state}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-
-                            {eduSchool && (
-                                <div className="grid md:grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Student ID</label>
-                                        <input 
-                                            className="w-full p-3 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white"
-                                            value={eduStudentId}
-                                            onChange={(e) => setEduStudentId(e.target.value)}
-                                            placeholder="e.g., SESH00123"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-xs font-bold text-gray-500 uppercase block mb-1">School Email</label>
-                                        <input 
-                                            className="w-full p-3 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white"
-                                            value={eduStudentEmail}
-                                            onChange={(e) => setEduStudentEmail(e.target.value)}
-                                            placeholder="you@school.edu"
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
-                            {eduError && <p className="text-sm text-red-500">{eduError}</p>}
-                        </div>
-
-                        <div className="flex justify-end gap-2">
-                            <button onClick={() => setEduModalOpen(false)} className="px-4 py-2 rounded-lg border dark:border-gray-700 text-sm font-bold text-gray-600 dark:text-gray-300">Cancel</button>
-                            <button onClick={submitEduVerification} disabled={eduSubmitting} className="px-4 py-2 rounded-lg bg-indigo-600 text-white font-bold hover:bg-indigo-700 disabled:opacity-60">
-                                {eduSubmitting ? <Loader2 className="animate-spin" size={16}/> : 'Submit Verification'}
-                            </button>
-                        </div>
-                    </div>
-                </div>
             )}
         </div>
     );

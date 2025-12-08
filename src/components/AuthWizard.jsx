@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, GoogleAuthProvider, sendSignInLinkToEmail, isSignInWithEmailLink, signInWithEmailLink, RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp, collection, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 import { Loader2, AlertCircle, ArrowLeft, Check, Sun, Moon, MapPin, User, Crosshair, School, Search, Mail, Key, ShieldCheck, X } from 'lucide-react';
 import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
@@ -90,11 +90,10 @@ function ZipUserMap({ zip }) {
 }
 
 // --- MAIN COMPONENT ---
-export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, onClose, intent }) {
+export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
   // Steps: 1=Login, 2=Info, 3=SchoolSearch, 4=VerifyStudent, 5=Roles
   const [step, setStep] = useState(1);
   const [mode, setMode] = useState('login'); 
-  const [authMethod, setAuthMethod] = useState('password');
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', zip: '', roles: [] });
   const [error, setError] = useState('');
@@ -102,12 +101,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, onC
   const [cardHeight, setCardHeight] = useState('auto');
   const [locating, setLocating] = useState(false);
   const [showLegalOverlay, setShowLegalOverlay] = useState(false);
-  const [magicSent, setMagicSent] = useState(false);
-  const [smsPhone, setSmsPhone] = useState('');
-  const [smsCode, setSmsCode] = useState('');
-  const [smsSent, setSmsSent] = useState(false);
-  const [smsVerifier, setSmsVerifier] = useState(null);
-  const [passkeySupported] = useState(() => typeof window !== 'undefined' && 'PublicKeyCredential' in window);
   const contentRef = useRef(null);
 
   // Student Linking State
@@ -151,24 +144,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, onC
 
   const [passwordValidations, setPasswordValidations] = useState({ hasUpper: false, hasLower: false, hasNumber: false, isLength: false });
 
-  // Handle inbound magic-link completion
-  useEffect(() => {
-      if (typeof window === 'undefined') return;
-      if (isSignInWithEmailLink(auth, window.location.href)) {
-          const storedEmail = window.localStorage.getItem('seshnx_magic_email') || form.email;
-          if (!storedEmail) {
-              setMode('login');
-              setAuthMethod('magic');
-              setError('Enter your email to finish sign-in.');
-              return;
-          }
-          signInWithEmailLink(auth, storedEmail, window.location.href)
-              .then(() => { setError(''); onSuccess?.(); })
-              .catch((e) => setError(e.message || 'Magic link failed.'));
-      }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   useEffect(() => {
       const p = form.password;
       setPasswordValidations({ hasUpper: /[A-Z]/.test(p), hasLower: /[a-z]/.test(p), hasNumber: /[0-9]/.test(p), isLength: p.length >= 6 });
@@ -189,19 +164,12 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, onC
   }, [step, mode, error, resetSent, form.zip, isStudent, schoolResults, sentCode]);
 
   useEffect(() => { setError(''); }, [step]);
-  useEffect(() => {
-    if (intent?.intent) {
-        setMode('login');
-    }
-  }, [intent]);
 
   const handleLogin = async () => {
     if (!form.email || !form.password) return setError("Please fill in all fields.");
     setIsLoading(true);
     try { await signInWithEmailAndPassword(auth, form.email, form.password); } 
-    catch (e) { setError("Invalid email or password."); setIsLoading(false); return; }
-    setIsLoading(false);
-    if (onSuccess) onSuccess();
+    catch (e) { setError("Invalid email or password."); setIsLoading(false); }
   };
 
   const handleGoogleLogin = async () => {
@@ -211,77 +179,11 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, onC
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await signInWithPopup(auth, provider);
-      if (onSuccess) onSuccess();
-      setIsLoading(false);
     } catch (e) {
       console.error("Google Sign-In Error:", e);
       setError(e.message);
       setIsLoading(false);
     }
-  };
-
-  const handleMagicLink = async () => {
-    if (!form.email) return setError("Enter your email first.");
-    setIsLoading(true);
-    try {
-      await sendSignInLinkToEmail(auth, form.email, {
-        url: window.location.href,
-        handleCodeInApp: true
-      });
-      window.localStorage.setItem('seshnx_magic_email', form.email);
-      setMagicSent(true);
-      setError('');
-    } catch (e) {
-      setError(e.message || 'Could not send magic link.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const ensureRecaptcha = () => {
-    if (typeof window === 'undefined') return null;
-    if (window.recaptchaVerifier) return window.recaptchaVerifier;
-    window.recaptchaVerifier = new RecaptchaVerifier(auth, 'sms-recaptcha', { size: 'invisible' });
-    return window.recaptchaVerifier;
-  };
-
-  const handleSendSms = async () => {
-    if (!smsPhone) return setError('Enter a phone number first.');
-    setIsLoading(true);
-    try {
-      const verifier = ensureRecaptcha();
-      const confirmation = await signInWithPhoneNumber(auth, smsPhone, verifier);
-      setSmsVerifier(confirmation);
-      setSmsSent(true);
-      setError('');
-    } catch (e) {
-      console.error('SMS error', e);
-      setError('Could not send code. Check number and try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifySms = async () => {
-    if (!smsVerifier || !smsCode) return;
-    setIsLoading(true);
-    try {
-      await smsVerifier.confirm(smsCode);
-      if (onSuccess) onSuccess();
-    } catch (e) {
-      setError('Invalid code. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handlePasskeyLogin = async () => {
-    if (!passkeySupported) {
-      setError('Passkeys are not supported on this device.');
-      return;
-    }
-    // Placeholder: real WebAuthn validation requires a server-side challenge
-    setError('Passkeys require a device enrollment step. Sign in once, then enable passkeys in settings.');
   };
 
   const handleSignup = async () => {
@@ -393,13 +295,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, onC
       <div className="absolute top-6 right-6 z-20">
           <button onClick={toggleTheme} className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:scale-110 transition-transform shadow-sm">{darkMode ? <Sun size={20} /> : <Moon size={20} />}</button>
       </div>
-      {typeof onClose === 'function' && (
-        <div className="absolute top-6 left-6 z-20">
-            <button onClick={onClose} className="p-2 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition shadow-sm">
-                <X size={18}/>
-            </button>
-        </div>
-      )}
 
       <div className="bg-white dark:bg-dark-card dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden transition-[height] duration-500 z-10" style={{ height: cardHeight, minHeight: '500px' }}>
         <div ref={contentRef} className="pt-12 px-8 pb-8">
@@ -422,72 +317,16 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, onC
                 {/* LOGIN */}
                 {mode === 'login' && (
                     <div className="space-y-4 w-full">
-                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            {[
-                                { id: 'password', label: 'Password' },
-                                { id: 'magic', label: 'Magic Link' },
-                                { id: 'sms', label: 'SMS OTP' },
-                                { id: 'passkey', label: 'Passkey' },
-                            ].map(option => (
-                                <button
-                                    key={option.id}
-                                    onClick={() => setAuthMethod(option.id)}
-                                    className={`px-3 py-2 rounded-lg text-xs font-bold border transition ${authMethod === option.id ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white dark:bg-[#1f2128] border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-indigo-200 dark:hover:border-indigo-700'}`}
-                                >
-                                    {option.label}
-                                </button>
-                            ))}
+                        <div className="space-y-3">
+                            <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none dark:text-white transition-all" placeholder="Email Address" type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleLogin)} disabled={isLoading} />
+                            <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none dark:text-white transition-all" type="password" placeholder="Password" value={form.password} onChange={e=>setForm({...form, password:e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleLogin)} disabled={isLoading} />
                         </div>
-
-                        {authMethod === 'password' && (
-                            <div className="space-y-3">
-                                <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none dark:text-white transition-all" placeholder="Email Address" type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleLogin)} disabled={isLoading} />
-                                <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none dark:text-white transition-all" type="password" placeholder="Password" value={form.password} onChange={e=>setForm({...form, password:e.target.value})} onKeyDown={(e) => handleKeyDown(e, handleLogin)} disabled={isLoading} />
-                                <div className="flex justify-between items-center">
-                                    <div />
-                                    <button onClick={() => setMode('forgot')} className="text-xs text-gray-500 hover:text-brand-blue font-medium transition-colors">Forgot Password?</button>
-                                </div>
-                                <button className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold hover:bg-blue-600 transition-all shadow-lg flex justify-center disabled:opacity-70" onClick={handleLogin} disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Sign In'}</button>
-                            </div>
-                        )}
-
-                        {authMethod === 'magic' && (
-                            <div className="space-y-3">
-                                <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none dark:text-white transition-all" placeholder="Email Address" type="email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} disabled={isLoading || magicSent} />
-                                <button className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex justify-center disabled:opacity-70" onClick={handleMagicLink} disabled={isLoading || magicSent || !form.email}>{isLoading ? <Loader2 className="animate-spin" /> : magicSent ? 'Link Sent' : 'Send Magic Link'}</button>
-                                {magicSent && <p className="text-xs text-gray-500">Check your email for a secure sign-in link.</p>}
-                            </div>
-                        )}
-
-                        {authMethod === 'sms' && (
-                            <div className="space-y-3">
-                                <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none dark:text-white transition-all" placeholder="+1 (555) 123-4567" type="tel" value={smsPhone} onChange={e => setSmsPhone(e.target.value)} disabled={isLoading || smsSent} />
-                                {!smsSent ? (
-                                    <button className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg flex justify-center disabled:opacity-70" onClick={handleSendSms} disabled={isLoading || !smsPhone}>{isLoading ? <Loader2 className="animate-spin" /> : 'Send Code'}</button>
-                                ) : (
-                                    <>
-                                        <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border border-gray-200 dark:border-gray-600 rounded-xl focus:ring-2 focus:ring-brand-blue outline-none dark:text-white transition-all text-center tracking-widest" placeholder="Enter OTP" value={smsCode} onChange={e => setSmsCode(e.target.value)} />
-                                        <button className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg flex justify-center disabled:opacity-70" onClick={handleVerifySms} disabled={isLoading || !smsCode}>{isLoading ? <Loader2 className="animate-spin" /> : 'Verify & Sign In'}</button>
-                                    </>
-                                )}
-                                <div id="sms-recaptcha" className="hidden"></div>
-                            </div>
-                        )}
-
-                        {authMethod === 'passkey' && (
-                            <div className="space-y-3">
-                                <p className="text-sm text-gray-600 dark:text-gray-400">Use Face ID / Touch ID on supported devices. New users should sign in once via another method, then enable passkeys.</p>
-                                <button className="w-full bg-gray-900 dark:bg-white dark:text-black text-white py-3.5 rounded-xl font-bold hover:opacity-90 transition-all shadow-lg flex justify-center disabled:opacity-70" onClick={handlePasskeyLogin} disabled={isLoading}>
-                                    {isLoading ? <Loader2 className="animate-spin" /> : (passkeySupported ? 'Use Passkey' : 'Passkeys not supported')}
-                                </button>
-                            </div>
-                        )}
-
+                        <div className="flex justify-end"><button onClick={() => setMode('forgot')} className="text-xs text-gray-500 hover:text-brand-blue font-medium transition-colors">Forgot Password?</button></div>
+                        <button className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold hover:bg-blue-600 transition-all shadow-lg flex justify-center disabled:opacity-70" onClick={handleLogin} disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Sign In'}</button>
                         <button onClick={handleGoogleLogin} className="w-full bg-white dark:bg-transparent border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-white py-3.5 rounded-xl font-bold hover:bg-gray-50 dark:hover:bg-gray-800 transition-all flex justify-center items-center gap-2" disabled={isLoading}>
                             <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" /><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" /><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" /><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" /></svg>
                             Continue with Google
                         </button>
-
                         <div className="relative py-2"><div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200 dark:border-gray-700"></div></div><div className="relative flex justify-center text-sm"><span className="px-2 bg-white dark:bg-dark-card text-gray-500">or</span></div></div>
                         <p className="text-center text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:text-brand-blue font-medium transition-colors pt-2" onClick={() => setMode('signup')}>New here? Create an Account</p>
                     </div>

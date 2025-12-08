@@ -17,7 +17,7 @@ const FEED_MODES = {
     FOLLOWING: 'following'
 };
 
-export default function SocialFeed({ user, userData, openPublicProfile, requireAuth }) {
+export default function SocialFeed({ user, userData, openPublicProfile }) {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [reportTarget, setReportTarget] = useState(null);
@@ -121,10 +121,7 @@ export default function SocialFeed({ user, userData, openPublicProfile, requireA
     }, [feedMode, followingIds, user?.uid]);
 
     const handlePost = async (postPayload) => {
-        if (!user) {
-            requireAuth?.('create_post', { location: 'feed' });
-            return;
-        }
+        if (!user) return;
         try {
             await addDoc(collection(db, `artifacts/${appId}/public/data/posts`), {
                 ...postPayload,
@@ -153,14 +150,6 @@ export default function SocialFeed({ user, userData, openPublicProfile, requireA
         }
     };
 
-    const guardedFollowToggle = (targetUserId, targetUser) => {
-        if (!user) {
-            requireAuth?.('follow', { targetUserId });
-            return;
-        }
-        return toggleFollow(targetUserId, targetUser);
-    };
-
     // Suggested user card component
     const SuggestedUserCard = ({ suggestedUser }) => (
         <motion.div
@@ -186,7 +175,7 @@ export default function SocialFeed({ user, userData, openPublicProfile, requireA
             </div>
             <FollowButton
                 isFollowing={isFollowing(suggestedUser.userId)}
-                onToggle={() => guardedFollowToggle(suggestedUser.userId, suggestedUser)}
+                onToggle={() => toggleFollow(suggestedUser.userId, suggestedUser)}
                 size="sm"
                 variant="default"
             />
@@ -200,7 +189,6 @@ export default function SocialFeed({ user, userData, openPublicProfile, requireA
                 user={user} 
                 userData={userData} 
                 onPost={handlePost} 
-                requireAuth={requireAuth}
             />
 
             {/* Feed Mode Toggle */}
@@ -302,12 +290,11 @@ export default function SocialFeed({ user, userData, openPublicProfile, requireA
                                     openPublicProfile={openPublicProfile || (() => {})}
                                     onReport={() => setReportTarget(post)}
                                     isFollowingAuthor={isFollowing(post.userId)}
-                                    onToggleFollow={() => guardedFollowToggle(post.userId, {
+                                    onToggleFollow={() => toggleFollow(post.userId, {
                                         displayName: post.displayName,
                                         photoURL: post.authorPhoto,
                                         role: post.role
                                     })}
-                                    requireAuth={requireAuth}
                                 />
                             ))}
                         </AnimatePresence>

@@ -16,8 +16,7 @@ export default function Navbar({
     setActiveTab, 
     onMenuClick, 
     onRoleSwitch,
-    openPublicProfile, // Add callback for viewing profiles
-    requireAuth
+    openPublicProfile // Add callback for viewing profiles
 }) {
   const [showNotifs, setShowNotifs] = useState(false);
   const [showRoleMenu, setShowRoleMenu] = useState(false);
@@ -147,15 +146,6 @@ export default function Navbar({
         
         <div className="flex items-center gap-3 md:gap-4">
           
-          {!user && (
-              <button
-                  onClick={() => requireAuth?.('nav_login', { source: 'navbar' })}
-                  className="hidden sm:flex items-center px-3 py-1.5 rounded-lg bg-brand-blue text-white text-sm font-bold hover:bg-blue-600 transition"
-              >
-                  Sign in
-              </button>
-          )}
-
           {hasEduAccess && (
               <div className="hidden md:flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border dark:border-gray-700">
                   <button

@@ -4,7 +4,7 @@ import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { POPULAR_PLUGINS_LIST } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
 
-export default function CreatePostWidget({ user, userData, onPost, requireAuth }) {
+export default function CreatePostWidget({ user, userData, onPost }) {
     const [text, setText] = useState('');
     const [media, setMedia] = useState([]); // Array of {file, type, previewUrl}
     const [seshFxOpen, setSeshFxOpen] = useState(false);
@@ -29,10 +29,6 @@ export default function CreatePostWidget({ user, userData, onPost, requireAuth }
 
     const handleSubmit = async () => {
         if (!text.trim() && media.length === 0) return;
-        if (!user) {
-            requireAuth?.('create_post', { location: 'feed' });
-            return;
-        }
         setIsPosting(true);
 
         try {
@@ -85,25 +81,6 @@ export default function CreatePostWidget({ user, userData, onPost, requireAuth }
             setIsPosting(false);
         }
     };
-
-    if (!user) {
-        return (
-            <div className="bg-white dark:bg-dark-card p-4 rounded-xl border dark:border-gray-700 shadow-sm mb-6">
-                <div className="flex items-center justify-between mb-3">
-                    <div className="font-bold text-gray-800 dark:text-white">Share with the community</div>
-                    <button
-                        className="px-3 py-1.5 rounded-full bg-brand-blue text-white text-xs font-bold hover:bg-blue-600 transition"
-                        onClick={() => requireAuth?.('create_post', { location: 'feed' })}
-                    >
-                        Sign in to post
-                    </button>
-                </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                    Browsing is open to everyone. Sign in to create posts, react, and follow creators.
-                </p>
-            </div>
-        );
-    }
 
     return (
         <div className="bg-white dark:bg-dark-card p-4 rounded-xl border dark:border-gray-700 shadow-sm mb-6">

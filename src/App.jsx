@@ -24,8 +24,6 @@ export default function App() {
   const [subProfiles, setSubProfiles] = useState({}); 
   const [notifications, setNotifications] = useState([]); 
   const [loading, setLoading] = useState(true);
-  const [authModalOpen, setAuthModalOpen] = useState(false);
-  const [authIntent, setAuthIntent] = useState(null);
   
   // React Router navigation - MUST be called before any early returns
   const navigate = useNavigate();
@@ -153,7 +151,6 @@ export default function App() {
         setUser(null);
         setUserData(null);
         setSubProfiles({});
-        setTokenBalance(0);
         setLoading(false);
       }
     });
@@ -174,46 +171,13 @@ export default function App() {
       }
   };
 
-  // Auth gating helper - opens AuthWizard modal when actions require authentication
-  const requireAuth = useCallback((intent = 'general', meta = {}) => {
-    if (user) return true;
-    setAuthIntent({ intent, meta });
-    setAuthModalOpen(true);
-    setSidebarOpen(false);
-    return false;
-  }, [user]);
-
-  const closeAuthModal = useCallback(() => {
-    setAuthModalOpen(false);
-    setAuthIntent(null);
-  }, []);
-
-  useEffect(() => {
-    if (user && !userData && !loading) {
-      setAuthModalOpen(true);
-      setAuthIntent({ intent: 'onboarding' });
-    }
-  }, [user, userData, loading]);
-
   // --- RENDER HELPERS ---
   // ConvexProvider is now at root level in main.jsx, so hooks work everywhere
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
-
-  // --- UNAUTHENTICATED LANDING: Full-screen AuthWizard ---
-  if (!user) {
-    return (
-      <AuthWizard 
-        user={null}
-        isNewUser={false}
-        darkMode={darkMode}
-        toggleTheme={toggleTheme}
-        onSuccess={() => {}}
-        intent={authIntent || { intent: 'login' }}
-      />
-    );
-  }
-
+  if (!user) return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} />;
   if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} />;
+
+  // React Router handles all routing - no need for custom render logic
 
   const isEduMode = activeTab.startsWith('edu-');
   const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('Admin') || userData?.accountTypes?.includes('Instructor'));
@@ -243,7 +207,6 @@ export default function App() {
             toggleTheme={toggleTheme}
             onRoleSwitch={handleRoleSwitch}
             openPublicProfile={openPublicProfile}
-            requireAuth={requireAuth}
         />
 
         {/* 2. Content Area */}
@@ -256,6 +219,8 @@ export default function App() {
                         setActiveTab={setActiveTab} 
                         sidebarOpen={sidebarOpen}
                         setSidebarOpen={setSidebarOpen}
+                        isStaff={userData.accountTypes?.includes('Instructor')} 
+                        isAdmin={userData.accountTypes?.includes('Admin')} 
                     />
                 ) : (
                     <Sidebar 
@@ -281,7 +246,6 @@ export default function App() {
                           setActiveTab={setActiveTab}
                           handleLogout={handleLogout}
                           openPublicProfile={openPublicProfile}
-                          requireAuth={requireAuth}
                         />
                     </PageTransition>
                 </AnimatePresence>
@@ -302,23 +266,6 @@ export default function App() {
                       // TODO: Open chat with specific user
                   }}
               />
-          )}
-        </AnimatePresence>
-
-        {/* Auth modal for gated interactions and onboarding */}
-        <AnimatePresence>
-          {authModalOpen && (
-            <div className="fixed inset-0 z-[12000] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-              <AuthWizard 
-                user={user}
-                isNewUser={user && !userData}
-                darkMode={darkMode}
-                toggleTheme={toggleTheme}
-                onSuccess={closeAuthModal}
-                onClose={closeAuthModal}
-                intent={authIntent}
-              />
-            </div>
           )}
         </AnimatePresence>
       </div>

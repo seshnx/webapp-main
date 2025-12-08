@@ -33,8 +33,7 @@ export default function PostCard({
     openPublicProfile, 
     onReport,
     isFollowingAuthor,
-    onToggleFollow,
-    requireAuth
+    onToggleFollow 
 }) {
     const [showComments, setShowComments] = useState(false);
     const [commentCount, setCommentCount] = useState(post.commentCount || 0); 
@@ -86,10 +85,7 @@ export default function PostCard({
 
     const handleReaction = async (emoji) => {
         setShowReactionMenu(false);
-        if (!currentUser?.uid) {
-            requireAuth?.('react', { postId: post.id });
-            return;
-        }
+        if (!currentUser?.uid) return;
 
         const ref = doc(db, `artifacts/${appId}/public/data/posts/${post.id}`);
         try {
@@ -127,11 +123,7 @@ export default function PostCard({
     };
 
     const handleSavePost = async () => {
-        if (!currentUser?.uid) {
-            requireAuth?.('save_post', { postId: post.id });
-            return;
-        }
-        if (savingPost) return;
+        if (!currentUser?.uid || savingPost) return;
         setSavingPost(true);
 
         try {
@@ -255,14 +247,7 @@ export default function PostCard({
                             {/* Follow button in header for non-own posts */}
                             {!isOwnPost && onToggleFollow && !isFollowingAuthor && (
                                 <button
-                                    onClick={(e) => { 
-                                        e.stopPropagation(); 
-                                        if (!currentUser?.uid) {
-                                            requireAuth?.('follow', { targetUserId: post.userId });
-                                            return;
-                                        }
-                                        onToggleFollow(); 
-                                    }}
+                                    onClick={(e) => { e.stopPropagation(); onToggleFollow(); }}
                                     className="text-xs font-bold text-brand-blue hover:text-blue-700 transition shrink-0"
                                 >
                                     • Follow
@@ -311,14 +296,7 @@ export default function PostCard({
                                     <>
                                         {onToggleFollow && (
                                             <button 
-                                                onClick={() => { 
-                                                    if (!currentUser?.uid) {
-                                                        requireAuth?.('follow', { targetUserId: post.userId });
-                                                        return;
-                                                    }
-                                                    onToggleFollow(); 
-                                                    setShowMoreMenu(false); 
-                                                }}
+                                                onClick={() => { onToggleFollow(); setShowMoreMenu(false); }}
                                                 className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                                             >
                                                 <UserPlus size={16} className="text-gray-400" />
@@ -416,13 +394,7 @@ export default function PostCard({
                     <div className="relative">
                         <motion.button 
                             whileTap={{ scale: 0.9 }}
-                            onClick={() => {
-                                if (!currentUser?.uid) {
-                                    requireAuth?.('react', { postId: post.id });
-                                    return;
-                                }
-                                setShowReactionMenu(!showReactionMenu);
-                            }}
+                            onClick={() => setShowReactionMenu(!showReactionMenu)}
                             className={`flex items-center gap-1.5 sm:gap-2 text-sm font-medium transition px-2 py-1 rounded-lg ${myReaction ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
                         >
                             {myReaction ? <span className="text-lg">{myReaction}</span> : <Smile size={18} />}
@@ -457,13 +429,7 @@ export default function PostCard({
                     {/* Comment Button */}
                     <motion.button 
                         whileTap={{ scale: 0.95 }} 
-                        onClick={() => {
-                            if (!currentUser?.uid) {
-                                requireAuth?.('comment', { postId: post.id });
-                                return;
-                            }
-                            setShowComments(!showComments);
-                        }} 
+                        onClick={() => setShowComments(!showComments)} 
                         className="flex items-center gap-1.5 sm:gap-2 text-sm font-medium text-gray-500 hover:text-brand-blue transition px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
                     >
                         <MessageCircle size={18} />

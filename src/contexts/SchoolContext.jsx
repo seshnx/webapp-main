@@ -11,67 +11,34 @@ export function useSchool() {
 export function SchoolProvider({ children, user, userData }) {
     const [schoolData, setSchoolData] = useState(null);
     const [studentProfile, setStudentProfile] = useState(null);
-    const [staffProfile, setStaffProfile] = useState(null); // Staff Identity
-    const [myPermissions, setMyPermissions] = useState([]); // Resolved Permissions
-    const [internshipStudio, setInternshipStudio] = useState(null); // Assigned Studio Data
-    const [eduRole, setEduRole] = useState('GUEST'); // ADMIN | INSTRUCTOR | STUDENT | INTERN | UNVERIFIED | GUEST
+    const [staffProfile, setStaffProfile] = useState(null); // NEW: Staff Identity
+    const [myPermissions, setMyPermissions] = useState([]); // NEW: Resolved Permissions
+    const [internshipStudio, setInternshipStudio] = useState(null); // NEW: Assigned Studio Data
     const [loading, setLoading] = useState(true);
 
-    const resolveEduRole = (base = {}) => {
-        const hasSchool = !!base.schoolId;
-        if (!base.user) return 'GUEST';
-        if (!hasSchool) return 'UNVERIFIED';
-        if (base.accountTypes?.includes('Admin')) return 'ADMIN';
-        if (base.accountTypes?.includes('Instructor') || base.staffProfile) return 'INSTRUCTOR';
-        if (base.accountTypes?.includes('Intern')) return 'INTERN';
-        if (base.accountTypes?.includes('Student') || base.studentProfile) return 'STUDENT';
-        return 'UNVERIFIED';
-    };
-
     useEffect(() => {
-        if (!user) {
-            setSchoolData(null);
-            setStudentProfile(null);
-            setStaffProfile(null);
-            setMyPermissions([]);
-            setInternshipStudio(null);
-            setEduRole('GUEST');
-            setLoading(false);
-            return;
-        }
-
-        if (!userData?.schoolId) {
-            setSchoolData(null);
-            setStudentProfile(null);
-            setStaffProfile(null);
-            setMyPermissions([]);
-            setInternshipStudio(null);
-            setEduRole('UNVERIFIED');
+        if (!user || !userData?.schoolId) {
             setLoading(false);
             return;
         }
 
         // 1. Fetch Public School Data
         getDoc(doc(db, 'schools', userData.schoolId)).then(snap => {
-            if (snap.exists()) setSchoolData(snap.data());
+            if(snap.exists()) setSchoolData(snap.data());
         }).catch(e => console.error("Error fetching school data:", e));
 
         // 2. Determine Role & Load Context (Student vs Staff)
         const loadContext = async () => {
             try {
-                let nextStudentProfile = null;
-                let nextStaffProfile = null;
-                let nextPermissions = [];
-
                 // A. Check if STUDENT/INTERN
                 if (userData.accountTypes?.includes('Student') || userData.accountTypes?.includes('Intern')) {
                     const recordPath = getPaths(user.uid).studentRecord(userData.schoolId, user.uid);
+                    
                     onSnapshot(doc(db, recordPath), async (snap) => {
-                        if (snap.exists()) {
+                        if(snap.exists()) {
                             const sData = snap.data();
                             setStudentProfile(sData);
-                            nextStudentProfile = sData;
-
+                            
                             // Load Assigned Studio if exists
                             if (sData.internshipStudioId) {
                                 // First check 'partners' subcollection
@@ -80,17 +47,10 @@ export function SchoolProvider({ children, user, userData }) {
                                     setInternshipStudio(partnerSnap.data());
                                 } else {
                                     // Fallback to global studios
-                                    const studioSnap = await getDoc(doc(db, 'studios', sData.internshipStudioId));
+                                    const studioSnap = await getDoc(doc(db, 'studios', sData.internshipStudioId)); 
                                     if (studioSnap.exists()) setInternshipStudio(studioSnap.data());
                                 }
                             }
-                            setEduRole(resolveEduRole({
-                                user,
-                                schoolId: userData.schoolId,
-                                accountTypes: userData.accountTypes,
-                                studentProfile: sData,
-                                staffProfile: nextStaffProfile
-                            }));
                         }
                     });
                 }
@@ -104,19 +64,15 @@ export function SchoolProvider({ children, user, userData }) {
                     if (!staffSnap.empty) {
                         const sData = staffSnap.docs[0].data();
                         setStaffProfile(sData);
-                        nextStaffProfile = sData;
 
                         // Fetch Permissions for this Role
                         if (sData.roleId) {
                             const roleSnap = await getDoc(doc(db, `schools/${userData.schoolId}/roles/${sData.roleId}`));
                             if (roleSnap.exists()) {
-                                const perms = roleSnap.data().permissions || [];
-                                setMyPermissions(perms);
-                                nextPermissions = perms;
+                                setMyPermissions(roleSnap.data().permissions || []);
                             }
                         } else if (userData.accountTypes.includes('Admin')) {
-                            setMyPermissions(['ALL']);
-                            nextPermissions = ['ALL'];
+                            setMyPermissions(['ALL']); 
                         }
                     }
                 }
@@ -124,13 +80,6 @@ export function SchoolProvider({ children, user, userData }) {
             } catch (e) {
                 console.error("Error setting up school context:", e);
             } finally {
-                setEduRole(resolveEduRole({
-                    user,
-                    schoolId: userData.schoolId,
-                    accountTypes: userData.accountTypes,
-                    studentProfile,
-                    staffProfile,
-                }));
                 setLoading(false);
             }
         };
@@ -176,24 +125,12 @@ export function SchoolProvider({ children, user, userData }) {
         staffProfile,
         myPermissions,
         internshipStudio,
-        eduRole,
         isStudent: !!studentProfile,
         isStaff: !!staffProfile || userData?.accountTypes?.includes('Admin'),
         checkIn,
         checkOut,
         loading
     };
-
-    // Recompute role whenever inputs change (covers snapshot updates)
-    useEffect(() => {
-        setEduRole(resolveEduRole({
-            user,
-            schoolId: userData?.schoolId,
-            accountTypes: userData?.accountTypes,
-            studentProfile,
-            staffProfile
-        }));
-    }, [user, userData?.schoolId, JSON.stringify(userData?.accountTypes || []), studentProfile, staffProfile]);
 
     return (
         <SchoolContext.Provider value={value}>
