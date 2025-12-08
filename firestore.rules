@@ -14,22 +14,26 @@ service cloud.firestore {
 
     // 2. Public Feed
     match /artifacts/{appId}/public/data/posts/{document=**} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;           // Public preview
+      allow write: if isAuthenticated();
     }
 
     // 3. Public Profiles (Search Directory)
     match /artifacts/{appId}/public/data/profiles/{document=**} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;           // Public search
+      allow write: if isAuthenticated();
     }
     
     // 4. Marketplace Items
     match /artifacts/{appId}/public/data/market_items/{document=**} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;           // Public browsing
+      allow write: if isAuthenticated();
     }
     
     // 5. Service Requests
     match /artifacts/{appId}/public/data/service_requests/{document=**} {
-      allow read, write: if isAuthenticated();
+      allow read: if true;           // Public view of postings
+      allow write: if isAuthenticated();
     }
     
     // 6. Direct Messages
@@ -40,6 +44,24 @@ service cloud.firestore {
     // 7. Bookings
     match /artifacts/{appId}/public/data/bookings/{document=**} {
       allow read, write: if isAuthenticated();
+    }
+
+    // 8. Schools directory (needed for public lookup)
+    match /schools/{document=**} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    // 9. EDU petitions (public lead gen)
+    match /edu_petitions/{document=**} {
+      allow read: if true;
+      allow write: if true; // petitions can be created/signed by guests
+    }
+
+    // 10. EDU verification requests (allow submit, restrict reads)
+    match /edu_verifications/{document=**} {
+      allow create: if true;
+      allow read, update, delete: if false;
     }
   }
 }
