@@ -5,7 +5,12 @@ The AuthWizard component now features an animated background with images fetched
 
 ## Firestore Collection Structure
 
-Create a collection at: `artifacts/{appId}/config/auth_backgrounds`
+Create a collection at: `artifacts/{appId}/auth_backgrounds`
+
+**Note**: This is a subcollection under the artifacts document. In Firestore Console, navigate to:
+- `artifacts` collection
+- Document ID: `{your-app-id}` (e.g., `seshnx-db`)
+- Subcollection: `auth_backgrounds`
 
 ### Document Structure
 Each document should have:
@@ -23,7 +28,7 @@ Each document should have:
 ## Adding Images via Firebase Console
 
 1. Go to Firestore Database in Firebase Console
-2. Navigate to: `artifacts` → `{your-app-id}` → `config` → `auth_backgrounds`
+2. Navigate to: `artifacts` → `{your-app-id}` → `auth_backgrounds` (subcollection)
 3. Click "Add document"
 4. Add fields:
    - `url` (string): Image URL
@@ -37,7 +42,7 @@ import { collection, addDoc } from 'firebase/firestore';
 import { db, appId } from './config/firebase';
 
 // Upload image to Firebase Storage first, then:
-await addDoc(collection(db, `artifacts/${appId}/config/auth_backgrounds`), {
+await addDoc(collection(db, `artifacts/${appId}/auth_backgrounds`), {
   url: 'https://your-image-url.com/image.jpg',
   order: 0
 });
@@ -55,7 +60,7 @@ await addDoc(collection(db, `artifacts/${appId}/config/auth_backgrounds`), {
 Add this rule to allow reading background images:
 
 ```javascript
-match /artifacts/{appId}/config/auth_backgrounds/{document=**} {
+match /artifacts/{appId}/auth_backgrounds/{document=**} {
   allow read: if true; // Public read access
   allow write: if request.auth != null && 
     request.auth.token.admin == true; // Admin only write

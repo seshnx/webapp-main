@@ -13,9 +13,9 @@ export default function AuthWizardBackground() {
     const loadBackgroundImages = async () => {
       try {
         // Fetch images from Firestore collection
-        // Path: artifacts/{appId}/config/auth_backgrounds
+        // Path: artifacts/{appId}/auth_backgrounds (subcollection)
         const q = query(
-          collection(db, `artifacts/${appId}/config/auth_backgrounds`),
+          collection(db, `artifacts/${appId}/auth_backgrounds`),
           orderBy('order', 'asc'),
           limit(20) // Limit to 20 images for variety
         );
