@@ -6,10 +6,9 @@ import { isConvexAvailable } from '../config/convex';
 /**
  * Hook for managing user online/offline presence
  * Automatically sets user as online when component mounts, offline when disconnects
- * 
- * @param {string} userId - Current user's UID
+ * * @param {string} userId - Current user's UID
  */
-export function usePresence(userId) {
+export function usePresence(userId) { //
     const isOnlineRef = useRef(false);
     // Hook must be called unconditionally (React rules)
     const updatePresenceMutation = useMutation(api.presence.updatePresence);
@@ -56,13 +55,13 @@ export function usePresence(userId) {
 
 /**
  * Hook to subscribe to another user's presence status
- * 
- * @param {string} userId - User ID to monitor
+ * * @param {string} userId - User ID to monitor
  * @returns {object} { online, lastSeen, loading }
  */
-export function useUserPresence(userId) {
-    // Memoize Convex availability to ensure stable hook calls
-    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+export function useUserPresence(userId) { //
+    // FIX: Determine Convex availability directly. Avoid using useMemo for stable config checks
+    // This removes the potential source of the "Cannot access 'W' before initialization" error.
+    const convexAvailable = isConvexAvailable(); //
     const presenceQuery = useMemo(() => {
         return userId && convexAvailable ? { userId } : "skip";
     }, [userId, convexAvailable]);
