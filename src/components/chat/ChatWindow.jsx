@@ -382,7 +382,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         return (
             <div className="flex flex-col h-full bg-white dark:bg-[#1f2128] items-center justify-center text-gray-400">
                 <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                    <span className="text-4xl">町</span>
+                    <MessageSquare size={64} className="text-gray-200 dark:text-gray-700 mb-2" />
                 </div>
                 <p>Select a conversation to start chatting</p>
             </div>
