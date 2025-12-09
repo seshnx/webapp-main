@@ -59,10 +59,8 @@ export function usePresence(userId) { //
  * @returns {object} { online, lastSeen, loading }
  */
 export function useUserPresence(userId) { //
-    // FIX: Determine Convex availability directly. Avoid using useMemo for stable config checks
     // This removes the potential source of the "Cannot access 'W' before initialization" error.
     const convexAvailable = isConvexAvailable(); //
-    const presenceQuery = useMemo(() => {
         return userId && convexAvailable ? { userId } : "skip";
     }, [userId, convexAvailable]);
     
