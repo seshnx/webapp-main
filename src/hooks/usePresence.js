@@ -61,6 +61,8 @@ export function usePresence(userId) { //
 export function useUserPresence(userId) { //
     // This removes the potential source of the "Cannot access 'W' before initialization" error.
     const convexAvailable = isConvexAvailable(); //
+
+    const presenceQuery = useMemo(() => {
         return userId && convexAvailable ? { userId } : "skip";
     }, [userId, convexAvailable]);
     
