@@ -16,7 +16,7 @@ export default function ChatInterface({ user, userData, openPublicProfile }) {
     usePresence(user?.uid);
 
     // Memoize Convex availability to ensure stable hook calls
-    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+    const convexAvailable = isConvexAvailable();
     const conversationsQuery = useMemo(() => {
         return user?.uid && convexAvailable ? { userId: user.uid } : "skip";
     }, [user?.uid, convexAvailable]);
