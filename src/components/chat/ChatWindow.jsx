@@ -170,7 +170,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                     chatId: targetChatId,
                     senderId: user.uid,
                     senderName: userData.firstName || 'User',
-                    senderPhoto: userData.photoURL || null,
+                    senderPhoto: userData.photoURL || undefined, // FIX: Use undefined, not null
                     content: `竊ｪ Forwarded: ${forwardText}`,
                     media: forwardMedia,
                 });
@@ -229,7 +229,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 chatId,
                 senderId: user.uid,
                 senderName: userData.firstName || 'User',
-                senderPhoto: userData.photoURL || null,
+                senderPhoto: userData.photoURL || undefined, // FIX: Use undefined, not null
                 content: msgText,
                 media: mediaData,
                 replyTo: replyingTo ? {
