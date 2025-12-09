@@ -46,8 +46,10 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         myLastRead 
     } = useReadReceipts(chatId, user?.uid);
 
-    // Memoize Convex availability to ensure stable hook calls
-    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+    // FIX: Determine Convex availability directly. 
+    // Removing useMemo prevents the "Cannot access before initialization" error.
+    const convexAvailable = isConvexAvailable();
+
     const messagesQuery = useMemo(() => {
         return chatId && convexAvailable ? { chatId, limit: 100 } : "skip";
     }, [chatId, convexAvailable]);
@@ -169,7 +171,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                     senderId: user.uid,
                     senderName: userData.firstName || 'User',
                     senderPhoto: userData.photoURL || null,
-                    content: `↪ Forwarded: ${forwardText}`,
+                    content: `竊ｪ Forwarded: ${forwardText}`,
                     media: forwardMedia,
                 });
 
@@ -180,7 +182,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 await updateConversationMutation({
                     userId: user.uid,
                     chatId: targetChatId,
-                    lastMessage: `↪ ${summary}`,
+                    lastMessage: `竊ｪ ${summary}`,
                     lastMessageTime: Date.now(),
                     lastSenderId: user.uid,
                     chatName: targetConvo?.name || targetConvo?.n,
@@ -200,9 +202,9 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         
         let msgText = text ? text.trim() : '';
         if (msgText.length === 0 && mediaData) {
-            msgText = mediaData.type === 'image' ? '📷 Image' : 
-                      mediaData.type === 'video' ? '🎥 Video' : 
-                      mediaData.type === 'audio' ? '🎵 Audio' : '📎 File';
+            msgText = mediaData.type === 'image' ? '胴 Image' : 
+                      mediaData.type === 'video' ? '磁 Video' : 
+                      mediaData.type === 'audio' ? '七 Audio' : '梼 File';
         }
 
         // Handle edit mode
@@ -380,7 +382,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         return (
             <div className="flex flex-col h-full bg-white dark:bg-[#1f2128] items-center justify-center text-gray-400">
                 <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                    <span className="text-4xl">💬</span>
+                    <span className="text-4xl">町</span>
                 </div>
                 <p>Select a conversation to start chatting</p>
             </div>
