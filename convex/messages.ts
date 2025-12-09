@@ -28,6 +28,8 @@ export const sendMessage = mutation({
         type: v.string(),
         url: v.string(),
         thumbnail: v.optional(v.string()),
+        name: v.optional(v.string()), // Added
+        gif: v.optional(v.boolean()),  // Added
       })
     ),
     replyTo: v.optional(
@@ -156,4 +158,3 @@ export const removeReaction = mutation({
     });
   },
 });
-
