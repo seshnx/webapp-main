@@ -14,6 +14,8 @@ export default defineSchema({
         type: v.string(),
         url: v.string(),
         thumbnail: v.optional(v.string()),
+        name: v.optional(v.string()), // Added to support file names
+        gif: v.optional(v.boolean()),  // Added to support GIF flag
       })
     ),
     timestamp: v.number(),
@@ -76,4 +78,3 @@ export default defineSchema({
     .index("by_chat", ["chatId"])
     .index("by_user", ["userId"]),
 });
-
