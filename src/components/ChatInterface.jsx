@@ -15,8 +15,10 @@ export default function ChatInterface({ user, userData, openPublicProfile }) {
     // Initialize presence tracking for current user
     usePresence(user?.uid);
 
-    // Memoize Convex availability to ensure stable hook calls
-    const convexAvailable = isConvexAvailable();
+    // FIX: Calculate Convex availability directly. Avoid using useMemo for stable config checks
+    // that don't depend on other hooks or dynamic state, as it can cause initialization issues.
+    const convexAvailable = isConvexAvailable(); //
+    
     const conversationsQuery = useMemo(() => {
         return user?.uid && convexAvailable ? { userId: user.uid } : "skip";
     }, [user?.uid, convexAvailable]);
