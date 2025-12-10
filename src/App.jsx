@@ -159,11 +159,13 @@ export default function App() {
 
   const handleLogout = useCallback(() => signOut(auth), [auth]);
 
-  // --- AUTO-LOGOUT (30 min inactivity) ---
+  // --- AUTO-LOGOUT (Dual Timer) ---
   useEffect(() => {
     if (!user) return;
 
-    const TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    // Configuration
+    const TIMEOUT_FOREGROUND_MS = 30 * 60 * 1000; // 30 minutes (App Tab)
+    const TIMEOUT_BACKGROUND_MS = 15 * 60 * 1000; // 15 minutes (Different Tab)
     const STORAGE_KEY = 'seshnx_last_active';
     
     // Set initial activity timestamp if not present
@@ -173,17 +175,20 @@ export default function App() {
 
     // Function to update activity timestamp (shared across tabs via localStorage)
     const updateActivity = () => {
-       const now = Date.now();
-       localStorage.setItem(STORAGE_KEY, now.toString());
+       localStorage.setItem(STORAGE_KEY, Date.now().toString());
     };
 
-    // Check for inactivity periodically
+    // Periodic Check
     const checkInactivity = () => {
       const lastActive = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
       const now = Date.now();
+      const elapsed = now - lastActive;
       
-      if (now - lastActive > TIMEOUT_MS) {
-        console.log("User inactive for 30 minutes. Logging out...");
+      // Strict rule: If tab is hidden (background), use shorter timeout.
+      const currentLimit = document.hidden ? TIMEOUT_BACKGROUND_MS : TIMEOUT_FOREGROUND_MS;
+      
+      if (elapsed > currentLimit) {
+        console.log(`User inactive for ${(elapsed/60000).toFixed(1)}m (Limit: ${currentLimit/60000}m). Logging out...`);
         handleLogout();
       }
     };
@@ -202,14 +207,34 @@ export default function App() {
         }
     };
 
+    // Handle Tab Switching / Visibility Changes
+    const handleVisibilityChange = () => {
+        if (!document.hidden) {
+            // Tab just became visible (User switched back to App Tab)
+            // Check if they violated the 15-minute background rule while away
+            const lastActive = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+            const now = Date.now();
+            
+            if (now - lastActive > TIMEOUT_BACKGROUND_MS) {
+                console.log("Returned after background timeout (>15m). Logging out...");
+                handleLogout();
+            } else {
+                // Safe to continue, update activity so they don't get hit by the 30m rule instantly if close
+                updateActivity();
+            }
+        }
+    };
+
     // Setup listeners
     events.forEach(event => window.addEventListener(event, handleEvent));
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     
     // Setup periodic check (every 1 minute)
     const intervalId = setInterval(checkInactivity, 60 * 1000); 
 
     return () => {
       events.forEach(event => window.removeEventListener(event, handleEvent));
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(intervalId);
     };
   }, [user, handleLogout]);
