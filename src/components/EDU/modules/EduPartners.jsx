@@ -4,6 +4,7 @@ import {
 } from 'firebase/firestore';
 import { Briefcase, MapPin, Phone, Plus, Trash2, ExternalLink } from 'lucide-react';
 import { db } from '../../../config/firebase';
+import AddressAutocomplete from '../../shared/AddressAutocomplete';
 
 export default function EduPartners({ schoolId, logAction }) {
     const [partners, setPartners] = useState([]);
@@ -84,16 +85,19 @@ export default function EduPartners({ schoolId, logAction }) {
                         />
                     </div>
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Address</label>
-                        <div className="relative">
-                            <MapPin size={14} className="absolute left-3 top-3 text-gray-400"/>
-                            <input 
-                                className="w-full pl-9 p-2.5 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white"
-                                placeholder="123 Main St..."
-                                value={form.address}
-                                onChange={e => setForm({...form, address: e.target.value})}
-                            />
-                        </div>
+                        <AddressAutocomplete
+                            label="Address"
+                            value={form.address}
+                            onChange={(val) => setForm({...form, address: val})}
+                            onSelect={(addressData) => {
+                                setForm({
+                                    ...form, 
+                                    address: addressData.formattedAddress || addressData.displayName
+                                });
+                            }}
+                            placeholder="123 Main St..."
+                            showGeolocation={false}
+                        />
                     </div>
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Contact Email</label>
