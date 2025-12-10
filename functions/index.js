@@ -1,6 +1,8 @@
 const functions = require('firebase-functions');
 const admin = require('firebase-admin');
 const nodemailer = require('nodemailer');
+const https = require('https');
+const http = require('http');
 
 // Initialize Firebase Admin
 admin.initializeApp();
@@ -692,3 +694,175 @@ exports.createStripeCheckoutSession = functions.https.onCall(async (data, contex
         throw new functions.https.HttpsError('internal', error.message);
     }
 });
+
+/**
+ * Fetch OpenGraph metadata from a URL for link previews.
+ * Called from the frontend to get rich link previews in chat.
+ */
+exports.getLinkPreview = functions.https.onCall(async (data, context) => {
+    const { url } = data;
+
+    if (!url) {
+        throw new functions.https.HttpsError('invalid-argument', 'URL is required.');
+    }
+
+    // Validate URL format
+    let parsedUrl;
+    try {
+        parsedUrl = new URL(url);
+    } catch (e) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid URL format.');
+    }
+
+    // Only allow http/https
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+        throw new functions.https.HttpsError('invalid-argument', 'Invalid URL protocol.');
+    }
+
+    return new Promise((resolve, reject) => {
+        const protocol = parsedUrl.protocol === 'https:' ? https : http;
+        
+        const requestOptions = {
+            method: 'GET',
+            timeout: 5000,
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (compatible; SeshNx LinkBot/1.0)',
+                'Accept': 'text/html,application/xhtml+xml'
+            }
+        };
+
+        const req = protocol.get(parsedUrl.href, requestOptions, (res) => {
+            // Handle redirects
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                protocol.get(res.headers.location, requestOptions, handleResponse);
+                return;
+            }
+
+            handleResponse(res);
+        });
+
+        function handleResponse(res) {
+            let html = '';
+            res.setEncoding('utf8');
+            
+            res.on('data', (chunk) => {
+                html += chunk;
+                // Limit to first 50KB to avoid memory issues
+                if (html.length > 50000) {
+                    res.destroy();
+                }
+            });
+
+            res.on('end', () => {
+                try {
+                    const result = parseOpenGraphTags(html, url);
+                    resolve(result);
+                } catch (e) {
+                    resolve({
+                        url: url,
+                        title: extractDomain(url),
+                        description: null,
+                        image: null
+                    });
+                }
+            });
+        }
+
+        req.on('error', (e) => {
+            // Return basic fallback on error
+            resolve({
+                url: url,
+                title: extractDomain(url),
+                description: null,
+                image: null
+            });
+        });
+
+        req.on('timeout', () => {
+            req.destroy();
+            resolve({
+                url: url,
+                title: extractDomain(url),
+                description: null,
+                image: null
+            });
+        });
+    });
+});
+
+/**
+ * Parse OpenGraph and standard meta tags from HTML
+ */
+function parseOpenGraphTags(html, originalUrl) {
+    const result = {
+        url: originalUrl,
+        title: null,
+        description: null,
+        image: null,
+        siteName: null
+    };
+
+    // Extract OG tags
+    const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([^"']+)["']/i) ||
+                         html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:title["']/i);
+    const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:description["']/i);
+    const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([^"']+)["']/i) ||
+                         html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:image["']/i);
+    const ogSiteMatch = html.match(/<meta[^>]*property=["']og:site_name["'][^>]*content=["']([^"']+)["']/i) ||
+                        html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*property=["']og:site_name["']/i);
+
+    // Fallback to standard meta tags
+    const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+    const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i) ||
+                      html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']description["']/i);
+
+    // Twitter card fallback
+    const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([^"']+)["']/i) ||
+                              html.match(/<meta[^>]*content=["']([^"']+)["'][^>]*name=["']twitter:image["']/i);
+
+    // Apply values with priority
+    result.title = ogTitleMatch?.[1] || titleMatch?.[1] || extractDomain(originalUrl);
+    result.description = ogDescMatch?.[1] || descMatch?.[1] || null;
+    result.image = ogImageMatch?.[1] || twitterImageMatch?.[1] || null;
+    result.siteName = ogSiteMatch?.[1] || null;
+
+    // Decode HTML entities
+    result.title = decodeHTMLEntities(result.title);
+    if (result.description) result.description = decodeHTMLEntities(result.description);
+
+    // Make relative image URLs absolute
+    if (result.image && !result.image.startsWith('http')) {
+        try {
+            const urlObj = new URL(originalUrl);
+            result.image = result.image.startsWith('/') 
+                ? `${urlObj.protocol}//${urlObj.host}${result.image}`
+                : `${urlObj.protocol}//${urlObj.host}/${result.image}`;
+        } catch (e) {
+            result.image = null;
+        }
+    }
+
+    return result;
+}
+
+function extractDomain(url) {
+    try {
+        return new URL(url).hostname;
+    } catch (e) {
+        return url;
+    }
+}
+
+function decodeHTMLEntities(text) {
+    if (!text) return text;
+    return text
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&#x27;/g, "'")
+        .replace(/&#x2F;/g, '/')
+        .replace(/&nbsp;/g, ' ');
+}

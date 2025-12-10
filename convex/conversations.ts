@@ -87,3 +87,49 @@ export const updateUnreadCount = mutation({
   },
 });
 
+// Get members of a group chat
+export const getChatMembers = query({
+  args: { chatId: v.string() },
+  handler: async (ctx, args) => {
+    const members = await ctx.db
+      .query("chatMembers")
+      .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+      .collect();
+    
+    return members.map(m => ({
+      id: m._id,
+      oduserId: m.userId,
+      role: m.role,
+      joinedAt: m.joinedAt,
+    }));
+  },
+});
+
+// Add member to a group chat
+export const addChatMember = mutation({
+  args: {
+    chatId: v.string(),
+    userId: v.string(),
+    role: v.union(v.literal("member"), v.literal("admin")),
+  },
+  handler: async (ctx, args) => {
+    // Check if member already exists
+    const existing = await ctx.db
+      .query("chatMembers")
+      .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .first();
+
+    if (existing) {
+      return existing._id;
+    }
+
+    return await ctx.db.insert("chatMembers", {
+      chatId: args.chatId,
+      userId: args.userId,
+      role: args.role,
+      joinedAt: Date.now(),
+    });
+  },
+});
+
