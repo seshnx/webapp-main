@@ -41,7 +41,7 @@ export default function Marketplace({ user, userData, tokenBalance }) {
                 )}
                 {subTab === 'gear' && (
                     <div key="gear" className="tab-content">
-                        <GearExchange user={user} />
+                        <GearExchange user={user} userData={userData} />
                     </div>
                 )}
                 {subTab === 'fx' && (

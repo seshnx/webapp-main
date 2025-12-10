@@ -138,4 +138,14 @@ export const getPaths = (uid) => ({
   socialStats: `artifacts/${appId}/users/${uid}/stats/social`,
   notifications: `artifacts/${appId}/users/${uid}/notifications`,
   savedPosts: `artifacts/${appId}/users/${uid}/savedPosts`,
+  
+  // --- SAFE EXCHANGE / HIGH-VALUE TRANSACTIONS ---
+  safeExchangeTransactions: `artifacts/${appId}/public/data/safe_exchange_transactions`,
+  userSafeExchanges: `artifacts/${appId}/users/${uid}/safe_exchanges`,
+  safeZones: `artifacts/${appId}/public/data/safe_zones`,
+  escrowHolds: `artifacts/${appId}/escrow/holds`,
+  
+  // --- SHIPPING VERIFICATION ---
+  shippingTransactions: `artifacts/${appId}/public/data/shipping_transactions`,
+  userShippingTransactions: `artifacts/${appId}/users/${uid}/shipping_transactions`,
 });
