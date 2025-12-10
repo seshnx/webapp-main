@@ -157,7 +157,63 @@ export default function App() {
     return () => unsubscribe();
   }, []);
 
-  const handleLogout = () => signOut(auth);
+  const handleLogout = useCallback(() => signOut(auth), [auth]);
+
+  // --- AUTO-LOGOUT (30 min inactivity) ---
+  useEffect(() => {
+    if (!user) return;
+
+    const TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+    const STORAGE_KEY = 'seshnx_last_active';
+    
+    // Set initial activity timestamp if not present
+    if (!localStorage.getItem(STORAGE_KEY)) {
+      localStorage.setItem(STORAGE_KEY, Date.now().toString());
+    }
+
+    // Function to update activity timestamp (shared across tabs via localStorage)
+    const updateActivity = () => {
+       const now = Date.now();
+       localStorage.setItem(STORAGE_KEY, now.toString());
+    };
+
+    // Check for inactivity periodically
+    const checkInactivity = () => {
+      const lastActive = parseInt(localStorage.getItem(STORAGE_KEY) || '0', 10);
+      const now = Date.now();
+      
+      if (now - lastActive > TIMEOUT_MS) {
+        console.log("User inactive for 30 minutes. Logging out...");
+        handleLogout();
+      }
+    };
+
+    // Events to monitor for activity
+    const events = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click'];
+    
+    // Throttled event handler to prevent excessive localStorage writes
+    let lastThrottled = 0;
+    const handleEvent = () => {
+        const now = Date.now();
+        // Only update localStorage max once every 5 seconds to avoid performance hit
+        if (now - lastThrottled > 5000) { 
+            updateActivity();
+            lastThrottled = now;
+        }
+    };
+
+    // Setup listeners
+    events.forEach(event => window.addEventListener(event, handleEvent));
+    
+    // Setup periodic check (every 1 minute)
+    const intervalId = setInterval(checkInactivity, 60 * 1000); 
+
+    return () => {
+      events.forEach(event => window.removeEventListener(event, handleEvent));
+      clearInterval(intervalId);
+    };
+  }, [user, handleLogout]);
+
   const openPublicProfile = (uid, name) => setViewingProfile({ uid, name });
 
   // --- ROLE SWITCH HANDLER ---
