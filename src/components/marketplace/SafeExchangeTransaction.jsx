@@ -124,7 +124,7 @@ export default function SafeExchangeTransaction({
             });
 
             // Send notification to other party
-            await sendNotification(newStatus);
+            await sendNotification(newStatus, additionalData);
         } catch (error) {
             console.error('Failed to update status:', error);
             alert('Failed to update transaction. Please try again.');
@@ -133,12 +133,13 @@ export default function SafeExchangeTransaction({
     }, [transactionId, user?.uid]);
 
     // Send notification to other party
-    const sendNotification = async (status) => {
+    const sendNotification = async (status, data = {}) => {
         const otherUserId = isSeller ? transaction.buyerId : transaction.sellerId;
         const notificationRef = collection(db, getPaths(otherUserId).notifications);
         
+        // Use data passed from updateStatus for values that may not be in React state yet
         const messages = {
-            [SAFE_EXCHANGE_STATUS.MEETUP_SCHEDULED]: `Meetup scheduled for ${transaction.meetupDate} at ${transaction.meetupTime}`,
+            [SAFE_EXCHANGE_STATUS.MEETUP_SCHEDULED]: `Meetup scheduled for ${data.meetupDate || transaction.meetupDate} at ${data.meetupTime || transaction.meetupTime}`,
             [SAFE_EXCHANGE_STATUS.SELLER_EN_ROUTE]: 'Seller is on their way to the exchange location',
             [SAFE_EXCHANGE_STATUS.BUYER_EN_ROUTE]: 'Buyer is on their way to the exchange location',
             [SAFE_EXCHANGE_STATUS.AT_SAFE_ZONE]: `${isSeller ? 'Seller' : 'Buyer'} has arrived at the safe zone`,
