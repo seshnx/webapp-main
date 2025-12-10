@@ -1,5 +1,5 @@
 import React from 'react';
-import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, GraduationCap, ShieldCheck, Wrench } from 'lucide-react';
+import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, GraduationCap, ShieldCheck, Wrench, Briefcase } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
 import { useSchool } from '../contexts/SchoolContext';
@@ -17,14 +17,6 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
     { id: 'payments', icon: <CreditCard size={18} />, label: 'Billing' },
     { id: 'profile', icon: <Settings size={18} />, label: 'Profile' },
   ];
-
-  // Insert Studio Ops if Studio
-  if (userData?.accountTypes?.includes('Studio')) {
-    const insertIdx = links.findIndex(l => l.id === 'profile');
-    if (insertIdx !== -1) {
-        links.splice(insertIdx, 0, { id: 'studio-ops', icon: <Sliders size={18} />, label: 'Studio Ops', highlight: true });
-    }
-  }
 
   // --- UPDATED: EDU Panel Logic ---
   // Now checks for Students OR Staff (Instructors/Admins)
@@ -50,6 +42,11 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
           highlight: true 
       });
   }
+
+  // Check if user has business features (Studio, Label, Agent, Artist, Producer, etc.)
+  const hasBusinessFeatures = userData?.accountTypes?.some(t => 
+    ['Studio', 'Label', 'Agent', 'Artist', 'Producer', 'Engineer', 'DJ'].includes(t)
+  );
 
   const onLogout = handleLogout || (() => signOut(auth));
 
@@ -93,11 +90,26 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
             ))}
         </nav>
 
-        <div className="mt-auto px-2 pt-4">
+        <div className="mt-auto px-2 pt-4 space-y-1">
             <button onClick={() => handleNavigation('legal')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${activeTab === 'legal' ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                 <ShieldCheck size={18} />
                 Legal Center
             </button>
+            
+            {/* Business Center - Show if user has business features */}
+            {hasBusinessFeatures && (
+                <button 
+                    onClick={() => handleNavigation('business-center')} 
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${
+                        activeTab === 'business-center' 
+                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400' 
+                            : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10'
+                    }`}
+                >
+                    <Briefcase size={18} />
+                    Business Center
+                </button>
+            )}
         </div>
       </div>
 
@@ -108,14 +120,6 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
       </div>
     </>
   );
-
-  const isLabelOrAgent = userData?.accountTypes?.some(t => ['Label', 'Agent'].includes(t));
-  if (isLabelOrAgent) {
-      const insertIdx = links.findIndex(l => l.id === 'bookings');
-      if (insertIdx !== -1) {
-          links.splice(insertIdx, 0, { id: 'roster', icon: <ShieldCheck size={18} />, label: 'Label Roster', highlight: true });
-      }
-  }
 
   return (
     <>

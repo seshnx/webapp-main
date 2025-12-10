@@ -14,6 +14,7 @@ import TechServices from '../components/TechServices';
 import LegalDocs from '../components/LegalDocs';
 import PaymentsManager from '../components/PaymentsManager';
 import LabelManager from '../components/LabelManager';
+import BusinessCenter from '../components/BusinessCenter';
 
 // EDU Components
 import EduStudentDashboard from '../components/EDU/EduStudentDashboard';
@@ -112,20 +113,18 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
           } 
         />
         
+        {/* Business Center - Consolidated business features */}
         <Route 
-          path="/studio-ops" 
+          path="/business-center" 
           element={
-            <StudioManager user={user} userData={userData} />
+            <BusinessCenter user={user} userData={userData} />
           } 
         />
-        <Route path="/studio-manager" element={<Navigate to="/studio-ops" replace />} />
         
-        <Route 
-          path="/label-manager" 
-          element={
-            <LabelManager user={user} userData={userData} />
-          } 
-        />
+        {/* Legacy routes redirect to Business Center */}
+        <Route path="/studio-ops" element={<Navigate to="/business-center" replace />} />
+        <Route path="/studio-manager" element={<Navigate to="/business-center" replace />} />
+        <Route path="/label-manager" element={<Navigate to="/business-center" replace />} />
         
         <Route 
           path="/payments" 
