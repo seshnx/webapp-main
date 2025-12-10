@@ -15,9 +15,9 @@ export default function ChatInterface({ user, userData, openPublicProfile }) {
     // Initialize presence tracking for current user
     usePresence(user?.uid);
 
-    // FIX: Calculate Convex availability directly. Avoid using useMemo for stable config checks
-    // that don't depend on other hooks or dynamic state, as it can cause initialization issues.
-    const convexAvailable = isConvexAvailable(); //
+    // FIX: Calculate Convex availability directly. 
+    // Wrapping this in useMemo causes the "Cannot access before initialization" error.
+    const convexAvailable = isConvexAvailable(); 
     
     const conversationsQuery = useMemo(() => {
         return user?.uid && convexAvailable ? { userId: user.uid } : "skip";
