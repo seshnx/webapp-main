@@ -16,9 +16,9 @@ export default function ChatInterface({ user, userData, openPublicProfile }) {
     usePresence(user?.uid);
 
     // FIX: Calculate Convex availability directly. 
-    // Wrapping this in useMemo causes the "Cannot access before initialization" error.
-    const convexAvailable = isConvexAvailable(); 
-    
+    // Do NOT use useMemo here, as it causes the "Cannot access before initialization" error.
+    const convexAvailable = isConvexAvailable();
+
     const conversationsQuery = useMemo(() => {
         return user?.uid && convexAvailable ? { userId: user.uid } : "skip";
     }, [user?.uid, convexAvailable]);
