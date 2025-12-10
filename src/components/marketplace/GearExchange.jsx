@@ -1,20 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, doc, updateDoc } from 'firebase/firestore';
-import { Search, Filter, Plus, Camera, DollarSign, Tag, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { 
+    Search, Plus, Camera, DollarSign, X, CheckCircle, AlertTriangle, 
+    Loader2, MapPin, Wrench, Heart, Star, MessageSquare, Shield
+} from 'lucide-react';
 import { db, getPaths, appId } from '../../config/firebase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { EQUIP_CATEGORIES } from '../../config/constants';
 import InspectionEditor from '../tech/InspectionEditor';
 import { InspectionSvg } from '../tech/InspectionDiagrams';
+import WishlistButton from './WishlistButton';
+import SellerReviews, { SellerRatingBadge, StarRating } from './SellerReviews';
+import { EscrowInfoBanner, EscrowSelector, EscrowInfoModal } from './EscrowSystem';
+import { useWishlist } from '../../hooks/useWishlist';
+import { useSellerRating } from '../../hooks/useSellerReviews';
+import toast from 'react-hot-toast';
 
 const CONDITIONS = ['Mint', 'Excellent', 'Good', 'Fair', 'Non-Functioning'];
 
-export default function GearExchange({ user, userData, setActiveTab }) {
+export default function GearExchange({ user, userData, onNavigateToChat }) {
     const [view, setView] = useState('browse'); // 'browse', 'create', 'detail'
     const [listings, setListings] = useState([]);
     const [filter, setFilter] = useState('All');
     const [search, setSearch] = useState('');
     const [selectedItem, setSelectedItem] = useState(null);
+    const { wishlistIds } = useWishlist(user?.uid);
 
     // Fetch Listings
     useEffect(() => {
@@ -28,7 +38,7 @@ export default function GearExchange({ user, userData, setActiveTab }) {
     // Filtering
     const filteredListings = listings.filter(l => 
         (filter === 'All' || l.category === filter) &&
-        (l.title.toLowerCase().includes(search.toLowerCase()) || l.brand.toLowerCase().includes(search.toLowerCase()))
+        (l.title?.toLowerCase().includes(search.toLowerCase()) || l.brand?.toLowerCase().includes(search.toLowerCase()))
     );
 
     return (
@@ -77,34 +87,26 @@ export default function GearExchange({ user, userData, setActiveTab }) {
                     {/* Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                         {filteredListings.map(item => (
-                            <div key={item.id} onClick={() => setSelectedItem(item)} className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden hover:shadow-xl transition cursor-pointer group flex flex-col">
-                                <div className="aspect-square bg-gray-100 dark:bg-black/40 relative flex items-center justify-center overflow-hidden">
-                                    {item.images?.[0] ? (
-                                        <img src={item.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
-                                    ) : (
-                                        <Camera size={32} className="text-gray-400"/>
-                                    )}
-                                    <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-md">
-                                        ${item.price}
-                                    </div>
-                                    {item.conditionReport && (
-                                        <div className="absolute bottom-2 left-2 bg-green-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                                            <CheckCircle size={10}/> Inspected
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="p-4 flex-1 flex flex-col">
-                                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">{item.brand}</div>
-                                    <h4 className="font-bold dark:text-white text-sm mb-1 line-clamp-1">{item.title}</h4>
-                                    <div className="text-xs text-gray-500 mb-3">{item.condition} Condition</div>
-                                    
-                                    <div className="mt-auto pt-3 border-t dark:border-gray-700 flex justify-between items-center text-xs text-gray-400">
-                                        <span className="flex items-center gap-1"><MapPin size={10}/> {item.location || 'Shipped'}</span>
-                                    </div>
-                                </div>
-                            </div>
+                            <GearListingCard 
+                                key={item.id}
+                                item={item}
+                                userId={user?.uid}
+                                isInWishlist={wishlistIds.has(item.id)}
+                                onClick={() => setSelectedItem(item)}
+                            />
                         ))}
                     </div>
+
+                    {/* Empty State */}
+                    {filteredListings.length === 0 && (
+                        <div className="text-center py-12">
+                            <Camera size={48} className="mx-auto mb-4 text-gray-300" />
+                            <h3 className="text-lg font-medium dark:text-white mb-2">No listings found</h3>
+                            <p className="text-sm text-gray-500">
+                                {search ? 'Try adjusting your search' : 'Be the first to list gear for sale!'}
+                            </p>
+                        </div>
+                    )}
                 </>
             )}
 
@@ -124,8 +126,78 @@ export default function GearExchange({ user, userData, setActiveTab }) {
                     item={selectedItem} 
                     onClose={() => setSelectedItem(null)} 
                     currentUser={user}
+                    userData={userData}
+                    onNavigateToChat={onNavigateToChat}
                 />
             )}
+        </div>
+    );
+}
+
+// --- Gear Listing Card with Wishlist & Rating ---
+function GearListingCard({ item, userId, isInWishlist, onClick }) {
+    const { rating, reviewCount } = useSellerRating(item.sellerId);
+
+    return (
+        <div 
+            onClick={onClick} 
+            className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden hover:shadow-xl transition cursor-pointer group flex flex-col"
+        >
+            <div className="aspect-square bg-gray-100 dark:bg-black/40 relative flex items-center justify-center overflow-hidden">
+                {item.images?.[0] ? (
+                    <img src={item.images[0]} alt={item.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
+                ) : (
+                    <Camera size={32} className="text-gray-400"/>
+                )}
+                
+                {/* Price Badge */}
+                <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-md">
+                    ${item.price}
+                </div>
+                
+                {/* Wishlist Button */}
+                <div className="absolute top-2 left-2" onClick={e => e.stopPropagation()}>
+                    <WishlistButton 
+                        item={{ ...item, itemType: 'gear' }} 
+                        userId={userId} 
+                        size="small"
+                        showPriceAlert={true}
+                    />
+                </div>
+                
+                {/* Inspected Badge */}
+                {item.conditionReport && (
+                    <div className="absolute bottom-2 left-2 bg-green-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                        <CheckCircle size={10}/> Inspected
+                    </div>
+                )}
+
+                {/* Escrow Recommended Badge */}
+                {item.price >= 500 && (
+                    <div className="absolute bottom-2 right-2 bg-green-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                        <Shield size={10}/> Escrow
+                    </div>
+                )}
+            </div>
+            
+            <div className="p-4 flex-1 flex flex-col">
+                <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">{item.brand}</div>
+                <h4 className="font-bold dark:text-white text-sm mb-1 line-clamp-1">{item.title}</h4>
+                <div className="text-xs text-gray-500 mb-2">{item.condition} Condition</div>
+                
+                {/* Seller Rating */}
+                {rating > 0 && (
+                    <div className="flex items-center gap-1 mb-2">
+                        <Star size={12} fill="#facc15" className="text-yellow-400" />
+                        <span className="text-xs font-medium dark:text-white">{rating.toFixed(1)}</span>
+                        <span className="text-xs text-gray-400">({reviewCount})</span>
+                    </div>
+                )}
+                
+                <div className="mt-auto pt-3 border-t dark:border-gray-700 flex justify-between items-center text-xs text-gray-400">
+                    <span className="flex items-center gap-1"><MapPin size={10}/> {item.location || 'Ships Anywhere'}</span>
+                </div>
+            </div>
         </div>
     );
 }
@@ -134,9 +206,9 @@ export default function GearExchange({ user, userData, setActiveTab }) {
 function CreateListingForm({ user, userData, onCancel, onSuccess }) {
     const [step, setStep] = useState(1);
     const [form, setForm] = useState({ 
-        title: '', brand: '', category: EQUIP_CATEGORIES[0].id, condition: 'Good', price: '', 
-        description: '', location: userData.city || '',
-        weight: '', length: '', width: '', height: '' // Added dimensions
+        title: '', brand: '', category: EQUIP_CATEGORIES[0]?.id || 'microphones', condition: 'Good', price: '', 
+        description: '', location: userData?.city || '',
+        weight: '', length: '', width: '', height: ''
     });
     const [images, setImages] = useState([]);
     const [conditionReport, setConditionReport] = useState(null);
@@ -151,25 +223,28 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
     };
 
     const handleSubmit = async () => {
-        if (!form.title || !form.price) return alert("Title and Price required.");
+        if (!form.title || !form.price) {
+            toast.error("Title and Price are required");
+            return;
+        }
         setSubmitting(true);
         try {
             await addDoc(collection(db, getPaths(user.uid).gearListings), {
                 ...form,
                 price: parseInt(form.price),
                 images,
-                conditionReport, // Attach the inspection object directly
+                conditionReport,
                 sellerId: user.uid,
-                sellerName: `${userData.firstName} ${userData.lastName}`,
-                sellerPhoto: userData.photoURL || null,
+                sellerName: `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || 'Anonymous',
+                sellerPhoto: userData?.photoURL || null,
                 timestamp: serverTimestamp(),
                 status: 'Active'
             });
-            alert("Listing posted!");
+            toast.success("Listing posted successfully!");
             onSuccess();
         } catch (e) {
             console.error(e);
-            alert("Failed to post listing.");
+            toast.error("Failed to post listing.");
         }
         setSubmitting(false);
     };
@@ -179,7 +254,7 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
         return (
             <div className="h-[600px]">
                 <InspectionEditor 
-                    type="Pre" // Using "Pre" template as base for condition report
+                    type="Pre"
                     onSave={(report) => { setConditionReport(report); setStep(1); }} 
                     onCancel={() => setStep(1)} 
                 />
@@ -252,7 +327,7 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
                         <div className="font-bold text-orange-800 dark:text-orange-400 text-sm mb-1">Tech Inspection Report</div>
                         <div className="text-xs text-orange-600 dark:text-orange-300">
                             {conditionReport 
-                                ? <span className="flex items-center gap-1"><CheckCircle size={12}/> Report Attached ({conditionReport.markers.length} points)</span> 
+                                ? <span className="flex items-center gap-1"><CheckCircle size={12}/> Report Attached ({conditionReport.markers?.length || 0} points)</span> 
                                 : "Mark scratches, dents, or issues on a diagram to build trust."}
                         </div>
                     </div>
@@ -266,20 +341,39 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
 
                 <div>
                     <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">Photos</label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                         {images.map((img, i) => (
-                            <img key={i} src={img} className="w-16 h-16 rounded-lg object-cover border dark:border-gray-600"/>
+                            <div key={i} className="relative">
+                                <img src={img} alt={`Upload ${i + 1}`} className="w-16 h-16 rounded-lg object-cover border dark:border-gray-600"/>
+                                <button 
+                                    onClick={() => setImages(images.filter((_, idx) => idx !== i))}
+                                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-xs"
+                                >
+                                    ×
+                                </button>
+                            </div>
                         ))}
                         <label className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 flex items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800">
                             {uploading ? <Loader2 className="animate-spin text-gray-400"/> : <Plus className="text-gray-400"/>}
-                            <input type="file" className="hidden" onChange={handleImageUpload} disabled={uploading}/>
+                            <input type="file" className="hidden" onChange={handleImageUpload} disabled={uploading} accept="image/*"/>
                         </label>
                     </div>
                 </div>
 
+                <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Description</label>
+                    <textarea 
+                        className="w-full p-2.5 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white resize-none" 
+                        rows={3}
+                        value={form.description} 
+                        onChange={e => setForm({...form, description: e.target.value})} 
+                        placeholder="Describe your item, its history, any modifications..."
+                    />
+                </div>
+
                 <div className="flex gap-3 pt-4">
                     <button onClick={onCancel} className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-gray-700 rounded-xl transition">Cancel</button>
-                    <button onClick={handleSubmit} disabled={submitting || uploading} className="flex-1 bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700 transition shadow-lg flex items-center justify-center gap-2">
+                    <button onClick={handleSubmit} disabled={submitting || uploading} className="flex-1 bg-orange-600 text-white py-3 rounded-xl font-bold hover:bg-orange-700 transition shadow-lg flex items-center justify-center gap-2 disabled:opacity-50">
                         {submitting ? <Loader2 className="animate-spin"/> : "Post Listing"}
                     </button>
                 </div>
@@ -289,8 +383,25 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
 }
 
 // --- SUB-COMPONENT: DETAIL MODAL ---
-function ListingDetailModal({ item, onClose, currentUser }) {
+function ListingDetailModal({ item, onClose, currentUser, userData, onNavigateToChat }) {
     const [viewReport, setViewReport] = useState(false);
+    const [activeTab, setActiveTab] = useState('details'); // 'details', 'reviews'
+    const [showEscrowInfo, setShowEscrowInfo] = useState(false);
+    const [useEscrow, setUseEscrow] = useState(item.price >= 500);
+    
+    const isHighValue = item.price >= 500;
+    const isOwner = item.sellerId === currentUser?.uid;
+
+    const handleBuy = () => {
+        // TODO: Implement purchase flow with escrow option
+        toast.success(useEscrow ? 'Starting escrow purchase...' : 'Starting direct purchase...');
+    };
+
+    const handleMessage = () => {
+        if (onNavigateToChat) {
+            onNavigateToChat(item.sellerId);
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
@@ -306,17 +417,32 @@ function ListingDetailModal({ item, onClose, currentUser }) {
                                     type={item.conditionReport.gearType} 
                                     view="front" 
                                     markers={item.conditionReport.markers} 
-                                    onClick={() => {}} // Read-only
+                                    onClick={() => {}}
                                 />
                                 <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-3 py-1 rounded-full text-xs">
                                     Inspection View
                                 </div>
                             </div>
                         ) : (
-                            item.images?.[0] ? <img src={item.images[0]} className="max-h-full max-w-full object-contain"/> : <Camera size={48} className="text-gray-600"/>
+                            item.images?.[0] ? (
+                                <img src={item.images[0]} alt={item.title} className="max-h-full max-w-full object-contain"/>
+                            ) : (
+                                <Camera size={48} className="text-gray-600"/>
+                            )
                         )}
                         
-                        <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70"><X size={20}/></button>
+                        <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70">
+                            <X size={20}/>
+                        </button>
+
+                        {/* Wishlist Button */}
+                        <div className="absolute top-4 right-4">
+                            <WishlistButton 
+                                item={{ ...item, itemType: 'gear' }} 
+                                userId={currentUser?.uid}
+                                showPriceAlert={true}
+                            />
+                        </div>
                     </div>
                     
                     {/* Visual Toggle Bar */}
@@ -331,56 +457,165 @@ function ListingDetailModal({ item, onClose, currentUser }) {
                 </div>
 
                 {/* Right: Info */}
-                <div className="md:w-1/2 p-8 overflow-y-auto bg-white dark:bg-[#2c2e36]">
-                    <div className="mb-6">
-                        <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">{item.brand}</div>
-                        <h2 className="text-3xl font-extrabold dark:text-white mb-2">{item.title}</h2>
-                        <div className="flex items-center gap-3">
-                            <span className="text-xl font-bold text-green-600">${item.price}</span>
-                            <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded text-xs font-bold">{item.condition}</span>
-                        </div>
+                <div className="md:w-1/2 flex flex-col overflow-hidden">
+                    {/* Tabs */}
+                    <div className="flex border-b dark:border-gray-700">
+                        <button
+                            onClick={() => setActiveTab('details')}
+                            className={`flex-1 py-3 text-sm font-medium transition ${
+                                activeTab === 'details' 
+                                    ? 'text-orange-600 border-b-2 border-orange-600' 
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            Details
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('reviews')}
+                            className={`flex-1 py-3 text-sm font-medium transition flex items-center justify-center gap-1 ${
+                                activeTab === 'reviews' 
+                                    ? 'text-orange-600 border-b-2 border-orange-600' 
+                                    : 'text-gray-500 hover:text-gray-700'
+                            }`}
+                        >
+                            <Star size={14} />
+                            Seller Reviews
+                        </button>
                     </div>
 
-                    <div className="space-y-6">
-                        {/* Seller Info */}
-                        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700">
-                            <img src={item.sellerPhoto} className="w-10 h-10 rounded-full bg-gray-300"/>
-                            <div>
-                                <div className="text-xs text-gray-500 uppercase font-bold">Seller</div>
-                                <div className="font-bold dark:text-white text-sm">{item.sellerName}</div>
-                            </div>
-                        </div>
+                    <div className="flex-1 overflow-y-auto p-6">
+                        {activeTab === 'details' ? (
+                            <>
+                                {/* Header */}
+                                <div className="mb-6">
+                                    <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">{item.brand}</div>
+                                    <h2 className="text-2xl font-extrabold dark:text-white mb-2">{item.title}</h2>
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                        <span className="text-xl font-bold text-green-600">${item.price}</span>
+                                        <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded text-xs font-bold">{item.condition}</span>
+                                        {item.location && (
+                                            <span className="flex items-center gap-1 text-xs text-gray-500">
+                                                <MapPin size={12} />
+                                                {item.location}
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
 
-                        {/* Condition Notes */}
-                        {item.conditionReport?.notes && (
-                            <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl border border-orange-100 dark:border-orange-800/50">
-                                <h4 className="font-bold text-orange-800 dark:text-orange-400 text-sm mb-2 flex items-center gap-2">
-                                    <Wrench size={16}/> Tech Notes
-                                </h4>
-                                <p className="text-sm text-orange-900 dark:text-orange-200 italic">"{item.conditionReport.notes}"</p>
-                            </div>
-                        )}
+                                {/* Escrow Banner for High-Value Items */}
+                                {isHighValue && !isOwner && (
+                                    <EscrowInfoBanner 
+                                        price={item.price} 
+                                        onLearnMore={() => setShowEscrowInfo(true)} 
+                                    />
+                                )}
 
-                        <div className="prose dark:prose-invert text-sm text-gray-600 dark:text-gray-300">
-                            <h4 className="font-bold dark:text-white text-sm uppercase">Description</h4>
-                            <p>{item.description || "No description provided."}</p>
-                        </div>
-                    </div>
+                                {/* Seller Info */}
+                                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700 my-4">
+                                    {item.sellerPhoto ? (
+                                        <img src={item.sellerPhoto} alt={item.sellerName} className="w-10 h-10 rounded-full object-cover"/>
+                                    ) : (
+                                        <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-500">
+                                            ?
+                                        </div>
+                                    )}
+                                    <div className="flex-1">
+                                        <div className="text-xs text-gray-500 uppercase font-bold">Seller</div>
+                                        <div className="font-bold dark:text-white text-sm flex items-center gap-2">
+                                            {item.sellerName}
+                                            <SellerRatingBadge sellerId={item.sellerId} size="small" />
+                                        </div>
+                                    </div>
+                                    {!isOwner && (
+                                        <button 
+                                            onClick={handleMessage}
+                                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition"
+                                        >
+                                            <MessageSquare size={18} className="text-gray-500" />
+                                        </button>
+                                    )}
+                                </div>
 
-                    <div className="mt-8 pt-6 border-t dark:border-gray-700">
-                        {item.sellerId === currentUser.uid ? (
-                            <button className="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold py-3 rounded-xl cursor-not-allowed">You own this listing</button>
+                                {/* Condition Notes */}
+                                {item.conditionReport?.notes && (
+                                    <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl border border-orange-100 dark:border-orange-800/50 mb-4">
+                                        <h4 className="font-bold text-orange-800 dark:text-orange-400 text-sm mb-2 flex items-center gap-2">
+                                            <Wrench size={16}/> Tech Notes
+                                        </h4>
+                                        <p className="text-sm text-orange-900 dark:text-orange-200 italic">&quot;{item.conditionReport.notes}&quot;</p>
+                                    </div>
+                                )}
+
+                                {/* Description */}
+                                <div className="prose dark:prose-invert text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                    <h4 className="font-bold dark:text-white text-sm uppercase">Description</h4>
+                                    <p>{item.description || "No description provided."}</p>
+                                </div>
+
+                                {/* Specs */}
+                                {(item.weight || item.length) && (
+                                    <div className="mb-4">
+                                        <h4 className="font-bold dark:text-white text-sm uppercase mb-2">Specifications</h4>
+                                        <div className="grid grid-cols-2 gap-2 text-sm">
+                                            {item.weight && (
+                                                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                                                    <span className="text-gray-500">Weight:</span>
+                                                    <span className="ml-2 dark:text-white">{item.weight} lbs</span>
+                                                </div>
+                                            )}
+                                            {item.length && (
+                                                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                                                    <span className="text-gray-500">Dimensions:</span>
+                                                    <span className="ml-2 dark:text-white">{item.length}×{item.width}×{item.height} in</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Escrow Selector */}
+                                {isHighValue && !isOwner && (
+                                    <div className="mb-4">
+                                        <EscrowSelector 
+                                            price={item.price}
+                                            selected={useEscrow}
+                                            onChange={setUseEscrow}
+                                        />
+                                    </div>
+                                )}
+                            </>
                         ) : (
-                            <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02]">
-                                <DollarSign size={20}/> Buy Now
-                            </button>
+                            <SellerReviews sellerId={item.sellerId} currentUserId={currentUser?.uid} />
                         )}
-                        <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
-                            <CheckCircle size={10}/> Purchases covered by SeshNx Buyer Protection
-                        </p>
+                    </div>
+
+                    {/* Buy Actions */}
+                    <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-[#2c2e36]">
+                        {isOwner ? (
+                            <button className="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold py-3 rounded-xl cursor-not-allowed">
+                                You own this listing
+                            </button>
+                        ) : (
+                            <>
+                                <button 
+                                    onClick={handleBuy}
+                                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02]"
+                                >
+                                    {useEscrow && <Shield size={18} />}
+                                    <DollarSign size={20}/> 
+                                    Buy Now {useEscrow && '(with Escrow)'}
+                                </button>
+                                <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
+                                    <CheckCircle size={10}/> Purchases covered by SeshNx Buyer Protection
+                                </p>
+                            </>
+                        )}
                     </div>
                 </div>
             </div>
+
+            {/* Escrow Info Modal */}
+            <EscrowInfoModal isOpen={showEscrowInfo} onClose={() => setShowEscrowInfo(false)} />
         </div>
     );
 }
