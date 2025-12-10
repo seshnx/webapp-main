@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { ArrowLeft, Info, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Info, MessageSquare, Users } from 'lucide-react';
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { isConvexAvailable } from '../../config/convex';
@@ -166,13 +166,14 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
         for (const targetChatId of targetChatIds) {
             try {
+                // GUARD: Ensure no nulls are passed to optional fields
                 await sendMessageMutation({
                     chatId: targetChatId,
                     senderId: user.uid,
                     senderName: userData.firstName || 'User',
-                    senderPhoto: userData.photoURL || undefined, // FIX: Use undefined, not null
+                    senderPhoto: userData.photoURL || undefined, // Strict undefined
                     content: `竊ｪ Forwarded: ${forwardText}`,
-                    media: forwardMedia,
+                    media: forwardMedia || undefined, // Strict undefined
                 });
 
                 // Update conversation
@@ -202,7 +203,6 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         
         let msgText = text ? text.trim() : '';
         if (msgText.length === 0 && mediaData) {
-            // FIXED: Replaced garbled characters with standard Emoji
             msgText = mediaData.type === 'image' ? '📷 Image' : 
                       mediaData.type === 'video' ? '🎥 Video' : 
                       mediaData.type === 'audio' ? '🎵 Audio' : '📎 File';
@@ -226,13 +226,14 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
         try {
             // Send message
+            // GUARD: Ensure strictly undefined for null/empty optional fields
             await sendMessageMutation({
                 chatId,
                 senderId: user.uid,
                 senderName: userData.firstName || 'User',
-                senderPhoto: userData.photoURL || undefined, // FIX: Use undefined, not null
-                content: msgText,
-                media: mediaData || undefined,
+                senderPhoto: userData.photoURL || undefined, // undefined if null
+                content: msgText || undefined,               // undefined if empty
+                media: mediaData || undefined,               // undefined if null
                 replyTo: replyingTo ? {
                     messageId: replyingTo.id,
                     text: replyingTo.b?.substring(0, 100) || 'Media',
@@ -383,8 +384,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         return (
             <div className="flex flex-col h-full bg-white dark:bg-[#1f2128] items-center justify-center text-gray-400">
                 <div className="w-20 h-20 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center mb-4">
-                     {/* FIXED: Replaced garbled char with Lucide icon */}
-                    <MessageSquare size={45} className="text-gray-200 dark:text-gray-300 mb-2" />
+                    <Users size={64} className="text-gray-200 dark:text-gray-700 mb-2" />
                 </div>
                 <p>Select a conversation to start chatting</p>
             </div>
