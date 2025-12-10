@@ -232,7 +232,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 senderName: userData.firstName || 'User',
                 senderPhoto: userData.photoURL || undefined, // FIX: Use undefined, not null
                 content: msgText,
-                media: mediaData,
+                media: mediaData || undefined,
                 replyTo: replyingTo ? {
                     messageId: replyingTo.id,
                     text: replyingTo.b?.substring(0, 100) || 'Media',
