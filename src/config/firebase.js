@@ -144,4 +144,8 @@ export const getPaths = (uid) => ({
   userSafeExchanges: `artifacts/${appId}/users/${uid}/safe_exchanges`,
   safeZones: `artifacts/${appId}/public/data/safe_zones`,
   escrowHolds: `artifacts/${appId}/escrow/holds`,
+  
+  // --- SHIPPING VERIFICATION ---
+  shippingTransactions: `artifacts/${appId}/public/data/shipping_transactions`,
+  userShippingTransactions: `artifacts/${appId}/users/${uid}/shipping_transactions`,
 });

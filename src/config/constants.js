@@ -199,7 +199,14 @@ export const EQUIP_CATEGORIES = [
 
 // --- HIGH-VALUE MARKETPLACE / SAFE EXCHANGE CONSTANTS ---
 
-export const HIGH_VALUE_THRESHOLD = 500; // Items over $500 require local pickup
+export const HIGH_VALUE_THRESHOLD = 500; // Items over $500 require escrow hold
+
+// Safe Exchange requirement levels
+export const SAFE_EXCHANGE_REQUIREMENT = {
+    OPTIONAL: 'optional',       // Under $500, buyer can choose
+    SELLER_REQUIRED: 'seller_required', // Seller enabled "require for all listings"
+    REQUIRED: 'required'        // Over $500, always required with escrow
+};
 
 export const SAFE_EXCHANGE_STATUS = {
     INTENT_CREATED: 'intent_created',
@@ -218,6 +225,36 @@ export const SAFE_EXCHANGE_STATUS = {
     COMPLETED: 'completed',
     DISPUTED: 'disputed',
     CANCELLED: 'cancelled'
+};
+
+// Shipping Verification Status (for shipped items)
+export const SHIPPING_VERIFICATION_STATUS = {
+    PENDING_SHIPMENT: 'pending_shipment',
+    SELLER_PACKAGING_PHOTOS: 'seller_packaging_photos',
+    SELLER_DROPOFF_PHOTOS: 'seller_dropoff_photos',
+    IN_TRANSIT: 'in_transit',
+    DELIVERED: 'delivered',
+    BUYER_PICKUP_PHOTOS: 'buyer_pickup_photos',
+    BUYER_UNBOXING_PHOTOS: 'buyer_unboxing_photos',
+    BUYER_VERIFIED: 'buyer_verified',
+    COMPLETED: 'completed',
+    DISPUTED: 'disputed'
+};
+
+export const SHIPPING_VERIFICATION_STEPS = [
+    { key: 'packaging', label: 'Package Item', description: 'Seller photographs item & packaging', role: 'seller' },
+    { key: 'dropoff', label: 'Drop Off', description: 'Seller photographs package at carrier', role: 'seller' },
+    { key: 'transit', label: 'In Transit', description: 'Package in transit to buyer', role: 'system' },
+    { key: 'pickup', label: 'Pick Up', description: 'Buyer photographs sealed package', role: 'buyer' },
+    { key: 'unbox', label: 'Unbox & Verify', description: 'Buyer opens and verifies contents', role: 'buyer' },
+    { key: 'complete', label: 'Complete', description: 'Transaction finalized', role: 'system' }
+];
+
+// Fulfillment methods
+export const FULFILLMENT_METHOD = {
+    LOCAL_PICKUP: 'local_pickup',
+    SAFE_EXCHANGE: 'safe_exchange',
+    SHIPPING: 'shipping'
 };
 
 export const SAFE_EXCHANGE_STEPS = [

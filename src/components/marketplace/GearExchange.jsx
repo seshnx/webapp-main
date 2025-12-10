@@ -1,17 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, doc, updateDoc } from 'firebase/firestore';
-import { Search, Filter, Plus, Camera, DollarSign, Tag, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info } from 'lucide-react';
+import { Search, Filter, Plus, Camera, DollarSign, Tag, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info, ToggleLeft, ToggleRight, Package } from 'lucide-react';
 import { db, getPaths, appId } from '../../config/firebase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
-import { EQUIP_CATEGORIES, HIGH_VALUE_THRESHOLD, SAFE_EXCHANGE_STATUS } from '../../config/constants';
+import { EQUIP_CATEGORIES, HIGH_VALUE_THRESHOLD, SAFE_EXCHANGE_STATUS, SAFE_EXCHANGE_REQUIREMENT, FULFILLMENT_METHOD, SHIPPING_VERIFICATION_STATUS } from '../../config/constants';
 import InspectionEditor from '../tech/InspectionEditor';
 import { InspectionSvg } from '../tech/InspectionDiagrams';
 import SafeExchangeTransaction from './SafeExchangeTransaction';
+import ShippingVerification from './ShippingVerification';
 
 const CONDITIONS = ['Mint', 'Excellent', 'Good', 'Fair', 'Non-Functioning'];
 
-// Helper to check if item requires local pickup
+// Helper to check if item requires escrow (high value)
 const isHighValueItem = (price) => price >= HIGH_VALUE_THRESHOLD;
+
+// Determine safe exchange requirement level
+const getSafeExchangeRequirement = (price, sellerRequiresSafeExchange) => {
+    if (price >= HIGH_VALUE_THRESHOLD) return SAFE_EXCHANGE_REQUIREMENT.REQUIRED;
+    if (sellerRequiresSafeExchange) return SAFE_EXCHANGE_REQUIREMENT.SELLER_REQUIRED;
+    return SAFE_EXCHANGE_REQUIREMENT.OPTIONAL;
+};
 
 export default function GearExchange({ user, userData, setActiveTab, openChat }) {
     const [view, setView] = useState('browse'); // 'browse', 'create', 'detail'
