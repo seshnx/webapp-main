@@ -2,18 +2,20 @@ import { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
 import { 
     Search, Plus, Camera, DollarSign, X, CheckCircle, AlertTriangle, 
-    Loader2, MapPin, Wrench, Heart, Star, MessageSquare, Shield
+    Loader2, MapPin, Wrench, Star, MessageSquare, Shield, Package
 } from 'lucide-react';
-import { db, getPaths, appId } from '../../config/firebase';
+import { db, getPaths } from '../../config/firebase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { EQUIP_CATEGORIES } from '../../config/constants';
 import InspectionEditor from '../tech/InspectionEditor';
 import { InspectionSvg } from '../tech/InspectionDiagrams';
 import WishlistButton from './WishlistButton';
-import SellerReviews, { SellerRatingBadge, StarRating } from './SellerReviews';
-import { EscrowInfoBanner, EscrowSelector, EscrowInfoModal } from './EscrowSystem';
+import SellerReviews, { SellerRatingBadge } from './SellerReviews';
+import { EscrowInfoModal } from './EscrowSystem';
 import { useWishlist } from '../../hooks/useWishlist';
 import { useSellerRating } from '../../hooks/useSellerReviews';
+import PickupVerification, { HighValuePurchaseModal } from './PickupVerification';
+import { HIGH_VALUE_THRESHOLD } from '../../hooks/usePickupSession';
 import toast from 'react-hot-toast';
 
 const CONDITIONS = ['Mint', 'Excellent', 'Good', 'Fair', 'Non-Functioning'];
@@ -387,14 +389,21 @@ function ListingDetailModal({ item, onClose, currentUser, userData, onNavigateTo
     const [viewReport, setViewReport] = useState(false);
     const [activeTab, setActiveTab] = useState('details'); // 'details', 'reviews'
     const [showEscrowInfo, setShowEscrowInfo] = useState(false);
-    const [useEscrow, setUseEscrow] = useState(item.price >= 500);
+    const [showHighValuePurchase, setShowHighValuePurchase] = useState(false);
+    const [pickupSessionId, setPickupSessionId] = useState(null);
     
-    const isHighValue = item.price >= 500;
+    const isHighValue = item.price >= HIGH_VALUE_THRESHOLD;
     const isOwner = item.sellerId === currentUser?.uid;
 
     const handleBuy = () => {
-        // TODO: Implement purchase flow with escrow option
-        toast.success(useEscrow ? 'Starting escrow purchase...' : 'Starting direct purchase...');
+        if (isHighValue) {
+            // High-value items require local pickup with 2-party verification
+            setShowHighValuePurchase(true);
+        } else {
+            // Standard purchase flow for lower-value items
+            toast.success('Starting purchase...');
+            // TODO: Implement standard purchase flow
+        }
     };
 
     const handleMessage = () => {
@@ -403,219 +412,279 @@ function ListingDetailModal({ item, onClose, currentUser, userData, onNavigateTo
         }
     };
 
-    return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
-            <div className="bg-white dark:bg-[#2c2e36] w-full max-w-4xl h-[90vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden border dark:border-gray-700">
-                
-                {/* Left: Gallery & Visuals */}
-                <div className="md:w-1/2 bg-black relative flex flex-col">
-                    <div className="flex-1 flex items-center justify-center p-4 relative">
-                        {/* Toggle between Photo and Diagram if Report Exists */}
-                        {viewReport && item.conditionReport ? (
-                            <div className="w-full h-full bg-white rounded-xl overflow-hidden">
-                                <InspectionSvg 
-                                    type={item.conditionReport.gearType} 
-                                    view="front" 
-                                    markers={item.conditionReport.markers} 
-                                    onClick={() => {}}
-                                />
-                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-3 py-1 rounded-full text-xs">
-                                    Inspection View
-                                </div>
-                            </div>
-                        ) : (
-                            item.images?.[0] ? (
-                                <img src={item.images[0]} alt={item.title} className="max-h-full max-w-full object-contain"/>
-                            ) : (
-                                <Camera size={48} className="text-gray-600"/>
-                            )
-                        )}
-                        
-                        <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70">
-                            <X size={20}/>
-                        </button>
+    const handleSessionCreated = (sessionId) => {
+        setShowHighValuePurchase(false);
+        setPickupSessionId(sessionId);
+    };
 
-                        {/* Wishlist Button */}
-                        <div className="absolute top-4 right-4">
-                            <WishlistButton 
-                                item={{ ...item, itemType: 'gear' }} 
-                                userId={currentUser?.uid}
-                                showPriceAlert={true}
-                            />
-                        </div>
-                    </div>
+    return (
+        <>
+            <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
+                <div className="bg-white dark:bg-[#2c2e36] w-full max-w-4xl h-[90vh] rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden border dark:border-gray-700">
                     
-                    {/* Visual Toggle Bar */}
-                    {item.conditionReport && (
-                        <div className="p-4 bg-[#1f2128] border-t border-gray-800 flex gap-2 justify-center">
-                            <button onClick={() => setViewReport(false)} className={`px-4 py-2 rounded text-xs font-bold ${!viewReport ? 'bg-orange-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Photos</button>
-                            <button onClick={() => setViewReport(true)} className={`px-4 py-2 rounded text-xs font-bold flex items-center gap-1 ${viewReport ? 'bg-orange-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
-                                <AlertTriangle size={12}/> Condition Map
+                    {/* Left: Gallery & Visuals */}
+                    <div className="md:w-1/2 bg-black relative flex flex-col">
+                        <div className="flex-1 flex items-center justify-center p-4 relative">
+                            {/* Toggle between Photo and Diagram if Report Exists */}
+                            {viewReport && item.conditionReport ? (
+                                <div className="w-full h-full bg-white rounded-xl overflow-hidden">
+                                    <InspectionSvg 
+                                        type={item.conditionReport.gearType} 
+                                        view="front" 
+                                        markers={item.conditionReport.markers} 
+                                        onClick={() => {}}
+                                    />
+                                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-black/80 text-white px-3 py-1 rounded-full text-xs">
+                                        Inspection View
+                                    </div>
+                                </div>
+                            ) : (
+                                item.images?.[0] ? (
+                                    <img src={item.images[0]} alt={item.title} className="max-h-full max-w-full object-contain"/>
+                                ) : (
+                                    <Camera size={48} className="text-gray-600"/>
+                                )
+                            )}
+                            
+                            <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70">
+                                <X size={20}/>
+                            </button>
+
+                            {/* Wishlist Button */}
+                            <div className="absolute top-4 right-4">
+                                <WishlistButton 
+                                    item={{ ...item, itemType: 'gear' }} 
+                                    userId={currentUser?.uid}
+                                    showPriceAlert={true}
+                                />
+                            </div>
+                        </div>
+                        
+                        {/* Visual Toggle Bar */}
+                        {item.conditionReport && (
+                            <div className="p-4 bg-[#1f2128] border-t border-gray-800 flex gap-2 justify-center">
+                                <button onClick={() => setViewReport(false)} className={`px-4 py-2 rounded text-xs font-bold ${!viewReport ? 'bg-orange-600 text-white' : 'bg-gray-800 text-gray-400'}`}>Photos</button>
+                                <button onClick={() => setViewReport(true)} className={`px-4 py-2 rounded text-xs font-bold flex items-center gap-1 ${viewReport ? 'bg-orange-600 text-white' : 'bg-gray-800 text-gray-400'}`}>
+                                    <AlertTriangle size={12}/> Condition Map
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Right: Info */}
+                    <div className="md:w-1/2 flex flex-col overflow-hidden">
+                        {/* Tabs */}
+                        <div className="flex border-b dark:border-gray-700">
+                            <button
+                                onClick={() => setActiveTab('details')}
+                                className={`flex-1 py-3 text-sm font-medium transition ${
+                                    activeTab === 'details' 
+                                        ? 'text-orange-600 border-b-2 border-orange-600' 
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                Details
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('reviews')}
+                                className={`flex-1 py-3 text-sm font-medium transition flex items-center justify-center gap-1 ${
+                                    activeTab === 'reviews' 
+                                        ? 'text-orange-600 border-b-2 border-orange-600' 
+                                        : 'text-gray-500 hover:text-gray-700'
+                                }`}
+                            >
+                                <Star size={14} />
+                                Seller Reviews
                             </button>
                         </div>
-                    )}
-                </div>
 
-                {/* Right: Info */}
-                <div className="md:w-1/2 flex flex-col overflow-hidden">
-                    {/* Tabs */}
-                    <div className="flex border-b dark:border-gray-700">
-                        <button
-                            onClick={() => setActiveTab('details')}
-                            className={`flex-1 py-3 text-sm font-medium transition ${
-                                activeTab === 'details' 
-                                    ? 'text-orange-600 border-b-2 border-orange-600' 
-                                    : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            Details
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('reviews')}
-                            className={`flex-1 py-3 text-sm font-medium transition flex items-center justify-center gap-1 ${
-                                activeTab === 'reviews' 
-                                    ? 'text-orange-600 border-b-2 border-orange-600' 
-                                    : 'text-gray-500 hover:text-gray-700'
-                            }`}
-                        >
-                            <Star size={14} />
-                            Seller Reviews
-                        </button>
-                    </div>
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {activeTab === 'details' ? (
+                                <>
+                                    {/* Header */}
+                                    <div className="mb-6">
+                                        <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">{item.brand}</div>
+                                        <h2 className="text-2xl font-extrabold dark:text-white mb-2">{item.title}</h2>
+                                        <div className="flex items-center gap-3 flex-wrap">
+                                            <span className="text-xl font-bold text-green-600">${item.price}</span>
+                                            <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded text-xs font-bold">{item.condition}</span>
+                                            {item.location && (
+                                                <span className="flex items-center gap-1 text-xs text-gray-500">
+                                                    <MapPin size={12} />
+                                                    {item.location}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
 
-                    <div className="flex-1 overflow-y-auto p-6">
-                        {activeTab === 'details' ? (
-                            <>
-                                {/* Header */}
-                                <div className="mb-6">
-                                    <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">{item.brand}</div>
-                                    <h2 className="text-2xl font-extrabold dark:text-white mb-2">{item.title}</h2>
-                                    <div className="flex items-center gap-3 flex-wrap">
-                                        <span className="text-xl font-bold text-green-600">${item.price}</span>
-                                        <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded text-xs font-bold">{item.condition}</span>
-                                        {item.location && (
-                                            <span className="flex items-center gap-1 text-xs text-gray-500">
-                                                <MapPin size={12} />
-                                                {item.location}
-                                            </span>
+                                    {/* High-Value Item Banner */}
+                                    {isHighValue && !isOwner && (
+                                        <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800 rounded-xl p-4 mb-4">
+                                            <div className="flex items-start gap-3">
+                                                <Shield className="text-green-600 shrink-0 mt-0.5" size={20} />
+                                                <div className="flex-1">
+                                                    <h4 className="font-bold text-green-800 dark:text-green-200 mb-1">
+                                                        Secure Local Pickup Required
+                                                    </h4>
+                                                    <p className="text-sm text-green-700 dark:text-green-300 mb-2">
+                                                        High-value items (${HIGH_VALUE_THRESHOLD}+) require local pickup with our 
+                                                        two-party verification system to protect both buyer and seller.
+                                                    </p>
+                                                    <ul className="text-xs text-green-600 dark:text-green-400 space-y-1">
+                                                        <li className="flex items-center gap-1">
+                                                            <CheckCircle size={10} /> Full deposit held securely
+                                                        </li>
+                                                        <li className="flex items-center gap-1">
+                                                            <CheckCircle size={10} /> Photo verification from both parties
+                                                        </li>
+                                                        <li className="flex items-center gap-1">
+                                                            <CheckCircle size={10} /> Mutual approval before funds release
+                                                        </li>
+                                                    </ul>
+                                                    <button 
+                                                        onClick={() => setShowEscrowInfo(true)}
+                                                        className="mt-2 text-sm font-medium text-green-600 dark:text-green-400 hover:underline"
+                                                    >
+                                                        Learn more →
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Seller Info */}
+                                    <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700 my-4">
+                                        {item.sellerPhoto ? (
+                                            <img src={item.sellerPhoto} alt={item.sellerName} className="w-10 h-10 rounded-full object-cover"/>
+                                        ) : (
+                                            <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-500">
+                                                ?
+                                            </div>
+                                        )}
+                                        <div className="flex-1">
+                                            <div className="text-xs text-gray-500 uppercase font-bold">Seller</div>
+                                            <div className="font-bold dark:text-white text-sm flex items-center gap-2">
+                                                {item.sellerName}
+                                                <SellerRatingBadge sellerId={item.sellerId} size="small" />
+                                            </div>
+                                        </div>
+                                        {!isOwner && (
+                                            <button 
+                                                onClick={handleMessage}
+                                                className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition"
+                                            >
+                                                <MessageSquare size={18} className="text-gray-500" />
+                                            </button>
                                         )}
                                     </div>
-                                </div>
 
-                                {/* Escrow Banner for High-Value Items */}
-                                {isHighValue && !isOwner && (
-                                    <EscrowInfoBanner 
-                                        price={item.price} 
-                                        onLearnMore={() => setShowEscrowInfo(true)} 
-                                    />
-                                )}
-
-                                {/* Seller Info */}
-                                <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700 my-4">
-                                    {item.sellerPhoto ? (
-                                        <img src={item.sellerPhoto} alt={item.sellerName} className="w-10 h-10 rounded-full object-cover"/>
-                                    ) : (
-                                        <div className="w-10 h-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center text-gray-500">
-                                            ?
+                                    {/* Condition Notes */}
+                                    {item.conditionReport?.notes && (
+                                        <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl border border-orange-100 dark:border-orange-800/50 mb-4">
+                                            <h4 className="font-bold text-orange-800 dark:text-orange-400 text-sm mb-2 flex items-center gap-2">
+                                                <Wrench size={16}/> Tech Notes
+                                            </h4>
+                                            <p className="text-sm text-orange-900 dark:text-orange-200 italic">&quot;{item.conditionReport.notes}&quot;</p>
                                         </div>
                                     )}
-                                    <div className="flex-1">
-                                        <div className="text-xs text-gray-500 uppercase font-bold">Seller</div>
-                                        <div className="font-bold dark:text-white text-sm flex items-center gap-2">
-                                            {item.sellerName}
-                                            <SellerRatingBadge sellerId={item.sellerId} size="small" />
-                                        </div>
+
+                                    {/* Description */}
+                                    <div className="prose dark:prose-invert text-sm text-gray-600 dark:text-gray-300 mb-4">
+                                        <h4 className="font-bold dark:text-white text-sm uppercase">Description</h4>
+                                        <p>{item.description || "No description provided."}</p>
                                     </div>
-                                    {!isOwner && (
-                                        <button 
-                                            onClick={handleMessage}
-                                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition"
-                                        >
-                                            <MessageSquare size={18} className="text-gray-500" />
-                                        </button>
+
+                                    {/* Specs */}
+                                    {(item.weight || item.length) && (
+                                        <div className="mb-4">
+                                            <h4 className="font-bold dark:text-white text-sm uppercase mb-2">Specifications</h4>
+                                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                                {item.weight && (
+                                                    <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                                                        <span className="text-gray-500">Weight:</span>
+                                                        <span className="ml-2 dark:text-white">{item.weight} lbs</span>
+                                                    </div>
+                                                )}
+                                                {item.length && (
+                                                    <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
+                                                        <span className="text-gray-500">Dimensions:</span>
+                                                        <span className="ml-2 dark:text-white">{item.length}×{item.width}×{item.height} in</span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     )}
-                                </div>
+                                </>
+                            ) : (
+                                <SellerReviews sellerId={item.sellerId} currentUserId={currentUser?.uid} />
+                            )}
+                        </div>
 
-                                {/* Condition Notes */}
-                                {item.conditionReport?.notes && (
-                                    <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-xl border border-orange-100 dark:border-orange-800/50 mb-4">
-                                        <h4 className="font-bold text-orange-800 dark:text-orange-400 text-sm mb-2 flex items-center gap-2">
-                                            <Wrench size={16}/> Tech Notes
-                                        </h4>
-                                        <p className="text-sm text-orange-900 dark:text-orange-200 italic">&quot;{item.conditionReport.notes}&quot;</p>
-                                    </div>
-                                )}
-
-                                {/* Description */}
-                                <div className="prose dark:prose-invert text-sm text-gray-600 dark:text-gray-300 mb-4">
-                                    <h4 className="font-bold dark:text-white text-sm uppercase">Description</h4>
-                                    <p>{item.description || "No description provided."}</p>
-                                </div>
-
-                                {/* Specs */}
-                                {(item.weight || item.length) && (
-                                    <div className="mb-4">
-                                        <h4 className="font-bold dark:text-white text-sm uppercase mb-2">Specifications</h4>
-                                        <div className="grid grid-cols-2 gap-2 text-sm">
-                                            {item.weight && (
-                                                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
-                                                    <span className="text-gray-500">Weight:</span>
-                                                    <span className="ml-2 dark:text-white">{item.weight} lbs</span>
-                                                </div>
-                                            )}
-                                            {item.length && (
-                                                <div className="bg-gray-50 dark:bg-gray-800 p-2 rounded">
-                                                    <span className="text-gray-500">Dimensions:</span>
-                                                    <span className="ml-2 dark:text-white">{item.length}×{item.width}×{item.height} in</span>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Escrow Selector */}
-                                {isHighValue && !isOwner && (
-                                    <div className="mb-4">
-                                        <EscrowSelector 
-                                            price={item.price}
-                                            selected={useEscrow}
-                                            onChange={setUseEscrow}
-                                        />
-                                    </div>
-                                )}
-                            </>
-                        ) : (
-                            <SellerReviews sellerId={item.sellerId} currentUserId={currentUser?.uid} />
-                        )}
-                    </div>
-
-                    {/* Buy Actions */}
-                    <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-[#2c2e36]">
-                        {isOwner ? (
-                            <button className="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold py-3 rounded-xl cursor-not-allowed">
-                                You own this listing
-                            </button>
-                        ) : (
-                            <>
-                                <button 
-                                    onClick={handleBuy}
-                                    className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02]"
-                                >
-                                    {useEscrow && <Shield size={18} />}
-                                    <DollarSign size={20}/> 
-                                    Buy Now {useEscrow && '(with Escrow)'}
+                        {/* Buy Actions */}
+                        <div className="p-4 border-t dark:border-gray-700 bg-white dark:bg-[#2c2e36]">
+                            {isOwner ? (
+                                <button className="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold py-3 rounded-xl cursor-not-allowed">
+                                    You own this listing
                                 </button>
-                                <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
-                                    <CheckCircle size={10}/> Purchases covered by SeshNx Buyer Protection
-                                </p>
-                            </>
-                        )}
+                            ) : (
+                                <>
+                                    <button 
+                                        onClick={handleBuy}
+                                        className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02]"
+                                    >
+                                        {isHighValue ? (
+                                            <>
+                                                <Shield size={18} />
+                                                <Package size={18} />
+                                                Secure Local Pickup - ${item.price}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <DollarSign size={20}/> 
+                                                Buy Now
+                                            </>
+                                        )}
+                                    </button>
+                                    <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
+                                        <CheckCircle size={10}/> 
+                                        {isHighValue 
+                                            ? 'Protected by 2-Party Verification System' 
+                                            : 'Purchases covered by SeshNx Buyer Protection'
+                                        }
+                                    </p>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
+
+                {/* Escrow Info Modal */}
+                <EscrowInfoModal isOpen={showEscrowInfo} onClose={() => setShowEscrowInfo(false)} />
             </div>
 
-            {/* Escrow Info Modal */}
-            <EscrowInfoModal isOpen={showEscrowInfo} onClose={() => setShowEscrowInfo(false)} />
-        </div>
+            {/* High-Value Purchase Modal */}
+            {showHighValuePurchase && (
+                <HighValuePurchaseModal
+                    item={item}
+                    user={currentUser}
+                    userData={userData}
+                    onClose={() => setShowHighValuePurchase(false)}
+                    onSessionCreated={handleSessionCreated}
+                />
+            )}
+
+            {/* Pickup Verification Modal */}
+            {pickupSessionId && (
+                <PickupVerification
+                    sessionId={pickupSessionId}
+                    userId={currentUser?.uid}
+                    onClose={() => {
+                        setPickupSessionId(null);
+                        onClose();
+                    }}
+                    onMessageOther={onNavigateToChat}
+                />
+            )}
+        </>
     );
 }
