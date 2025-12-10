@@ -11,6 +11,7 @@ import { isConvexAvailable } from '../config/convex';
 import { db, getPaths, appId } from '../config/firebase'; 
 import StatCard from './shared/StatCard';
 import { PROFILE_SCHEMAS, BOOKING_THRESHOLD } from '../config/constants';
+import { useNotifications } from '../hooks/useNotifications';
 
 // FIX: Added default values for all props to prevent 'undefined' crashes
 export default function Dashboard({ 
@@ -19,11 +20,13 @@ export default function Dashboard({
     setActiveTab, 
     bookingCount = 0, 
     subProfiles = {}, 
-    notifications = [], // FIX: Default to empty array prevents .map error
     tokenBalance = 0 
 }) {
   const [recentConvos, setRecentConvos] = useState([]);
   const [trendingItem, setTrendingItem] = useState(null);
+
+  // Real-time notifications from Firestore
+  const { notifications, unreadCount } = useNotifications(user?.uid);
   
   const isStudio = userData?.accountTypes?.includes('Studio');
   
@@ -222,7 +225,7 @@ export default function Dashboard({
             <div className="bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden shadow-sm">
                 <div className="p-5 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-[#23262f]">
                     <h3 className="font-bold dark:text-white flex items-center gap-2"><Bell size={18} className="text-gray-500"/> Activity Feed</h3>
-                    {notifications && notifications.length > 0 && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">{notifications.length} New</span>}
+                    {unreadCount > 0 && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">{unreadCount} New</span>}
                 </div>
                 <div className="divide-y dark:divide-gray-700">
                     {(!notifications || notifications.length === 0) ? (
@@ -233,12 +236,20 @@ export default function Dashboard({
                             <p className="text-gray-500 dark:text-gray-400 text-sm">You're all caught up!</p>
                         </div>
                     ) : (
-                        notifications.map((n, i) => (
-                            <div key={n.id || i} className="p-4 hover:bg-gray-50 dark:hover:bg-[#25272e] transition flex justify-between items-center group cursor-pointer" onClick={() => setActiveTab('bookings')}>
+                        notifications.slice(0, 5).map((n, i) => (
+                            <div key={n.id || i} className={`p-4 hover:bg-gray-50 dark:hover:bg-[#25272e] transition flex justify-between items-center group cursor-pointer ${!n.read ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}`} onClick={() => setActiveTab('feed')}>
                                 <div className="flex items-center gap-3">
-                                    <div className={`h-2 w-2 rounded-full ${n.type === 'booking' ? 'bg-brand-blue' : 'bg-yellow-500'}`}></div>
+                                    <div className={`h-2 w-2 rounded-full ${
+                                        n.type === 'follow' ? 'bg-brand-blue' : 
+                                        n.type === 'like' ? 'bg-red-500' : 
+                                        n.type === 'comment' ? 'bg-green-500' : 
+                                        n.type === 'mention' ? 'bg-purple-500' :
+                                        'bg-yellow-500'
+                                    }`}></div>
                                     <div>
-                                        <p className="text-sm dark:text-gray-200 font-medium">{n.text}</p>
+                                        <p className="text-sm dark:text-gray-200 font-medium">
+                                            <span className="font-bold">{n.fromUserName}</span> {n.message}
+                                        </p>
                                         <p className="text-xs text-gray-500">
                                             {formatNotificationTime(n.timestamp)}
                                         </p>

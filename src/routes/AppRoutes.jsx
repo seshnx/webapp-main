@@ -51,7 +51,7 @@ function EduDashboardWrapper({ user, userData }) {
  * Handles all application routes with proper component lifecycle management.
  * React Router ensures components are properly mounted/unmounted on route changes.
  */
-export default function AppRoutes({ user, userData, subProfiles, notifications, tokenBalance, setActiveTab, handleLogout, openPublicProfile }) {
+export default function AppRoutes({ user, userData, subProfiles, tokenBalance, setActiveTab, handleLogout, openPublicProfile, pendingChatTarget, clearPendingChatTarget }) {
 
   return (
     <Routes>
@@ -63,7 +63,6 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
               user={user} 
               userData={userData} 
               subProfiles={subProfiles} 
-              notifications={notifications} 
               setActiveTab={setActiveTab} 
               tokenBalance={tokenBalance}
             />
@@ -96,7 +95,13 @@ export default function AppRoutes({ user, userData, subProfiles, notifications, 
         <Route 
           path="/messages" 
           element={
-            <ChatInterface user={user} userData={userData} openPublicProfile={openPublicProfile} />
+            <ChatInterface 
+              user={user} 
+              userData={userData} 
+              openPublicProfile={openPublicProfile}
+              pendingChatTarget={pendingChatTarget}
+              clearPendingChatTarget={clearPendingChatTarget}
+            />
           } 
         />
         

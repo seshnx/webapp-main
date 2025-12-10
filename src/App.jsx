@@ -22,7 +22,6 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [subProfiles, setSubProfiles] = useState({}); 
-  const [notifications, setNotifications] = useState([]); 
   const [loading, setLoading] = useState(true);
   
   // React Router navigation - MUST be called before any early returns
@@ -85,6 +84,7 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [tokenBalance, setTokenBalance] = useState(0);
+  const [pendingChatTarget, setPendingChatTarget] = useState(null); // Target user to open chat with
 
   // DARK MODE STATE
   const [darkMode, setDarkMode] = useState(() => {
@@ -139,11 +139,6 @@ export default function App() {
             });
             setSubProfiles(profiles);
         });
-        
-        // Placeholder Notifications
-        setNotifications([
-            { id: 1, text: 'Welcome to SeshNx!', type: 'system', timestamp: new Date() }
-        ]);
 
         setLoading(false);
         return () => { unsubUser(); unsubWallet(); unsubProfiles(); };
@@ -321,11 +316,12 @@ export default function App() {
                       user={user}
                       userData={userData}
                       subProfiles={subProfiles}
-                      notifications={notifications}
                       tokenBalance={tokenBalance}
                       setActiveTab={setActiveTab}
                       handleLogout={handleLogout}
                       openPublicProfile={openPublicProfile}
+                      pendingChatTarget={pendingChatTarget}
+                      clearPendingChatTarget={() => setPendingChatTarget(null)}
                     />
                 </PageTransition>
             </main>
@@ -341,8 +337,9 @@ export default function App() {
                   onClose={() => setViewingProfile(null)}
                   onMessage={(targetId, targetName) => {
                       setViewingProfile(null);
+                      // Set the pending chat target so ChatInterface can auto-open the conversation
+                      setPendingChatTarget({ uid: targetId, name: targetName });
                       setActiveTab('messages');
-                      // TODO: Open chat with specific user
                   }}
               />
           )}

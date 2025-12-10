@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Shield, X } from 'lucide-react';
 import { AMENITIES_DATA } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
+import AddressAutocomplete from '../shared/AddressAutocomplete';
 
 export default function StudioDetailsModal({ initialData, onClose, onSave }) {
     const [formData, setFormData] = useState(initialData || {});
@@ -39,7 +40,20 @@ export default function StudioDetailsModal({ initialData, onClose, onSave }) {
                         <div><label className="text-xs font-bold text-gray-500 uppercase">Studio Name</label><input className="w-full p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white" value={formData.profileName||''} onChange={e=>handleChange('profileName', e.target.value)} /></div>
                         <div><label className="text-xs font-bold text-gray-500 uppercase">Website</label><input className="w-full p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white" value={formData.website||''} onChange={e=>handleChange('website', e.target.value)} /></div>
                     </div>
-                    <div><label className="text-xs font-bold text-gray-500 uppercase">Address</label><input className="w-full p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white" value={formData.address||''} onChange={e=>handleChange('address', e.target.value)} /></div>
+                    <AddressAutocomplete
+                        label="Address"
+                        value={formData.address || ''}
+                        onChange={(val) => handleChange('address', val)}
+                        onSelect={(addressData) => {
+                            handleChange('address', addressData.formattedAddress || addressData.displayName);
+                            if (addressData.city) handleChange('city', addressData.city);
+                            if (addressData.state) handleChange('state', addressData.state);
+                            if (addressData.zip) handleChange('zip', addressData.zip);
+                            if (addressData.lat) handleChange('lat', addressData.lat);
+                            if (addressData.lng) handleChange('lng', addressData.lng);
+                        }}
+                        placeholder="Start typing address..."
+                    />
                     <div className="grid grid-cols-3 gap-4">
                         <div><label className="text-xs font-bold text-gray-500 uppercase">City</label><input className="w-full p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white" value={formData.city||''} onChange={e=>handleChange('city', e.target.value)} /></div>
                         <div><label className="text-xs font-bold text-gray-500 uppercase">State</label><input className="w-full p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white" value={formData.state||''} onChange={e=>handleChange('state', e.target.value)} /></div>

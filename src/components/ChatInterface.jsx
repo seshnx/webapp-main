@@ -8,12 +8,27 @@ import ChatDetailsPane from './chat/ChatDetailsPane';
 import { usePresence } from '../hooks/usePresence';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function ChatInterface({ user, userData, openPublicProfile }) {
+export default function ChatInterface({ user, userData, openPublicProfile, pendingChatTarget, clearPendingChatTarget }) {
     const [activeChat, setActiveChat] = useState(null);
     const [showDetails, setShowDetails] = useState(false);
 
     // Initialize presence tracking for current user
     usePresence(user?.uid);
+
+    // Handle pending chat target - auto-open conversation when navigating from another page
+    useEffect(() => {
+        if (pendingChatTarget && user?.uid) {
+            const chatId = [user.uid, pendingChatTarget.uid].sort().join('_');
+            setActiveChat({
+                id: chatId,
+                uid: pendingChatTarget.uid,
+                name: pendingChatTarget.name,
+                type: 'direct'
+            });
+            // Clear the pending target so it doesn't re-trigger
+            clearPendingChatTarget?.();
+        }
+    }, [pendingChatTarget, user?.uid, clearPendingChatTarget]);
 
     // FIX: Calculate Convex availability directly. 
     // Do NOT use useMemo here, as it causes the "Cannot access before initialization" error.

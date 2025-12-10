@@ -9,7 +9,8 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { AMENITIES_DATA } from '../config/constants';
 import toast from 'react-hot-toast';
-import EquipmentAutocomplete from './shared/EquipmentAutocomplete'; // Added Import
+import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
+import AddressAutocomplete from './shared/AddressAutocomplete';
 
 const studioSchema = z.object({
     studioName: z.string().min(3, "Studio name is required"),
@@ -110,9 +111,30 @@ export default function StudioManager({ user, userData }) {
                             {errors.studioName && <p className="text-red-500 text-xs mt-1">{errors.studioName.message}</p>}
                         </div>
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Location Address</label>
-                            <input {...register("address")} className={inputClass(errors.address)} placeholder="123 Music Row, Nashville TN" />
-                            {errors.address && <p className="text-red-500 text-xs mt-1">{errors.address.message}</p>}
+                            <Controller
+                                control={control}
+                                name="address"
+                                render={({ field: { onChange, value } }) => (
+                                    <AddressAutocomplete
+                                        label="Location Address"
+                                        value={value || ''}
+                                        onChange={onChange}
+                                        onSelect={(addressData) => {
+                                            // Store additional location data if needed
+                                            if (addressData.lat && addressData.lng) {
+                                                setValue('lat', addressData.lat);
+                                                setValue('lng', addressData.lng);
+                                            }
+                                            if (addressData.city) setValue('city', addressData.city);
+                                            if (addressData.state) setValue('state', addressData.state);
+                                            if (addressData.zip) setValue('zip', addressData.zip);
+                                        }}
+                                        placeholder="Start typing your studio address..."
+                                        error={errors.address?.message}
+                                        required
+                                    />
+                                )}
+                            />
                         </div>
                     </div>
                     <div>

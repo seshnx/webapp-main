@@ -54,6 +54,22 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         return chatId && convexAvailable ? { chatId, limit: 100 } : "skip";
     }, [chatId, convexAvailable]);
 
+    // Query for group chat members
+    const chatMembersQuery = useMemo(() => {
+        return chatId && convexAvailable && activeChat?.type === 'group' ? { chatId } : "skip";
+    }, [chatId, convexAvailable, activeChat?.type]);
+
+    const chatMembersData = useQuery(
+        api.conversations.getChatMembers,
+        chatMembersQuery
+    );
+
+    // Extract member user IDs from chat members data
+    const groupMemberIds = useMemo(() => {
+        if (!chatMembersData) return [];
+        return chatMembersData.map(m => m.userId);
+    }, [chatMembersData]);
+
     // Fetch messages from Convex (automatically reactive)
     // Hook must always be called, but we skip if Convex not available
     const messagesData = useQuery(
@@ -252,8 +268,11 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
             }
             
             if (activeChat.type === 'group') {
-                // For group chats, get members from conversations or chat_members table
-                recipientIds = [user.uid]; // TODO: Get actual group members
+                // For group chats, use the queried members from chatMembers table
+                // Include current user if not already in the list
+                recipientIds = groupMemberIds.length > 0 
+                    ? [...new Set([user.uid, ...groupMemberIds])] 
+                    : [user.uid];
             } else if (otherUid) {
                 recipientIds = [user.uid, otherUid];
             } else {
