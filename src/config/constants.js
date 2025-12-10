@@ -196,3 +196,54 @@ export const EQUIP_CATEGORIES = [
     { id: 'monitoring_and_playback', label: 'Monitoring & Playback' },
     { id: 'outboard_signal_processing', label: 'Outboard Gear' }
 ];
+
+// --- HIGH-VALUE MARKETPLACE / SAFE EXCHANGE CONSTANTS ---
+
+export const HIGH_VALUE_THRESHOLD = 500; // Items over $500 require local pickup
+
+export const SAFE_EXCHANGE_STATUS = {
+    INTENT_CREATED: 'intent_created',
+    HOLD_PLACED: 'hold_placed',
+    SELLER_NOTIFIED: 'seller_notified',
+    MEETUP_SCHEDULED: 'meetup_scheduled',
+    SELLER_EN_ROUTE: 'seller_en_route',
+    BUYER_EN_ROUTE: 'buyer_en_route',
+    AT_SAFE_ZONE: 'at_safe_zone',
+    SELLER_PHOTOS_UPLOADED: 'seller_photos_uploaded',
+    BUYER_INSPECTING: 'buyer_inspecting',
+    BUYER_PHOTOS_UPLOADED: 'buyer_photos_uploaded',
+    PENDING_DUAL_APPROVAL: 'pending_dual_approval',
+    SELLER_APPROVED: 'seller_approved',
+    BUYER_APPROVED: 'buyer_approved',
+    COMPLETED: 'completed',
+    DISPUTED: 'disputed',
+    CANCELLED: 'cancelled'
+};
+
+export const SAFE_EXCHANGE_STEPS = [
+    { key: 'intent', label: 'Purchase Intent', description: 'Buyer initiates purchase' },
+    { key: 'hold', label: 'Payment Hold', description: 'Card hold placed in escrow' },
+    { key: 'schedule', label: 'Schedule Meetup', description: 'Coordinate exchange date/location' },
+    { key: 'seller_depart', label: 'Seller Departs', description: 'Seller uploads pre-departure photos' },
+    { key: 'arrive', label: 'Safe Zone Arrival', description: 'Both parties arrive at safe location' },
+    { key: 'inspect', label: 'Buyer Inspection', description: 'Buyer verifies item condition' },
+    { key: 'approve', label: 'Dual Approval', description: 'Both parties confirm exchange' },
+    { key: 'complete', label: 'Complete', description: 'Funds released to seller' }
+];
+
+// GPS fence radius in meters for safe zone verification
+export const SAFE_ZONE_RADIUS_METERS = 100;
+
+// Distance threshold for buyer/seller proximity (meters)
+export const PROXIMITY_THRESHOLD_METERS = 50;
+
+// Pre-defined safe exchange locations (expandable via admin)
+export const SAFE_ZONE_TYPES = [
+    { id: 'police_station', label: 'Police Station', icon: 'shield', priority: 1 },
+    { id: 'fire_station', label: 'Fire Station', icon: 'flame', priority: 2 },
+    { id: 'bank', label: 'Bank Lobby', icon: 'landmark', priority: 3 },
+    { id: 'post_office', label: 'Post Office', icon: 'mail', priority: 4 },
+    { id: 'city_hall', label: 'City Hall / Gov Building', icon: 'building', priority: 5 },
+    { id: 'library', label: 'Public Library', icon: 'book', priority: 6 },
+    { id: 'mall_security', label: 'Mall Security Office', icon: 'store', priority: 7 }
+];

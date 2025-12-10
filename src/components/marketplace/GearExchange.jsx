@@ -1,20 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, doc, updateDoc } from 'firebase/firestore';
-import { Search, Filter, Plus, Camera, DollarSign, Tag, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench } from 'lucide-react';
+import { Search, Filter, Plus, Camera, DollarSign, Tag, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info } from 'lucide-react';
 import { db, getPaths, appId } from '../../config/firebase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
-import { EQUIP_CATEGORIES } from '../../config/constants';
+import { EQUIP_CATEGORIES, HIGH_VALUE_THRESHOLD, SAFE_EXCHANGE_STATUS } from '../../config/constants';
 import InspectionEditor from '../tech/InspectionEditor';
 import { InspectionSvg } from '../tech/InspectionDiagrams';
+import SafeExchangeTransaction from './SafeExchangeTransaction';
 
 const CONDITIONS = ['Mint', 'Excellent', 'Good', 'Fair', 'Non-Functioning'];
 
-export default function GearExchange({ user, userData, setActiveTab }) {
+// Helper to check if item requires local pickup
+const isHighValueItem = (price) => price >= HIGH_VALUE_THRESHOLD;
+
+export default function GearExchange({ user, userData, setActiveTab, openChat }) {
     const [view, setView] = useState('browse'); // 'browse', 'create', 'detail'
     const [listings, setListings] = useState([]);
     const [filter, setFilter] = useState('All');
     const [search, setSearch] = useState('');
     const [selectedItem, setSelectedItem] = useState(null);
+    
+    // Safe Exchange State
+    const [activeTransaction, setActiveTransaction] = useState(null);
+    const [userTransactions, setUserTransactions] = useState([]);
 
     // Fetch Listings
     useEffect(() => {
@@ -25,17 +33,205 @@ export default function GearExchange({ user, userData, setActiveTab }) {
         return () => unsub();
     }, [user.uid]);
 
+    // Fetch user's active safe exchange transactions
+    useEffect(() => {
+        if (!user?.uid) return;
+
+        const qBuyer = query(
+            collection(db, `artifacts/${appId}/public/data/safe_exchange_transactions`),
+            where('buyerId', '==', user.uid)
+        );
+        const qSeller = query(
+            collection(db, `artifacts/${appId}/public/data/safe_exchange_transactions`),
+            where('sellerId', '==', user.uid)
+        );
+
+        const unsubBuyer = onSnapshot(qBuyer, (snap) => {
+            setUserTransactions(prev => {
+                const buyerTxns = snap.docs.map(d => ({ id: d.id, ...d.data(), role: 'buyer' }));
+                const sellerTxns = prev.filter(t => t.role === 'seller');
+                return [...buyerTxns, ...sellerTxns];
+            });
+        });
+
+        const unsubSeller = onSnapshot(qSeller, (snap) => {
+            setUserTransactions(prev => {
+                const sellerTxns = snap.docs.map(d => ({ id: d.id, ...d.data(), role: 'seller' }));
+                const buyerTxns = prev.filter(t => t.role === 'buyer');
+                return [...buyerTxns, ...sellerTxns];
+            });
+        });
+
+        return () => {
+            unsubBuyer();
+            unsubSeller();
+        };
+    }, [user?.uid]);
+
+    // Handle initiating a safe exchange purchase
+    const handleSafeExchangePurchase = async (item) => {
+        try {
+            // Create the safe exchange transaction
+            const transactionRef = await addDoc(
+                collection(db, `artifacts/${appId}/public/data/safe_exchange_transactions`),
+                {
+                    // Item details
+                    listingId: item.id,
+                    itemTitle: item.title,
+                    itemBrand: item.brand,
+                    itemDescription: item.description || '',
+                    itemPhotos: item.images || [],
+                    itemCondition: item.condition,
+                    price: item.price,
+                    
+                    // Seller details
+                    sellerId: item.sellerId,
+                    sellerName: item.sellerName,
+                    sellerPhoto: item.sellerPhoto,
+                    
+                    // Buyer details
+                    buyerId: user.uid,
+                    buyerName: `${userData.firstName} ${userData.lastName}`,
+                    buyerPhoto: userData.photoURL || null,
+                    
+                    // Status
+                    status: SAFE_EXCHANGE_STATUS.INTENT_CREATED,
+                    statusHistory: {
+                        [SAFE_EXCHANGE_STATUS.INTENT_CREATED]: {
+                            timestamp: Date.now(),
+                            userId: user.uid
+                        }
+                    },
+                    
+                    // Escrow (placeholder - in production this would integrate with payment processor)
+                    escrowAmount: item.price,
+                    escrowStatus: 'pending',
+                    
+                    // Approvals
+                    sellerApproved: false,
+                    buyerApproved: false,
+                    
+                    // Timestamps
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                }
+            );
+
+            // Update transaction to hold_placed status (simulating payment hold)
+            await updateDoc(transactionRef, {
+                status: SAFE_EXCHANGE_STATUS.HOLD_PLACED,
+                [`statusHistory.${SAFE_EXCHANGE_STATUS.HOLD_PLACED}`]: {
+                    timestamp: Date.now(),
+                    userId: user.uid
+                },
+                escrowStatus: 'held'
+            });
+
+            // Notify seller
+            await updateDoc(transactionRef, {
+                status: SAFE_EXCHANGE_STATUS.SELLER_NOTIFIED,
+                [`statusHistory.${SAFE_EXCHANGE_STATUS.SELLER_NOTIFIED}`]: {
+                    timestamp: Date.now(),
+                    userId: user.uid
+                }
+            });
+
+            // Send notification to seller
+            await addDoc(collection(db, getPaths(item.sellerId).notifications), {
+                type: 'safe_exchange_intent',
+                transactionId: transactionRef.id,
+                message: `${userData.firstName} wants to purchase your ${item.title} for $${item.price}`,
+                buyerName: `${userData.firstName} ${userData.lastName}`,
+                itemTitle: item.title,
+                price: item.price,
+                read: false,
+                createdAt: serverTimestamp()
+            });
+
+            // Open the transaction view
+            setActiveTransaction(transactionRef.id);
+            setSelectedItem(null);
+
+        } catch (error) {
+            console.error('Failed to create safe exchange:', error);
+            alert('Failed to initiate purchase. Please try again.');
+        }
+    };
+
     // Filtering
     const filteredListings = listings.filter(l => 
         (filter === 'All' || l.category === filter) &&
         (l.title.toLowerCase().includes(search.toLowerCase()) || l.brand.toLowerCase().includes(search.toLowerCase()))
     );
 
+    // Get active transactions that are not completed
+    const pendingTransactions = userTransactions.filter(t => 
+        t.status !== SAFE_EXCHANGE_STATUS.COMPLETED && 
+        t.status !== SAFE_EXCHANGE_STATUS.CANCELLED
+    );
+
     return (
         <div className="max-w-7xl mx-auto pb-24 animate-in fade-in">
+            {/* Active Safe Exchange Transaction Modal */}
+            {activeTransaction && (
+                <SafeExchangeTransaction
+                    transactionId={activeTransaction}
+                    user={user}
+                    userData={userData}
+                    onClose={() => setActiveTransaction(null)}
+                    onComplete={() => {
+                        setActiveTransaction(null);
+                        // Could trigger a refresh or show success message
+                    }}
+                    onMessage={(otherUserId) => {
+                        // Open chat with other party
+                        openChat?.(otherUserId);
+                    }}
+                />
+            )}
+
             {/* Navigation & Search Header */}
             {view === 'browse' && (
                 <>
+                    {/* Pending Transactions Banner */}
+                    {pendingTransactions.length > 0 && (
+                        <div className="mb-6 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 p-4 rounded-xl border border-orange-200 dark:border-orange-800">
+                            <div className="flex items-center gap-3 mb-3">
+                                <Shield className="text-orange-600" size={24} />
+                                <div>
+                                    <h3 className="font-bold text-orange-800 dark:text-orange-300">Active Safe Exchanges</h3>
+                                    <p className="text-sm text-orange-600 dark:text-orange-400">
+                                        You have {pendingTransactions.length} pending transaction{pendingTransactions.length > 1 ? 's' : ''}
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                {pendingTransactions.map(txn => (
+                                    <button
+                                        key={txn.id}
+                                        onClick={() => setActiveTransaction(txn.id)}
+                                        className="w-full flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg hover:shadow-md transition"
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-full ${txn.role === 'buyer' ? 'bg-blue-100 text-blue-600' : 'bg-green-100 text-green-600'}`}>
+                                                {txn.role === 'buyer' ? <CreditCard size={16} /> : <DollarSign size={16} />}
+                                            </div>
+                                            <div className="text-left">
+                                                <div className="font-bold text-sm dark:text-white">{txn.itemTitle}</div>
+                                                <div className="text-xs text-gray-500">
+                                                    {txn.role === 'buyer' ? 'Buying' : 'Selling'} • ${txn.price}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full font-bold">
+                                            {txn.status.replace(/_/g, ' ')}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-6">
                         <div>
                             <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
@@ -76,34 +272,48 @@ export default function GearExchange({ user, userData, setActiveTab }) {
 
                     {/* Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {filteredListings.map(item => (
-                            <div key={item.id} onClick={() => setSelectedItem(item)} className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden hover:shadow-xl transition cursor-pointer group flex flex-col">
-                                <div className="aspect-square bg-gray-100 dark:bg-black/40 relative flex items-center justify-center overflow-hidden">
-                                    {item.images?.[0] ? (
-                                        <img src={item.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
-                                    ) : (
-                                        <Camera size={32} className="text-gray-400"/>
-                                    )}
-                                    <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-md">
-                                        ${item.price}
-                                    </div>
-                                    {item.conditionReport && (
-                                        <div className="absolute bottom-2 left-2 bg-green-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                                            <CheckCircle size={10}/> Inspected
+                        {filteredListings.map(item => {
+                            const highValue = isHighValueItem(item.price);
+                            return (
+                                <div key={item.id} onClick={() => setSelectedItem(item)} className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden hover:shadow-xl transition cursor-pointer group flex flex-col">
+                                    <div className="aspect-square bg-gray-100 dark:bg-black/40 relative flex items-center justify-center overflow-hidden">
+                                        {item.images?.[0] ? (
+                                            <img src={item.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
+                                        ) : (
+                                            <Camera size={32} className="text-gray-400"/>
+                                        )}
+                                        <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-md">
+                                            ${item.price}
                                         </div>
-                                    )}
-                                </div>
-                                <div className="p-4 flex-1 flex flex-col">
-                                    <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">{item.brand}</div>
-                                    <h4 className="font-bold dark:text-white text-sm mb-1 line-clamp-1">{item.title}</h4>
-                                    <div className="text-xs text-gray-500 mb-3">{item.condition} Condition</div>
-                                    
-                                    <div className="mt-auto pt-3 border-t dark:border-gray-700 flex justify-between items-center text-xs text-gray-400">
-                                        <span className="flex items-center gap-1"><MapPin size={10}/> {item.location || 'Shipped'}</span>
+                                        {highValue && (
+                                            <div className="absolute top-2 left-2 bg-orange-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                                                <Shield size={10}/> Safe Exchange
+                                            </div>
+                                        )}
+                                        {item.conditionReport && (
+                                            <div className="absolute bottom-2 left-2 bg-green-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                                                <CheckCircle size={10}/> Inspected
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div className="p-4 flex-1 flex flex-col">
+                                        <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">{item.brand}</div>
+                                        <h4 className="font-bold dark:text-white text-sm mb-1 line-clamp-1">{item.title}</h4>
+                                        <div className="text-xs text-gray-500 mb-3">{item.condition} Condition</div>
+                                        
+                                        <div className="mt-auto pt-3 border-t dark:border-gray-700 flex justify-between items-center text-xs text-gray-400">
+                                            <span className="flex items-center gap-1">
+                                                {highValue ? (
+                                                    <><MapPin size={10}/> Local Pickup Only</>
+                                                ) : (
+                                                    <><Truck size={10}/> {item.location || 'Shipped'}</>
+                                                )}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </>
             )}
@@ -124,6 +334,8 @@ export default function GearExchange({ user, userData, setActiveTab }) {
                     item={selectedItem} 
                     onClose={() => setSelectedItem(null)} 
                     currentUser={user}
+                    currentUserData={userData}
+                    onSafeExchangePurchase={handleSafeExchangePurchase}
                 />
             )}
         </div>
@@ -224,6 +436,27 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
                 <div>
                     <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Price ($)</label>
                     <input type="number" className="w-full p-2.5 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white font-bold" value={form.price} onChange={e => setForm({...form, price: e.target.value})}/>
+                    
+                    {/* High Value Warning */}
+                    {form.price && parseInt(form.price) >= HIGH_VALUE_THRESHOLD && (
+                        <div className="mt-3 bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 p-4 rounded-lg border border-orange-200 dark:border-orange-800">
+                            <div className="flex items-start gap-3">
+                                <Shield className="text-orange-500 shrink-0 mt-0.5" size={20}/>
+                                <div>
+                                    <h4 className="font-bold text-orange-800 dark:text-orange-300 text-sm">Safe Exchange Required</h4>
+                                    <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
+                                        Items priced at ${HIGH_VALUE_THRESHOLD}+ require in-person exchange at a verified safe location (police station, bank, etc.). 
+                                        Buyers will initiate a Safe Exchange with payment held in escrow until both parties approve.
+                                    </p>
+                                    <ul className="text-xs text-orange-600 dark:text-orange-400 mt-2 space-y-1">
+                                        <li className="flex items-center gap-1"><Info size={10}/> No shipping available for high-value items</li>
+                                        <li className="flex items-center gap-1"><Camera size={10}/> You must upload pre-departure photos</li>
+                                        <li className="flex items-center gap-1"><MapPin size={10}/> GPS verification at exchange location</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Weight & Dimensions for Shipping */}
@@ -289,8 +522,22 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
 }
 
 // --- SUB-COMPONENT: DETAIL MODAL ---
-function ListingDetailModal({ item, onClose, currentUser }) {
+function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSafeExchangePurchase }) {
     const [viewReport, setViewReport] = useState(false);
+    const [isPurchasing, setIsPurchasing] = useState(false);
+
+    const highValue = isHighValueItem(item.price);
+
+    const handlePurchase = async () => {
+        if (highValue) {
+            setIsPurchasing(true);
+            await onSafeExchangePurchase(item);
+            setIsPurchasing(false);
+        } else {
+            // Standard purchase flow for low-value items
+            alert('Standard purchase flow - coming soon!');
+        }
+    };
 
     return (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[70] p-4">
@@ -317,6 +564,13 @@ function ListingDetailModal({ item, onClose, currentUser }) {
                         )}
                         
                         <button onClick={onClose} className="absolute top-4 left-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70"><X size={20}/></button>
+                        
+                        {/* High Value Badge */}
+                        {highValue && (
+                            <div className="absolute top-4 right-4 bg-orange-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-lg">
+                                <Shield size={14}/> Safe Exchange Required
+                            </div>
+                        )}
                     </div>
                     
                     {/* Visual Toggle Bar */}
@@ -342,13 +596,67 @@ function ListingDetailModal({ item, onClose, currentUser }) {
                     </div>
 
                     <div className="space-y-6">
+                        {/* High Value Notice */}
+                        {highValue && (
+                            <div className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-900/20 dark:to-red-900/20 p-4 rounded-xl border border-orange-200 dark:border-orange-800">
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2 bg-orange-500 rounded-lg">
+                                        <Shield className="text-white" size={20}/>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-orange-800 dark:text-orange-300 mb-1">Safe Exchange Protection</h4>
+                                        <p className="text-sm text-orange-700 dark:text-orange-400 mb-3">
+                                            High-value items (${HIGH_VALUE_THRESHOLD}+) require in-person exchange at a verified safe location.
+                                        </p>
+                                        <ul className="text-xs text-orange-600 dark:text-orange-400 space-y-1">
+                                            <li className="flex items-center gap-1"><Lock size={12}/> Payment held in escrow until exchange</li>
+                                            <li className="flex items-center gap-1"><MapPin size={12}/> Meet at police station or safe zone</li>
+                                            <li className="flex items-center gap-1"><Camera size={12}/> Photo verification required</li>
+                                            <li className="flex items-center gap-1"><CheckCircle size={12}/> Both parties must approve</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Seller Info */}
                         <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700">
-                            <img src={item.sellerPhoto} className="w-10 h-10 rounded-full bg-gray-300"/>
+                            {item.sellerPhoto ? (
+                                <img src={item.sellerPhoto} className="w-10 h-10 rounded-full bg-gray-300 object-cover"/>
+                            ) : (
+                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold">
+                                    {item.sellerName?.[0]}
+                                </div>
+                            )}
                             <div>
                                 <div className="text-xs text-gray-500 uppercase font-bold">Seller</div>
                                 <div className="font-bold dark:text-white text-sm">{item.sellerName}</div>
                             </div>
+                        </div>
+
+                        {/* Fulfillment Method */}
+                        <div className={`p-3 rounded-xl border ${highValue 
+                            ? 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800' 
+                            : 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800'}`}
+                        >
+                            <div className="flex items-center gap-2">
+                                {highValue ? (
+                                    <>
+                                        <MapPin className="text-orange-600" size={18}/>
+                                        <span className="font-bold text-orange-700 dark:text-orange-400">Local Pickup Only</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Truck className="text-green-600" size={18}/>
+                                        <span className="font-bold text-green-700 dark:text-green-400">Shipping Available</span>
+                                    </>
+                                )}
+                            </div>
+                            <p className="text-xs text-gray-500 mt-1">
+                                {highValue 
+                                    ? 'You will coordinate a meetup at a verified safe exchange zone'
+                                    : item.location || 'Contact seller for shipping details'}
+                            </p>
                         </div>
 
                         {/* Condition Notes */}
@@ -371,12 +679,38 @@ function ListingDetailModal({ item, onClose, currentUser }) {
                         {item.sellerId === currentUser.uid ? (
                             <button className="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold py-3 rounded-xl cursor-not-allowed">You own this listing</button>
                         ) : (
-                            <button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02]">
-                                <DollarSign size={20}/> Buy Now
+                            <button 
+                                onClick={handlePurchase}
+                                disabled={isPurchasing}
+                                className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed ${
+                                    highValue 
+                                        ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white' 
+                                        : 'bg-orange-600 hover:bg-orange-700 text-white'
+                                }`}
+                            >
+                                {isPurchasing ? (
+                                    <Loader2 className="animate-spin" size={20}/>
+                                ) : highValue ? (
+                                    <>
+                                        <Shield size={20}/> Initiate Safe Exchange
+                                    </>
+                                ) : (
+                                    <>
+                                        <DollarSign size={20}/> Buy Now
+                                    </>
+                                )}
                             </button>
                         )}
                         <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
-                            <CheckCircle size={10}/> Purchases covered by SeshNx Buyer Protection
+                            {highValue ? (
+                                <>
+                                    <Lock size={10}/> Funds held in escrow • GPS verified exchange • Dual approval release
+                                </>
+                            ) : (
+                                <>
+                                    <CheckCircle size={10}/> Purchases covered by SeshNx Buyer Protection
+                                </>
+                            )}
                         </p>
                     </div>
                 </div>
