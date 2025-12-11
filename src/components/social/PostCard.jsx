@@ -251,6 +251,7 @@ export default function PostCard({
                                 onClick={() => post.userId && openPublicProfile(post.userId)}
                             >
                                 {post.displayName || 'Unknown User'}
+                            </h4>
                             {/* Follow button in header for non-own posts */}
                             {!isOwnPost && onToggleFollow && !isFollowingAuthor && (
                                 <button
