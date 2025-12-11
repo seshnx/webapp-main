@@ -72,5 +72,10 @@ service cloud.firestore {
     match /artifacts/{appId}/public/data/gear_listings/{document=**} {
       allow read, write: if isAuthenticated();
     }
+
+    // 14. Gear Orders (standard purchase transactions)
+    match /artifacts/{appId}/public/data/gear_orders/{document=**} {
+      allow read, write: if isAuthenticated();
+    }
   }
 }

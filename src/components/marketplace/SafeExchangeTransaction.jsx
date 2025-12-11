@@ -381,6 +381,9 @@ export default function SafeExchangeTransaction({
                     <div className="flex items-center gap-4 text-sm">
                         <span className="flex items-center gap-1">
                             <DollarSign size={16} /> ${transaction?.price?.toLocaleString()}
+                            {transaction?.serviceFee && (
+                                <span className="text-orange-200 text-xs ml-1">(+${transaction.serviceFee.toFixed(2)} fee)</span>
+                            )}
                         </span>
                         <span className="flex items-center gap-1">
                             <Package size={16} /> {transaction?.itemBrand}
@@ -449,10 +452,24 @@ export default function SafeExchangeTransaction({
                             <div className="p-2 bg-green-500 rounded-full">
                                 <Lock className="text-white" size={20} />
                             </div>
-                            <div>
+                            <div className="flex-1">
                                 <h4 className="font-bold text-green-800 dark:text-green-300">Escrow Protected</h4>
                                 <p className="text-sm text-green-600 dark:text-green-400">
-                                    ${transaction?.price?.toLocaleString()} held securely until both parties approve
+                                    {isBuyer ? (
+                                        <>
+                                            ${transaction?.buyerTotal?.toFixed(2) || transaction?.price?.toLocaleString()} held securely
+                                            {transaction?.serviceFee && (
+                                                <span className="text-green-500 text-xs"> (includes ${transaction.serviceFee.toFixed(2)} service fee)</span>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <>
+                                            You&apos;ll receive ${transaction?.sellerPayout?.toFixed(2) || transaction?.price?.toLocaleString()} on completion
+                                            {transaction?.serviceFee && (
+                                                <span className="text-green-500 text-xs"> (after ${transaction.serviceFee.toFixed(2)} service fee)</span>
+                                            )}
+                                        </>
+                                    )}
                                 </p>
                             </div>
                         </div>
