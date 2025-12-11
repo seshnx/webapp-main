@@ -44,7 +44,7 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
   };
 
   // --- CORE REQUEST STATE ---
-  const [role, setRole] = useState('Musician');
+  const [role, setRole] = useState('Talent');
   const [action, setAction] = useState('Play');
   const [instrument, setInstrument] = useState('');
   const [genre, setGenre] = useState('');
@@ -69,11 +69,38 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
 
   const getActionsForRole = (r) => {
       switch(r) {
-          case 'Musician': return ['Play', 'Compose', 'Improvise'];
-          case 'Engineer': return ['Mix', 'Master', 'Record', 'Edit'];
-          case 'Producer': return ['Produce', 'Remix', 'Arrange'];
-          case 'Studio': return ['Host Session', 'Rent Gear'];
-          default: return ['Work'];
+          case 'Talent': return [
+              // Vocal-focused
+              'Sing Lead Vocals', 'Sing Background/Harmonies', 'Feature on Track', 'Write Topline/Melody',
+              // Instrumentalist-focused
+              'Play Instrument', 'Session Recording', 'Live Performance', 'Tour Support',
+              // DJ-focused
+              'DJ Set', 'DJ Private Event', 'DJ Club Night',
+              // General
+              'Record Demo', 'Collaborate', 'Improvise', 'Teach/Lesson'
+          ];
+          case 'Engineer': return [
+              'Mix Track', 'Mix Album/EP', 'Master Track', 'Master Album', 
+              'Record/Track Session', 'Edit/Comp', 'Tune Vocals', 
+              'Sound Design', 'Dolby Atmos Mix', 'Live Sound/FOH'
+          ];
+          case 'Producer': return [
+              'Produce Full Track', 'Co-Produce', 'Remix', 'Create Custom Beat',
+              'Arrange/Program', 'Vocal Production', 'Toplining', 
+              'Beat Lease', 'Beat Exclusive', 'Sound Design'
+          ];
+          case 'Studio': return [
+              'Host Recording Session', 'Host Mixing Session', 'Rent Rehearsal Space',
+              'Rent Gear/Backline', 'Full Day Lockout', 'Podcast Recording'
+          ];
+          case 'Composer': return [
+              'Compose Original Score', 'Arrange Song', 'Orchestrate', 
+              'Write Library Music', 'Create Jingle', 'Score Film/TV',
+              'Score Video Game', 'Ghostwrite'
+          ];
+          case 'Label': return ['Sign Artist', 'Distribution Deal', 'Licensing'];
+          case 'Agent': return ['Book Artist', 'Negotiate Deal', 'Represent'];
+          default: return ['Work', 'Collaborate', 'Consult'];
       }
   };
 
@@ -97,9 +124,13 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
       }));
   };
 
+  // Actions that require an instrument selection
+  const instrumentRequiredActions = ['Play Instrument', 'Session Work'];
+  const needsInstrument = role === 'Talent' && instrumentRequiredActions.includes(action);
+
   const sendBroadcast = async () => {
       if(!title || !genre) return alert("Please complete the request sentence.");
-      if(role === 'Musician' && action === 'Play' && !instrument) return alert("Please select an instrument.");
+      if(needsInstrument && !instrument) return alert("Please select an instrument.");
 
       const validNeeds = needs.filter(n => n.value.trim() !== '');
       
@@ -198,7 +229,7 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
                           <select value={action} onChange={e => setAction(e.target.value)} className="appearance-none bg-purple-50 dark:bg-gray-700 text-purple-700 dark:text-white font-bold py-1 pl-3 pr-8 rounded-lg border-b-2 border-purple-200 dark:border-gray-600 focus:outline-none cursor-pointer hover:bg-purple-100 dark:hover:bg-gray-600 transition">{getActionsForRole(role).map(a => <option key={a} value={a}>{a}</option>)}</select>
                           <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-500 dark:text-gray-400 pointer-events-none" size={16}/>
                       </div>
-                      {(action === 'Play' || action === 'Improvise') && (
+                      {needsInstrument && (
                           <div className="relative inline-block">
                               <select value={instrument} onChange={e => setInstrument(e.target.value)} className="appearance-none bg-green-50 dark:bg-gray-700 text-green-700 dark:text-white font-bold py-1 pl-3 pr-8 rounded-lg border-b-2 border-green-200 dark:border-gray-600 focus:outline-none cursor-pointer hover:bg-green-100 dark:hover:bg-gray-600 transition"><option value="">(Select Instrument)</option>{Object.entries(INSTRUMENT_DATA).map(([category, instruments]) => (<optgroup key={category} label={category}>{instruments.map(inst => <option key={inst} value={inst}>{inst}</option>)}</optgroup>))}</select>
                               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500 dark:text-gray-400 pointer-events-none" size={16}/>

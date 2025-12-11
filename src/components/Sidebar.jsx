@@ -43,9 +43,9 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
       });
   }
 
-  // Check if user has business features (Studio, Label, Agent, Artist, Producer, etc.)
+  // Check if user has business features (Studio, Label, Agent, Talent, Producer, etc.)
   const hasBusinessFeatures = userData?.accountTypes?.some(t => 
-    ['Studio', 'Label', 'Agent', 'Artist', 'Producer', 'Engineer', 'DJ'].includes(t)
+    ['Studio', 'Label', 'Agent', 'Talent', 'Producer', 'Engineer'].includes(t)
   );
 
   const onLogout = handleLogout || (() => signOut(auth));
@@ -66,8 +66,12 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
         {isMobile && (
             <div className="px-4 mb-6 flex items-center justify-between">
                 <div className="text-xs font-bold text-gray-400 uppercase">Menu</div>
-                <button onClick={() => setSidebarOpen(false)} className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors">
-                    <X size={20} />
+                <button 
+                    onClick={() => setSidebarOpen(false)} 
+                    className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                    aria-label="Close menu"
+                >
+                    <X size={20} aria-hidden="true" />
                 </button>
             </div>
         )}
@@ -123,13 +127,25 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
 
   return (
     <>
+      {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-30">
          <SidebarContent isMobile={false} />
       </aside>
 
-      <div className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-opacity duration-300 lg:hidden ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setSidebarOpen(false)} />
+      {/* Mobile Backdrop */}
+      <div 
+        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-all duration-300 ease-out lg:hidden ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} 
+        onClick={() => setSidebarOpen(false)}
+        aria-hidden="true"
+      />
 
-      <aside className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-transform duration-300 cubic-bezier(0.4, 0, 0.2, 1) flex flex-col h-full lg:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      {/* Mobile Sidebar */}
+      <aside 
+        className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-all duration-300 ease-out flex flex-col h-full lg:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Navigation menu"
+      >
          <SidebarContent isMobile={true} />
       </aside>
     </>

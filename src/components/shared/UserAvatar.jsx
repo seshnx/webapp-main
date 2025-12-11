@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { User, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
@@ -6,9 +6,27 @@ import { twMerge } from 'tailwind-merge';
 // Helper to generate initials
 const getInitials = (name) => {
     if (!name) return '';
-    const parts = name.trim().split(' ');
+    const parts = name.trim().split(' ').filter(Boolean);
     if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-    return name.substring(0, 2).toUpperCase();
+    if (parts.length === 1 && parts[0].length >= 2) return parts[0].substring(0, 2).toUpperCase();
+    return parts[0]?.[0]?.toUpperCase() || '';
+};
+
+// Generate a consistent color based on the name
+const getAvatarColor = (name) => {
+    if (!name) return 'from-brand-blue to-purple-600';
+    const colors = [
+        'from-brand-blue to-purple-600',
+        'from-emerald-500 to-teal-600',
+        'from-orange-500 to-red-600',
+        'from-pink-500 to-rose-600',
+        'from-indigo-500 to-blue-600',
+        'from-amber-500 to-orange-600',
+        'from-cyan-500 to-blue-600',
+        'from-violet-500 to-purple-600',
+    ];
+    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
 };
 
 export default function UserAvatar({ 
@@ -21,6 +39,7 @@ export default function UserAvatar({
     isGroup = false,
     square = false 
 }) {
+    const [imgError, setImgError] = useState(false);
     
     const sizeClasses = {
         xs: "h-6 w-6 text-[10px]",
@@ -42,28 +61,48 @@ export default function UserAvatar({
         )
     );
 
+    const showFallback = !src || imgError;
+    const initials = getInitials(name);
+    const avatarColor = getAvatarColor(name);
+
     return (
-        <div className={containerClass} onClick={onClick}>
-            {src ? (
+        <div 
+            className={containerClass} 
+            onClick={onClick}
+            role={onClick ? "button" : undefined}
+            tabIndex={onClick ? 0 : undefined}
+            aria-label={name ? `${name}'s avatar` : 'User avatar'}
+        >
+            {!showFallback ? (
                 <img 
                     src={src} 
                     alt={name || "Avatar"} 
                     className="h-full w-full object-cover" 
-                    onError={(e) => e.target.style.display = 'none'} 
+                    onError={() => setImgError(true)}
+                    loading="lazy"
                 />
             ) : (
-                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-brand-blue to-purple-600 text-white font-bold">
-                    {isGroup ? <Users className="w-1/2 h-1/2"/> : (name ? getInitials(name) : <User className="w-1/2 h-1/2"/>)}
+                <div className={`h-full w-full flex items-center justify-center bg-gradient-to-br ${avatarColor} text-white font-bold`}>
+                    {isGroup ? (
+                        <Users className="w-1/2 h-1/2" aria-hidden="true" />
+                    ) : initials ? (
+                        <span aria-hidden="true">{initials}</span>
+                    ) : (
+                        <User className="w-1/2 h-1/2" aria-hidden="true" />
+                    )}
                 </div>
             )}
             
             {/* Online Status Indicator */}
             {status && (
-                <span className={clsx(
-                    "absolute bottom-0 right-0 rounded-full border-2 border-white dark:border-gray-900",
-                    status === 'online' ? "bg-green-500" : "bg-gray-400",
-                    size === 'xs' || size === 'sm' ? "h-2 w-2" : "h-3.5 w-3.5"
-                )}></span>
+                <span 
+                    className={clsx(
+                        "absolute bottom-0 right-0 rounded-full border-2 border-white dark:border-gray-900",
+                        status === 'online' ? "bg-green-500" : "bg-gray-400",
+                        size === 'xs' || size === 'sm' ? "h-2 w-2" : "h-3.5 w-3.5"
+                    )}
+                    aria-label={status === 'online' ? 'Online' : 'Offline'}
+                />
             )}
         </div>
     );

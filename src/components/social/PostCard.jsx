@@ -226,13 +226,21 @@ export default function PostCard({
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div 
                         className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden cursor-pointer shrink-0"
-                        onClick={() => openPublicProfile(post.userId)}
+                        onClick={() => post.userId && openPublicProfile(post.userId)}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`View ${post.displayName || 'user'}'s profile`}
                     >
                         {post.authorPhoto ? (
-                            <img src={post.authorPhoto} className="h-full w-full object-cover" alt="avatar" />
+                            <img 
+                                src={post.authorPhoto} 
+                                className="h-full w-full object-cover" 
+                                alt={`${post.displayName || 'User'}'s avatar`}
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                            />
                         ) : (
                             <div className="h-full w-full bg-gradient-to-tr from-brand-blue to-purple-500 flex items-center justify-center text-white font-bold">
-                                {post.displayName?.[0] || <User size={16}/>}
+                                {post.displayName?.[0]?.toUpperCase() || <User size={16} aria-hidden="true" />}
                             </div>
                         )}
                     </div>
@@ -240,9 +248,9 @@ export default function PostCard({
                         <div className="flex items-center gap-2">
                             <h4 
                                 className="font-bold dark:text-white text-sm hover:underline decoration-brand-blue cursor-pointer truncate"
-                                onClick={() => openPublicProfile(post.userId)}
+                                onClick={() => post.userId && openPublicProfile(post.userId)}
                             >
-                                {post.displayName}
+                                {post.displayName || 'Unknown User'}
                             </h4>
                             {/* Follow button in header for non-own posts */}
                             {!isOwnPost && onToggleFollow && !isFollowingAuthor && (

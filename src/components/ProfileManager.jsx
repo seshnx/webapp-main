@@ -264,7 +264,19 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
     };
 
     if (schema.length === 0) return <div className="p-10 text-center text-gray-500">No configuration available for this role.</div>;
-    const filteredSchema = schema.filter(f => f.key !== 'profileName' && f.key !== 'useRealName');
+    
+    // Get current sub-role (for Talent profiles)
+    const currentSubRole = formData.talentSubRole || '';
+    
+    // Filter schema - hide profileName/useRealName and filter by showFor
+    const filteredSchema = schema.filter(f => {
+        if (f.key === 'profileName' || f.key === 'useRealName') return false;
+        // If field has showFor restriction, check if current sub-role matches
+        if (f.showFor && Array.isArray(f.showFor)) {
+            return f.showFor.includes(currentSubRole);
+        }
+        return true;
+    });
 
     return (
         <form onSubmit={handleSave} className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm space-y-6">

@@ -1,10 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout } from 'lucide-react';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db, appId, getPaths } from '../config/firebase';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
 import UserAvatar from './shared/UserAvatar';
 import NotificationsPanel, { NotificationBadge } from './social/NotificationsPanel';
 import { useNotifications } from '../hooks/useNotifications';
+import { getDisplayRole } from '../config/constants';
 
 export default function Navbar({ 
     user, 
@@ -36,6 +39,7 @@ export default function Navbar({
   } = useNotifications(user?.uid);
 
   const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'User';
+  const displayRole = getDisplayRole(userData); // Shows subRole if set for Talent
   const roles = userData?.accountTypes || [];
 
   const eduRoles = ['Student', 'Instructor', 'Intern', 'Admin'];
@@ -99,6 +103,30 @@ export default function Navbar({
       setShowNotifs(false);
       setActiveTab('feed'); // Navigate to feed where the post would be
   };
+  
+  // Handler for quick booking accept/decline from notifications
+  const handleBookingAction = async (bookingId, action, notificationId) => {
+      try {
+          // Update booking status
+          const bookingRef = doc(db, `artifacts/${appId}/public/data/bookings`, bookingId);
+          await updateDoc(bookingRef, {
+              status: action === 'accept' ? 'Confirmed' : 'Declined',
+              respondedAt: new Date()
+          });
+          
+          // Mark notification as actioned
+          if (notificationId && user?.uid) {
+              const notifRef = doc(db, getPaths(user.uid).notifications, notificationId);
+              await updateDoc(notifRef, { 
+                  actionTaken: action,
+                  read: true 
+              });
+          }
+      } catch (error) {
+          console.error('Booking action failed:', error);
+          throw error;
+      }
+  };
 
   const handleRoleSelect = (role) => {
       if (onRoleSwitch) onRoleSwitch(role);
@@ -131,8 +159,10 @@ export default function Navbar({
           <button 
               onClick={onMenuClick}
               className="p-2 -ml-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden"
+              aria-label="Open navigation menu"
+              aria-expanded="false"
           >
-              <Menu size={24} />
+              <Menu size={24} aria-hidden="true" />
           </button>
 
           <div className="flex items-center gap-2 cursor-pointer" onClick={()=>setActiveTab('dashboard')}>
@@ -170,7 +200,7 @@ export default function Navbar({
                       className="group flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold transition border border-gray-200 dark:border-gray-700"
                   >
                       <RefreshCw size={12} className={`text-brand-blue shrink-0 transition-transform ${isSwitching ? 'rotate-180 duration-500' : ''}`}/>
-                      <span>{activeRole}</span>
+                      <span>{displayRole}</span>
                       <ChevronDown size={12} className={`shrink-0 transition-transform ${showRoleMenu ? 'rotate-180' : ''}`}/>
                   </button>
 
@@ -207,16 +237,23 @@ export default function Navbar({
               </div>
           )}
 
-          <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          <button 
+            onClick={toggleTheme} 
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? <Sun size={20} aria-hidden="true" /> : <Moon size={20} aria-hidden="true" />}
           </button>
           
           <div className="relative" ref={notifRef}>
               <button 
                   className={`relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition ${showNotifs ? 'bg-gray-100 dark:bg-gray-800 text-brand-blue' : ''}`}
                   onClick={() => setShowNotifs(!showNotifs)}
+                  aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+                  aria-expanded={showNotifs}
               >
-                  <Bell size={20} />
+                  <Bell size={20} aria-hidden="true" />
                   <NotificationBadge count={unreadCount} />
               </button>
 
@@ -231,6 +268,7 @@ export default function Navbar({
                       onClearAll={clearAll}
                       onUserClick={handleNotifUserClick}
                       onPostClick={handleNotifPostClick}
+                      onBookingAction={handleBookingAction}
                       onClose={() => setShowNotifs(false)}
                   />
               )}

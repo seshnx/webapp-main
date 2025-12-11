@@ -171,10 +171,25 @@ export default function Dashboard({
 
     roles.forEach(role => {
         const data = subProfiles?.[role] || {};
+        // Also check userData for Talent subRole
+        const talentData = role === 'Talent' ? { ...data, talentSubRole: userData?.talentSubRole } : data;
         const schema = PROFILE_SCHEMAS[role] || [];
         if (schema.length === 0) return;
-        const totalFields = schema.filter(f => !f.isToggle && f.type !== 'list').length || 1;
-        const filledFields = schema.filter(f => !f.isToggle && f.type !== 'list' && data[f.key] && data[f.key].length).length;
+        
+        // Filter out toggle fields and list fields, but include subRole fields
+        const relevantFields = schema.filter(f => !f.isToggle && f.type !== 'list');
+        const totalFields = relevantFields.length || 1;
+        
+        const filledFields = relevantFields.filter(f => {
+            const value = f.isSubRole ? talentData[f.key] : data[f.key];
+            // Check if the value is truthy and has content
+            if (value === null || value === undefined) return false;
+            if (Array.isArray(value)) return value.length > 0;
+            if (typeof value === 'string') return value.trim().length > 0;
+            if (typeof value === 'number') return true;
+            return !!value;
+        }).length;
+        
         totalPct += (filledFields / totalFields);
         roleCount++;
     });
@@ -598,6 +613,48 @@ export default function Dashboard({
                                 Quick Actions
                             </h3>
                             <div className="space-y-3">
+                                {/* Professional role-specific actions */}
+                                {userData?.accountTypes?.some(r => ['Talent', 'Producer', 'Engineer', 'Composer'].includes(r)) && (
+                                    <>
+                                        <QuickActionButton
+                                            icon={<Zap size={18} className="text-yellow-600" />}
+                                            label="Browse Open Gigs"
+                                            description="Find work opportunities near you"
+                                            onClick={() => setActiveTab('bookings')}
+                                            color="bg-yellow-100 dark:bg-yellow-900/30"
+                                        />
+                                        <QuickActionButton
+                                            icon={<Mic2 size={18} className="text-pink-600" />}
+                                            label="Update Availability"
+                                            description="Let clients know you're open for work"
+                                            onClick={() => setActiveTab('profile')}
+                                            color="bg-pink-100 dark:bg-pink-900/30"
+                                        />
+                                    </>
+                                )}
+                                
+                                {/* Studio-specific actions */}
+                                {userData?.accountTypes?.includes('Studio') && (
+                                    <QuickActionButton
+                                        icon={<Calendar size={18} className="text-indigo-600" />}
+                                        label="Manage Bookings"
+                                        description="View and manage studio sessions"
+                                        onClick={() => setActiveTab('bookings')}
+                                        color="bg-indigo-100 dark:bg-indigo-900/30"
+                                    />
+                                )}
+                                
+                                {/* Label/Agent-specific actions */}
+                                {userData?.accountTypes?.some(r => ['Label', 'Agent'].includes(r)) && (
+                                    <QuickActionButton
+                                        icon={<Users size={18} className="text-teal-600" />}
+                                        label="Manage Roster"
+                                        description="View and manage your artists"
+                                        onClick={() => setActiveTab('business')}
+                                        color="bg-teal-100 dark:bg-teal-900/30"
+                                    />
+                                )}
+                                
                                 <QuickActionButton
                                     icon={<Edit2 size={18} className="text-blue-600" />}
                                     label="Create Post"
@@ -605,13 +662,18 @@ export default function Dashboard({
                                     onClick={() => setActiveTab('feed')}
                                     color="bg-blue-100 dark:bg-blue-900/30"
                                 />
-                                <QuickActionButton
-                                    icon={<Search size={18} className="text-purple-600" />}
-                                    label="Find Talent"
-                                    description="Discover collaborators"
-                                    onClick={() => setActiveTab('bookings')}
-                                    color="bg-purple-100 dark:bg-purple-900/30"
-                                />
+                                
+                                {/* Find talent for non-professional roles */}
+                                {!userData?.accountTypes?.some(r => ['Talent', 'Producer', 'Engineer', 'Composer', 'Studio'].includes(r)) && (
+                                    <QuickActionButton
+                                        icon={<Search size={18} className="text-purple-600" />}
+                                        label="Find Talent"
+                                        description="Discover collaborators"
+                                        onClick={() => setActiveTab('bookings')}
+                                        color="bg-purple-100 dark:bg-purple-900/30"
+                                    />
+                                )}
+                                
                                 <QuickActionButton
                                     icon={<ShoppingBag size={18} className="text-amber-600" />}
                                     label="Marketplace"

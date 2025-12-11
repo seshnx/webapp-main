@@ -19,7 +19,7 @@ export default function PaymentsManager({ user, userData }) {
   
   // --- UPDATED: Comprehensive Role Check for Earnings Access ---
   const isTalent = userData?.accountTypes?.some(role => 
-      ['Artist', 'Musician', 'Producer', 'Engineer', 'Studio', 'Composer', 'Technician', 'Label', 'Agent'].includes(role)
+      ['Talent', 'Producer', 'Engineer', 'Studio', 'Composer', 'Technician', 'Label', 'Agent'].includes(role)
   );
 
   useEffect(() => {
@@ -238,26 +238,111 @@ export default function PaymentsManager({ user, userData }) {
 
           {activeTab === 'earnings' && isTalent && (
               <div className="space-y-6 animate-in fade-in duration-300">
+                  {/* Summary Header */}
+                  <div className="bg-gradient-to-r from-green-600 to-emerald-600 rounded-2xl p-6 text-white shadow-lg">
+                      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                          <div>
+                              <h3 className="text-lg font-medium opacity-90">Total Lifetime Earnings</h3>
+                              <div className="text-4xl font-extrabold mt-1">
+                                  ${(walletData.payoutBalance + walletData.escrowBalance).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                              </div>
+                          </div>
+                          <div className="flex gap-4 text-sm">
+                              <div className="bg-white/20 backdrop-blur px-4 py-2 rounded-xl">
+                                  <div className="text-white/70 text-xs">Pending</div>
+                                  <div className="font-bold">${walletData.escrowBalance.toFixed(2)}</div>
+                              </div>
+                              <div className="bg-white/20 backdrop-blur px-4 py-2 rounded-xl">
+                                  <div className="text-white/70 text-xs">Available</div>
+                                  <div className="font-bold">${walletData.payoutBalance.toFixed(2)}</div>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {/* Escrow/Pending */}
                       <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm relative overflow-hidden">
                           <div className="flex items-center gap-3 mb-4">
                               <div className="p-2 bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 rounded-lg"><Lock size={24}/></div>
-                              <div><h3 className="font-bold dark:text-white">Escrow Balance</h3><p className="text-xs text-gray-500 dark:text-gray-400">Funds held for active sessions</p></div>
+                              <div><h3 className="font-bold dark:text-white">Pending in Escrow</h3><p className="text-xs text-gray-500 dark:text-gray-400">Held for active gigs/sessions</p></div>
                           </div>
                           <div className="text-4xl font-extrabold dark:text-white mb-4">${walletData.escrowBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                          <div className="text-xs bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300 p-3 rounded-lg flex items-start gap-2"><AlertCircle size={14} className="mt-0.5 shrink-0"/> Funds are released to "Available" 24 hours after a session is successfully completed.</div>
+                          
+                          {/* Earnings Breakdown */}
+                          <div className="border-t dark:border-gray-700 pt-4 mt-4 space-y-2">
+                              <div className="text-xs font-bold text-gray-500 uppercase mb-2">How Escrow Works</div>
+                              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                  <div className="w-2 h-2 bg-yellow-500 rounded-full"></div>
+                                  Client books you → Funds held in escrow
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                  Complete the session → Mark as done
+                              </div>
+                              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                  24 hours later → Released to Available
+                              </div>
+                          </div>
+                          
+                          <div className="text-xs bg-orange-50 dark:bg-orange-900/10 text-orange-700 dark:text-orange-300 p-3 rounded-lg flex items-start gap-2 mt-4"><AlertCircle size={14} className="mt-0.5 shrink-0"/> Funds are released 24 hours after session completion.</div>
                       </div>
 
+                      {/* Available for Payout */}
                       <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border border-green-500/30 shadow-lg relative overflow-hidden">
                           <div className="flex items-center gap-3 mb-4">
                               <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 rounded-lg"><DollarSign size={24}/></div>
-                              <div><h3 className="font-bold dark:text-white">Available for Payout</h3><p className="text-xs text-gray-500 dark:text-gray-400">Cleared funds ready to transfer</p></div>
+                              <div><h3 className="font-bold dark:text-white">Ready to Cash Out</h3><p className="text-xs text-gray-500 dark:text-gray-400">Cleared funds - transfer anytime</p></div>
                           </div>
-                          <div className="text-4xl font-extrabold text-green-600 dark:text-green-400 mb-6">${walletData.payoutBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                          <div className="text-4xl font-extrabold text-green-600 dark:text-green-400 mb-2">${walletData.payoutBalance.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
+                          
+                          {/* Fee Info */}
+                          <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 mb-4 text-xs">
+                              <div className="flex justify-between text-gray-600 dark:text-gray-400 mb-1">
+                                  <span>Platform Fee (1%)</span>
+                                  <span className="text-red-500">-${(walletData.payoutBalance * 0.01).toFixed(2)}</span>
+                              </div>
+                              <div className="flex justify-between font-bold text-gray-900 dark:text-white pt-1 border-t dark:border-gray-700">
+                                  <span>You'll Receive</span>
+                                  <span className="text-green-600">${(walletData.payoutBalance * 0.99).toFixed(2)}</span>
+                              </div>
+                          </div>
+                          
                           <button onClick={initCashOut} disabled={processing || walletData.payoutBalance <= 0} className="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-xl font-bold shadow-lg hover:shadow-green-500/30 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:shadow-none">
                               {processing ? <Loader2 className="animate-spin" size={20}/> : <>Cash Out Now <ArrowRight size={20}/></>}
                           </button>
-                          <div className="text-[10px] text-center text-gray-400 mt-3">Transfers handled securely via Stripe Connect.</div>
+                          <div className="text-[10px] text-center text-gray-400 mt-3">Transfers via Stripe Connect to your bank in 2-3 days.</div>
+                      </div>
+                  </div>
+
+                  {/* Quick Stats */}
+                  <div className="bg-white dark:bg-[#2c2e36] p-5 rounded-2xl border dark:border-gray-700">
+                      <h4 className="font-bold dark:text-white mb-4 flex items-center gap-2">
+                          <TrendingUp size={18} className="text-brand-blue" /> Earnings Tips
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                          <div className="flex items-start gap-3">
+                              <div className="p-2 bg-purple-100 dark:bg-purple-900/30 text-purple-600 rounded-lg"><Star size={16}/></div>
+                              <div>
+                                  <div className="font-medium dark:text-white">Complete Your Profile</div>
+                                  <div className="text-xs text-gray-500">Add demos & set your rates to get booked faster</div>
+                              </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                              <div className="p-2 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg"><Zap size={16}/></div>
+                              <div>
+                                  <div className="font-medium dark:text-white">Check Open Gigs</div>
+                                  <div className="text-xs text-gray-500">Browse broadcasts for immediate opportunities</div>
+                              </div>
+                          </div>
+                          <div className="flex items-start gap-3">
+                              <div className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg"><Shield size={16}/></div>
+                              <div>
+                                  <div className="font-medium dark:text-white">Build Trust</div>
+                                  <div className="text-xs text-gray-500">Great reviews = more bookings & better rates</div>
+                              </div>
+                          </div>
                       </div>
                   </div>
               </div>

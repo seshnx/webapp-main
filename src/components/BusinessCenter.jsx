@@ -23,7 +23,7 @@ export default function BusinessCenter({ user, userData }) {
     // Determine which features the user has access to
     const isStudio = userData?.accountTypes?.includes('Studio');
     const isLabel = userData?.accountTypes?.some(t => ['Label', 'Agent'].includes(t));
-    const isArtist = userData?.accountTypes?.some(t => ['Artist', 'Producer', 'Engineer', 'DJ'].includes(t));
+    const isArtist = userData?.accountTypes?.some(t => ['Talent', 'Producer', 'Engineer'].includes(t));
     
     // Everyone with business features gets distribution access
     const hasDistribution = isStudio || isLabel || isArtist;
@@ -173,7 +173,7 @@ export default function BusinessCenter({ user, userData }) {
                                     Upgrade your account to access studio management, music distribution, and label features.
                                 </p>
                                 <p className="text-sm text-gray-400">
-                                    Update your profile to add "Studio", "Artist", "Label", or "Agent" account types.
+                                    Update your profile to add "Studio", "Talent", "Label", or "Agent" account types.
                                 </p>
                             </div>
                         )}

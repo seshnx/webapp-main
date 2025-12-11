@@ -5,7 +5,7 @@ import { Loader2, AlertCircle, ArrowLeft, Check, Sun, Moon, MapPin, User, Crossh
 import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { auth, db, getPaths } from '../config/firebase';
-import { ACCOUNT_TYPES } from '../config/constants';
+import { ACCOUNT_TYPES, TALENT_SUBROLES } from '../config/constants';
 import { fetchZipLocation, fetchRegionalUserCount } from '../utils/geocode'; 
 import LegalDocs from './LegalDocs';
 import AuthWizardBackground from './AuthWizardBackground';
@@ -97,7 +97,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
   const [mode, setMode] = useState('login');
   const [backgroundImagesLoaded, setBackgroundImagesLoaded] = useState(false); 
   const [isLoading, setIsLoading] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', zip: '', roles: [] });
+  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', zip: '', roles: [], talentSubRole: '' });
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
   const [cardHeight, setCardHeight] = useState('auto');
@@ -140,7 +140,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
     } else {
         setMode('login');
         setStep(1);
-        setForm({ email: '', password: '', firstName: '', lastName: '', zip: '', roles: [] });
+        setForm({ email: '', password: '', firstName: '', lastName: '', zip: '', roles: [], talentSubRole: '' });
     }
   }, [user]);
 
@@ -215,7 +215,9 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
         firstName: form.firstName, lastName: form.lastName, zip: form.zip,
         accountTypes: finalRoles, activeProfileRole: finalRoles[0], 
         schoolId: selectedSchool?.id || null, studentId: studentIdInput || null,
-        createdAt: serverTimestamp(), email: form.email, photoURL: user?.photoURL || null
+        createdAt: serverTimestamp(), email: form.email, photoURL: user?.photoURL || null,
+        // Include talentSubRole if Talent role is selected and sub-role is chosen
+        ...(finalRoles.includes('Talent') && form.talentSubRole ? { talentSubRole: form.talentSubRole } : {})
       };
 
       await Promise.all([
@@ -467,12 +469,39 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
 
                         {step === 5 && (
                             <div className="space-y-5 animate-in fade-in slide-in-from-right-8 duration-500">
-                                <div className="text-center"><h4 className="font-bold dark:text-white">Select Additional Roles</h4><p className="text-xs text-gray-500 dark:text-gray-400">You can change these later.</p></div>
+                                <div className="text-center"><h4 className="font-bold dark:text-white">Select Your Roles</h4><p className="text-xs text-gray-500 dark:text-gray-400">Choose what you do. You can change these later.</p></div>
                                 <div className="grid grid-cols-2 gap-2.5 h-auto">
                                     {publicRoles.map(role => (
-                                        <div key={role} onClick={() => { const newRoles = form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role]; setForm({...form, roles: newRoles}); }} className={`relative p-3 border-2 rounded-xl cursor-pointer text-sm font-bold text-center transition-colors duration-200 select-none ${form.roles.includes(role) ? 'bg-blue-50 border-brand-blue text-brand-blue dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-300 shadow-sm' : 'bg-white border-gray-100 text-gray-500 hover:border-gray-300 dark:bg-[#1f2128] dark:border-gray-700 dark:text-gray-400'}`}>{role}{form.roles.includes(role) && <div className="absolute top-1 right-1 text-brand-blue"><Check size={10} strokeWidth={4}/></div>}</div>
+                                        <div key={role} onClick={() => { 
+                                            const newRoles = form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role]; 
+                                            // Clear talentSubRole if Talent is deselected
+                                            if (role === 'Talent' && form.roles.includes('Talent')) {
+                                                setForm({...form, roles: newRoles, talentSubRole: ''});
+                                            } else {
+                                                setForm({...form, roles: newRoles});
+                                            }
+                                        }} className={`relative p-3 border-2 rounded-xl cursor-pointer text-sm font-bold text-center transition-colors duration-200 select-none ${form.roles.includes(role) ? 'bg-blue-50 border-brand-blue text-brand-blue dark:bg-blue-900/20 dark:border-blue-500 dark:text-blue-300 shadow-sm' : 'bg-white border-gray-100 text-gray-500 hover:border-gray-300 dark:bg-[#1f2128] dark:border-gray-700 dark:text-gray-400'}`}>{role}{form.roles.includes(role) && <div className="absolute top-1 right-1 text-brand-blue"><Check size={10} strokeWidth={4}/></div>}</div>
                                     ))}
                                 </div>
+                                
+                                {/* Talent Sub-Role Selector - Shows when Talent is selected */}
+                                {form.roles.includes('Talent') && (
+                                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                                        <label className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-2 block">What type of talent are you?</label>
+                                        <select 
+                                            className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:text-white dark:border-blue-800 text-sm font-bold focus:ring-2 focus:ring-brand-blue outline-none"
+                                            value={form.talentSubRole}
+                                            onChange={(e) => setForm({...form, talentSubRole: e.target.value})}
+                                        >
+                                            <option value="">Select your specialty...</option>
+                                            {TALENT_SUBROLES.map(subRole => (
+                                                <option key={subRole} value={subRole}>{subRole}</option>
+                                            ))}
+                                        </select>
+                                        <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2">This helps clients find you for relevant opportunities.</p>
+                                    </div>
+                                )}
+                                
                                 <p className="text-[10px] text-gray-400 text-center px-4 leading-tight">
                                     By completing setup, you agree to our <button onClick={() => setShowLegalOverlay(true)} className="underline hover:text-brand-blue mx-1">Terms of Service</button> and <button onClick={() => setShowLegalOverlay(true)} className="underline hover:text-brand-blue mx-1">Privacy Policy</button>.
                                 </p>
