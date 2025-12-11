@@ -190,11 +190,91 @@ export const TECH_SPECIALTIES = [
 ];
 
 export const EQUIP_CATEGORIES = [
-    { id: 'computer_audio_and_interfaces', label: 'Computer Audio & Interfaces' },
-    { id: 'microphones_and_input_transducers', label: 'Microphones' },
-    { id: 'mixing_consoles_and_control', label: 'Mixing Consoles' },
-    { id: 'monitoring_and_playback', label: 'Monitoring & Playback' },
-    { id: 'outboard_signal_processing', label: 'Outboard Gear' }
+    // Recording & Production
+    { id: 'audio_interfaces', label: 'Audio Interfaces' },
+    { id: 'microphones', label: 'Microphones' },
+    { id: 'preamps', label: 'Preamps & Channel Strips' },
+    { id: 'mixing_consoles', label: 'Mixing Consoles & Mixers' },
+    { id: 'monitors', label: 'Studio Monitors & Speakers' },
+    { id: 'headphones', label: 'Headphones & IEMs' },
+    { id: 'outboard_processing', label: 'Outboard Gear (Compressors, EQs)' },
+    { id: 'effects_processors', label: 'Effects Processors & Reverbs' },
+    { id: 'converters', label: 'AD/DA Converters & Clocks' },
+    
+    // Instruments - Guitars & Bass
+    { id: 'electric_guitars', label: 'Electric Guitars' },
+    { id: 'acoustic_guitars', label: 'Acoustic Guitars' },
+    { id: 'bass_guitars', label: 'Bass Guitars' },
+    { id: 'guitar_amps', label: 'Guitar & Bass Amplifiers' },
+    { id: 'guitar_effects', label: 'Guitar Pedals & Effects' },
+    { id: 'guitar_accessories', label: 'Guitar Accessories (Cases, Straps, Strings)' },
+    
+    // Instruments - Keys & Synths
+    { id: 'synthesizers', label: 'Synthesizers' },
+    { id: 'keyboards', label: 'Keyboards & Workstations' },
+    { id: 'midi_controllers', label: 'MIDI Controllers' },
+    { id: 'pianos', label: 'Pianos (Digital & Acoustic)' },
+    { id: 'organs', label: 'Organs' },
+    
+    // Instruments - Drums & Percussion
+    { id: 'drum_kits', label: 'Drum Kits (Acoustic)' },
+    { id: 'electronic_drums', label: 'Electronic Drums & Pads' },
+    { id: 'cymbals', label: 'Cymbals' },
+    { id: 'percussion', label: 'Percussion & Hand Drums' },
+    { id: 'drum_machines', label: 'Drum Machines & Samplers' },
+    
+    // Instruments - Other
+    { id: 'string_instruments', label: 'String Instruments (Violin, Cello, etc.)' },
+    { id: 'wind_instruments', label: 'Wind & Brass Instruments' },
+    { id: 'world_instruments', label: 'World & Ethnic Instruments' },
+    
+    // Live Sound & PA
+    { id: 'pa_speakers', label: 'PA Speakers & Subwoofers' },
+    { id: 'power_amps', label: 'Power Amplifiers' },
+    { id: 'live_mixers', label: 'Live Sound Mixers' },
+    { id: 'wireless_systems', label: 'Wireless Microphone Systems' },
+    { id: 'in_ear_monitors', label: 'In-Ear Monitor Systems' },
+    { id: 'stage_gear', label: 'Stage Gear (DI Boxes, Snakes, Stands)' },
+    
+    // DJ & Electronic
+    { id: 'turntables', label: 'Turntables & DJ Decks' },
+    { id: 'dj_controllers', label: 'DJ Controllers' },
+    { id: 'dj_mixers', label: 'DJ Mixers' },
+    { id: 'cdj_media_players', label: 'CDJs & Media Players' },
+    
+    // Recording Media & Storage
+    { id: 'recorders', label: 'Recorders (Field, Multitrack)' },
+    { id: 'tape_machines', label: 'Tape Machines & Reel-to-Reel' },
+    
+    // Studio Furniture & Acoustic
+    { id: 'studio_furniture', label: 'Studio Furniture & Desks' },
+    { id: 'acoustic_treatment', label: 'Acoustic Treatment & Panels' },
+    { id: 'isolation', label: 'Isolation Booths & Shields' },
+    
+    // Cables & Connectivity
+    { id: 'cables', label: 'Cables & Connectors' },
+    { id: 'patchbays', label: 'Patchbays & Routing' },
+    
+    // Lighting & Video
+    { id: 'stage_lighting', label: 'Stage Lighting' },
+    { id: 'video_gear', label: 'Video & Streaming Gear' },
+    
+    // Computers & Software
+    { id: 'computers', label: 'Computers & Laptops (Music Production)' },
+    { id: 'software_licenses', label: 'Software & Plugin Licenses' },
+    { id: 'storage_drives', label: 'Storage & Hard Drives' },
+    
+    // Accessories & Parts
+    { id: 'stands_mounts', label: 'Stands & Mounts' },
+    { id: 'cases_bags', label: 'Cases, Bags & Road Cases' },
+    { id: 'power_conditioning', label: 'Power Conditioners & UPS' },
+    { id: 'parts_components', label: 'Parts & Components' },
+    
+    // Vintage & Collectible
+    { id: 'vintage_gear', label: 'Vintage & Collectible Gear' },
+    
+    // Other
+    { id: 'other', label: 'Other' }
 ];
 
 // --- HIGH-VALUE MARKETPLACE / SAFE EXCHANGE CONSTANTS ---
