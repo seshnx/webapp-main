@@ -1,19 +1,150 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Calendar, User, MessageCircle, Search, Edit2, Zap, Sliders, 
-  ArrowRight, Bell, Music, TrendingUp, Clock, AlertTriangle, 
-  CheckCircle, XCircle, ShoppingBag, ChevronRight
+    Calendar, User, MessageCircle, Search, Edit2, Zap, Sliders, 
+    ArrowRight, Bell, Music, TrendingUp, Clock, AlertTriangle, 
+    CheckCircle, XCircle, ShoppingBag, ChevronRight, Sparkles,
+    Headphones, Radio, Mic2, Play, Heart, Star, ArrowUpRight,
+    Wallet, Users, Eye, Activity, BarChart3, Crown, Flame, Target
 } from 'lucide-react';
 import { collection, query, where, onSnapshot, orderBy, limit, getDocs } from 'firebase/firestore';
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
 import { db, getPaths, appId } from '../config/firebase'; 
-import StatCard from './shared/StatCard';
 import { PROFILE_SCHEMAS, BOOKING_THRESHOLD } from '../config/constants';
 import { useNotifications } from '../hooks/useNotifications';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// FIX: Added default values for all props to prevent 'undefined' crashes
+// Get time-based greeting
+const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return { text: 'Good morning', emoji: '☀️' };
+    if (hour < 17) return { text: 'Good afternoon', emoji: '🌤️' };
+    if (hour < 21) return { text: 'Good evening', emoji: '🌅' };
+    return { text: 'Good night', emoji: '🌙' };
+};
+
+// Animated counter component
+const AnimatedNumber = ({ value, duration = 1000 }) => {
+    const [displayValue, setDisplayValue] = useState(0);
+    
+    useEffect(() => {
+        let startTime;
+        const animate = (timestamp) => {
+            if (!startTime) startTime = timestamp;
+            const progress = Math.min((timestamp - startTime) / duration, 1);
+            setDisplayValue(Math.floor(progress * value));
+            if (progress < 1) requestAnimationFrame(animate);
+        };
+        requestAnimationFrame(animate);
+    }, [value, duration]);
+    
+    return <span>{displayValue.toLocaleString()}</span>;
+};
+
+// Glassmorphic stat card
+const GlassStatCard = ({ title, value, icon, gradient, onClick, trend, trendUp }) => (
+    <motion.div
+        whileHover={{ scale: 1.02, y: -4 }}
+        whileTap={{ scale: 0.98 }}
+        onClick={onClick}
+        className={`relative p-5 rounded-2xl cursor-pointer overflow-hidden group ${gradient}`}
+    >
+        {/* Animated background elements */}
+        <div className="absolute inset-0 opacity-30">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-700" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl transform -translate-x-8 translate-y-8" />
+        </div>
+        
+        <div className="relative z-10">
+            <div className="flex items-start justify-between mb-3">
+                <div className="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl">
+                    {icon}
+                </div>
+                {trend && (
+                    <div className={`flex items-center gap-1 text-xs font-bold ${trendUp ? 'text-green-300' : 'text-red-300'}`}>
+                        <ArrowUpRight size={14} className={!trendUp ? 'rotate-90' : ''} />
+                        {trend}
+                    </div>
+                )}
+            </div>
+            <div className="text-3xl font-black text-white mb-1">
+                <AnimatedNumber value={value} />
+            </div>
+            <div className="text-white/80 text-sm font-medium">{title}</div>
+        </div>
+        
+        {/* Hover shine effect */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+    </motion.div>
+);
+
+// Quick action button with enhanced styling
+const QuickActionButton = ({ icon, label, description, onClick, color }) => (
+    <motion.button
+        whileHover={{ scale: 1.01, x: 4 }}
+        whileTap={{ scale: 0.99 }}
+        onClick={onClick}
+        className="w-full text-left px-4 py-3.5 rounded-xl border dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-[#1f2128] hover:shadow-lg dark:hover:shadow-black/20 transition-all duration-300 group"
+    >
+        <div className="flex items-center gap-4">
+            <div className={`p-2.5 rounded-xl ${color} group-hover:scale-110 transition-transform duration-300`}>
+                {icon}
+            </div>
+            <div className="flex-1">
+                <span className="font-semibold dark:text-white block">{label}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400">{description}</span>
+            </div>
+            <ArrowRight size={16} className="text-gray-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
+        </div>
+    </motion.button>
+);
+
+// Activity item with better styling
+const ActivityItem = ({ notification, onClick, formatTime }) => {
+    const getActivityIcon = (type) => {
+        switch (type) {
+            case 'follow': return { icon: <Users size={14} />, color: 'bg-blue-500' };
+            case 'like': return { icon: <Heart size={14} />, color: 'bg-red-500' };
+            case 'comment': return { icon: <MessageCircle size={14} />, color: 'bg-green-500' };
+            case 'mention': return { icon: <Mic2 size={14} />, color: 'bg-purple-500' };
+            case 'booking': return { icon: <Calendar size={14} />, color: 'bg-amber-500' };
+            default: return { icon: <Bell size={14} />, color: 'bg-gray-500' };
+        }
+    };
+    
+    const { icon, color } = getActivityIcon(notification.type);
+    
+    return (
+        <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            whileHover={{ x: 4, backgroundColor: 'rgba(59, 130, 246, 0.05)' }}
+            onClick={onClick}
+            className={`p-4 cursor-pointer transition-colors duration-200 ${!notification.read ? 'bg-gradient-to-r from-blue-50/50 to-transparent dark:from-blue-900/10' : ''}`}
+        >
+            <div className="flex items-start gap-3">
+                <div className={`${color} p-2 rounded-full text-white shrink-0`}>
+                    {icon}
+                </div>
+                <div className="flex-1 min-w-0">
+                    <p className="text-sm dark:text-gray-200">
+                        <span className="font-semibold">{notification.fromUserName}</span>{' '}
+                        <span className="text-gray-600 dark:text-gray-400">{notification.message}</span>
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                        <Clock size={10} />
+                        {formatTime(notification.timestamp)}
+                    </p>
+                </div>
+                {!notification.read && (
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shrink-0 mt-2" />
+                )}
+            </div>
+        </motion.div>
+    );
+};
+
 export default function Dashboard({ 
     user, 
     userData, 
@@ -22,391 +153,616 @@ export default function Dashboard({
     subProfiles = {}, 
     tokenBalance = 0 
 }) {
-  const [recentConvos, setRecentConvos] = useState([]);
-  const [trendingItem, setTrendingItem] = useState(null);
+    const [recentConvos, setRecentConvos] = useState([]);
+    const [trendingItem, setTrendingItem] = useState(null);
+    const greeting = getGreeting();
 
-  // Real-time notifications from Firestore
-  const { notifications, unreadCount } = useNotifications(user?.uid);
-  
-  const isStudio = userData?.accountTypes?.includes('Studio');
-  
-  // FIX: Safe access to subProfiles using optional chaining
-  const studioRooms = subProfiles?.['Studio']?.rooms || [];
-  const profileViews = userData?.profileViews || 0;
+    // Real-time notifications from Firestore
+    const { notifications, unreadCount } = useNotifications(user?.uid);
+    
+    const isStudio = userData?.accountTypes?.includes('Studio');
+    const studioRooms = subProfiles?.['Studio']?.rooms || [];
+    const profileViews = userData?.profileViews || 0;
 
-  // Calculate Overall Completion for Banner
-  const roles = userData?.accountTypes || [];
-  let totalPct = 0;
-  let roleCount = 0;
+    // Calculate Overall Completion for Banner
+    const roles = userData?.accountTypes || [];
+    let totalPct = 0;
+    let roleCount = 0;
 
-  roles.forEach(role => {
-      const data = subProfiles?.[role] || {};
-      const schema = PROFILE_SCHEMAS[role] || [];
-      // Skip empty schema (like Admin)
-      if (schema.length === 0) return;
+    roles.forEach(role => {
+        const data = subProfiles?.[role] || {};
+        const schema = PROFILE_SCHEMAS[role] || [];
+        if (schema.length === 0) return;
+        const totalFields = schema.filter(f => !f.isToggle && f.type !== 'list').length || 1;
+        const filledFields = schema.filter(f => !f.isToggle && f.type !== 'list' && data[f.key] && data[f.key].length).length;
+        totalPct += (filledFields / totalFields);
+        roleCount++;
+    });
+    
+    const avgCompletion = roleCount > 0 ? Math.round((totalPct / roleCount) * 100) : 100;
+    const showCompletionWarning = avgCompletion < 60;
 
-      const totalFields = schema.filter(f => !f.isToggle && f.type !== 'list').length || 1;
-      const filledFields = schema.filter(f => !f.isToggle && f.type !== 'list' && data[f.key] && data[f.key].length).length;
-      totalPct += (filledFields / totalFields);
-      roleCount++;
-  });
-  
-  const avgCompletion = roleCount > 0 ? Math.round((totalPct / roleCount) * 100) : 100;
-  const showCompletionWarning = avgCompletion < 60;
+    // Memoize Convex availability
+    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+    const conversationsQuery = useMemo(() => {
+        return user?.uid && convexAvailable ? { userId: user.uid } : "skip";
+    }, [user?.uid, convexAvailable]);
 
-  // Memoize Convex availability to ensure stable hook calls
-  const convexAvailable = useMemo(() => isConvexAvailable(), []);
-  const conversationsQuery = useMemo(() => {
-    return user?.uid && convexAvailable ? { userId: user.uid } : "skip";
-  }, [user?.uid, convexAvailable]);
+    const conversationsData = useQuery(
+        api.conversations.getConversations,
+        conversationsQuery
+    );
 
-  // 1. Fetch Recent Conversations from Convex
-  // Hook must always be called, but we skip if Convex not available
-  const conversationsData = useQuery(
-    api.conversations.getConversations,
-    conversationsQuery
-  );
+    useEffect(() => {
+        if (!conversationsData) {
+            setRecentConvos([]);
+            return;
+        }
+        const convos = conversationsData
+            .map(conv => ({
+                uid: conv.otherUserId || conv.chatId,
+                name: conv.chatName || 'Unknown',
+                lastMessage: conv.lastMessage || '',
+                timestamp: conv.lastMessageTime || 0,
+                isMe: conv.lastSenderId === user.uid,
+                photo: conv.chatPhoto
+            }))
+            .sort((a, b) => b.timestamp - a.timestamp)
+            .slice(0, 4);
+        setRecentConvos(convos);
+    }, [conversationsData, user?.uid]);
 
-  useEffect(() => {
-    if (!conversationsData) {
-      setRecentConvos([]);
-      return;
-    }
+    useEffect(() => {
+        const q = query(collection(db, `artifacts/${appId}/public/data/market_items`), orderBy('timestamp', 'desc'), limit(1));
+        const unsub = onSnapshot(q, (snap) => {
+            if (!snap.empty) {
+                setTrendingItem({ id: snap.docs[0].id, ...snap.docs[0].data() });
+            }
+        });
+        return () => unsub();
+    }, []);
 
-    // Transform and get top 3 most recent
-    const convos = conversationsData
-      .map(conv => ({
-        uid: conv.otherUserId || conv.chatId,
-        name: conv.chatName || 'Unknown',
-        lastMessage: conv.lastMessage || '',
-        timestamp: conv.lastMessageTime || 0,
-        isMe: conv.lastSenderId === user.uid
-      }))
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, 3); // Get top 3
+    const formatNotificationTime = (ts) => {
+        if (!ts) return 'Just now';
+        let date;
+        if (typeof ts.toMillis === 'function') {
+            date = new Date(ts.toMillis());
+        } else if (typeof ts === 'number') {
+            date = new Date(ts);
+        } else if (ts instanceof Date) {
+            date = ts;
+        } else {
+            return 'Just now';
+        }
+        if (isNaN(date.getTime())) return 'Just now';
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        return date.toLocaleDateString();
+    };
 
-    setRecentConvos(convos);
-  }, [conversationsData, user?.uid]);
-
-  // 2. Fetch Trending Marketplace Item
-  useEffect(() => {
-      const q = query(collection(db, `artifacts/${appId}/public/data/market_items`), orderBy('timestamp', 'desc'), limit(1));
-      const unsub = onSnapshot(q, (snap) => {
-          if (!snap.empty) {
-              setTrendingItem({ id: snap.docs[0].id, ...snap.docs[0].data() });
-          }
-      });
-      return () => unsub();
-  }, []);
-
-  // Safe Timestamp Formatter
-  const formatNotificationTime = (ts) => {
-      if (!ts) return 'Just now';
-      
-      let date;
-      if (typeof ts.toMillis === 'function') {
-          date = new Date(ts.toMillis());
-      } else if (typeof ts === 'number') {
-          date = new Date(ts);
-      } else if (ts instanceof Date) {
-          date = ts;
-      } else {
-          return 'Just now';
-      }
-
-      if (isNaN(date.getTime())) return 'Just now';
-      
-      const now = new Date();
-      const isToday = date.getDate() === now.getDate() && 
-                      date.getMonth() === now.getMonth() && 
-                      date.getFullYear() === now.getFullYear();
-      
-      return isToday 
-        ? date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        : date.toLocaleDateString();
-  };
-
-  return (
-    <div className="space-y-8 max-w-6xl mx-auto pb-20 animate-in fade-in duration-500">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4">
-        <div>
-          <h1 className="text-3xl font-extrabold dark:text-white tracking-tight">Welcome, {userData?.firstName}</h1>
-          <p className="text-gray-500 dark:text-gray-400 mt-1">Your creative command center.</p>
-        </div>
-        <div className="flex items-center gap-3">
-            <div className="text-sm font-medium text-gray-500 bg-white dark:bg-[#2c2e36] px-4 py-2 rounded-full border dark:border-gray-700 shadow-sm flex items-center gap-2">
-                <Clock size={14} />
-                {new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-            </div>
-        </div>
-      </div>
-
-      {/* Completion Warning Banner */}
-      {showCompletionWarning && (
-          <div className="bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 rounded-xl p-4 flex items-center justify-between gap-4 animate-in slide-in-from-top-2">
-              <div className="flex items-center gap-3">
-                  <div className="bg-orange-100 dark:bg-orange-900/50 p-2 rounded-full text-orange-600 dark:text-orange-400">
-                      <AlertTriangle size={20} />
-                  </div>
-                  <div>
-                      <h4 className="font-bold text-orange-800 dark:text-orange-300 text-sm">Profile Incomplete ({avgCompletion}%)</h4>
-                      <p className="text-xs text-orange-700 dark:text-orange-400">Please complete your profile details before booking sessions.</p>
-                  </div>
-              </div>
-              <button 
-                  onClick={() => setActiveTab('profile')} 
-                  className="bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold px-4 py-2 rounded-lg transition"
-              >
-                  Complete Profile
-              </button>
-          </div>
-      )}
-
-      {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Wallet Card */}
-        <div 
-            className="bg-gradient-to-br from-yellow-500 to-orange-600 p-5 rounded-xl text-white shadow-lg cursor-pointer transform transition hover:scale-[1.02] relative overflow-hidden group" 
-            onClick={() => setActiveTab('payments')}
-        >
-            <div className="relative z-10">
-                <div className="text-yellow-100 text-sm font-medium mb-1 flex items-center gap-1">
-                    SeshFx Balance <ArrowRight size={12} className="opacity-0 group-hover:opacity-100 transition-opacity"/>
+    return (
+        <div className="min-h-screen pb-24">
+            {/* Hero Section with Gradient Background */}
+            <div className="relative overflow-hidden">
+                {/* Animated gradient background */}
+                <div className="absolute inset-0 bg-gradient-to-br from-brand-blue via-purple-600 to-pink-500 opacity-90" />
+                <div className="absolute inset-0">
+                    <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-400 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" />
+                    <div className="absolute top-0 right-1/4 w-96 h-96 bg-purple-400 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" style={{ animationDelay: '1s' }} />
+                    <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-pink-400 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse" style={{ animationDelay: '2s' }} />
                 </div>
-                <div className="text-3xl font-extrabold flex items-center gap-2">
-                    <Zap fill="currentColor" size={28} /> {tokenBalance}
-                </div>
-                <div className="text-xs text-yellow-100 mt-2 opacity-80 bg-white/20 inline-block px-2 py-0.5 rounded-full">
-                    + Add Funds
-                </div>
-            </div>
-            <Zap size={120} className="absolute -bottom-6 -right-6 text-white opacity-20 rotate-12 group-hover:rotate-0 transition-transform duration-500" />
-        </div>
+                
+                {/* Grid pattern overlay */}
+                <div 
+                    className="absolute inset-0 opacity-10"
+                    style={{
+                        backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
+                        backgroundSize: '50px 50px'
+                    }}
+                />
 
-        {/* Sessions Card */}
-        <div className="cursor-pointer transform transition hover:scale-[1.02]" onClick={() => setActiveTab('bookings')}>
-            <StatCard 
-                title="Pending Bookings" 
-                value={bookingCount} 
-                icon={<Calendar className="text-white" />} 
-                bg="bg-gradient-to-br from-brand-blue to-blue-600" 
-                text="text-white" 
-                sub={bookingCount > 0 ? "Action Required" : "No pending requests"}
-            />
-        </div>
-        
-        {/* Messages Card */}
-        <div className="cursor-pointer transform transition hover:scale-[1.02]" onClick={() => setActiveTab('messages')}>
-            <StatCard 
-                title="Active Chats" 
-                value={recentConvos.length} 
-                icon={<MessageCircle className="text-brand-blue" />} 
-                sub="Check Inbox" 
-            />
-        </div>
-
-        {/* Views Card */}
-        <div className="cursor-pointer transform transition hover:scale-[1.02]" onClick={() => setActiveTab('profile')}>
-            <StatCard 
-                title="Profile Views" 
-                value={profileViews} 
-                icon={<TrendingUp className="text-brand-blue" />} 
-                sub="Lifetime views" 
-            />
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column: Main Feeds */}
-        <div className="lg:col-span-2 space-y-8">
-          
-            {/* Notifications / Activity Feed */}
-            <div className="bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 overflow-hidden shadow-sm">
-                <div className="p-5 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50/50 dark:bg-[#23262f]">
-                    <h3 className="font-bold dark:text-white flex items-center gap-2"><Bell size={18} className="text-gray-500"/> Activity Feed</h3>
-                    {unreadCount > 0 && <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full animate-pulse">{unreadCount} New</span>}
-                </div>
-                <div className="divide-y dark:divide-gray-700">
-                    {(!notifications || notifications.length === 0) ? (
-                        <div className="p-8 text-center">
-                            <div className="bg-gray-100 dark:bg-gray-800 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <Bell size={20} className="text-gray-400"/>
+                <div className="relative z-10 px-6 py-10 md:py-14 max-w-7xl mx-auto">
+                    {/* Header */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6 }}
+                        className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-10"
+                    >
+                        <div>
+                            <div className="flex items-center gap-2 mb-2">
+                                <span className="text-2xl">{greeting.emoji}</span>
+                                <span className="text-white/80 text-lg font-medium">{greeting.text}</span>
                             </div>
-                            <p className="text-gray-500 dark:text-gray-400 text-sm">You're all caught up!</p>
+                            <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">
+                                {userData?.firstName || 'Creator'}
+                            </h1>
+                            <p className="text-white/60 mt-2 text-lg">Your creative command center</p>
                         </div>
-                    ) : (
-                        notifications.slice(0, 5).map((n, i) => (
-                            <div key={n.id || i} className={`p-4 hover:bg-gray-50 dark:hover:bg-[#25272e] transition flex justify-between items-center group cursor-pointer ${!n.read ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}`} onClick={() => setActiveTab('feed')}>
-                                <div className="flex items-center gap-3">
-                                    <div className={`h-2 w-2 rounded-full ${
-                                        n.type === 'follow' ? 'bg-brand-blue' : 
-                                        n.type === 'like' ? 'bg-red-500' : 
-                                        n.type === 'comment' ? 'bg-green-500' : 
-                                        n.type === 'mention' ? 'bg-purple-500' :
-                                        'bg-yellow-500'
-                                    }`}></div>
-                                    <div>
-                                        <p className="text-sm dark:text-gray-200 font-medium">
-                                            <span className="font-bold">{n.fromUserName}</span> {n.message}
-                                        </p>
-                                        <p className="text-xs text-gray-500">
-                                            {formatNotificationTime(n.timestamp)}
-                                        </p>
-                                    </div>
-                                </div>
-                                <ChevronRight size={14} className="text-gray-300" />
-                            </div>
-                        ))
-                    )}
+                        
+                        <div className="flex items-center gap-3">
+                            <motion.div 
+                                whileHover={{ scale: 1.05 }}
+                                className="bg-white/10 backdrop-blur-md border border-white/20 px-5 py-2.5 rounded-full flex items-center gap-2 text-white"
+                            >
+                                <Clock size={16} className="text-white/70" />
+                                <span className="text-sm font-medium">
+                                    {new Date().toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                                </span>
+                            </motion.div>
+                            
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setActiveTab('feed')}
+                                className="relative bg-white text-gray-900 px-5 py-2.5 rounded-full font-bold text-sm flex items-center gap-2 shadow-lg hover:shadow-xl transition-shadow"
+                            >
+                                <Bell size={16} />
+                                {unreadCount > 0 && (
+                                    <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center animate-bounce">
+                                        {unreadCount}
+                                    </span>
+                                )}
+                            </motion.button>
+                        </div>
+                    </motion.div>
+
+                    {/* Stats Grid */}
+                    <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.6, delay: 0.2 }}
+                        className="grid grid-cols-2 lg:grid-cols-4 gap-4"
+                    >
+                        <GlassStatCard
+                            title="SeshFx Balance"
+                            value={tokenBalance}
+                            icon={<Zap size={20} className="text-white" fill="currentColor" />}
+                            gradient="bg-gradient-to-br from-amber-500/90 to-orange-600/90 backdrop-blur-sm"
+                            onClick={() => setActiveTab('payments')}
+                            trend="+12%"
+                            trendUp={true}
+                        />
+                        <GlassStatCard
+                            title="Pending Bookings"
+                            value={bookingCount}
+                            icon={<Calendar size={20} className="text-white" />}
+                            gradient="bg-gradient-to-br from-blue-500/90 to-indigo-600/90 backdrop-blur-sm"
+                            onClick={() => setActiveTab('bookings')}
+                        />
+                        <GlassStatCard
+                            title="Active Chats"
+                            value={recentConvos.length}
+                            icon={<MessageCircle size={20} className="text-white" />}
+                            gradient="bg-gradient-to-br from-emerald-500/90 to-teal-600/90 backdrop-blur-sm"
+                            onClick={() => setActiveTab('messages')}
+                        />
+                        <GlassStatCard
+                            title="Profile Views"
+                            value={profileViews}
+                            icon={<Eye size={20} className="text-white" />}
+                            gradient="bg-gradient-to-br from-pink-500/90 to-rose-600/90 backdrop-blur-sm"
+                            onClick={() => setActiveTab('profile')}
+                            trend="+8%"
+                            trendUp={true}
+                        />
+                    </motion.div>
                 </div>
             </div>
 
-            {/* Studio Overview */}
-            {isStudio && (
-                <div className="bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 p-5 relative overflow-hidden shadow-sm">
-                    <div className="flex justify-between items-center mb-4 relative z-10">
-                        <h3 className="font-bold dark:text-white flex items-center gap-2"><Sliders size={18} className="text-brand-blue"/> Studio Status</h3>
-                        <button onClick={() => setActiveTab('studio-ops')} className="text-sm text-brand-blue hover:underline flex items-center gap-1">Manage Ops <ArrowRight size={14}/></button>
+            {/* Main Content */}
+            <div className="max-w-7xl mx-auto px-6 -mt-6 relative z-20">
+                {/* Completion Warning Banner */}
+                <AnimatePresence>
+                    {showCompletionWarning && (
+                        <motion.div 
+                            initial={{ opacity: 0, y: -20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -20 }}
+                            className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg"
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="bg-gradient-to-br from-amber-400 to-orange-500 p-3 rounded-xl text-white shadow-lg">
+                                    <Target size={24} />
+                                </div>
+                                <div>
+                                    <h4 className="font-bold text-amber-800 dark:text-amber-300 flex items-center gap-2">
+                                        Complete Your Profile
+                                        <span className="text-sm font-normal bg-amber-200 dark:bg-amber-800 px-2 py-0.5 rounded-full">
+                                            {avgCompletion}%
+                                        </span>
+                                    </h4>
+                                    <p className="text-sm text-amber-700 dark:text-amber-400">
+                                        A complete profile increases your visibility and booking chances
+                                    </p>
+                                </div>
+                            </div>
+                            <motion.button 
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setActiveTab('profile')} 
+                                className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white font-bold px-6 py-2.5 rounded-xl transition shadow-lg flex items-center gap-2"
+                            >
+                                <Sparkles size={16} />
+                                Complete Now
+                            </motion.button>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    {/* Left Column: Main Feeds */}
+                    <div className="lg:col-span-2 space-y-6">
+                        
+                        {/* Activity Feed */}
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 overflow-hidden shadow-xl"
+                        >
+                            <div className="p-5 border-b dark:border-gray-800 flex justify-between items-center bg-gradient-to-r from-gray-50 to-white dark:from-[#23262f] dark:to-[#1f2128]">
+                                <h3 className="font-bold dark:text-white flex items-center gap-2">
+                                    <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                                        <Activity size={16} className="text-blue-600 dark:text-blue-400" />
+                                    </div>
+                                    Activity Feed
+                                </h3>
+                                {unreadCount > 0 && (
+                                    <span className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs px-3 py-1 rounded-full font-bold animate-pulse shadow-lg">
+                                        {unreadCount} New
+                                    </span>
+                                )}
+                            </div>
+                            <div className="divide-y dark:divide-gray-800">
+                                {(!notifications || notifications.length === 0) ? (
+                                    <div className="p-12 text-center">
+                                        <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                            <Sparkles size={28} className="text-gray-400" />
+                                        </div>
+                                        <p className="text-gray-600 dark:text-gray-400 font-medium">All caught up!</p>
+                                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">No new notifications</p>
+                                    </div>
+                                ) : (
+                                    notifications.slice(0, 5).map((n, i) => (
+                                        <ActivityItem
+                                            key={n.id || i}
+                                            notification={n}
+                                            onClick={() => setActiveTab('feed')}
+                                            formatTime={formatNotificationTime}
+                                        />
+                                    ))
+                                )}
+                            </div>
+                            {notifications?.length > 5 && (
+                                <div className="p-4 border-t dark:border-gray-800 bg-gray-50 dark:bg-[#1a1c23]">
+                                    <button 
+                                        onClick={() => setActiveTab('feed')}
+                                        className="w-full text-center text-sm text-brand-blue font-semibold hover:underline"
+                                    >
+                                        View All Activity →
+                                    </button>
+                                </div>
+                            )}
+                        </motion.div>
+
+                        {/* Studio Overview */}
+                        {isStudio && (
+                            <motion.div 
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ delay: 0.4 }}
+                                className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 overflow-hidden shadow-xl"
+                            >
+                                <div className="p-5 border-b dark:border-gray-800 flex justify-between items-center bg-gradient-to-r from-purple-50 to-white dark:from-purple-900/10 dark:to-[#1f2128]">
+                                    <h3 className="font-bold dark:text-white flex items-center gap-2">
+                                        <div className="p-1.5 bg-purple-100 dark:bg-purple-900/30 rounded-lg">
+                                            <Headphones size={16} className="text-purple-600 dark:text-purple-400" />
+                                        </div>
+                                        Studio Status
+                                    </h3>
+                                    <button 
+                                        onClick={() => setActiveTab('studio-ops')} 
+                                        className="text-sm text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-medium"
+                                    >
+                                        Manage <ArrowRight size={14}/>
+                                    </button>
+                                </div>
+                                
+                                <div className="p-5">
+                                    {studioRooms.length === 0 ? (
+                                        <div className="text-center py-8 border-2 border-dashed dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#1a1c23]">
+                                            <Radio size={32} className="mx-auto mb-3 text-gray-400" />
+                                            <p className="text-gray-500 mb-3">No rooms configured yet</p>
+                                            <button 
+                                                onClick={() => setActiveTab('studio-ops')}
+                                                className="text-purple-600 font-bold hover:underline"
+                                            >
+                                                + Add Your First Room
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {studioRooms.map((room, idx) => (
+                                                <motion.div 
+                                                    key={idx}
+                                                    whileHover={{ scale: 1.02 }}
+                                                    className="bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#1a1c23] dark:to-[#23262f] p-4 rounded-xl border dark:border-gray-700/50"
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <div className="font-bold dark:text-white">{room.name}</div>
+                                                        <span className={`text-xs px-2.5 py-1 rounded-full font-bold flex items-center gap-1 ${
+                                                            room.active 
+                                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                                                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                                        }`}>
+                                                            {room.active ? <CheckCircle size={10}/> : <AlertTriangle size={10}/>}
+                                                            {room.active ? 'Active' : 'Maint.'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+                                                        <span>{room.equipment?.length || 0} items</span>
+                                                        <span>•</span>
+                                                        <span className="font-bold text-green-600 dark:text-green-400">${room.rate}/hr</span>
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {/* Recent Messages */}
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5 }}
+                            className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 overflow-hidden shadow-xl"
+                        >
+                            <div className="p-5 border-b dark:border-gray-800 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/10 dark:to-[#1f2128]">
+                                <h3 className="font-bold dark:text-white flex items-center gap-2">
+                                    <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
+                                        <MessageCircle size={16} className="text-emerald-600 dark:text-emerald-400" />
+                                    </div>
+                                    Recent Messages
+                                </h3>
+                                <button 
+                                    onClick={() => setActiveTab('messages')} 
+                                    className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
+                                >
+                                    View All
+                                </button>
+                            </div>
+                            <div className="p-4 space-y-2">
+                                {recentConvos.length === 0 ? (
+                                    <div className="text-center text-gray-400 py-8">
+                                        <MessageCircle size={32} className="mx-auto mb-3 opacity-50" />
+                                        <p className="font-medium">No messages yet</p>
+                                        <p className="text-sm text-gray-400">Start a conversation!</p>
+                                    </div>
+                                ) : (
+                                    recentConvos.map((c, i) => (
+                                        <motion.div 
+                                            key={c.uid + i}
+                                            whileHover={{ x: 4, backgroundColor: 'rgba(16, 185, 129, 0.05)' }}
+                                            onClick={() => setActiveTab('messages')}
+                                            className="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-all"
+                                        >
+                                            <div className="relative">
+                                                {c.photo ? (
+                                                    <img src={c.photo} className="h-10 w-10 rounded-full object-cover" />
+                                                ) : (
+                                                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center text-white font-bold">
+                                                        {c.name?.charAt(0) || '?'}
+                                                    </div>
+                                                )}
+                                                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#1f2128] rounded-full" />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex justify-between items-center mb-0.5">
+                                                    <span className="font-semibold dark:text-white truncate">{c.name || 'Unknown User'}</span>
+                                                    <span className="text-[10px] text-gray-400 shrink-0 ml-2">
+                                                        {new Date(c.timestamp).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                                    {c.isMe && <span className="text-gray-400">You: </span>}
+                                                    {c.lastMessage}
+                                                </p>
+                                            </div>
+                                        </motion.div>
+                                    ))
+                                )}
+                            </div>
+                        </motion.div>
                     </div>
                     
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
-                        {studioRooms.length === 0 ? (
-                            <div className="col-span-full text-center py-6 text-gray-400 text-sm border-2 border-dashed dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-[#1f2128]">
-                                <div className="mb-2">No rooms configured.</div>
-                                <button className="text-brand-blue font-bold hover:underline" onClick={()=>setActiveTab('studio-ops')}>+ Add Room</button>
+                    {/* Right Column: Actions & Discovery */}
+                    <div className="space-y-6">
+                        
+                        {/* Quick Actions */}
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.3 }}
+                            className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 p-5 shadow-xl"
+                        >
+                            <h3 className="font-bold mb-4 dark:text-white flex items-center gap-2">
+                                <Flame size={18} className="text-orange-500" />
+                                Quick Actions
+                            </h3>
+                            <div className="space-y-3">
+                                <QuickActionButton
+                                    icon={<Edit2 size={18} className="text-blue-600" />}
+                                    label="Create Post"
+                                    description="Share with your network"
+                                    onClick={() => setActiveTab('feed')}
+                                    color="bg-blue-100 dark:bg-blue-900/30"
+                                />
+                                <QuickActionButton
+                                    icon={<Search size={18} className="text-purple-600" />}
+                                    label="Find Talent"
+                                    description="Discover collaborators"
+                                    onClick={() => setActiveTab('bookings')}
+                                    color="bg-purple-100 dark:bg-purple-900/30"
+                                />
+                                <QuickActionButton
+                                    icon={<ShoppingBag size={18} className="text-amber-600" />}
+                                    label="Marketplace"
+                                    description="Buy & sell gear"
+                                    onClick={() => setActiveTab('marketplace')}
+                                    color="bg-amber-100 dark:bg-amber-900/30"
+                                />
                             </div>
-                        ) : (
-                            studioRooms.map((room, idx) => (
-                                <div key={idx} className="bg-gray-50 dark:bg-[#1f2128] p-3 rounded-lg border dark:border-gray-700 flex justify-between items-center">
-                                    <div>
-                                        <div className="font-bold text-sm dark:text-gray-200">{room.name}</div>
-                                        <div className="text-xs text-gray-500">{room.equipment?.length || 0} items • ${room.rate}/hr</div>
-                                    </div>
-                                    <span className={`text-xs px-2 py-1 rounded-full font-bold flex items-center gap-1 ${room.active ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-yellow-100 text-yellow-700'}`}>
-                                        {room.active ? <CheckCircle size={10}/> : <AlertTriangle size={10}/>}
-                                        {room.active ? 'Active' : 'Maint.'}
-                                    </span>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            )}
+                        </motion.div>
 
-            {/* Recent Messages */}
-            <div className="bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 p-5 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold dark:text-white flex items-center gap-2"><MessageCircle size={18} className="text-gray-400"/> Recent Messages</h3>
-                    <button onClick={()=>setActiveTab('messages')} className="text-sm text-brand-blue hover:underline">View All</button>
-                </div>
-                <div className="space-y-3">
-                    {recentConvos.length === 0 ? (
-                        <div className="text-center text-gray-400 text-sm py-4">No recent messages.</div>
-                    ) : (
-                        recentConvos.map((c, i) => (
-                            <div key={c.uid + i} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-[#25272e] rounded-lg cursor-pointer transition" onClick={() => setActiveTab('messages')}>
-                                <div className="h-8 w-8 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-xs font-bold text-gray-600 dark:text-gray-300">
-                                    {c.name ? c.name.charAt(0) : '?'}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-bold dark:text-gray-200 flex justify-between">
-                                        {c.name || 'Unknown User'}
-                                        <span className="text-[10px] text-gray-400 font-normal">{new Date(c.timestamp).toLocaleDateString()}</span>
+                        {/* Trending Promo Card */}
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.4 }}
+                            className="relative rounded-2xl overflow-hidden shadow-xl"
+                        >
+                            {/* Animated gradient background */}
+                            <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600" />
+                            <div className="absolute inset-0">
+                                <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full blur-3xl animate-pulse" />
+                                <div className="absolute bottom-0 left-0 w-32 h-32 bg-pink-500/20 rounded-full blur-2xl animate-pulse" style={{ animationDelay: '1s' }} />
+                            </div>
+                            
+                            <div className="relative z-10 p-6">
+                                <div className="flex items-center gap-2 mb-4">
+                                    <div className="bg-white/20 backdrop-blur-sm p-2 rounded-lg">
+                                        <Zap size={18} className="text-yellow-300" fill="currentColor" />
                                     </div>
-                                    <div className="text-xs text-gray-500 truncate">
-                                        {c.isMe ? 'You: ' : ''}{c.lastMessage}
+                                    <span className="text-xs font-bold text-yellow-300 uppercase tracking-wider">Trending on SeshFx</span>
+                                </div>
+                                
+                                {trendingItem ? (
+                                    <>
+                                        <h4 className="font-black text-xl text-white mb-1 truncate">{trendingItem.title}</h4>
+                                        <p className="text-white/60 text-sm mb-4">by {trendingItem.author} • {trendingItem.price} Tokens</p>
+                                    </>
+                                ) : (
+                                    <>
+                                        <h4 className="font-black text-xl text-white mb-1">Discover New Sounds</h4>
+                                        <p className="text-white/60 text-sm mb-4">Fresh beats & presets daily</p>
+                                    </>
+                                )}
+                                
+                                <motion.button 
+                                    whileHover={{ scale: 1.02 }}
+                                    whileTap={{ scale: 0.98 }}
+                                    onClick={() => setActiveTab('seshfx')} 
+                                    className="w-full bg-white/20 hover:bg-white/30 backdrop-blur-sm border border-white/30 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+                                >
+                                    <Play size={16} fill="currentColor" />
+                                    Visit Store
+                                </motion.button>
+                            </div>
+                        </motion.div>
+                        
+                        {/* Profile Completion */}
+                        <motion.div 
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.5 }}
+                            className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 p-5 shadow-xl"
+                        >
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold dark:text-white flex items-center gap-2">
+                                    <Crown size={18} className="text-amber-500" />
+                                    Profile Health
+                                </h3>
+                                <span className={`text-sm font-bold ${avgCompletion >= 80 ? 'text-green-500' : avgCompletion >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                                    {avgCompletion}%
+                                </span>
+                            </div>
+                            
+                            {/* Overall progress ring */}
+                            <div className="flex items-center gap-4 mb-5 p-4 bg-gray-50 dark:bg-[#1a1c23] rounded-xl">
+                                <div className="relative w-16 h-16">
+                                    <svg className="w-16 h-16 transform -rotate-90">
+                                        <circle
+                                            cx="32"
+                                            cy="32"
+                                            r="28"
+                                            stroke="currentColor"
+                                            strokeWidth="6"
+                                            fill="none"
+                                            className="text-gray-200 dark:text-gray-700"
+                                        />
+                                        <circle
+                                            cx="32"
+                                            cy="32"
+                                            r="28"
+                                            stroke="currentColor"
+                                            strokeWidth="6"
+                                            fill="none"
+                                            strokeDasharray={`${avgCompletion * 1.76} 176`}
+                                            className={avgCompletion >= 80 ? 'text-green-500' : avgCompletion >= 50 ? 'text-amber-500' : 'text-red-500'}
+                                            strokeLinecap="round"
+                                        />
+                                    </svg>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <Star size={20} className={avgCompletion >= 80 ? 'text-green-500' : avgCompletion >= 50 ? 'text-amber-500' : 'text-red-500'} fill="currentColor" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="font-bold dark:text-white">
+                                        {avgCompletion >= 80 ? 'Looking Great!' : avgCompletion >= 50 ? 'Almost There!' : 'Needs Work'}
+                                    </div>
+                                    <div className="text-xs text-gray-500">
+                                        {avgCompletion < 100 ? 'Complete your profile to boost visibility' : 'Your profile is fully complete'}
                                     </div>
                                 </div>
                             </div>
-                        ))
-                    )}
+                            
+                            <div className="space-y-3">
+                                {(userData?.accountTypes || []).map(role => {
+                                    const data = subProfiles?.[role] || {};
+                                    const schema = PROFILE_SCHEMAS[role] || [];
+                                    if (schema.length === 0) return null;
+
+                                    const total = schema.filter(f => !f.isToggle && f.type !== 'list').length || 1;
+                                    const filled = schema.filter(f => !f.isToggle && f.type !== 'list' && data[f.key] && data[f.key].length).length;
+                                    const pct = Math.round((filled/total)*100);
+                                    
+                                    return (
+                                        <motion.div 
+                                            key={role}
+                                            whileHover={{ scale: 1.01 }}
+                                            onClick={() => setActiveTab('profile')}
+                                            className="p-3 rounded-xl bg-gray-50 dark:bg-[#1a1c23] cursor-pointer hover:shadow-md transition-all"
+                                        >
+                                            <div className="flex justify-between items-center mb-2">
+                                                <span className="text-sm font-medium dark:text-gray-300">{role}</span>
+                                                <span className={`text-xs font-bold ${pct >= 80 ? 'text-green-500' : pct >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                                                    {pct}%
+                                                </span>
+                                            </div>
+                                            <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                <motion.div 
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${pct}%` }}
+                                                    transition={{ duration: 1, delay: 0.5 }}
+                                                    className={`h-full rounded-full ${pct >= 80 ? 'bg-gradient-to-r from-green-400 to-emerald-500' : pct >= 50 ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 'bg-gradient-to-r from-red-400 to-rose-500'}`}
+                                                />
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    </div>
                 </div>
             </div>
         </div>
-        
-        {/* Right Column: Actions & Discovery */}
-        <div className="space-y-6">
-            
-           {/* Quick Actions */}
-           <div className="bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 p-4 shadow-sm">
-             <h3 className="font-bold mb-3 dark:text-white text-sm uppercase tracking-wide text-gray-500">Quick Actions</h3>
-             <div className="space-y-3">
-               <button className="w-full text-left px-4 py-3 rounded-lg border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3 dark:text-gray-300 transition group" onClick={()=>setActiveTab('feed')}>
-                   <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded text-brand-blue group-hover:scale-110 transition-transform"><Edit2 size={16}/></div> 
-                   <span className="font-medium">Create Post</span>
-               </button>
-               <button className="w-full text-left px-4 py-3 rounded-lg border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3 dark:text-gray-300 transition group" onClick={()=>setActiveTab('bookings')}>
-                   <div className="bg-purple-100 dark:bg-purple-900/30 p-2 rounded text-purple-600 group-hover:scale-110 transition-transform"><Search size={16}/></div> 
-                   <span className="font-medium">Find Talent</span>
-               </button>
-              <button className="w-full text-left px-4 py-3 rounded-lg border dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm flex items-center gap-3 dark:text-gray-300 transition group" onClick={()=>setActiveTab('marketplace')}>
-                  <div className="bg-yellow-100 dark:bg-yellow-900/30 p-2 rounded text-yellow-600 group-hover:scale-110 transition-transform"><ShoppingBag size={16}/></div> 
-                  <span className="font-medium">Browse Marketplace</span>
-</button>
-             </div>
-           </div>
-
-           {/* Dynamic Trending Promo */}
-           <div className="bg-gradient-to-br from-slate-800 to-black text-white rounded-xl p-5 relative overflow-hidden shadow-lg">
-               <div className="relative z-10">
-                   <div className="flex items-center gap-2 mb-2">
-                       <Zap size={16} className="text-yellow-400" fill="currentColor"/>
-                       <span className="text-xs font-bold text-yellow-400 uppercase">Trending on SeshFx</span>
-                   </div>
-                   {trendingItem ? (
-                       <>
-                           <h4 className="font-bold text-lg mb-1 truncate">{trendingItem.title}</h4>
-                           <p className="text-xs text-gray-400 mb-4">by {trendingItem.author} • {trendingItem.price} Tokens</p>
-                       </>
-                   ) : (
-                       <>
-                           <h4 className="font-bold text-lg mb-1">Discover Sounds</h4>
-                           <p className="text-xs text-gray-400 mb-4">Fresh beats & presets added daily.</p>
-                       </>
-                   )}
-                   <button onClick={() => setActiveTab('seshfx')} className="w-full bg-white/10 hover:bg-white/20 backdrop-blur-sm border border-white/20 text-white py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition">
-                       Visit Store <ArrowRight size={12} />
-                   </button>
-               </div>
-               <div className="absolute -right-4 -bottom-4 w-24 h-24 bg-yellow-500 rounded-full blur-3xl opacity-20 animate-pulse"></div>
-           </div>
-           
-           {/* Profile Health */}
-           <div className="bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 p-4 shadow-sm">
-                <h3 className="font-bold dark:text-white text-sm mb-3">Completion</h3>
-                <div className="space-y-3">
-                    {(userData?.accountTypes || []).map(role => {
-                        // FIX: Safe access to subProfiles
-                        const data = subProfiles?.[role] || {};
-                        const schema = PROFILE_SCHEMAS[role] || [];
-                        if (schema.length === 0) return null; // Skip if no schema
-
-                        const total = schema.filter(f => !f.isToggle && f.type !== 'list').length || 1;
-                        const filled = schema.filter(f => !f.isToggle && f.type !== 'list' && data[f.key] && data[f.key].length).length;
-                        const pct = Math.round((filled/total)*100);
-                        return (
-                            <div 
-                                key={role} 
-                                className="space-y-1 cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 p-2 rounded transition"
-                                onClick={() => setActiveTab('profile')} // Action: Open Profile Editor
-                                title="Click to edit profile"
-                            >
-                                <div className="flex justify-between text-xs">
-                                    <span className="text-gray-600 dark:text-gray-400 font-medium">{role}</span>
-                                    <span className={pct===100 ? "text-green-500 font-bold" : "text-gray-500"}>{pct}%</span>
-                                </div>
-                                <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                                    <div className={`h-full transition-all duration-1000 ${pct>=80?'bg-green-500': pct>=40?'bg-yellow-500':'bg-red-500'}`} style={{width: `${pct}%`}}></div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-           </div>
-
-        </div>
-      </div>
-    </div>
-  );
+    );
 }
