@@ -77,4 +77,15 @@ export default defineSchema({
   })
     .index("by_chat", ["chatId"])
     .index("by_user", ["userId"]),
+
+  // Typing indicators table
+  typingIndicators: defineTable({
+    chatId: v.string(),
+    userId: v.string(),
+    userName: v.string(),
+    isTyping: v.boolean(),
+    updatedAt: v.number(),
+  })
+    .index("by_chat", ["chatId"])
+    .index("by_chat_user", ["chatId", "userId"]),
 });

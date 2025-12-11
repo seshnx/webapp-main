@@ -10,6 +10,7 @@ import ForwardMessageModal from './message/ForwardMessageModal';
 import PresenceIndicator, { StatusBadge } from './PresenceIndicator';
 import { useUserPresence } from '../../hooks/usePresence';
 import { useReadReceipts } from '../../hooks/useReadReceipts';
+import { useTypingIndicator, formatTypingUsers } from '../../hooks/useTypingIndicator';
 import getLinkPreview from '../../utils/linkPreview'; 
 import UserAvatar from '../shared/UserAvatar';
 
@@ -45,6 +46,13 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         isMessageRead,
         myLastRead 
     } = useReadReceipts(chatId, user?.uid);
+
+    // Typing indicator tracking
+    const { typingUsers, setTyping, clearTyping } = useTypingIndicator(
+        chatId, 
+        user?.uid, 
+        userData?.firstName || 'User'
+    );
 
     // FIX: Determine Convex availability directly. 
     // Removing useMemo prevents the "Cannot access before initialization" error.
@@ -453,11 +461,16 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
             {/* Chat Input */}
             <ChatInput
+                activeChatId={chatId}
+                uid={user?.uid}
                 onSend={sendMessage}
                 replyingTo={replyingTo}
                 editingMessage={editingMessage}
                 onCancelReply={() => setReplyingTo(null)}
                 onCancelEdit={() => setEditingMessage(null)}
+                typingUsers={typingUsers}
+                onTyping={setTyping}
+                onStopTyping={clearTyping}
             />
 
             {/* Forward Modal */}
