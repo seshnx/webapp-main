@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import DistributionManager from './marketplace/DistributionManager';
 import GearExchange from './marketplace/GearExchange';
 import SeshFxStore from './marketplace/SeshFxStore'; // Sample Pack Store
 
 export default function Marketplace({ user, userData, tokenBalance }) {
-    const [subTab, setSubTab] = useState('distribution');
+    const [subTab, setSubTab] = useState('gear');
 
     const tabs = [
-        { id: 'distribution', label: 'Music Distribution' },
         { id: 'gear', label: 'Gear Exchange' },
         { id: 'fx', label: 'SeshFX Store' },
     ];
@@ -34,11 +32,6 @@ export default function Marketplace({ user, userData, tokenBalance }) {
             </div>
 
             <div className="tab-content-wrapper">
-                {subTab === 'distribution' && (
-                    <div key="distribution" className="tab-content">
-                        <DistributionManager user={user} userData={userData} />
-                    </div>
-                )}
                 {subTab === 'gear' && (
                     <div key="gear" className="tab-content">
                         <GearExchange user={user} userData={userData} />
