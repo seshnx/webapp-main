@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
     Calendar, User, Check, X, MessageSquare, 
     Search, RefreshCw, ChevronLeft, ChevronRight,
-    CheckCircle, XCircle, Clock3, Eye, Plus, Ban, Trash2
+    CheckCircle, XCircle, Clock3, Eye, Ban, Trash2
 } from 'lucide-react';
 import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, Timestamp, addDoc, deleteDoc } from 'firebase/firestore';
 import { db, appId } from '../../config/firebase';
@@ -91,8 +91,7 @@ export default function StudioBookings({ user, onNavigateToChat }) {
         const blockedRef = collection(db, `artifacts/${appId}/blockedDates`);
         const q = query(
             blockedRef,
-            where('studioOwnerId', '==', user.uid),
-            orderBy('date', 'asc')
+            where('studioOwnerId', '==', user.uid)
         );
 
         const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -101,9 +100,13 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                 ...doc.data(),
                 date: doc.data().date?.toDate?.() || new Date(doc.data().date)
             }));
+            // Sort client-side to avoid needing composite index
+            blockedData.sort((a, b) => new Date(a.date) - new Date(b.date));
             setBlockedDates(blockedData);
         }, (error) => {
             console.error('Error fetching blocked dates:', error);
+            // Don't break the UI if blocked dates can't be fetched
+            setBlockedDates([]);
         });
 
         return () => unsubscribe();
