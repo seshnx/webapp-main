@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, doc, updateDoc, getDoc } from 'firebase/firestore';
-import { Search, Filter, Plus, Camera, DollarSign, Tag, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info, ToggleLeft, ToggleRight, Package, Star, MessageCircle, Send, Clock, ThumbsUp, ThumbsDown, BadgeCheck } from 'lucide-react';
+import { Search, Plus, Camera, DollarSign, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info, ToggleLeft, ToggleRight, Package, Star, MessageCircle, Send, Clock, ThumbsUp, ThumbsDown, BadgeCheck, ShoppingCart, ArrowRight, Home, BoxIcon, Receipt, ChevronRight } from 'lucide-react';
 import { db, getPaths, appId } from '../../config/firebase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { EQUIP_CATEGORIES, HIGH_VALUE_THRESHOLD, SAFE_EXCHANGE_STATUS, SAFE_EXCHANGE_REQUIREMENT, FULFILLMENT_METHOD, SHIPPING_VERIFICATION_STATUS } from '../../config/constants';
@@ -9,8 +9,31 @@ import { InspectionSvg } from '../tech/InspectionDiagrams';
 import SafeExchangeTransaction from './SafeExchangeTransaction';
 import ShippingVerification from './ShippingVerification';
 import toast from 'react-hot-toast';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const CONDITIONS = ['Mint', 'Excellent', 'Good', 'Fair', 'Non-Functioning'];
+
+// Order status constants for standard purchases
+const ORDER_STATUS = {
+    PENDING: 'pending',           // Order placed, awaiting seller confirmation
+    CONFIRMED: 'confirmed',       // Seller confirmed the order
+    SHIPPED: 'shipped',           // Item has been shipped
+    DELIVERED: 'delivered',       // Item delivered
+    COMPLETED: 'completed',       // Buyer confirmed receipt, transaction complete
+    CANCELLED: 'cancelled',       // Order cancelled
+    REFUNDED: 'refunded',         // Order refunded
+};
+
+// Order status display config
+const ORDER_STATUS_CONFIG = {
+    [ORDER_STATUS.PENDING]: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400', icon: Clock },
+    [ORDER_STATUS.CONFIRMED]: { label: 'Confirmed', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400', icon: CheckCircle },
+    [ORDER_STATUS.SHIPPED]: { label: 'Shipped', color: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400', icon: Truck },
+    [ORDER_STATUS.DELIVERED]: { label: 'Delivered', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', icon: Package },
+    [ORDER_STATUS.COMPLETED]: { label: 'Completed', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400', icon: CheckCircle },
+    [ORDER_STATUS.CANCELLED]: { label: 'Cancelled', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400', icon: X },
+    [ORDER_STATUS.REFUNDED]: { label: 'Refunded', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400', icon: Receipt },
+};
 
 // Seller Rating Component
 const SellerRating = ({ rating, reviewCount, size = 'sm' }) => {
@@ -65,7 +88,7 @@ const getSafeExchangeRequirement = (price, sellerRequiresSafeExchange) => {
 };
 
 export default function GearExchange({ user, userData, setActiveTab, openChat }) {
-    const [view, setView] = useState('browse'); // 'browse', 'create', 'detail'
+    const [view, setView] = useState('browse'); // 'browse', 'create', 'detail', 'orders'
     const [listings, setListings] = useState([]);
     const [filter, setFilter] = useState('All');
     const [search, setSearch] = useState('');
@@ -74,6 +97,10 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
     // Safe Exchange State
     const [activeTransaction, setActiveTransaction] = useState(null);
     const [userTransactions, setUserTransactions] = useState([]);
+    
+    // Standard Orders State
+    const [userOrders, setUserOrders] = useState([]);
+    const [selectedOrder, setSelectedOrder] = useState(null);
 
     // Fetch Listings
     useEffect(() => {
@@ -116,6 +143,45 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
         return () => {
             unsubBuyer();
             unsubSeller();
+        };
+    }, [user?.uid]);
+
+    // Fetch user's standard orders (as buyer and seller)
+    useEffect(() => {
+        if (!user?.uid) return;
+
+        const qBuyerOrders = query(
+            collection(db, `artifacts/${appId}/public/data/gear_orders`),
+            where('buyerId', '==', user.uid)
+        );
+        const qSellerOrders = query(
+            collection(db, `artifacts/${appId}/public/data/gear_orders`),
+            where('sellerId', '==', user.uid)
+        );
+
+        const unsubBuyerOrders = onSnapshot(qBuyerOrders, (snap) => {
+            setUserOrders(prev => {
+                const buyerOrders = snap.docs.map(d => ({ id: d.id, ...d.data(), role: 'buyer' }));
+                const sellerOrders = prev.filter(o => o.role === 'seller');
+                return [...buyerOrders, ...sellerOrders].sort((a, b) => 
+                    (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)
+                );
+            });
+        });
+
+        const unsubSellerOrders = onSnapshot(qSellerOrders, (snap) => {
+            setUserOrders(prev => {
+                const sellerOrders = snap.docs.map(d => ({ id: d.id, ...d.data(), role: 'seller' }));
+                const buyerOrders = prev.filter(o => o.role === 'buyer');
+                return [...buyerOrders, ...sellerOrders].sort((a, b) => 
+                    (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)
+                );
+            });
+        });
+
+        return () => {
+            unsubBuyerOrders();
+            unsubSellerOrders();
         };
     }, [user?.uid]);
 
@@ -208,6 +274,167 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
             alert('Failed to initiate purchase. Please try again.');
         }
     };
+
+    // Handle standard purchase for low-value items
+    const handleStandardPurchase = async (item, shippingDetails) => {
+        const toastId = toast.loading('Processing your order...');
+        
+        try {
+            // Create the order
+            const orderRef = await addDoc(
+                collection(db, `artifacts/${appId}/public/data/gear_orders`),
+                {
+                    // Item details
+                    listingId: item.id,
+                    itemTitle: item.title,
+                    itemBrand: item.brand,
+                    itemDescription: item.description || '',
+                    itemPhotos: item.images || [],
+                    itemCondition: item.condition,
+                    price: item.price,
+                    
+                    // Seller details
+                    sellerId: item.sellerId,
+                    sellerName: item.sellerName,
+                    sellerPhoto: item.sellerPhoto,
+                    
+                    // Buyer details
+                    buyerId: user.uid,
+                    buyerName: `${userData.firstName} ${userData.lastName}`,
+                    buyerPhoto: userData.photoURL || null,
+                    
+                    // Shipping/Fulfillment
+                    fulfillmentMethod: shippingDetails.method, // 'shipping' or 'pickup'
+                    shippingAddress: shippingDetails.method === 'shipping' ? shippingDetails.address : null,
+                    buyerPhone: shippingDetails.phone || null,
+                    buyerNotes: shippingDetails.notes || '',
+                    
+                    // Tracking (to be updated by seller)
+                    trackingNumber: null,
+                    trackingCarrier: null,
+                    
+                    // Status
+                    status: ORDER_STATUS.PENDING,
+                    statusHistory: [{
+                        status: ORDER_STATUS.PENDING,
+                        timestamp: Date.now(),
+                        note: 'Order placed by buyer'
+                    }],
+                    
+                    // Payment (placeholder - in production would integrate with Stripe)
+                    paymentStatus: 'pending',
+                    paymentIntentId: null,
+                    
+                    // Timestamps
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp()
+                }
+            );
+
+            // Send notification to seller
+            await addDoc(collection(db, getPaths(item.sellerId).notifications), {
+                type: 'gear_order',
+                orderId: orderRef.id,
+                listingId: item.id,
+                message: `${userData.firstName} purchased your ${item.title} for $${item.price}`,
+                buyerName: `${userData.firstName} ${userData.lastName}`,
+                itemTitle: item.title,
+                price: item.price,
+                fulfillmentMethod: shippingDetails.method,
+                read: false,
+                createdAt: serverTimestamp()
+            });
+
+            // Update listing status to sold/pending
+            await updateDoc(doc(db, getPaths(item.sellerId).gearListings, item.id), {
+                status: 'Pending Sale',
+                pendingOrderId: orderRef.id,
+                updatedAt: serverTimestamp()
+            });
+
+            toast.success('Order placed successfully!', { id: toastId });
+            setSelectedItem(null);
+            setView('orders'); // Switch to orders view
+            
+            return orderRef.id;
+        } catch (error) {
+            console.error('Failed to create order:', error);
+            toast.error('Failed to place order. Please try again.', { id: toastId });
+            return null;
+        }
+    };
+
+    // Update order status (for sellers)
+    const handleUpdateOrderStatus = async (orderId, newStatus, trackingInfo = null) => {
+        const toastId = toast.loading('Updating order...');
+        
+        try {
+            const orderRef = doc(db, `artifacts/${appId}/public/data/gear_orders`, orderId);
+            const orderSnap = await getDoc(orderRef);
+            
+            if (!orderSnap.exists()) {
+                toast.error('Order not found', { id: toastId });
+                return;
+            }
+            
+            const orderData = orderSnap.data();
+            const statusHistory = orderData.statusHistory || [];
+            
+            const updateData = {
+                status: newStatus,
+                statusHistory: [...statusHistory, {
+                    status: newStatus,
+                    timestamp: Date.now(),
+                    note: `Status updated to ${newStatus}`
+                }],
+                updatedAt: serverTimestamp()
+            };
+            
+            // Add tracking info if provided
+            if (trackingInfo) {
+                updateData.trackingNumber = trackingInfo.trackingNumber;
+                updateData.trackingCarrier = trackingInfo.carrier;
+            }
+            
+            await updateDoc(orderRef, updateData);
+            
+            // Send notification to buyer
+            const notificationMessage = newStatus === ORDER_STATUS.SHIPPED 
+                ? `Your order "${orderData.itemTitle}" has been shipped!`
+                : `Your order "${orderData.itemTitle}" status updated to ${newStatus}`;
+                
+            await addDoc(collection(db, getPaths(orderData.buyerId).notifications), {
+                type: 'order_update',
+                orderId: orderId,
+                message: notificationMessage,
+                itemTitle: orderData.itemTitle,
+                newStatus: newStatus,
+                trackingNumber: trackingInfo?.trackingNumber || null,
+                read: false,
+                createdAt: serverTimestamp()
+            });
+            
+            // If completed, update listing to sold
+            if (newStatus === ORDER_STATUS.COMPLETED) {
+                await updateDoc(doc(db, getPaths(orderData.sellerId).gearListings, orderData.listingId), {
+                    status: 'Sold',
+                    updatedAt: serverTimestamp()
+                });
+            }
+            
+            toast.success('Order updated!', { id: toastId });
+        } catch (error) {
+            console.error('Failed to update order:', error);
+            toast.error('Failed to update order', { id: toastId });
+        }
+    };
+
+    // Get pending orders count
+    const pendingOrders = userOrders.filter(o => 
+        o.status !== ORDER_STATUS.COMPLETED && 
+        o.status !== ORDER_STATUS.CANCELLED &&
+        o.status !== ORDER_STATUS.REFUNDED
+    );
 
     // Filtering
     const filteredListings = listings.filter(l => 
@@ -303,6 +530,17 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                                 />
                             </div>
                             <button 
+                                onClick={() => setView('orders')} 
+                                className="relative bg-white dark:bg-[#2c2e36] border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 transition"
+                            >
+                                <BoxIcon size={16}/> Orders
+                                {pendingOrders.length > 0 && (
+                                    <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center">
+                                        {pendingOrders.length}
+                                    </span>
+                                )}
+                            </button>
+                            <button 
                                 onClick={() => setView('create')} 
                                 className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg transition"
                             >
@@ -394,6 +632,18 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                 />
             )}
 
+            {/* Orders View */}
+            {view === 'orders' && (
+                <OrdersView 
+                    orders={userOrders}
+                    user={user}
+                    userData={userData}
+                    onBack={() => setView('browse')}
+                    onUpdateStatus={handleUpdateOrderStatus}
+                    openChat={openChat}
+                />
+            )}
+
             {/* Detail Modal */}
             {selectedItem && (
                 <ListingDetailModal 
@@ -402,6 +652,7 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                     currentUser={user}
                     currentUserData={userData}
                     onSafeExchangePurchase={handleSafeExchangePurchase}
+                    onStandardPurchase={handleStandardPurchase}
                 />
             )}
         </div>
@@ -644,15 +895,28 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
 }
 
 // --- SUB-COMPONENT: DETAIL MODAL ---
-function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSafeExchangePurchase }) {
+function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSafeExchangePurchase, onStandardPurchase }) {
     const [viewReport, setViewReport] = useState(false);
     const [isPurchasing, setIsPurchasing] = useState(false);
     const [showOfferForm, setShowOfferForm] = useState(false);
+    const [showCheckout, setShowCheckout] = useState(false);
     const [offerAmount, setOfferAmount] = useState('');
     const [offerMessage, setOfferMessage] = useState('');
     const [submittingOffer, setSubmittingOffer] = useState(false);
     const [existingOffers, setExistingOffers] = useState([]);
     const [loadingOffers, setLoadingOffers] = useState(true);
+    
+    // Checkout form state
+    const [checkoutStep, setCheckoutStep] = useState(1); // 1: method, 2: details, 3: confirm
+    const [fulfillmentMethod, setFulfillmentMethod] = useState('shipping');
+    const [shippingForm, setShippingForm] = useState({
+        street: currentUserData?.address?.street || '',
+        city: currentUserData?.city || '',
+        state: currentUserData?.state || '',
+        zip: currentUserData?.zip || '',
+        phone: currentUserData?.phone || '',
+        notes: ''
+    });
 
     const highValue = isHighValueItem(item.price);
 
@@ -693,9 +957,42 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
             await onSafeExchangePurchase(item);
             setIsPurchasing(false);
         } else {
-            // Standard purchase flow for low-value items
-            alert('Standard purchase flow - coming soon!');
+            // Open checkout flow for standard purchase
+            setShowCheckout(true);
+            setCheckoutStep(1);
         }
+    };
+
+    const handleCheckoutComplete = async () => {
+        setIsPurchasing(true);
+        
+        const shippingDetails = {
+            method: fulfillmentMethod,
+            address: fulfillmentMethod === 'shipping' ? {
+                street: shippingForm.street,
+                city: shippingForm.city,
+                state: shippingForm.state,
+                zip: shippingForm.zip
+            } : null,
+            phone: shippingForm.phone,
+            notes: shippingForm.notes
+        };
+        
+        const success = await onStandardPurchase(item, shippingDetails);
+        
+        if (success) {
+            setShowCheckout(false);
+            onClose();
+        }
+        
+        setIsPurchasing(false);
+    };
+
+    const validateShippingForm = () => {
+        if (fulfillmentMethod === 'shipping') {
+            return shippingForm.street && shippingForm.city && shippingForm.state && shippingForm.zip;
+        }
+        return true;
     };
 
     const handleSubmitOffer = async () => {
@@ -1025,59 +1322,615 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                         </div>
                     )}
 
-                    <div className="mt-8 pt-6 border-t dark:border-gray-700">
-                        {item.sellerId === currentUser.uid ? (
-                            <button className="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold py-3 rounded-xl cursor-not-allowed">You own this listing</button>
-                        ) : (
-                            <div className="space-y-3">
-                                <button 
-                                    onClick={handlePurchase}
-                                    disabled={isPurchasing}
-                                    className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed ${
-                                        highValue 
-                                            ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white' 
-                                            : 'bg-orange-600 hover:bg-orange-700 text-white'
-                                    }`}
-                                >
-                                    {isPurchasing ? (
-                                        <Loader2 className="animate-spin" size={20}/>
-                                    ) : highValue ? (
-                                        <>
-                                            <Shield size={20}/> Initiate Safe Exchange
-                                        </>
-                                    ) : (
-                                        <>
-                                            <DollarSign size={20}/> Buy Now - ${item.price}
-                                        </>
-                                    )}
-                                </button>
-                                
-                                {/* Make Offer Button */}
-                                {!showOfferForm && item.acceptsOffers !== false && (
-                                    <button
-                                        onClick={() => setShowOfferForm(true)}
-                                        className="w-full py-3 border-2 border-blue-500 text-blue-600 dark:text-blue-400 font-bold rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition flex items-center justify-center gap-2"
+                    {/* Checkout Flow */}
+                    <AnimatePresence>
+                        {showCheckout && (
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -20 }}
+                                className="mt-6 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 p-5 rounded-xl border border-green-200 dark:border-green-800"
+                            >
+                                <div className="flex items-center justify-between mb-4">
+                                    <h4 className="font-bold text-green-800 dark:text-green-300 flex items-center gap-2">
+                                        <ShoppingCart size={18} />
+                                        Checkout
+                                    </h4>
+                                    <button 
+                                        onClick={() => setShowCheckout(false)}
+                                        className="text-gray-400 hover:text-gray-600"
                                     >
-                                        <MessageCircle size={18} />
-                                        Make an Offer
+                                        <X size={18} />
                                     </button>
+                                </div>
+
+                                {/* Step Indicator */}
+                                <div className="flex items-center gap-2 mb-6">
+                                    {[1, 2, 3].map((step) => (
+                                        <React.Fragment key={step}>
+                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all ${
+                                                checkoutStep >= step 
+                                                    ? 'bg-green-500 text-white' 
+                                                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+                                            }`}>
+                                                {checkoutStep > step ? <CheckCircle size={16} /> : step}
+                                            </div>
+                                            {step < 3 && (
+                                                <div className={`flex-1 h-1 rounded ${
+                                                    checkoutStep > step ? 'bg-green-500' : 'bg-gray-200 dark:bg-gray-700'
+                                                }`} />
+                                            )}
+                                        </React.Fragment>
+                                    ))}
+                                </div>
+
+                                {/* Step 1: Fulfillment Method */}
+                                {checkoutStep === 1 && (
+                                    <div className="space-y-4">
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">How would you like to receive this item?</p>
+                                        
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <button
+                                                onClick={() => setFulfillmentMethod('shipping')}
+                                                className={`p-4 rounded-xl border-2 transition-all ${
+                                                    fulfillmentMethod === 'shipping'
+                                                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <Truck size={24} className={fulfillmentMethod === 'shipping' ? 'text-green-600 mx-auto mb-2' : 'text-gray-400 mx-auto mb-2'} />
+                                                <div className="font-bold text-sm dark:text-white">Ship to Me</div>
+                                                <div className="text-xs text-gray-500">Delivered to your door</div>
+                                            </button>
+                                            
+                                            <button
+                                                onClick={() => setFulfillmentMethod('pickup')}
+                                                className={`p-4 rounded-xl border-2 transition-all ${
+                                                    fulfillmentMethod === 'pickup'
+                                                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                                        : 'border-gray-200 dark:border-gray-700 hover:border-gray-300'
+                                                }`}
+                                            >
+                                                <Home size={24} className={fulfillmentMethod === 'pickup' ? 'text-green-600 mx-auto mb-2' : 'text-gray-400 mx-auto mb-2'} />
+                                                <div className="font-bold text-sm dark:text-white">Local Pickup</div>
+                                                <div className="text-xs text-gray-500">Meet the seller</div>
+                                            </button>
+                                        </div>
+
+                                        <button
+                                            onClick={() => setCheckoutStep(2)}
+                                            className="w-full py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition flex items-center justify-center gap-2"
+                                        >
+                                            Continue <ArrowRight size={16} />
+                                        </button>
+                                    </div>
                                 )}
-                            </div>
+
+                                {/* Step 2: Shipping Details */}
+                                {checkoutStep === 2 && (
+                                    <div className="space-y-4">
+                                        <p className="text-sm text-gray-600 dark:text-gray-400">
+                                            {fulfillmentMethod === 'shipping' ? 'Enter your shipping address' : 'Add your contact details'}
+                                        </p>
+                                        
+                                        {fulfillmentMethod === 'shipping' && (
+                                            <>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Street Address"
+                                                    value={shippingForm.street}
+                                                    onChange={e => setShippingForm({...shippingForm, street: e.target.value})}
+                                                    className="w-full p-3 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                                />
+                                                <div className="grid grid-cols-3 gap-2">
+                                                    <input
+                                                        type="text"
+                                                        placeholder="City"
+                                                        value={shippingForm.city}
+                                                        onChange={e => setShippingForm({...shippingForm, city: e.target.value})}
+                                                        className="p-3 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="State"
+                                                        value={shippingForm.state}
+                                                        onChange={e => setShippingForm({...shippingForm, state: e.target.value})}
+                                                        className="p-3 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                                    />
+                                                    <input
+                                                        type="text"
+                                                        placeholder="ZIP"
+                                                        value={shippingForm.zip}
+                                                        onChange={e => setShippingForm({...shippingForm, zip: e.target.value})}
+                                                        className="p-3 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                                    />
+                                                </div>
+                                            </>
+                                        )}
+                                        
+                                        <input
+                                            type="tel"
+                                            placeholder="Phone Number"
+                                            value={shippingForm.phone}
+                                            onChange={e => setShippingForm({...shippingForm, phone: e.target.value})}
+                                            className="w-full p-3 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                        />
+                                        
+                                        <textarea
+                                            placeholder="Notes for seller (optional)"
+                                            value={shippingForm.notes}
+                                            onChange={e => setShippingForm({...shippingForm, notes: e.target.value})}
+                                            rows={2}
+                                            className="w-full p-3 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white resize-none"
+                                        />
+
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setCheckoutStep(1)}
+                                                className="flex-1 py-3 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                                            >
+                                                Back
+                                            </button>
+                                            <button
+                                                onClick={() => setCheckoutStep(3)}
+                                                disabled={!validateShippingForm()}
+                                                className="flex-1 py-3 bg-green-600 text-white font-bold rounded-xl hover:bg-green-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                                            >
+                                                Review Order <ArrowRight size={16} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Step 3: Confirm */}
+                                {checkoutStep === 3 && (
+                                    <div className="space-y-4">
+                                        <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700">
+                                            <h5 className="font-bold text-sm dark:text-white mb-3">Order Summary</h5>
+                                            
+                                            <div className="flex items-center gap-3 pb-3 border-b dark:border-gray-700">
+                                                {item.images?.[0] && (
+                                                    <img src={item.images[0]} className="w-16 h-16 rounded-lg object-cover" />
+                                                )}
+                                                <div className="flex-1">
+                                                    <div className="font-bold dark:text-white">{item.title}</div>
+                                                    <div className="text-xs text-gray-500">{item.brand} • {item.condition}</div>
+                                                </div>
+                                                <div className="font-bold text-green-600">${item.price}</div>
+                                            </div>
+                                            
+                                            <div className="pt-3 space-y-2 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-500">Fulfillment</span>
+                                                    <span className="dark:text-white capitalize">{fulfillmentMethod}</span>
+                                                </div>
+                                                {fulfillmentMethod === 'shipping' && (
+                                                    <div className="flex justify-between">
+                                                        <span className="text-gray-500">Ship to</span>
+                                                        <span className="dark:text-white text-right text-xs">
+                                                            {shippingForm.city}, {shippingForm.state} {shippingForm.zip}
+                                                        </span>
+                                                    </div>
+                                                )}
+                                                <div className="flex justify-between pt-2 border-t dark:border-gray-700 font-bold">
+                                                    <span className="dark:text-white">Total</span>
+                                                    <span className="text-green-600">${item.price}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
+                                            <Shield size={14} className="shrink-0 mt-0.5" />
+                                            <span>Your purchase is protected by SeshNx Buyer Protection. If there's an issue with your order, we've got your back.</span>
+                                        </div>
+
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => setCheckoutStep(2)}
+                                                className="flex-1 py-3 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                                            >
+                                                Back
+                                            </button>
+                                            <button
+                                                onClick={handleCheckoutComplete}
+                                                disabled={isPurchasing}
+                                                className="flex-1 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white font-bold rounded-xl hover:from-green-700 hover:to-emerald-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                                            >
+                                                {isPurchasing ? (
+                                                    <Loader2 className="animate-spin" size={18} />
+                                                ) : (
+                                                    <>
+                                                        <CreditCard size={18} /> Place Order
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
+                            </motion.div>
                         )}
-                        <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
-                            {highValue ? (
-                                <>
-                                    <Lock size={10}/> Funds held in escrow • GPS verified exchange • Dual approval release
-                                </>
+                    </AnimatePresence>
+
+                    {/* Purchase Buttons (hidden when checkout is open) */}
+                    {!showCheckout && (
+                        <div className="mt-8 pt-6 border-t dark:border-gray-700">
+                            {item.sellerId === currentUser.uid ? (
+                                <button className="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold py-3 rounded-xl cursor-not-allowed">You own this listing</button>
                             ) : (
-                                <>
-                                    <CheckCircle size={10}/> Purchases covered by SeshNx Buyer Protection
-                                </>
+                                <div className="space-y-3">
+                                    <button 
+                                        onClick={handlePurchase}
+                                        disabled={isPurchasing}
+                                        className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed ${
+                                            highValue 
+                                                ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white' 
+                                                : 'bg-orange-600 hover:bg-orange-700 text-white'
+                                        }`}
+                                    >
+                                        {isPurchasing ? (
+                                            <Loader2 className="animate-spin" size={20}/>
+                                        ) : highValue ? (
+                                            <>
+                                                <Shield size={20}/> Initiate Safe Exchange
+                                            </>
+                                        ) : (
+                                            <>
+                                                <ShoppingCart size={20}/> Buy Now - ${item.price}
+                                            </>
+                                        )}
+                                    </button>
+                                    
+                                    {/* Make Offer Button */}
+                                    {!showOfferForm && item.acceptsOffers !== false && (
+                                        <button
+                                            onClick={() => setShowOfferForm(true)}
+                                            className="w-full py-3 border-2 border-blue-500 text-blue-600 dark:text-blue-400 font-bold rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition flex items-center justify-center gap-2"
+                                        >
+                                            <MessageCircle size={18} />
+                                            Make an Offer
+                                        </button>
+                                    )}
+                                </div>
                             )}
+                            <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
+                                {highValue ? (
+                                    <>
+                                        <Lock size={10}/> Funds held in escrow • GPS verified exchange • Dual approval release
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle size={10}/> Purchases covered by SeshNx Buyer Protection
+                                    </>
+                                )}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- SUB-COMPONENT: ORDERS VIEW ---
+function OrdersView({ orders, user, userData, onBack, onUpdateStatus, openChat }) {
+    const [selectedOrder, setSelectedOrder] = useState(null);
+    const [showShippingModal, setShowShippingModal] = useState(false);
+    const [trackingNumber, setTrackingNumber] = useState('');
+    const [trackingCarrier, setTrackingCarrier] = useState('usps');
+    const [activeTab, setActiveTab] = useState('all'); // 'all', 'buying', 'selling'
+
+    const carriers = [
+        { id: 'usps', label: 'USPS' },
+        { id: 'ups', label: 'UPS' },
+        { id: 'fedex', label: 'FedEx' },
+        { id: 'dhl', label: 'DHL' },
+        { id: 'other', label: 'Other' },
+    ];
+
+    const filteredOrders = orders.filter(order => {
+        if (activeTab === 'buying') return order.role === 'buyer';
+        if (activeTab === 'selling') return order.role === 'seller';
+        return true;
+    });
+
+    const handleMarkShipped = async () => {
+        if (!trackingNumber) {
+            toast.error('Please enter a tracking number');
+            return;
+        }
+        await onUpdateStatus(selectedOrder.id, ORDER_STATUS.SHIPPED, {
+            trackingNumber,
+            carrier: trackingCarrier
+        });
+        setShowShippingModal(false);
+        setTrackingNumber('');
+        setSelectedOrder(null);
+    };
+
+    const handleConfirmDelivery = async (order) => {
+        await onUpdateStatus(order.id, ORDER_STATUS.COMPLETED);
+    };
+
+    const getStatusIcon = (status) => {
+        const config = ORDER_STATUS_CONFIG[status];
+        if (config) {
+            const IconComponent = config.icon;
+            return <IconComponent size={16} />;
+        }
+        return <Clock size={16} />;
+    };
+
+    return (
+        <div className="animate-in fade-in">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <button 
+                        onClick={onBack}
+                        className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
+                    >
+                        <ChevronRight className="rotate-180 text-gray-500" size={20} />
+                    </button>
+                    <div>
+                        <h2 className="text-2xl font-bold dark:text-white flex items-center gap-2">
+                            <Receipt className="text-orange-500" /> My Orders
+                        </h2>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">
+                            Track your purchases and sales
                         </p>
                     </div>
                 </div>
             </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 mb-6">
+                {[
+                    { id: 'all', label: 'All Orders' },
+                    { id: 'buying', label: 'Buying' },
+                    { id: 'selling', label: 'Selling' },
+                ].map(tab => (
+                    <button
+                        key={tab.id}
+                        onClick={() => setActiveTab(tab.id)}
+                        className={`px-4 py-2 rounded-lg text-sm font-bold transition ${
+                            activeTab === tab.id
+                                ? 'bg-orange-600 text-white shadow'
+                                : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* Orders List */}
+            {filteredOrders.length === 0 ? (
+                <div className="text-center py-16 bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700">
+                    <BoxIcon size={48} className="mx-auto text-gray-300 dark:text-gray-600 mb-4" />
+                    <h3 className="text-lg font-bold dark:text-white mb-2">No orders yet</h3>
+                    <p className="text-gray-500 dark:text-gray-400 mb-4">
+                        {activeTab === 'buying' 
+                            ? "You haven't purchased anything yet" 
+                            : activeTab === 'selling'
+                            ? "You haven't received any orders yet"
+                            : "Start shopping or selling to see your orders here"}
+                    </p>
+                    <button
+                        onClick={onBack}
+                        className="px-6 py-2 bg-orange-600 text-white rounded-lg font-bold hover:bg-orange-700 transition"
+                    >
+                        Browse Gear
+                    </button>
+                </div>
+            ) : (
+                <div className="space-y-4">
+                    {filteredOrders.map(order => {
+                        const statusConfig = ORDER_STATUS_CONFIG[order.status] || ORDER_STATUS_CONFIG[ORDER_STATUS.PENDING];
+                        const isSeller = order.role === 'seller';
+                        const isBuyer = order.role === 'buyer';
+                        
+                        return (
+                            <motion.div
+                                key={order.id}
+                                initial={{ opacity: 0, y: 10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden hover:shadow-lg transition"
+                            >
+                                <div className="p-5">
+                                    <div className="flex items-start gap-4">
+                                        {/* Item Image */}
+                                        <div className="w-20 h-20 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden shrink-0">
+                                            {order.itemPhotos?.[0] ? (
+                                                <img src={order.itemPhotos[0]} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center">
+                                                    <Package className="text-gray-400" size={24} />
+                                                </div>
+                                            )}
+                                        </div>
+                                        
+                                        {/* Order Info */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div>
+                                                    <h4 className="font-bold dark:text-white truncate">{order.itemTitle}</h4>
+                                                    <p className="text-sm text-gray-500">{order.itemBrand}</p>
+                                                </div>
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${statusConfig.color}`}>
+                                                    {getStatusIcon(order.status)}
+                                                    {statusConfig.label}
+                                                </span>
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-4 mt-3 text-sm">
+                                                <span className="font-bold text-green-600">${order.price}</span>
+                                                <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                                                    isBuyer 
+                                                        ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
+                                                        : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                                                }`}>
+                                                    {isBuyer ? 'Purchasing' : 'Selling'}
+                                                </span>
+                                                <span className="text-gray-400 text-xs">
+                                                    {order.createdAt?.toDate?.().toLocaleDateString() || 'Recently'}
+                                                </span>
+                                            </div>
+                                            
+                                            {/* Fulfillment Info */}
+                                            <div className="flex items-center gap-2 mt-2 text-xs text-gray-500">
+                                                {order.fulfillmentMethod === 'shipping' ? (
+                                                    <>
+                                                        <Truck size={12} />
+                                                        <span>Shipping to {order.shippingAddress?.city}, {order.shippingAddress?.state}</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Home size={12} />
+                                                        <span>Local Pickup</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Tracking Info */}
+                                            {order.trackingNumber && (
+                                                <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg text-xs">
+                                                    <span className="text-purple-700 dark:text-purple-400 font-bold">
+                                                        Tracking: {order.trackingCarrier?.toUpperCase()} - {order.trackingNumber}
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Action Buttons */}
+                                    <div className="flex gap-2 mt-4 pt-4 border-t dark:border-gray-700">
+                                        {/* Seller Actions */}
+                                        {isSeller && order.status === ORDER_STATUS.PENDING && (
+                                            <button
+                                                onClick={() => onUpdateStatus(order.id, ORDER_STATUS.CONFIRMED)}
+                                                className="flex-1 py-2 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2"
+                                            >
+                                                <CheckCircle size={16} /> Confirm Order
+                                            </button>
+                                        )}
+                                        
+                                        {isSeller && order.status === ORDER_STATUS.CONFIRMED && order.fulfillmentMethod === 'shipping' && (
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedOrder(order);
+                                                    setShowShippingModal(true);
+                                                }}
+                                                className="flex-1 py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 transition flex items-center justify-center gap-2"
+                                            >
+                                                <Truck size={16} /> Mark as Shipped
+                                            </button>
+                                        )}
+                                        
+                                        {isSeller && order.status === ORDER_STATUS.CONFIRMED && order.fulfillmentMethod === 'pickup' && (
+                                            <button
+                                                onClick={() => onUpdateStatus(order.id, ORDER_STATUS.COMPLETED)}
+                                                className="flex-1 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2"
+                                            >
+                                                <CheckCircle size={16} /> Mark as Picked Up
+                                            </button>
+                                        )}
+                                        
+                                        {/* Buyer Actions */}
+                                        {isBuyer && (order.status === ORDER_STATUS.SHIPPED || order.status === ORDER_STATUS.DELIVERED) && (
+                                            <button
+                                                onClick={() => handleConfirmDelivery(order)}
+                                                className="flex-1 py-2 bg-green-600 text-white text-sm font-bold rounded-lg hover:bg-green-700 transition flex items-center justify-center gap-2"
+                                            >
+                                                <CheckCircle size={16} /> Confirm Receipt
+                                            </button>
+                                        )}
+                                        
+                                        {/* Contact Button */}
+                                        <button
+                                            onClick={() => openChat?.(isBuyer ? order.sellerId : order.buyerId)}
+                                            className="px-4 py-2 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 text-sm font-bold rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition flex items-center gap-2"
+                                        >
+                                            <MessageCircle size={16} /> 
+                                            Contact {isBuyer ? 'Seller' : 'Buyer'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* Shipping Modal */}
+            <AnimatePresence>
+                {showShippingModal && selectedOrder && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[70] p-4"
+                        onClick={() => setShowShippingModal(false)}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, y: 20 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.9, y: 20 }}
+                            onClick={e => e.stopPropagation()}
+                            className="bg-white dark:bg-[#2c2e36] rounded-2xl p-6 w-full max-w-md shadow-2xl"
+                        >
+                            <h3 className="text-xl font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Truck className="text-purple-600" /> Add Shipping Info
+                            </h3>
+                            
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Carrier</label>
+                                    <select
+                                        value={trackingCarrier}
+                                        onChange={e => setTrackingCarrier(e.target.value)}
+                                        className="w-full p-3 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                    >
+                                        {carriers.map(c => (
+                                            <option key={c.id} value={c.id}>{c.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Tracking Number</label>
+                                    <input
+                                        type="text"
+                                        value={trackingNumber}
+                                        onChange={e => setTrackingNumber(e.target.value)}
+                                        placeholder="Enter tracking number"
+                                        className="w-full p-3 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                    />
+                                </div>
+                                
+                                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-xs text-blue-700 dark:text-blue-300">
+                                    <Info size={12} className="inline mr-1" />
+                                    The buyer will be notified with the tracking information
+                                </div>
+                                
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setShowShippingModal(false)}
+                                        className="flex-1 py-3 border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 font-bold rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleMarkShipped}
+                                        className="flex-1 py-3 bg-purple-600 text-white font-bold rounded-xl hover:bg-purple-700 transition flex items-center justify-center gap-2"
+                                    >
+                                        <Truck size={16} /> Confirm Shipment
+                                    </button>
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }
