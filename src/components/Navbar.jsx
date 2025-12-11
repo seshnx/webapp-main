@@ -133,8 +133,10 @@ export default function Navbar({
           <button 
               onClick={onMenuClick}
               className="p-2 -ml-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden"
+              aria-label="Open navigation menu"
+              aria-expanded="false"
           >
-              <Menu size={24} />
+              <Menu size={24} aria-hidden="true" />
           </button>
 
           <div className="flex items-center gap-2 cursor-pointer" onClick={()=>setActiveTab('dashboard')}>
@@ -209,16 +211,23 @@ export default function Navbar({
               </div>
           )}
 
-          <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300">
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          <button 
+            onClick={toggleTheme} 
+            className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? <Sun size={20} aria-hidden="true" /> : <Moon size={20} aria-hidden="true" />}
           </button>
           
           <div className="relative" ref={notifRef}>
               <button 
                   className={`relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition ${showNotifs ? 'bg-gray-100 dark:bg-gray-800 text-brand-blue' : ''}`}
                   onClick={() => setShowNotifs(!showNotifs)}
+                  aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+                  aria-expanded={showNotifs}
               >
-                  <Bell size={20} />
+                  <Bell size={20} aria-hidden="true" />
                   <NotificationBadge count={unreadCount} />
               </button>
 

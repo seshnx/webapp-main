@@ -171,10 +171,25 @@ export default function Dashboard({
 
     roles.forEach(role => {
         const data = subProfiles?.[role] || {};
+        // Also check userData for Talent subRole
+        const talentData = role === 'Talent' ? { ...data, talentSubRole: userData?.talentSubRole } : data;
         const schema = PROFILE_SCHEMAS[role] || [];
         if (schema.length === 0) return;
-        const totalFields = schema.filter(f => !f.isToggle && f.type !== 'list').length || 1;
-        const filledFields = schema.filter(f => !f.isToggle && f.type !== 'list' && data[f.key] && data[f.key].length).length;
+        
+        // Filter out toggle fields and list fields, but include subRole fields
+        const relevantFields = schema.filter(f => !f.isToggle && f.type !== 'list');
+        const totalFields = relevantFields.length || 1;
+        
+        const filledFields = relevantFields.filter(f => {
+            const value = f.isSubRole ? talentData[f.key] : data[f.key];
+            // Check if the value is truthy and has content
+            if (value === null || value === undefined) return false;
+            if (Array.isArray(value)) return value.length > 0;
+            if (typeof value === 'string') return value.trim().length > 0;
+            if (typeof value === 'number') return true;
+            return !!value;
+        }).length;
+        
         totalPct += (filledFields / totalFields);
         roleCount++;
     });
