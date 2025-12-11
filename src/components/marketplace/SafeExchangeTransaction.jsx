@@ -382,7 +382,7 @@ export default function SafeExchangeTransaction({
                         <span className="flex items-center gap-1">
                             <DollarSign size={16} /> ${transaction?.price?.toLocaleString()}
                             {transaction?.serviceFee && (
-                                <span className="text-orange-200 text-xs ml-1">(+${transaction.serviceFee.toFixed(2)} fee)</span>
+                                <span className="text-orange-200 text-xs ml-1">(1% mutual service fee)</span>
                             )}
                         </span>
                         <span className="flex items-center gap-1">
@@ -459,14 +459,14 @@ export default function SafeExchangeTransaction({
                                         <>
                                             ${transaction?.buyerTotal?.toFixed(2) || transaction?.price?.toLocaleString()} held securely
                                             {transaction?.serviceFee && (
-                                                <span className="text-green-500 text-xs"> (includes ${transaction.serviceFee.toFixed(2)} service fee)</span>
+                                                <span className="text-green-500 text-xs"> (includes 1% service fee: ${transaction.serviceFee.toFixed(2)})</span>
                                             )}
                                         </>
                                     ) : (
                                         <>
                                             You&apos;ll receive ${transaction?.sellerPayout?.toFixed(2) || transaction?.price?.toLocaleString()} on completion
                                             {transaction?.serviceFee && (
-                                                <span className="text-green-500 text-xs"> (after ${transaction.serviceFee.toFixed(2)} service fee)</span>
+                                                <span className="text-green-500 text-xs"> (after 1% service fee: ${transaction.serviceFee.toFixed(2)})</span>
                                             )}
                                         </>
                                     )}
