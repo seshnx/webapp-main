@@ -35,15 +35,17 @@ const ORDER_STATUS_CONFIG = {
     [ORDER_STATUS.REFUNDED]: { label: 'Refunded', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400', icon: Receipt },
 };
 
-// Service fee configuration
-const SERVICE_FEE_RATE = 0.02; // 2% service fee
+// Service fee configuration - Mutual 1% fee on both buyer and seller
+const SERVICE_FEE_RATE = 0.01; // 1% service fee (applied to both parties)
 
 // Calculate service fee and totals
+// Buyer pays: item price + 1% fee
+// Seller receives: item price - 1% fee
 const calculateFees = (itemPrice) => {
     const price = parseFloat(itemPrice) || 0;
     const serviceFee = Math.round(price * SERVICE_FEE_RATE * 100) / 100; // Round to 2 decimal places
-    const buyerTotal = Math.round((price + serviceFee) * 100) / 100;
-    const sellerPayout = Math.round((price - serviceFee) * 100) / 100;
+    const buyerTotal = Math.round((price + serviceFee) * 100) / 100; // Buyer pays price + 1%
+    const sellerPayout = Math.round((price - serviceFee) * 100) / 100; // Seller receives price - 1%
     return {
         itemPrice: price,
         serviceFee,
@@ -1550,7 +1552,7 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-500 flex items-center gap-1">
                                                         Service Fee 
-                                                        <span className="text-[10px] text-gray-400">(2%)</span>
+                                                        <span className="text-[10px] text-gray-400">(1% buyer fee)</span>
                                                     </span>
                                                     <span className="dark:text-white">${fees.serviceFee.toFixed(2)}</span>
                                                 </div>
