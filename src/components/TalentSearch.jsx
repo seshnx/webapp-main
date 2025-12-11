@@ -13,10 +13,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Profile type options with icons
 const PROFILE_TYPES = [
     { value: 'All', label: 'All Profiles', icon: Sparkles },
-    { value: 'Musician', label: 'Musician', icon: Music },
+    { value: 'Talent', label: 'Talent', icon: Music },
     { value: 'Producer', label: 'Producer', icon: Radio },
     { value: 'Engineer', label: 'Audio Engineer', icon: Headphones },
-    { value: 'DJ', label: 'DJ', icon: Mic },
     { value: 'Vocalist', label: 'Vocalist', icon: Mic },
     { value: 'Guitarist', label: 'Guitarist', icon: Guitar },
     { value: 'Pianist', label: 'Pianist/Keys', icon: Piano },
@@ -535,7 +534,7 @@ export default function TalentSearch({
                                                     )}
                                                 </div>
                                                 <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                                                    <span className="text-xs text-gray-500">{res.accountTypes?.[0] || 'Artist'}</span>
+                                                    <span className="text-xs text-gray-500">{res.accountTypes?.[0] || 'Talent'}</span>
                                                     <span className="text-gray-300 dark:text-gray-600">•</span>
                                                     <span className="text-xs font-bold text-green-600 dark:text-green-400">
                                                         ${res.rate || '?'}/hr

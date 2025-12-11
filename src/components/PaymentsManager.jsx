@@ -19,7 +19,7 @@ export default function PaymentsManager({ user, userData }) {
   
   // --- UPDATED: Comprehensive Role Check for Earnings Access ---
   const isTalent = userData?.accountTypes?.some(role => 
-      ['Artist', 'Musician', 'Producer', 'Engineer', 'Studio', 'Composer', 'Technician', 'Label', 'Agent'].includes(role)
+      ['Talent', 'Producer', 'Engineer', 'Studio', 'Composer', 'Technician', 'Label', 'Agent'].includes(role)
   );
 
   useEffect(() => {

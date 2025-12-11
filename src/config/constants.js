@@ -5,9 +5,47 @@ export const BOOKING_THRESHOLD = 60;
 export const STRIPE_PUBLIC_KEY = "pk_test_TYooMQauvdEDq54NiTphI7jx"; 
 
 export const ACCOUNT_TYPES = [
-    "Artist", "Musician", "Engineer", "Producer", "Composer", "Studio", "Technician", "Fan",
+    "Talent", "Engineer", "Producer", "Composer", "Studio", "Technician", "Fan",
     "Student", "Instructor", "Label", "Agent" // Added Label & Agent for Distribution
 ];
+
+// Talent sub-roles - displayed instead of "Talent" when selected
+export const TALENT_SUBROLES = [
+    "Singer",
+    "Singer-Songwriter",
+    "Lyricist",
+    "Rapper",
+    "Guitarist",
+    "Bassist",
+    "Drummer",
+    "Keyboardist",
+    "Pianist",
+    "Violinist",
+    "Cellist",
+    "Saxophonist",
+    "Trumpeter",
+    "DJ",
+    "Beatmaker",
+    "Multi-Instrumentalist",
+    "Session Musician",
+    "Vocalist",
+    "Backup Singer",
+    "Band"
+];
+
+// Helper function to get display role - shows subRole if available, otherwise shows accountType
+export const getDisplayRole = (userData) => {
+    if (!userData) return 'User';
+    
+    const activeRole = userData.activeProfileRole || userData.accountTypes?.[0];
+    
+    // If the active role is Talent and they have a subRole set, show the subRole
+    if (activeRole === 'Talent' && userData.talentSubRole) {
+        return userData.talentSubRole;
+    }
+    
+    return activeRole || 'User';
+};
 
 export const SUBSCRIPTION_PLAN_KEYS = { FREE: 'FREE', BASIC: 'BASIC', PRO: 'PRO', STUDIO: 'STUDIO', LABEL: 'LABEL' };
 export const SUBSCRIPTION_PLANS = [];
@@ -96,39 +134,35 @@ export const AMENITIES_DATA = ["Wi-Fi", "Kitchen", "Lounge", "Private Parking", 
 const NAME_FIELDS = [{ key: "useRealName", label: "Use Primary Name?", type: "checkbox", isToggle: true }, { key: "profileName", label: "Profile/Stage Name", type: "text" }];
 
 export const PROFILE_SCHEMAS = {
-  "Artist": [
-    { key: "profileName", label: "Artist / Band Name", type: "text" }, 
-    { key: "bio", label: "Artist Bio", type: "textarea" },
+  "Talent": [
+    { key: "talentSubRole", label: "What best describes you?", type: "select", options: ["", ...TALENT_SUBROLES], isSubRole: true },
+    { key: "profileName", label: "Artist / Stage Name", type: "text" }, 
+    { key: "bio", label: "Biography", type: "textarea" },
+    { key: "instruments", label: "Instruments & Skills", type: "nested_select", data: INSTRUMENT_DATA },
     { key: "genres", label: "Primary Genres", type: "multi_select", data: GENRE_DATA },
     { key: "rates", label: "Booking/Feature Rate ($)", type: "number" },
+    { key: "sessionRate", label: "Session Rate ($/hr)", type: "number" },
+    { key: "dayRate", label: "Day Rate ($)", type: "number" },
+    { key: "travelDist", label: "Max Travel (mi)", type: "number" },
+    { key: "gearHighlights", label: "Key Gear (Instruments, Amps, etc.)", type: "textarea" },
+    { key: "readingSkill", label: "Sight Reading", type: "select", options: ["None", "Charts/Lead Sheets", "Standard Notation", "Expert"] },
+    { key: "remoteWork", label: "Remote Recording Capable?", type: "select", options: ["Yes", "No"] },
     { key: "website", label: "Official Website", type: "text" },
     { key: "label", label: "Record Label (Optional)", type: "text" },
     { key: "touring", label: "Currently Touring?", type: "select", options: ["Yes", "No"] }
   ],
-  "Label": [ // NEW SCHEMA
+  "Label": [
     { key: "profileName", label: "Label Name", type: "text" },
     { key: "bio", label: "Label Description / Mission", type: "textarea" },
     { key: "genres", label: "Focus Genres", type: "multi_select", data: GENRE_DATA },
     { key: "website", label: "Website", type: "text" },
     { key: "acceptingDemos", label: "Accepting Demos?", type: "select", options: ["Yes", "No"] }
   ],
-  "Agent": [ // NEW SCHEMA
+  "Agent": [
     ...NAME_FIELDS,
     { key: "agencyName", label: "Agency Name", type: "text" },
     { key: "rosterSize", label: "Roster Size", type: "number" },
     { key: "territory", label: "Territory Focus", type: "text" }
-  ],
-  "Musician": [
-    ...NAME_FIELDS,
-    { key: "bio", label: "Biography", type: "textarea" },
-    { key: "instruments", label: "Instruments & Skills", type: "nested_select", data: INSTRUMENT_DATA },
-    { key: "genres", label: "Genres", type: "multi_select", data: GENRE_DATA },
-    { key: "rates", label: "Session Rate ($/hr)", type: "number" },
-    { key: "dayRate", label: "Day Rate ($)", type: "number" },
-    { key: "travelDist", label: "Max Travel (mi)", type: "number" },
-    { key: "gearHighlights", label: "Key Gear (Guitars, Amps, etc.)", type: "textarea" },
-    { key: "readingSkill", label: "Sight Reading", type: "select", options: ["None", "Charts/Lead Sheets", "Standard Notation", "Expert"] },
-    { key: "remoteWork", label: "Remote Recording Capable?", type: "select", options: ["Yes", "No"] }
   ],
   "Fan": [
     { key: "bio", label: "About Me", type: "textarea" },

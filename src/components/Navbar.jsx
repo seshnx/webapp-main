@@ -5,6 +5,7 @@ import LogoDark from '../assets/SeshNx-PNG cCropped.png';
 import UserAvatar from './shared/UserAvatar';
 import NotificationsPanel, { NotificationBadge } from './social/NotificationsPanel';
 import { useNotifications } from '../hooks/useNotifications';
+import { getDisplayRole } from '../config/constants';
 
 export default function Navbar({ 
     user, 
@@ -36,6 +37,7 @@ export default function Navbar({
   } = useNotifications(user?.uid);
 
   const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'User';
+  const displayRole = getDisplayRole(userData); // Shows subRole if set for Talent
   const roles = userData?.accountTypes || [];
 
   const eduRoles = ['Student', 'Instructor', 'Intern', 'Admin'];
@@ -170,7 +172,7 @@ export default function Navbar({
                       className="group flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold transition border border-gray-200 dark:border-gray-700"
                   >
                       <RefreshCw size={12} className={`text-brand-blue shrink-0 transition-transform ${isSwitching ? 'rotate-180 duration-500' : ''}`}/>
-                      <span>{activeRole}</span>
+                      <span>{displayRole}</span>
                       <ChevronDown size={12} className={`shrink-0 transition-transform ${showRoleMenu ? 'rotate-180' : ''}`}/>
                   </button>
 

@@ -44,7 +44,7 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
   };
 
   // --- CORE REQUEST STATE ---
-  const [role, setRole] = useState('Musician');
+  const [role, setRole] = useState('Talent');
   const [action, setAction] = useState('Play');
   const [instrument, setInstrument] = useState('');
   const [genre, setGenre] = useState('');
@@ -69,7 +69,7 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
 
   const getActionsForRole = (r) => {
       switch(r) {
-          case 'Musician': return ['Play', 'Compose', 'Improvise'];
+          case 'Talent': return ['Play', 'Sing', 'Perform', 'Compose', 'Improvise'];
           case 'Engineer': return ['Mix', 'Master', 'Record', 'Edit'];
           case 'Producer': return ['Produce', 'Remix', 'Arrange'];
           case 'Studio': return ['Host Session', 'Rent Gear'];
@@ -99,7 +99,7 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
 
   const sendBroadcast = async () => {
       if(!title || !genre) return alert("Please complete the request sentence.");
-      if(role === 'Musician' && action === 'Play' && !instrument) return alert("Please select an instrument.");
+      if(role === 'Talent' && action === 'Play' && !instrument) return alert("Please select an instrument.");
 
       const validNeeds = needs.filter(n => n.value.trim() !== '');
       

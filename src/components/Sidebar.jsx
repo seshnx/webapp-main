@@ -43,9 +43,9 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
       });
   }
 
-  // Check if user has business features (Studio, Label, Agent, Artist, Producer, etc.)
+  // Check if user has business features (Studio, Label, Agent, Talent, Producer, etc.)
   const hasBusinessFeatures = userData?.accountTypes?.some(t => 
-    ['Studio', 'Label', 'Agent', 'Artist', 'Producer', 'Engineer', 'DJ'].includes(t)
+    ['Studio', 'Label', 'Agent', 'Talent', 'Producer', 'Engineer'].includes(t)
   );
 
   const onLogout = handleLogout || (() => signOut(auth));

@@ -57,16 +57,11 @@ const ROLE_CONFIG = {
         PERMISSIONS.CAN_POST,
         PERMISSIONS.CAN_COMMENT
     ],
-    // --- NEW ROLES ---
-    'Artist': [
+    // --- TALENT ROLE (covers Artists, Musicians, Singers, etc.) ---
+    'Talent': [
         PERMISSIONS.CAN_POST,
         PERMISSIONS.CAN_COMMENT,
-        PERMISSIONS.CAN_APPROVE_BOOKINGS // Artists can accept bookings (features, gigs)
-    ],
-    'Musician': [
-        PERMISSIONS.CAN_POST,
-        PERMISSIONS.CAN_COMMENT,
-        PERMISSIONS.CAN_APPROVE_BOOKINGS // Session musicians accept gigs
+        PERMISSIONS.CAN_APPROVE_BOOKINGS // Talent can accept bookings (features, gigs, sessions)
     ],
     'Engineer': [ PERMISSIONS.CAN_POST, PERMISSIONS.CAN_COMMENT, PERMISSIONS.CAN_APPROVE_BOOKINGS ],
     'Producer': [ PERMISSIONS.CAN_POST, PERMISSIONS.CAN_COMMENT, PERMISSIONS.CAN_APPROVE_BOOKINGS ],
