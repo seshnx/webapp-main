@@ -1,12 +1,14 @@
+import { useState } from 'react';
 import { 
     Home, MapPin, DollarSign, Users, Calendar, 
-    AlertCircle, CheckCircle, Star
+    AlertCircle, CheckCircle, Star, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 /**
  * StudioOverview - Dashboard view for studio stats and quick actions
  */
 export default function StudioOverview({ userData, stats, onNavigate }) {
+    const [currentDate, setCurrentDate] = useState(new Date());
     const studioName = userData?.studioName || userData?.profileName || 'My Studio';
     const rooms = userData?.rooms || [];
     const amenities = userData?.amenities || [];
@@ -215,6 +217,175 @@ export default function StudioOverview({ userData, stats, onNavigate }) {
                     </div>
                 </div>
             )}
+
+            {/* Calendar Preview */}
+            <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden">
+                <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-[#23262f] flex justify-between items-center">
+                    <h3 className="font-bold dark:text-white flex items-center gap-2">
+                        <Calendar size={18} className="text-brand-blue" />
+                        Booking Calendar
+                    </h3>
+                    <button 
+                        onClick={() => onNavigate('bookings')}
+                        className="text-xs text-brand-blue font-bold hover:underline"
+                    >
+                        View All →
+                    </button>
+                </div>
+                <div className="p-4">
+                    {/* Month Navigation */}
+                    <div className="flex items-center justify-between mb-4">
+                        <button 
+                            onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                        >
+                            <ChevronLeft size={18} className="text-gray-500" />
+                        </button>
+                        <span className="font-bold dark:text-white">
+                            {currentDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </span>
+                        <button 
+                            onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))}
+                            className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition"
+                        >
+                            <ChevronRight size={18} className="text-gray-500" />
+                        </button>
+                    </div>
+
+                    {/* Calendar Grid */}
+                    <MiniCalendar 
+                        currentDate={currentDate} 
+                        bookings={stats?.recentBookings || []} 
+                        onNavigate={onNavigate}
+                    />
+
+                    {/* Upcoming Bookings */}
+                    {stats?.recentBookings?.length > 0 && (
+                        <div className="mt-4 pt-4 border-t dark:border-gray-700">
+                            <div className="text-xs font-bold text-gray-500 uppercase mb-2">Upcoming Sessions</div>
+                            <div className="space-y-2">
+                                {stats.recentBookings.slice(0, 3).map((booking, i) => (
+                                    <div 
+                                        key={i}
+                                        className="flex items-center justify-between p-2 bg-gray-50 dark:bg-[#1f2128] rounded-lg text-sm"
+                                    >
+                                        <div>
+                                            <span className="font-medium dark:text-white">{booking.clientName || 'Client'}</span>
+                                            <span className="text-gray-500 ml-2">
+                                                {new Date(booking.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                            </span>
+                                        </div>
+                                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                                            booking.status === 'confirmed' 
+                                                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400' 
+                                                : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                                        }`}>
+                                            {booking.status || 'pending'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Mini Calendar Component
+function MiniCalendar({ currentDate, bookings, onNavigate }) {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const today = new Date();
+    
+    // Get first day of month and number of days
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Create calendar days array
+    const days = [];
+    for (let i = 0; i < firstDay; i++) {
+        days.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+        days.push(i);
+    }
+    
+    // Check if a day has bookings
+    const getDayBookings = (day) => {
+        if (!day) return [];
+        const dayDate = new Date(year, month, day);
+        return bookings.filter(b => {
+            const bookingDate = new Date(b.date);
+            return bookingDate.getDate() === day && 
+                   bookingDate.getMonth() === month && 
+                   bookingDate.getFullYear() === year;
+        });
+    };
+    
+    const isToday = (day) => {
+        return day === today.getDate() && 
+               month === today.getMonth() && 
+               year === today.getFullYear();
+    };
+    
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    
+    return (
+        <div>
+            {/* Day Headers */}
+            <div className="grid grid-cols-7 gap-1 mb-2">
+                {dayNames.map(day => (
+                    <div key={day} className="text-center text-xs font-bold text-gray-400 py-1">
+                        {day}
+                    </div>
+                ))}
+            </div>
+            
+            {/* Calendar Days */}
+            <div className="grid grid-cols-7 gap-1">
+                {days.map((day, i) => {
+                    const dayBookings = getDayBookings(day);
+                    const hasBookings = dayBookings.length > 0;
+                    const hasConfirmed = dayBookings.some(b => b.status === 'confirmed');
+                    const hasPending = dayBookings.some(b => b.status === 'pending');
+                    
+                    return (
+                        <button
+                            key={i}
+                            onClick={() => day && hasBookings && onNavigate('bookings')}
+                            disabled={!day}
+                            className={`aspect-square flex flex-col items-center justify-center rounded-lg text-sm relative transition ${
+                                !day ? '' :
+                                isToday(day) ? 'bg-brand-blue text-white font-bold' :
+                                hasBookings ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30 cursor-pointer' :
+                                'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                        >
+                            {day}
+                            {hasBookings && !isToday(day) && (
+                                <div className="flex gap-0.5 mt-0.5">
+                                    {hasConfirmed && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
+                                    {hasPending && <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>}
+                                </div>
+                            )}
+                        </button>
+                    );
+                })}
+            </div>
+            
+            {/* Legend */}
+            <div className="flex items-center gap-4 mt-3 text-xs text-gray-500">
+                <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                    Confirmed
+                </div>
+                <div className="flex items-center gap-1">
+                    <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+                    Pending
+                </div>
+            </div>
         </div>
     );
 }
