@@ -35,6 +35,24 @@ const ORDER_STATUS_CONFIG = {
     [ORDER_STATUS.REFUNDED]: { label: 'Refunded', color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400', icon: Receipt },
 };
 
+// Service fee configuration
+const SERVICE_FEE_RATE = 0.02; // 2% service fee
+
+// Calculate service fee and totals
+const calculateFees = (itemPrice) => {
+    const price = parseFloat(itemPrice) || 0;
+    const serviceFee = Math.round(price * SERVICE_FEE_RATE * 100) / 100; // Round to 2 decimal places
+    const buyerTotal = Math.round((price + serviceFee) * 100) / 100;
+    const sellerPayout = Math.round((price - serviceFee) * 100) / 100;
+    return {
+        itemPrice: price,
+        serviceFee,
+        serviceFeeRate: SERVICE_FEE_RATE,
+        buyerTotal,
+        sellerPayout
+    };
+};
+
 // Seller Rating Component
 const SellerRating = ({ rating, reviewCount, size = 'sm' }) => {
     if (!rating && !reviewCount) return null;
@@ -187,6 +205,9 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
 
     // Handle initiating a safe exchange purchase
     const handleSafeExchangePurchase = async (item) => {
+        // Calculate fees
+        const fees = calculateFees(item.price);
+        
         try {
             // Create the safe exchange transaction
             const transactionRef = await addDoc(
@@ -200,6 +221,13 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                     itemPhotos: item.images || [],
                     itemCondition: item.condition,
                     price: item.price,
+                    
+                    // Fee breakdown
+                    itemPrice: fees.itemPrice,
+                    serviceFee: fees.serviceFee,
+                    serviceFeeRate: fees.serviceFeeRate,
+                    buyerTotal: fees.buyerTotal,
+                    sellerPayout: fees.sellerPayout,
                     
                     // Seller details
                     sellerId: item.sellerId,
@@ -221,7 +249,7 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                     },
                     
                     // Escrow (placeholder - in production this would integrate with payment processor)
-                    escrowAmount: item.price,
+                    escrowAmount: fees.buyerTotal,
                     escrowStatus: 'pending',
                     
                     // Approvals
@@ -253,14 +281,16 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                 }
             });
 
-            // Send notification to seller
+            // Send notification to seller with payout info
             await addDoc(collection(db, getPaths(item.sellerId).notifications), {
                 type: 'safe_exchange_intent',
                 transactionId: transactionRef.id,
-                message: `${userData.firstName} wants to purchase your ${item.title} for $${item.price}`,
+                message: `${userData.firstName} wants to purchase your ${item.title} - You'll receive $${fees.sellerPayout.toFixed(2)}`,
                 buyerName: `${userData.firstName} ${userData.lastName}`,
                 itemTitle: item.title,
                 price: item.price,
+                sellerPayout: fees.sellerPayout,
+                serviceFee: fees.serviceFee,
                 read: false,
                 createdAt: serverTimestamp()
             });
@@ -279,6 +309,9 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
     const handleStandardPurchase = async (item, shippingDetails) => {
         const toastId = toast.loading('Processing your order...');
         
+        // Calculate fees
+        const fees = calculateFees(item.price);
+        
         try {
             // Create the order
             const orderRef = await addDoc(
@@ -292,6 +325,13 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                     itemPhotos: item.images || [],
                     itemCondition: item.condition,
                     price: item.price,
+                    
+                    // Fee breakdown
+                    itemPrice: fees.itemPrice,
+                    serviceFee: fees.serviceFee,
+                    serviceFeeRate: fees.serviceFeeRate,
+                    buyerTotal: fees.buyerTotal,
+                    sellerPayout: fees.sellerPayout,
                     
                     // Seller details
                     sellerId: item.sellerId,
@@ -331,15 +371,17 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                 }
             );
 
-            // Send notification to seller
+            // Send notification to seller with payout info
             await addDoc(collection(db, getPaths(item.sellerId).notifications), {
                 type: 'gear_order',
                 orderId: orderRef.id,
                 listingId: item.id,
-                message: `${userData.firstName} purchased your ${item.title} for $${item.price}`,
+                message: `${userData.firstName} purchased your ${item.title} - You'll receive $${fees.sellerPayout.toFixed(2)}`,
                 buyerName: `${userData.firstName} ${userData.lastName}`,
                 itemTitle: item.title,
                 price: item.price,
+                sellerPayout: fees.sellerPayout,
+                serviceFee: fees.serviceFee,
                 fulfillmentMethod: shippingDetails.method,
                 read: false,
                 createdAt: serverTimestamp()
@@ -1483,7 +1525,9 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                                 )}
 
                                 {/* Step 3: Confirm */}
-                                {checkoutStep === 3 && (
+                                {checkoutStep === 3 && (() => {
+                                    const fees = calculateFees(item.price);
+                                    return (
                                     <div className="space-y-4">
                                         <div className="bg-white dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700">
                                             <h5 className="font-bold text-sm dark:text-white mb-3">Order Summary</h5>
@@ -1496,10 +1540,20 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                                                     <div className="font-bold dark:text-white">{item.title}</div>
                                                     <div className="text-xs text-gray-500">{item.brand} • {item.condition}</div>
                                                 </div>
-                                                <div className="font-bold text-green-600">${item.price}</div>
                                             </div>
                                             
                                             <div className="pt-3 space-y-2 text-sm">
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-500">Item Price</span>
+                                                    <span className="dark:text-white">${fees.itemPrice.toFixed(2)}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span className="text-gray-500 flex items-center gap-1">
+                                                        Service Fee 
+                                                        <span className="text-[10px] text-gray-400">(2%)</span>
+                                                    </span>
+                                                    <span className="dark:text-white">${fees.serviceFee.toFixed(2)}</span>
+                                                </div>
                                                 <div className="flex justify-between">
                                                     <span className="text-gray-500">Fulfillment</span>
                                                     <span className="dark:text-white capitalize">{fulfillmentMethod}</span>
@@ -1514,14 +1568,14 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                                                 )}
                                                 <div className="flex justify-between pt-2 border-t dark:border-gray-700 font-bold">
                                                     <span className="dark:text-white">Total</span>
-                                                    <span className="text-green-600">${item.price}</span>
+                                                    <span className="text-green-600">${fees.buyerTotal.toFixed(2)}</span>
                                                 </div>
                                             </div>
                                         </div>
 
                                         <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg text-xs text-blue-700 dark:text-blue-300 flex items-start gap-2">
                                             <Shield size={14} className="shrink-0 mt-0.5" />
-                                            <span>Your purchase is protected by SeshNx Buyer Protection. If there's an issue with your order, we've got your back.</span>
+                                            <span>Your purchase is protected by SeshNx Buyer Protection. If there&apos;s an issue with your order, we&apos;ve got your back.</span>
                                         </div>
 
                                         <div className="flex gap-2">
@@ -1546,7 +1600,8 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                                             </button>
                                         </div>
                                     </div>
-                                )}
+                                    );
+                                })()}
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -1762,8 +1817,26 @@ function OrdersView({ orders, user, userData, onBack, onUpdateStatus, openChat }
                                                 </span>
                                             </div>
                                             
-                                            <div className="flex items-center gap-4 mt-3 text-sm">
-                                                <span className="font-bold text-green-600">${order.price}</span>
+                                            <div className="flex items-center gap-4 mt-3 text-sm flex-wrap">
+                                                {isBuyer ? (
+                                                    <span className="font-bold text-green-600">
+                                                        ${order.buyerTotal?.toFixed(2) || order.price}
+                                                        {order.serviceFee && (
+                                                            <span className="text-[10px] text-gray-400 font-normal ml-1">
+                                                                (incl. ${order.serviceFee?.toFixed(2)} fee)
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                ) : (
+                                                    <span className="font-bold text-green-600">
+                                                        ${order.sellerPayout?.toFixed(2) || order.price}
+                                                        {order.serviceFee && (
+                                                            <span className="text-[10px] text-gray-400 font-normal ml-1">
+                                                                (after ${order.serviceFee?.toFixed(2)} fee)
+                                                            </span>
+                                                        )}
+                                                    </span>
+                                                )}
                                                 <span className={`px-2 py-0.5 rounded text-xs font-bold ${
                                                     isBuyer 
                                                         ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' 
