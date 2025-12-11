@@ -48,7 +48,7 @@ const GlassStatCard = ({ title, value, icon, gradient, onClick, trend, trendUp }
         whileHover={{ scale: 1.02, y: -4 }}
         whileTap={{ scale: 0.98 }}
         onClick={onClick}
-        className={`relative p-5 rounded-2xl cursor-pointer overflow-hidden group ${gradient}`}
+        className={`relative p-5 rounded-[1.25rem] cursor-pointer overflow-hidden group ${gradient}`}
     >
         {/* Animated background elements */}
         <div className="absolute inset-0 opacity-30">
@@ -246,9 +246,9 @@ export default function Dashboard({
     };
 
     return (
-        <div className="min-h-screen pb-24">
+        <div className="min-h-screen pb-24 px-4 md:px-6 pt-4 md:pt-6">
             {/* Hero Section with Gradient Background */}
-            <div className="relative overflow-hidden">
+            <div className="relative overflow-hidden rounded-3xl md:rounded-[2rem] shadow-2xl max-w-7xl mx-auto">
                 {/* Animated gradient background */}
                 <div className="absolute inset-0 bg-gradient-to-br from-brand-blue via-purple-600 to-pink-500 opacity-90" />
                 <div className="absolute inset-0">
@@ -266,7 +266,7 @@ export default function Dashboard({
                     }}
                 />
 
-                <div className="relative z-10 px-6 py-10 md:py-14 max-w-7xl mx-auto">
+                <div className="relative z-10 px-5 md:px-8 py-8 md:py-12">
                     {/* Header */}
                     <motion.div 
                         initial={{ opacity: 0, y: 20 }}
@@ -356,7 +356,7 @@ export default function Dashboard({
             </div>
 
             {/* Main Content */}
-            <div className="max-w-7xl mx-auto px-6 -mt-6 relative z-20">
+            <div className="max-w-7xl mx-auto mt-6 md:mt-8 relative z-20">
                 {/* Completion Warning Banner */}
                 <AnimatePresence>
                     {showCompletionWarning && (
@@ -364,7 +364,7 @@ export default function Dashboard({
                             initial={{ opacity: 0, y: -20 }}
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -20 }}
-                            className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800/50 rounded-2xl p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg"
+                            className="mb-6 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border border-amber-200 dark:border-amber-800/50 rounded-[1.25rem] p-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-lg"
                         >
                             <div className="flex items-center gap-4">
                                 <div className="bg-gradient-to-br from-amber-400 to-orange-500 p-3 rounded-xl text-white shadow-lg">
@@ -404,7 +404,7 @@ export default function Dashboard({
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.3 }}
-                            className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 overflow-hidden shadow-xl"
+                            className="bg-white dark:bg-[#1f2128] rounded-[1.25rem] border dark:border-gray-800 overflow-hidden shadow-xl"
                         >
                             <div className="p-5 border-b dark:border-gray-800 flex justify-between items-center bg-gradient-to-r from-gray-50 to-white dark:from-[#23262f] dark:to-[#1f2128]">
                                 <h3 className="font-bold dark:text-white flex items-center gap-2">
@@ -422,7 +422,7 @@ export default function Dashboard({
                             <div className="divide-y dark:divide-gray-800">
                                 {(!notifications || notifications.length === 0) ? (
                                     <div className="p-12 text-center">
-                                        <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                                        <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 rounded-[1.25rem] flex items-center justify-center mx-auto mb-4">
                                             <Sparkles size={28} className="text-gray-400" />
                                         </div>
                                         <p className="text-gray-600 dark:text-gray-400 font-medium">All caught up!</p>
@@ -457,7 +457,7 @@ export default function Dashboard({
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: 0.4 }}
-                                className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 overflow-hidden shadow-xl"
+                                className="bg-white dark:bg-[#1f2128] rounded-[1.25rem] border dark:border-gray-800 overflow-hidden shadow-xl"
                             >
                                 <div className="p-5 border-b dark:border-gray-800 flex justify-between items-center bg-gradient-to-r from-purple-50 to-white dark:from-purple-900/10 dark:to-[#1f2128]">
                                     <h3 className="font-bold dark:text-white flex items-center gap-2">
@@ -523,7 +523,7 @@ export default function Dashboard({
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.5 }}
-                            className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 overflow-hidden shadow-xl"
+                            className="bg-white dark:bg-[#1f2128] rounded-[1.25rem] border dark:border-gray-800 overflow-hidden shadow-xl"
                         >
                             <div className="p-5 border-b dark:border-gray-800 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-900/10 dark:to-[#1f2128]">
                                 <h3 className="font-bold dark:text-white flex items-center gap-2">
@@ -591,7 +591,7 @@ export default function Dashboard({
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.3 }}
-                            className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 p-5 shadow-xl"
+                            className="bg-white dark:bg-[#1f2128] rounded-[1.25rem] border dark:border-gray-800 p-5 shadow-xl"
                         >
                             <h3 className="font-bold mb-4 dark:text-white flex items-center gap-2">
                                 <Flame size={18} className="text-orange-500" />
@@ -627,7 +627,7 @@ export default function Dashboard({
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.4 }}
-                            className="relative rounded-2xl overflow-hidden shadow-xl"
+                            className="relative rounded-[1.25rem] overflow-hidden shadow-xl"
                         >
                             {/* Animated gradient background */}
                             <div className="absolute inset-0 bg-gradient-to-br from-violet-600 via-purple-600 to-fuchsia-600" />
@@ -673,7 +673,7 @@ export default function Dashboard({
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.5 }}
-                            className="bg-white dark:bg-[#1f2128] rounded-2xl border dark:border-gray-800 p-5 shadow-xl"
+                            className="bg-white dark:bg-[#1f2128] rounded-[1.25rem] border dark:border-gray-800 p-5 shadow-xl"
                         >
                             <div className="flex items-center justify-between mb-4">
                                 <h3 className="font-bold dark:text-white flex items-center gap-2">
