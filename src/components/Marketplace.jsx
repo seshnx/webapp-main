@@ -1,9 +1,30 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import GearExchange from './marketplace/GearExchange';
 import SeshFxStore from './marketplace/SeshFxStore'; // Sample Pack Store
 
 export default function Marketplace({ user, userData, tokenBalance }) {
-    const [subTab, setSubTab] = useState('gear');
+    const [searchParams, setSearchParams] = useSearchParams();
+    const initialTab = searchParams.get('tab') || 'gear';
+    const [subTab, setSubTab] = useState(initialTab);
+
+    // Update tab when URL params change
+    useEffect(() => {
+        const tabParam = searchParams.get('tab');
+        if (tabParam && (tabParam === 'gear' || tabParam === 'fx')) {
+            setSubTab(tabParam);
+        }
+    }, [searchParams]);
+
+    // Update URL when tab changes
+    const handleTabChange = (tab) => {
+        setSubTab(tab);
+        if (tab === 'gear') {
+            setSearchParams({});
+        } else {
+            setSearchParams({ tab });
+        }
+    };
 
     const tabs = [
         { id: 'gear', label: 'Gear Exchange' },
@@ -18,7 +39,7 @@ export default function Marketplace({ user, userData, tokenBalance }) {
                     {tabs.map(tab => (
                         <button
                             key={tab.id}
-                            onClick={() => setSubTab(tab.id)}
+                            onClick={() => handleTabChange(tab.id)}
                             className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${
                                 subTab === tab.id 
                                 ? 'bg-brand-blue text-white shadow-md' 

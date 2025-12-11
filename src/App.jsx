@@ -54,6 +54,7 @@ export default function App() {
       'bookings': '/bookings',
       'find-talent': '/bookings',
       'marketplace': '/marketplace',
+      'seshfx': '/marketplace?tab=fx',
       'messages': '/messages',
       'tech': '/tech',
       'business-center': '/business-center',
