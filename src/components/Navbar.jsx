@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout } from 'lucide-react';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db, appId, getPaths } from '../config/firebase';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
 import UserAvatar from './shared/UserAvatar';
@@ -100,6 +102,30 @@ export default function Navbar({
   const handleNotifPostClick = (postId) => {
       setShowNotifs(false);
       setActiveTab('feed'); // Navigate to feed where the post would be
+  };
+  
+  // Handler for quick booking accept/decline from notifications
+  const handleBookingAction = async (bookingId, action, notificationId) => {
+      try {
+          // Update booking status
+          const bookingRef = doc(db, `artifacts/${appId}/public/data/bookings`, bookingId);
+          await updateDoc(bookingRef, {
+              status: action === 'accept' ? 'Confirmed' : 'Declined',
+              respondedAt: new Date()
+          });
+          
+          // Mark notification as actioned
+          if (notificationId && user?.uid) {
+              const notifRef = doc(db, getPaths(user.uid).notifications, notificationId);
+              await updateDoc(notifRef, { 
+                  actionTaken: action,
+                  read: true 
+              });
+          }
+      } catch (error) {
+          console.error('Booking action failed:', error);
+          throw error;
+      }
   };
 
   const handleRoleSelect = (role) => {
@@ -242,6 +268,7 @@ export default function Navbar({
                       onClearAll={clearAll}
                       onUserClick={handleNotifUserClick}
                       onPostClick={handleNotifPostClick}
+                      onBookingAction={handleBookingAction}
                       onClose={() => setShowNotifs(false)}
                   />
               )}

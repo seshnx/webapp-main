@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, DollarSign, MessageSquare, Loader2, Music, AlertCircle, User, Briefcase } from 'lucide-react';
+import { X, Calendar, Clock, DollarSign, MessageSquare, Loader2, Music, AlertCircle, User, Briefcase, FileText } from 'lucide-react';
 import { addDoc, collection, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db, appId, getPaths } from '../config/firebase';
+import { SERVICE_TYPES, GENRE_DATA } from '../config/constants';
 
 export default function BookingModal({ user, userData, target, onClose }) {
     const [loading, setLoading] = useState(false);
@@ -18,8 +19,22 @@ export default function BookingModal({ user, userData, target, onClose }) {
         duration: 2,
         serviceType: 'Session',
         offerAmount: target.rate ? target.rate * 2 : 100, 
-        message: ''
+        message: '',
+        // Project details - helps talent understand the opportunity
+        projectGenre: '',
+        projectType: '', // e.g., "Album", "Single", "Live Show", etc.
+        referenceLinks: '' // YouTube, Spotify links for reference
     });
+    
+    // Get relevant service types based on target's role
+    const getServiceTypes = () => {
+        const types = [...SERVICE_TYPES.general];
+        const targetRoles = target.accountTypes || [];
+        if (targetRoles.includes('Talent')) types.push(...SERVICE_TYPES.talent);
+        if (targetRoles.includes('Producer') || targetRoles.includes('Engineer')) types.push(...SERVICE_TYPES.production);
+        if (targetRoles.includes('Studio')) types.push(...SERVICE_TYPES.studio);
+        return [...new Set(types)]; // Remove duplicates
+    };
 
     // Fetch Roster if Agent/Label
     useEffect(() => {
@@ -83,6 +98,13 @@ export default function BookingModal({ user, userData, target, onClose }) {
                 duration: Number(form.duration),
                 offerAmount: Number(form.offerAmount),
                 message: form.message,
+                
+                // Project details for better context
+                projectDetails: {
+                    genre: form.projectGenre || null,
+                    projectType: form.projectType || null,
+                    referenceLinks: form.referenceLinks || null
+                },
                 
                 status: 'Pending',
                 timestamp: serverTimestamp(),
@@ -202,19 +224,66 @@ export default function BookingModal({ user, userData, target, onClose }) {
                             value={form.serviceType}
                             onChange={e => setForm({...form, serviceType: e.target.value})}
                         >
-                            <option>Session</option>
-                            <option>Lesson</option>
-                            <option>Consultation</option>
-                            <option>Mixing/Mastering</option>
-                            <option>Rehearsal</option>
+                            {getServiceTypes().map(type => (
+                                <option key={type} value={type}>{type}</option>
+                            ))}
                         </select>
+                    </div>
+
+                    {/* Project Details Section - Helps talent understand the gig */}
+                    <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-700 space-y-4">
+                        <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase mb-1">
+                            <FileText size={14} /> Project Details (Optional)
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-3">
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 mb-1 block">Project Type</label>
+                                <select
+                                    className="w-full p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white text-sm"
+                                    value={form.projectType}
+                                    onChange={e => setForm({...form, projectType: e.target.value})}
+                                >
+                                    <option value="">Select...</option>
+                                    <option>Single Release</option>
+                                    <option>EP / Album</option>
+                                    <option>Live Performance</option>
+                                    <option>Cover Song</option>
+                                    <option>Demo Recording</option>
+                                    <option>Commercial / Jingle</option>
+                                    <option>Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label className="text-xs font-medium text-gray-500 mb-1 block">Genre</label>
+                                <select
+                                    className="w-full p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white text-sm"
+                                    value={form.projectGenre}
+                                    onChange={e => setForm({...form, projectGenre: e.target.value})}
+                                >
+                                    <option value="">Select...</option>
+                                    {GENRE_DATA.map(g => <option key={g} value={g}>{g}</option>)}
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label className="text-xs font-medium text-gray-500 mb-1 block">Reference Links (YouTube, Spotify, etc.)</label>
+                            <input
+                                type="text"
+                                className="w-full p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white text-sm"
+                                placeholder="Paste links to reference tracks..."
+                                value={form.referenceLinks}
+                                onChange={e => setForm({...form, referenceLinks: e.target.value})}
+                            />
+                        </div>
                     </div>
 
                     <div>
                         <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Message / Requirements</label>
                         <textarea 
                             className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:border-gray-600 dark:text-white text-sm min-h-[100px] resize-none"
-                            placeholder="Describe what you need..."
+                            placeholder="Describe what you need, any specific style, key references..."
                             value={form.message}
                             onChange={e => setForm({...form, message: e.target.value})}
                         />

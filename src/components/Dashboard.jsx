@@ -613,6 +613,25 @@ export default function Dashboard({
                                 Quick Actions
                             </h3>
                             <div className="space-y-3">
+                                {/* Show talent-specific actions for Talent role */}
+                                {userData?.accountTypes?.includes('Talent') && (
+                                    <>
+                                        <QuickActionButton
+                                            icon={<Zap size={18} className="text-yellow-600" />}
+                                            label="Browse Open Gigs"
+                                            description="Find vocal opportunities near you"
+                                            onClick={() => setActiveTab('bookings')}
+                                            color="bg-yellow-100 dark:bg-yellow-900/30"
+                                        />
+                                        <QuickActionButton
+                                            icon={<Mic2 size={18} className="text-pink-600" />}
+                                            label="Update Availability"
+                                            description="Let clients know you're open for work"
+                                            onClick={() => setActiveTab('profile')}
+                                            color="bg-pink-100 dark:bg-pink-900/30"
+                                        />
+                                    </>
+                                )}
                                 <QuickActionButton
                                     icon={<Edit2 size={18} className="text-blue-600" />}
                                     label="Create Post"
@@ -620,13 +639,15 @@ export default function Dashboard({
                                     onClick={() => setActiveTab('feed')}
                                     color="bg-blue-100 dark:bg-blue-900/30"
                                 />
-                                <QuickActionButton
-                                    icon={<Search size={18} className="text-purple-600" />}
-                                    label="Find Talent"
-                                    description="Discover collaborators"
-                                    onClick={() => setActiveTab('bookings')}
-                                    color="bg-purple-100 dark:bg-purple-900/30"
-                                />
+                                {!userData?.accountTypes?.includes('Talent') && (
+                                    <QuickActionButton
+                                        icon={<Search size={18} className="text-purple-600" />}
+                                        label="Find Talent"
+                                        description="Discover collaborators"
+                                        onClick={() => setActiveTab('bookings')}
+                                        color="bg-purple-100 dark:bg-purple-900/30"
+                                    />
+                                )}
                                 <QuickActionButton
                                     icon={<ShoppingBag size={18} className="text-amber-600" />}
                                     label="Marketplace"

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
     Bell, 
     UserPlus, 
@@ -10,10 +10,17 @@ import {
     Check,
     CheckCheck,
     Trash2,
-    X
+    X,
+    Calendar,
+    DollarSign,
+    Clock,
+    Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db, appId } from '../../config/firebase';
 import UserAvatar from '../shared/UserAvatar';
+import toast from 'react-hot-toast';
 
 /**
  * Get the appropriate icon for notification type
@@ -26,7 +33,10 @@ const NotificationIcon = ({ type }) => {
         comment: <MessageCircle {...iconProps} />,
         mention: <AtSign {...iconProps} />,
         reply: <CornerDownRight {...iconProps} />,
-        save: <Bookmark {...iconProps} />
+        save: <Bookmark {...iconProps} />,
+        booking: <Calendar {...iconProps} />,
+        booking_accepted: <Check {...iconProps} />,
+        booking_declined: <X {...iconProps} />
     };
 
     const colorMap = {
@@ -35,7 +45,10 @@ const NotificationIcon = ({ type }) => {
         comment: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
         mention: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
         reply: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
-        save: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400'
+        save: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
+        booking: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
+        booking_accepted: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+        booking_declined: 'bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400'
     };
 
     return (
@@ -72,8 +85,11 @@ const NotificationItem = ({
     onMarkAsRead, 
     onDelete, 
     onUserClick, 
-    onPostClick 
+    onPostClick,
+    onBookingAction
 }) => {
+    const [actionLoading, setActionLoading] = useState(null);
+    
     const handleClick = () => {
         if (!notification.read) {
             onMarkAsRead(notification.id);
@@ -86,6 +102,23 @@ const NotificationItem = ({
             onPostClick(notification.postId);
         }
     };
+    
+    const handleBookingAction = async (e, action) => {
+        e.stopPropagation();
+        if (!notification.bookingId) return;
+        
+        setActionLoading(action);
+        try {
+            await onBookingAction(notification.bookingId, action, notification.id);
+            toast.success(action === 'accept' ? 'Booking accepted!' : 'Booking declined');
+        } catch (err) {
+            toast.error('Failed to update booking');
+            console.error(err);
+        }
+        setActionLoading(null);
+    };
+    
+    const isBookingNotification = notification.type === 'booking' && notification.bookingId && !notification.actionTaken;
 
     return (
         <motion.div
@@ -94,7 +127,7 @@ const NotificationItem = ({
             exit={{ opacity: 0, x: 10 }}
             className={`
                 p-3 cursor-pointer border-b dark:border-gray-700 last:border-0 
-                flex gap-3 items-start group transition-colors
+                flex gap-3 items-start group transition-colors relative
                 ${notification.read 
                     ? 'hover:bg-gray-50 dark:hover:bg-gray-800' 
                     : 'bg-blue-50/50 dark:bg-blue-900/10 hover:bg-blue-50 dark:hover:bg-blue-900/20'
@@ -137,6 +170,57 @@ const NotificationItem = ({
                         "{notification.postPreview}"
                     </p>
                 )}
+                
+                {/* Booking details preview */}
+                {isBookingNotification && notification.bookingDetails && (
+                    <div className="mt-2 bg-amber-50 dark:bg-amber-900/20 p-2 rounded-lg text-xs space-y-1">
+                        <div className="flex items-center gap-3 text-gray-600 dark:text-gray-300">
+                            {notification.bookingDetails.date && (
+                                <span className="flex items-center gap-1">
+                                    <Clock size={10} /> {notification.bookingDetails.date}
+                                </span>
+                            )}
+                            {notification.bookingDetails.amount && (
+                                <span className="flex items-center gap-1 text-green-600 dark:text-green-400 font-bold">
+                                    <DollarSign size={10} /> ${notification.bookingDetails.amount}
+                                </span>
+                            )}
+                        </div>
+                        {notification.bookingDetails.serviceType && (
+                            <span className="inline-block bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded text-[10px]">
+                                {notification.bookingDetails.serviceType}
+                            </span>
+                        )}
+                    </div>
+                )}
+                
+                {/* Quick Accept/Decline buttons for booking notifications */}
+                {isBookingNotification && (
+                    <div className="flex gap-2 mt-2" onClick={e => e.stopPropagation()}>
+                        <button
+                            onClick={(e) => handleBookingAction(e, 'accept')}
+                            disabled={actionLoading}
+                            className="flex-1 bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded-lg transition flex items-center justify-center gap-1 disabled:opacity-50"
+                        >
+                            {actionLoading === 'accept' ? (
+                                <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                                <><Check size={12} /> Accept</>
+                            )}
+                        </button>
+                        <button
+                            onClick={(e) => handleBookingAction(e, 'decline')}
+                            disabled={actionLoading}
+                            className="flex-1 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-xs font-bold py-1.5 px-3 rounded-lg transition flex items-center justify-center gap-1 disabled:opacity-50"
+                        >
+                            {actionLoading === 'decline' ? (
+                                <Loader2 size={12} className="animate-spin" />
+                            ) : (
+                                <><X size={12} /> Decline</>
+                            )}
+                        </button>
+                    </div>
+                )}
 
                 {/* Unread indicator */}
                 {!notification.read && (
@@ -171,6 +255,7 @@ export default function NotificationsPanel({
     onClearAll,
     onUserClick,
     onPostClick,
+    onBookingAction,
     onClose
 }) {
     return (
@@ -222,6 +307,7 @@ export default function NotificationsPanel({
                                 onDelete={onDeleteNotification}
                                 onUserClick={onUserClick}
                                 onPostClick={onPostClick}
+                                onBookingAction={onBookingAction}
                             />
                         ))}
                     </AnimatePresence>

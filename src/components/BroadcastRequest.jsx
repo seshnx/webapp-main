@@ -69,11 +69,16 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
 
   const getActionsForRole = (r) => {
       switch(r) {
-          case 'Talent': return ['Play', 'Sing', 'Perform', 'Compose', 'Improvise'];
-          case 'Engineer': return ['Mix', 'Master', 'Record', 'Edit'];
-          case 'Producer': return ['Produce', 'Remix', 'Arrange'];
-          case 'Studio': return ['Host Session', 'Rent Gear'];
-          default: return ['Work'];
+          case 'Talent': return [
+              'Sing Lead Vocals', 'Sing Background', 'Feature on Track', 
+              'Write Topline', 'Play Instrument', 'Perform Live',
+              'Record Demo', 'Session Work', 'Compose', 'Improvise'
+          ];
+          case 'Engineer': return ['Mix', 'Master', 'Record', 'Edit', 'Sound Design'];
+          case 'Producer': return ['Produce', 'Remix', 'Arrange', 'Co-Write', 'Beat Production'];
+          case 'Studio': return ['Host Session', 'Rent Gear', 'Rent Space'];
+          case 'Composer': return ['Compose', 'Arrange', 'Orchestrate', 'Score'];
+          default: return ['Work', 'Collaborate'];
       }
   };
 
@@ -97,9 +102,13 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
       }));
   };
 
+  // Actions that require an instrument selection
+  const instrumentRequiredActions = ['Play Instrument', 'Session Work'];
+  const needsInstrument = role === 'Talent' && instrumentRequiredActions.includes(action);
+
   const sendBroadcast = async () => {
       if(!title || !genre) return alert("Please complete the request sentence.");
-      if(role === 'Talent' && action === 'Play' && !instrument) return alert("Please select an instrument.");
+      if(needsInstrument && !instrument) return alert("Please select an instrument.");
 
       const validNeeds = needs.filter(n => n.value.trim() !== '');
       
@@ -198,7 +207,7 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
                           <select value={action} onChange={e => setAction(e.target.value)} className="appearance-none bg-purple-50 dark:bg-gray-700 text-purple-700 dark:text-white font-bold py-1 pl-3 pr-8 rounded-lg border-b-2 border-purple-200 dark:border-gray-600 focus:outline-none cursor-pointer hover:bg-purple-100 dark:hover:bg-gray-600 transition">{getActionsForRole(role).map(a => <option key={a} value={a}>{a}</option>)}</select>
                           <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-purple-500 dark:text-gray-400 pointer-events-none" size={16}/>
                       </div>
-                      {(action === 'Play' || action === 'Improvise') && (
+                      {needsInstrument && (
                           <div className="relative inline-block">
                               <select value={instrument} onChange={e => setInstrument(e.target.value)} className="appearance-none bg-green-50 dark:bg-gray-700 text-green-700 dark:text-white font-bold py-1 pl-3 pr-8 rounded-lg border-b-2 border-green-200 dark:border-gray-600 focus:outline-none cursor-pointer hover:bg-green-100 dark:hover:bg-gray-600 transition"><option value="">(Select Instrument)</option>{Object.entries(INSTRUMENT_DATA).map(([category, instruments]) => (<optgroup key={category} label={category}>{instruments.map(inst => <option key={inst} value={inst}>{inst}</option>)}</optgroup>))}</select>
                               <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-green-500 dark:text-gray-400 pointer-events-none" size={16}/>

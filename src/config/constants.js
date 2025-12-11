@@ -33,6 +33,52 @@ export const TALENT_SUBROLES = [
     "Band"
 ];
 
+// Vocal-specific data for singers
+export const VOCAL_RANGES = [
+    "Soprano",
+    "Mezzo-Soprano", 
+    "Alto",
+    "Countertenor",
+    "Tenor",
+    "Baritone",
+    "Bass",
+    "Not Applicable"
+];
+
+export const VOCAL_STYLES = [
+    "Pop",
+    "R&B/Soul",
+    "Rock",
+    "Jazz",
+    "Classical/Opera",
+    "Musical Theatre",
+    "Gospel",
+    "Country",
+    "Hip Hop/Rap",
+    "Electronic/EDM",
+    "Folk/Acoustic",
+    "Metal/Screaming",
+    "Reggae",
+    "Latin",
+    "World Music"
+];
+
+// Service types for bookings - organized by role relevance
+export const SERVICE_TYPES = {
+    general: ["Session", "Lesson", "Consultation", "Rehearsal"],
+    talent: ["Vocal Recording", "Feature Verse", "Background Vocals", "Vocal Topline", "Live Performance", "Session Work", "Demo Recording"],
+    production: ["Mixing", "Mastering", "Beat Production", "Arrangement", "Sound Design"],
+    studio: ["Studio Rental", "Equipment Rental", "Recording Session", "Mixing Session"]
+};
+
+// Availability status options
+export const AVAILABILITY_STATUS = {
+    AVAILABLE: { id: 'available', label: 'Available for Work', color: 'green' },
+    BUSY: { id: 'busy', label: 'Busy - Limited Availability', color: 'yellow' },
+    UNAVAILABLE: { id: 'unavailable', label: 'Not Available', color: 'red' },
+    TOURING: { id: 'touring', label: 'On Tour', color: 'purple' }
+};
+
 // Helper function to get display role - shows subRole if available, otherwise shows accountType
 export const getDisplayRole = (userData) => {
     if (!userData) return 'User';
@@ -138,8 +184,13 @@ export const PROFILE_SCHEMAS = {
     { key: "talentSubRole", label: "What best describes you?", type: "select", options: ["", ...TALENT_SUBROLES], isSubRole: true },
     { key: "profileName", label: "Artist / Stage Name", type: "text" }, 
     { key: "bio", label: "Biography", type: "textarea" },
+    // Vocal-specific fields - shown for singers/vocalists
+    { key: "vocalRange", label: "Vocal Range", type: "select", options: ["", ...VOCAL_RANGES], showFor: ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"] },
+    { key: "vocalStyles", label: "Vocal Styles", type: "multi_select", data: VOCAL_STYLES, showFor: ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"] },
+    { key: "demoReelUrl", label: "Demo Reel / Sample Link", type: "text", placeholder: "YouTube, SoundCloud, or Spotify link", showFor: ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"] },
     { key: "instruments", label: "Instruments & Skills", type: "nested_select", data: INSTRUMENT_DATA },
     { key: "genres", label: "Primary Genres", type: "multi_select", data: GENRE_DATA },
+    { key: "availabilityStatus", label: "Current Availability", type: "select", options: ["", "Available for Work", "Busy - Limited Availability", "Not Available", "On Tour"] },
     { key: "rates", label: "Booking/Feature Rate ($)", type: "number" },
     { key: "sessionRate", label: "Session Rate ($/hr)", type: "number" },
     { key: "dayRate", label: "Day Rate ($)", type: "number" },

@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { collectionGroup, query, getDocs, where, limit, orderBy } from 'firebase/firestore';
 import { db, getPaths } from '../config/firebase';
+import { VOCAL_RANGES, VOCAL_STYLES, TALENT_SUBROLES } from '../config/constants';
 import StudioMap from './shared/StudioMap';
 import LocationPicker from './shared/LocationPicker'; 
 import { motion, AnimatePresence } from 'framer-motion';
@@ -13,12 +14,17 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Profile type options with icons
 const PROFILE_TYPES = [
     { value: 'All', label: 'All Profiles', icon: Sparkles },
-    { value: 'Talent', label: 'Talent', icon: Music },
+    { value: 'Talent', label: 'All Talent', icon: Music },
+    { value: 'Singer', label: 'Singer', icon: Mic, isSubRole: true },
+    { value: 'Vocalist', label: 'Vocalist', icon: Mic, isSubRole: true },
+    { value: 'Singer-Songwriter', label: 'Singer-Songwriter', icon: Mic, isSubRole: true },
+    { value: 'Rapper', label: 'Rapper', icon: Mic, isSubRole: true },
+    { value: 'Backup Singer', label: 'Backup Singer', icon: Mic, isSubRole: true },
     { value: 'Producer', label: 'Producer', icon: Radio },
     { value: 'Engineer', label: 'Audio Engineer', icon: Headphones },
-    { value: 'Vocalist', label: 'Vocalist', icon: Mic },
-    { value: 'Guitarist', label: 'Guitarist', icon: Guitar },
-    { value: 'Pianist', label: 'Pianist/Keys', icon: Piano },
+    { value: 'Guitarist', label: 'Guitarist', icon: Guitar, isSubRole: true },
+    { value: 'Pianist', label: 'Pianist/Keys', icon: Piano, isSubRole: true },
+    { value: 'Drummer', label: 'Drummer', icon: Music, isSubRole: true },
     { value: 'Studio', label: 'Studio', icon: Headphones },
 ];
 
@@ -108,8 +114,14 @@ export default function TalentSearch({
         location: '',
         radius: 50, // miles
         genres: [],
-        skills: []
+        skills: [],
+        // Vocal-specific filters
+        vocalRange: '',
+        vocalStyle: ''
     });
+    
+    // Check if current role filter is a vocal sub-role
+    const isVocalRole = ['Singer', 'Vocalist', 'Singer-Songwriter', 'Rapper', 'Backup Singer'].includes(filters.role);
 
     // Active filter count for badge
     const activeFilterCount = [
@@ -122,7 +134,9 @@ export default function TalentSearch({
         filters.hasPortfolio,
         filters.location,
         filters.genres.length > 0,
-        filters.skills.length > 0
+        filters.skills.length > 0,
+        filters.vocalRange,
+        filters.vocalStyle
     ].filter(Boolean).length;
 
     const handleSearch = async () => {
@@ -198,7 +212,29 @@ export default function TalentSearch({
                 results = results.filter(p => 
                     (p.portfolio && p.portfolio.length > 0) || 
                     (p.audioSamples && p.audioSamples.length > 0) ||
-                    p.spotifyUrl || p.soundcloudUrl
+                    p.spotifyUrl || p.soundcloudUrl || p.demoReelUrl
+                );
+            }
+            
+            // Apply vocal range filter (for singers)
+            if (filters.vocalRange) {
+                results = results.filter(p => p.vocalRange === filters.vocalRange);
+            }
+            
+            // Apply vocal style filter (for singers)
+            if (filters.vocalStyle) {
+                results = results.filter(p => 
+                    p.vocalStyles?.includes(filters.vocalStyle) || 
+                    p.genres?.includes(filters.vocalStyle)
+                );
+            }
+            
+            // Apply talent sub-role filter
+            const selectedType = PROFILE_TYPES.find(t => t.value === filters.role);
+            if (selectedType?.isSubRole) {
+                results = results.filter(p => 
+                    p.talentSubRole === filters.role ||
+                    p.accountTypes?.includes(filters.role)
                 );
             }
 
@@ -252,7 +288,9 @@ export default function TalentSearch({
             location: '',
             radius: 50,
             genres: [],
-            skills: []
+            skills: [],
+            vocalRange: '',
+            vocalStyle: ''
         });
     };
 
@@ -264,13 +302,48 @@ export default function TalentSearch({
                 <select 
                     className="w-full p-2.5 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
                     value={filters.role} 
-                    onChange={e => setFilters({...filters, role: e.target.value})}
+                    onChange={e => setFilters({...filters, role: e.target.value, vocalRange: '', vocalStyle: ''})}
                 >
                     {PROFILE_TYPES.map(type => (
                         <option key={type.value} value={type.value}>{type.label}</option>
                     ))}
                 </select>
             </div>
+            
+            {/* Vocal-Specific Filters - Only shown for singer roles */}
+            {isVocalRole && (
+                <div className="bg-pink-50 dark:bg-pink-900/20 p-3 rounded-lg border border-pink-200 dark:border-pink-800 space-y-3 animate-in fade-in slide-in-from-top-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-pink-700 dark:text-pink-300 uppercase">
+                        <Mic size={12} /> Vocal Filters
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-gray-500 mb-1 block">Vocal Range</label>
+                        <select 
+                            className="w-full p-2 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-pink-800 dark:text-white"
+                            value={filters.vocalRange}
+                            onChange={e => setFilters({...filters, vocalRange: e.target.value})}
+                        >
+                            <option value="">Any Range</option>
+                            {VOCAL_RANGES.filter(r => r !== 'Not Applicable').map(range => (
+                                <option key={range} value={range}>{range}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div>
+                        <label className="text-xs font-medium text-gray-500 mb-1 block">Vocal Style</label>
+                        <select 
+                            className="w-full p-2 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-pink-800 dark:text-white"
+                            value={filters.vocalStyle}
+                            onChange={e => setFilters({...filters, vocalStyle: e.target.value})}
+                        >
+                            <option value="">Any Style</option>
+                            {VOCAL_STYLES.map(style => (
+                                <option key={style} value={style}>{style}</option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            )}
 
             {/* Rate Range */}
             <div>
