@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, doc, updateDoc } from 'firebase/firestore';
-import { Search, Filter, Plus, Camera, DollarSign, Tag, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info, ToggleLeft, ToggleRight, Package } from 'lucide-react';
+import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, where, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { Search, Filter, Plus, Camera, DollarSign, Tag, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info, ToggleLeft, ToggleRight, Package, Star, MessageCircle, Send, Clock, ThumbsUp, ThumbsDown, BadgeCheck } from 'lucide-react';
 import { db, getPaths, appId } from '../../config/firebase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { EQUIP_CATEGORIES, HIGH_VALUE_THRESHOLD, SAFE_EXCHANGE_STATUS, SAFE_EXCHANGE_REQUIREMENT, FULFILLMENT_METHOD, SHIPPING_VERIFICATION_STATUS } from '../../config/constants';
@@ -8,8 +8,51 @@ import InspectionEditor from '../tech/InspectionEditor';
 import { InspectionSvg } from '../tech/InspectionDiagrams';
 import SafeExchangeTransaction from './SafeExchangeTransaction';
 import ShippingVerification from './ShippingVerification';
+import toast from 'react-hot-toast';
 
 const CONDITIONS = ['Mint', 'Excellent', 'Good', 'Fair', 'Non-Functioning'];
+
+// Seller Rating Component
+const SellerRating = ({ rating, reviewCount, size = 'sm' }) => {
+    if (!rating && !reviewCount) return null;
+    
+    const sizes = {
+        sm: { star: 12, text: 'text-xs' },
+        md: { star: 14, text: 'text-sm' },
+        lg: { star: 16, text: 'text-base' }
+    };
+    const s = sizes[size];
+    
+    return (
+        <div className={`flex items-center gap-1 ${s.text}`}>
+            <Star size={s.star} className="text-yellow-500 fill-yellow-500" />
+            <span className="font-bold text-yellow-600 dark:text-yellow-400">
+                {rating?.toFixed(1) || '—'}
+            </span>
+            {reviewCount > 0 && (
+                <span className="text-gray-400">({reviewCount} sale{reviewCount !== 1 ? 's' : ''})</span>
+            )}
+        </div>
+    );
+};
+
+// Offer Status Badge
+const OfferStatusBadge = ({ status }) => {
+    const statusConfig = {
+        pending: { label: 'Pending', color: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' },
+        accepted: { label: 'Accepted', color: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' },
+        declined: { label: 'Declined', color: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' },
+        countered: { label: 'Countered', color: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
+        expired: { label: 'Expired', color: 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400' },
+    };
+    const config = statusConfig[status] || statusConfig.pending;
+    
+    return (
+        <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${config.color}`}>
+            {config.label}
+        </span>
+    );
+};
 
 // Helper to check if item requires escrow (high value)
 const isHighValueItem = (price) => price >= HIGH_VALUE_THRESHOLD;
@@ -303,20 +346,35 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
                                                 <CheckCircle size={10}/> Inspected
                                             </div>
                                         )}
+                                        {item.acceptsOffers && (
+                                            <div className="absolute bottom-2 right-2 bg-blue-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                                                <MessageCircle size={10}/> Offers
+                                            </div>
+                                        )}
                                     </div>
                                     <div className="p-4 flex-1 flex flex-col">
                                         <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">{item.brand}</div>
                                         <h4 className="font-bold dark:text-white text-sm mb-1 line-clamp-1">{item.title}</h4>
-                                        <div className="text-xs text-gray-500 mb-3">{item.condition} Condition</div>
+                                        <div className="text-xs text-gray-500 mb-2">{item.condition} Condition</div>
+                                        
+                                        {/* Seller Rating */}
+                                        {item.sellerRating && (
+                                            <div className="mb-2">
+                                                <SellerRating rating={item.sellerRating} reviewCount={item.sellerSalesCount} size="sm" />
+                                            </div>
+                                        )}
                                         
                                         <div className="mt-auto pt-3 border-t dark:border-gray-700 flex justify-between items-center text-xs text-gray-400">
                                             <span className="flex items-center gap-1">
                                                 {highValue ? (
-                                                    <><MapPin size={10}/> Local Pickup Only</>
+                                                    <><MapPin size={10}/> Local Pickup</>
                                                 ) : (
-                                                    <><Truck size={10}/> {item.location || 'Shipped'}</>
+                                                    <><Truck size={10}/> {item.location || 'Ships'}</>
                                                 )}
                                             </span>
+                                            {item.sellerVerified && (
+                                                <BadgeCheck size={14} className="text-blue-500" />
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -356,7 +414,9 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
     const [form, setForm] = useState({ 
         title: '', brand: '', category: EQUIP_CATEGORIES[0].id, condition: 'Good', price: '', 
         description: '', location: userData.city || '',
-        weight: '', length: '', width: '', height: '' // Added dimensions
+        weight: '', length: '', width: '', height: '', // Added dimensions
+        acceptsOffers: true, // Enable offers by default
+        minimumOffer: '' // Optional minimum offer percentage
     });
     const [images, setImages] = useState([]);
     const [conditionReport, setConditionReport] = useState(null);
@@ -377,19 +437,24 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
             await addDoc(collection(db, getPaths(user.uid).gearListings), {
                 ...form,
                 price: parseInt(form.price),
+                minimumOffer: form.minimumOffer ? parseInt(form.minimumOffer) : null,
                 images,
                 conditionReport, // Attach the inspection object directly
                 sellerId: user.uid,
                 sellerName: `${userData.firstName} ${userData.lastName}`,
                 sellerPhoto: userData.photoURL || null,
+                sellerRating: userData.sellerRating || null,
+                sellerSalesCount: userData.sellerSalesCount || 0,
+                sellerVerified: userData.verified || false,
+                sellerResponseTime: userData.avgResponseTime || null,
                 timestamp: serverTimestamp(),
                 status: 'Active'
             });
-            alert("Listing posted!");
+            toast.success("Listing posted!");
             onSuccess();
         } catch (e) {
             console.error(e);
-            alert("Failed to post listing.");
+            toast.error("Failed to post listing.");
         }
         setSubmitting(false);
     };
@@ -467,6 +532,55 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
                     )}
                 </div>
 
+                {/* Accept Offers Toggle */}
+                <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h4 className="font-bold text-blue-800 dark:text-blue-400 text-sm flex items-center gap-2">
+                                <MessageCircle size={16} />
+                                Accept Offers
+                            </h4>
+                            <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+                                Allow buyers to negotiate on price
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setForm({...form, acceptsOffers: !form.acceptsOffers})}
+                            className="p-1"
+                        >
+                            {form.acceptsOffers ? (
+                                <ToggleRight size={32} className="text-blue-600" />
+                            ) : (
+                                <ToggleLeft size={32} className="text-gray-400" />
+                            )}
+                        </button>
+                    </div>
+                    
+                    {form.acceptsOffers && form.price && (
+                        <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                                Minimum Acceptable Offer (Optional)
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="number"
+                                    placeholder={`e.g., ${Math.round(parseInt(form.price) * 0.8)}`}
+                                    value={form.minimumOffer}
+                                    onChange={e => setForm({...form, minimumOffer: e.target.value})}
+                                    className="flex-1 p-2 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white text-sm"
+                                />
+                                <span className="text-sm text-gray-500">
+                                    {form.minimumOffer && form.price ? `(${Math.round((parseInt(form.minimumOffer) / parseInt(form.price)) * 100)}%)` : ''}
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-gray-500 mt-1">
+                                Offers below this will be flagged as "Low Offer" to buyers
+                            </p>
+                        </div>
+                    )}
+                </div>
+
                 {/* Weight & Dimensions for Shipping */}
                 <div className="grid grid-cols-4 gap-2">
                     <div>
@@ -533,8 +647,45 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
 function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSafeExchangePurchase }) {
     const [viewReport, setViewReport] = useState(false);
     const [isPurchasing, setIsPurchasing] = useState(false);
+    const [showOfferForm, setShowOfferForm] = useState(false);
+    const [offerAmount, setOfferAmount] = useState('');
+    const [offerMessage, setOfferMessage] = useState('');
+    const [submittingOffer, setSubmittingOffer] = useState(false);
+    const [existingOffers, setExistingOffers] = useState([]);
+    const [loadingOffers, setLoadingOffers] = useState(true);
 
     const highValue = isHighValueItem(item.price);
+
+    // Fetch existing offers for this listing
+    useEffect(() => {
+        if (!item.id || !currentUser?.uid) {
+            setLoadingOffers(false);
+            return;
+        }
+
+        const offersRef = collection(db, `artifacts/${appId}/public/data/gear_offers`);
+        const q = query(
+            offersRef,
+            where('listingId', '==', item.id),
+            where('buyerId', '==', currentUser.uid),
+            orderBy('createdAt', 'desc')
+        );
+
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const offers = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: doc.data().createdAt?.toDate?.() || new Date()
+            }));
+            setExistingOffers(offers);
+            setLoadingOffers(false);
+        }, (error) => {
+            console.error('Error fetching offers:', error);
+            setLoadingOffers(false);
+        });
+
+        return () => unsubscribe();
+    }, [item.id, currentUser?.uid]);
 
     const handlePurchase = async () => {
         if (highValue) {
@@ -545,6 +696,74 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
             // Standard purchase flow for low-value items
             alert('Standard purchase flow - coming soon!');
         }
+    };
+
+    const handleSubmitOffer = async () => {
+        if (!offerAmount || parseFloat(offerAmount) <= 0) {
+            toast.error('Please enter a valid offer amount');
+            return;
+        }
+
+        const offer = parseFloat(offerAmount);
+        if (offer >= item.price) {
+            toast.error('Offer must be less than the asking price');
+            return;
+        }
+
+        setSubmittingOffer(true);
+        const toastId = toast.loading('Submitting offer...');
+
+        try {
+            // Create offer document
+            const offerRef = await addDoc(
+                collection(db, `artifacts/${appId}/public/data/gear_offers`),
+                {
+                    listingId: item.id,
+                    itemTitle: item.title,
+                    itemBrand: item.brand,
+                    askingPrice: item.price,
+                    offerAmount: offer,
+                    message: offerMessage,
+                    buyerId: currentUser.uid,
+                    buyerName: `${currentUserData.firstName} ${currentUserData.lastName}`,
+                    buyerPhoto: currentUserData.photoURL || null,
+                    sellerId: item.sellerId,
+                    sellerName: item.sellerName,
+                    status: 'pending',
+                    createdAt: serverTimestamp(),
+                    expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000) // 48 hours
+                }
+            );
+
+            // Send notification to seller
+            await addDoc(collection(db, getPaths(item.sellerId).notifications), {
+                type: 'gear_offer',
+                offerId: offerRef.id,
+                listingId: item.id,
+                message: `${currentUserData.firstName} made an offer of $${offer} on your ${item.title}`,
+                buyerName: `${currentUserData.firstName} ${currentUserData.lastName}`,
+                itemTitle: item.title,
+                offerAmount: offer,
+                askingPrice: item.price,
+                read: false,
+                createdAt: serverTimestamp()
+            });
+
+            toast.success('Offer submitted!', { id: toastId });
+            setShowOfferForm(false);
+            setOfferAmount('');
+            setOfferMessage('');
+        } catch (error) {
+            console.error('Failed to submit offer:', error);
+            toast.error('Failed to submit offer', { id: toastId });
+        }
+
+        setSubmittingOffer(false);
+    };
+
+    // Calculate offer percentage
+    const getOfferPercentage = (offer) => {
+        return Math.round((offer / item.price) * 100);
     };
 
     return (
@@ -597,9 +816,14 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                     <div className="mb-6">
                         <div className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-1">{item.brand}</div>
                         <h2 className="text-3xl font-extrabold dark:text-white mb-2">{item.title}</h2>
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-wrap">
                             <span className="text-xl font-bold text-green-600">${item.price}</span>
                             <span className="bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded text-xs font-bold">{item.condition}</span>
+                            {item.acceptsOffers && (
+                                <span className="bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-2 py-1 rounded text-xs font-bold flex items-center gap-1">
+                                    <MessageCircle size={12}/> Open to Offers
+                                </span>
+                            )}
                         </div>
                     </div>
 
@@ -627,20 +851,70 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                             </div>
                         )}
 
-                        {/* Seller Info */}
-                        <div className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700">
-                            {item.sellerPhoto ? (
-                                <img src={item.sellerPhoto} className="w-10 h-10 rounded-full bg-gray-300 object-cover"/>
-                            ) : (
-                                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold">
-                                    {item.sellerName?.[0]}
+                        {/* Seller Info with Rating */}
+                        <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-xl border dark:border-gray-700">
+                            <div className="flex items-center gap-3">
+                                {item.sellerPhoto ? (
+                                    <img src={item.sellerPhoto} className="w-12 h-12 rounded-full bg-gray-300 object-cover"/>
+                                ) : (
+                                    <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center text-orange-600 font-bold text-lg">
+                                        {item.sellerName?.[0]}
+                                    </div>
+                                )}
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-bold dark:text-white">{item.sellerName}</span>
+                                        {item.sellerVerified && (
+                                            <BadgeCheck size={16} className="text-blue-500" />
+                                        )}
+                                    </div>
+                                    <div className="flex items-center gap-3 mt-1">
+                                        <SellerRating 
+                                            rating={item.sellerRating} 
+                                            reviewCount={item.sellerSalesCount} 
+                                            size="md"
+                                        />
+                                        {item.sellerResponseTime && (
+                                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                                                <Clock size={12} />
+                                                Responds in {item.sellerResponseTime}
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
-                            )}
-                            <div>
-                                <div className="text-xs text-gray-500 uppercase font-bold">Seller</div>
-                                <div className="font-bold dark:text-white text-sm">{item.sellerName}</div>
                             </div>
                         </div>
+
+                        {/* My Offers Section */}
+                        {existingOffers.length > 0 && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                                <h4 className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-3 flex items-center gap-2">
+                                    <MessageCircle size={16} />
+                                    Your Offers
+                                </h4>
+                                <div className="space-y-2">
+                                    {existingOffers.map(offer => (
+                                        <div 
+                                            key={offer.id}
+                                            className="flex items-center justify-between p-3 bg-white dark:bg-gray-800 rounded-lg"
+                                        >
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold dark:text-white">${offer.offerAmount}</span>
+                                                    <span className="text-xs text-gray-500">
+                                                        ({getOfferPercentage(offer.offerAmount)}% of asking)
+                                                    </span>
+                                                </div>
+                                                <div className="text-xs text-gray-500 mt-0.5">
+                                                    {offer.createdAt.toLocaleDateString()}
+                                                </div>
+                                            </div>
+                                            <OfferStatusBadge status={offer.status} />
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {/* Fulfillment Method */}
                         <div className={`p-3 rounded-xl border ${highValue 
@@ -683,31 +957,112 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
                         </div>
                     </div>
 
+                    {/* Make Offer Form */}
+                    {showOfferForm && (
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                            <h4 className="font-bold text-blue-800 dark:text-blue-300 text-sm mb-3 flex items-center gap-2">
+                                <MessageCircle size={16} />
+                                Make an Offer
+                            </h4>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Your Offer ($)</label>
+                                    <div className="relative">
+                                        <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                        <input
+                                            type="number"
+                                            value={offerAmount}
+                                            onChange={e => setOfferAmount(e.target.value)}
+                                            placeholder={`Asking: $${item.price}`}
+                                            className="w-full pl-9 pr-4 py-2.5 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                        />
+                                    </div>
+                                    {offerAmount && (
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            {getOfferPercentage(parseFloat(offerAmount))}% of asking price
+                                            {parseFloat(offerAmount) < item.price * 0.7 && (
+                                                <span className="text-amber-600 ml-1">(Low offer)</span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Message (Optional)</label>
+                                    <textarea
+                                        value={offerMessage}
+                                        onChange={e => setOfferMessage(e.target.value)}
+                                        placeholder="Add a message to the seller..."
+                                        rows={2}
+                                        className="w-full p-2.5 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white text-sm resize-none"
+                                    />
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setShowOfferForm(false)}
+                                        className="flex-1 py-2 text-gray-600 dark:text-gray-400 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        onClick={handleSubmitOffer}
+                                        disabled={submittingOffer || !offerAmount}
+                                        className="flex-1 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 transition flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        {submittingOffer ? (
+                                            <Loader2 className="animate-spin" size={16} />
+                                        ) : (
+                                            <>
+                                                <Send size={16} /> Submit Offer
+                                            </>
+                                        )}
+                                    </button>
+                                </div>
+                                <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                                    <Clock size={10} />
+                                    Offers expire after 48 hours if not responded to
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="mt-8 pt-6 border-t dark:border-gray-700">
                         {item.sellerId === currentUser.uid ? (
                             <button className="w-full bg-gray-100 dark:bg-gray-700 text-gray-500 font-bold py-3 rounded-xl cursor-not-allowed">You own this listing</button>
                         ) : (
-                            <button 
-                                onClick={handlePurchase}
-                                disabled={isPurchasing}
-                                className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed ${
-                                    highValue 
-                                        ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white' 
-                                        : 'bg-orange-600 hover:bg-orange-700 text-white'
-                                }`}
-                            >
-                                {isPurchasing ? (
-                                    <Loader2 className="animate-spin" size={20}/>
-                                ) : highValue ? (
-                                    <>
-                                        <Shield size={20}/> Initiate Safe Exchange
-                                    </>
-                                ) : (
-                                    <>
-                                        <DollarSign size={20}/> Buy Now
-                                    </>
+                            <div className="space-y-3">
+                                <button 
+                                    onClick={handlePurchase}
+                                    disabled={isPurchasing}
+                                    className={`w-full font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed ${
+                                        highValue 
+                                            ? 'bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white' 
+                                            : 'bg-orange-600 hover:bg-orange-700 text-white'
+                                    }`}
+                                >
+                                    {isPurchasing ? (
+                                        <Loader2 className="animate-spin" size={20}/>
+                                    ) : highValue ? (
+                                        <>
+                                            <Shield size={20}/> Initiate Safe Exchange
+                                        </>
+                                    ) : (
+                                        <>
+                                            <DollarSign size={20}/> Buy Now - ${item.price}
+                                        </>
+                                    )}
+                                </button>
+                                
+                                {/* Make Offer Button */}
+                                {!showOfferForm && item.acceptsOffers !== false && (
+                                    <button
+                                        onClick={() => setShowOfferForm(true)}
+                                        className="w-full py-3 border-2 border-blue-500 text-blue-600 dark:text-blue-400 font-bold rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/20 transition flex items-center justify-center gap-2"
+                                    >
+                                        <MessageCircle size={18} />
+                                        Make an Offer
+                                    </button>
                                 )}
-                            </button>
+                            </div>
                         )}
                         <p className="text-center text-[10px] text-gray-400 mt-3 flex items-center justify-center gap-1">
                             {highValue ? (

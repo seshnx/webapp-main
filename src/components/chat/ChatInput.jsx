@@ -1,5 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { update, ref } from 'firebase/database';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
     Paperclip, 
     Send, 
@@ -15,14 +14,18 @@ import {
     Image as ImageIcon,
     Video,
     FileText,
-    ImagePlus
+    ImagePlus,
+    Trash2,
+    Play,
+    Pause,
+    Square
 } from 'lucide-react';
-import { rtdb } from '../../config/firebase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker from './media/EmojiPicker';
 import GifPicker from './media/GifPicker';
 import VideoRecorder from './media/VideoRecorder';
+import { formatTypingUsers } from '../../hooks/useTypingIndicator';
 
 export default function ChatInput({ 
     activeChatId, 
@@ -30,24 +33,30 @@ export default function ChatInput({
     onSend, 
     replyingTo, 
     editingMessage, 
-    onCancelReply, 
-    typingUsers = [] 
+    onCancelReply,
+    onCancelEdit, 
+    typingUsers = [],
+    onTyping,
+    onStopTyping
 }) {
     const [input, setInput] = useState('');
     const [attachment, setAttachment] = useState(null);
     const [isRecording, setIsRecording] = useState(false);
+    const [recordingDuration, setRecordingDuration] = useState(0);
     const [dragActive, setDragActive] = useState(false);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
     const [showGifPicker, setShowGifPicker] = useState(false);
     const [showVideoRecorder, setShowVideoRecorder] = useState(false);
+    const [isPlayingPreview, setIsPlayingPreview] = useState(false);
     
-    const typingTimeoutRef = useRef(null);
     const fileInputRef = useRef(null);
     const textareaRef = useRef(null);
     const mediaRecorder = useRef(null);
     const audioChunks = useRef([]);
     const emojiPickerRef = useRef(null);
     const gifPickerRef = useRef(null);
+    const recordingIntervalRef = useRef(null);
+    const audioPreviewRef = useRef(null);
     const { uploadMedia, uploading } = useMediaUpload();
 
     // Set input when editing
@@ -127,16 +136,9 @@ export default function ChatInput({
     const handleTyping = (e) => {
         setInput(e.target.value);
         
-        // Update typing indicator
-        if (activeChatId && uid && rtdb) {
-            update(ref(rtdb, `chats/${activeChatId}/typing`), { [uid]: true });
-            
-            if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-            typingTimeoutRef.current = setTimeout(() => {
-                if (rtdb) {
-                    update(ref(rtdb, `chats/${activeChatId}/typing`), { [uid]: false });
-                }
-            }, 2000);
+        // Update typing indicator via Convex
+        if (onTyping && e.target.value.trim()) {
+            onTyping();
         }
     };
 
@@ -165,26 +167,92 @@ export default function ChatInput({
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             mediaRecorder.current = new MediaRecorder(stream);
             audioChunks.current = [];
+            setRecordingDuration(0);
             
             mediaRecorder.current.ondataavailable = (e) => audioChunks.current.push(e.data);
             mediaRecorder.current.onstop = () => {
-                const audioBlob = new Blob(audioChunks.current, { type: 'audio/mp3' });
-                const audioFile = new File([audioBlob], `voice_note_${Date.now()}.mp3`, { type: 'audio/mp3' });
-                setAttachment({ file: audioFile, type: 'audio', previewUrl: URL.createObjectURL(audioBlob) });
+                const audioBlob = new Blob(audioChunks.current, { type: 'audio/webm' });
+                const audioFile = new File([audioBlob], `voice_note_${Date.now()}.webm`, { type: 'audio/webm' });
+                setAttachment({ 
+                    file: audioFile, 
+                    type: 'audio', 
+                    previewUrl: URL.createObjectURL(audioBlob),
+                    duration: recordingDuration
+                });
                 stream.getTracks().forEach(track => track.stop());
+                if (recordingIntervalRef.current) {
+                    clearInterval(recordingIntervalRef.current);
+                }
             };
             
             mediaRecorder.current.start();
             setIsRecording(true);
+            
+            // Start duration timer
+            recordingIntervalRef.current = setInterval(() => {
+                setRecordingDuration(prev => prev + 1);
+            }, 1000);
         } catch (e) { 
-            alert("Microphone access denied."); 
+            alert("Microphone access denied. Please allow microphone permissions."); 
         }
     };
 
     const stopRecording = () => {
-        if (mediaRecorder.current) mediaRecorder.current.stop();
-        setIsRecording(false);
+        if (mediaRecorder.current && isRecording) {
+            mediaRecorder.current.stop();
+            setIsRecording(false);
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current);
+            }
+        }
     };
+
+    const cancelRecording = () => {
+        if (mediaRecorder.current && isRecording) {
+            mediaRecorder.current.stop();
+            // Clear the chunks so nothing is saved
+            audioChunks.current = [];
+            setIsRecording(false);
+            setRecordingDuration(0);
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current);
+            }
+            // Stop the stream
+            mediaRecorder.current.stream?.getTracks().forEach(track => track.stop());
+        }
+    };
+
+    // Format duration as MM:SS
+    const formatDuration = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    // Toggle audio preview playback
+    const toggleAudioPreview = () => {
+        if (!audioPreviewRef.current || !attachment?.previewUrl) return;
+        
+        if (isPlayingPreview) {
+            audioPreviewRef.current.pause();
+            setIsPlayingPreview(false);
+        } else {
+            audioPreviewRef.current.play();
+            setIsPlayingPreview(true);
+        }
+    };
+
+    // Cleanup recording on unmount
+    useEffect(() => {
+        return () => {
+            if (recordingIntervalRef.current) {
+                clearInterval(recordingIntervalRef.current);
+            }
+            if (mediaRecorder.current && isRecording) {
+                mediaRecorder.current.stop();
+            }
+        };
+    }, []);
 
     // --- DRAG & DROP ---
     const handleDrag = (e) => { 
@@ -224,24 +292,34 @@ export default function ChatInput({
         let mediaData = null;
         if (attachment) {
             const res = await uploadMedia(attachment.file, `chat_media/${activeChatId}`);
-            if (res) mediaData = { url: res.url, type: res.type, name: res.name };
+            if (res) {
+                mediaData = { 
+                    url: res.url, 
+                    type: res.type, 
+                    name: res.name,
+                    duration: attachment.duration // Include duration for voice notes
+                };
+            }
         }
 
         onSend(input, mediaData);
         setInput('');
         setAttachment(null);
+        setIsPlayingPreview(false);
         
-        // Clear typing indicator
-        if (activeChatId && uid && rtdb) {
-            update(ref(rtdb, `chats/${activeChatId}/typing`), { [uid]: false });
+        // Clear typing indicator via Convex
+        if (onStopTyping) {
+            onStopTyping();
         }
     };
 
     const handleCancel = () => {
         if (editingMessage) {
             setInput('');
+            onCancelEdit?.();
+        } else {
+            onCancelReply?.();
         }
-        onCancelReply?.();
     };
 
     // Get reply/edit preview text
@@ -275,13 +353,74 @@ export default function ChatInput({
                         className="mb-2 px-2 flex items-center gap-2"
                     >
                         <div className="flex gap-1">
-                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce"></span>
-                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
-                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
+                            <span className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce"></span>
+                            <span className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></span>
+                            <span className="w-1.5 h-1.5 bg-brand-blue rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></span>
                         </div>
-                        <span className="text-xs text-gray-400 italic">
-                            {typingUsers.length > 1 ? 'Multiple people are' : 'Someone is'} typing...
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {formatTypingUsers(typingUsers)}
                         </span>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Voice Recording UI */}
+            <AnimatePresence>
+                {isRecording && (
+                    <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="mb-2 p-3 bg-red-50 dark:bg-red-900/20 rounded-xl border border-red-200 dark:border-red-800"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                                <span className="font-medium text-red-700 dark:text-red-400">
+                                    Recording...
+                                </span>
+                                <span className="font-mono text-red-600 dark:text-red-300 text-sm">
+                                    {formatDuration(recordingDuration)}
+                                </span>
+                            </div>
+                            
+                            {/* Recording Waveform Visualization */}
+                            <div className="flex items-center gap-0.5 mx-4">
+                                {[...Array(20)].map((_, i) => (
+                                    <motion.div
+                                        key={i}
+                                        className="w-1 bg-red-400 rounded-full"
+                                        animate={{
+                                            height: [8, Math.random() * 20 + 8, 8],
+                                        }}
+                                        transition={{
+                                            duration: 0.5,
+                                            repeat: Infinity,
+                                            delay: i * 0.05,
+                                        }}
+                                    />
+                                ))}
+                            </div>
+                            
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={cancelRecording}
+                                    className="p-2 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/40 rounded-full transition"
+                                    title="Cancel recording"
+                                >
+                                    <Trash2 size={18} />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={stopRecording}
+                                    className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition"
+                                    title="Stop recording"
+                                >
+                                    <Square size={16} fill="white" />
+                                </button>
+                            </div>
+                        </div>
                     </motion.div>
                 )}
             </AnimatePresence>
@@ -333,18 +472,61 @@ export default function ChatInput({
                             <img src={attachment.previewUrl} className="h-14 w-14 object-cover rounded-lg"/>
                         ) : attachment.type === 'video' ? (
                             <video src={attachment.previewUrl} className="h-14 w-14 object-cover rounded-lg"/>
-                        ) : (
-                            <div className="h-14 w-14 bg-purple-100 dark:bg-purple-900/30 text-purple-600 flex items-center justify-center rounded-lg">
-                                <FileAudio size={24}/>
+                        ) : attachment.type === 'audio' ? (
+                            <div className="flex items-center gap-3 flex-1">
+                                {/* Audio preview with playback */}
+                                <button
+                                    type="button"
+                                    onClick={toggleAudioPreview}
+                                    className="h-12 w-12 bg-purple-500 text-white flex items-center justify-center rounded-full hover:bg-purple-600 transition shrink-0"
+                                >
+                                    {isPlayingPreview ? <Pause size={20} /> : <Play size={20} className="ml-0.5" />}
+                                </button>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <Mic size={14} className="text-purple-500" />
+                                        <span className="text-sm font-bold dark:text-white">Voice Message</span>
+                                    </div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        {/* Simple waveform visualization */}
+                                        <div className="flex items-center gap-0.5 flex-1">
+                                            {[...Array(30)].map((_, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="w-1 bg-purple-300 dark:bg-purple-700 rounded-full"
+                                                    style={{ height: `${Math.random() * 12 + 4}px` }}
+                                                />
+                                            ))}
+                                        </div>
+                                        <span className="text-xs text-gray-500 font-mono">
+                                            {attachment.duration ? formatDuration(attachment.duration) : '0:00'}
+                                        </span>
+                                    </div>
+                                </div>
+                                <audio 
+                                    ref={audioPreviewRef}
+                                    src={attachment.previewUrl}
+                                    onEnded={() => setIsPlayingPreview(false)}
+                                    className="hidden"
+                                />
                             </div>
+                        ) : (
+                            <>
+                                <div className="h-14 w-14 bg-gray-200 dark:bg-gray-700 text-gray-500 flex items-center justify-center rounded-lg">
+                                    <FileText size={24}/>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="text-sm font-bold dark:text-white truncate">{attachment.file.name}</div>
+                                    <div className="text-xs text-gray-500">{(attachment.file.size / 1024).toFixed(1)} KB</div>
+                                </div>
+                            </>
                         )}
-                        <div className="flex-1 min-w-0">
-                            <div className="text-sm font-bold dark:text-white truncate">{attachment.file.name}</div>
-                            <div className="text-xs text-gray-500">{(attachment.file.size / 1024).toFixed(1)} KB</div>
-                        </div>
                         <button 
-                            onClick={() => setAttachment(null)}
-                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition"
+                            onClick={() => {
+                                setAttachment(null);
+                                setIsPlayingPreview(false);
+                            }}
+                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition shrink-0"
                         >
                             <X size={18} className="text-gray-400 hover:text-red-500"/>
                         </button>
