@@ -70,15 +70,37 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
   const getActionsForRole = (r) => {
       switch(r) {
           case 'Talent': return [
-              'Sing Lead Vocals', 'Sing Background', 'Feature on Track', 
-              'Write Topline', 'Play Instrument', 'Perform Live',
-              'Record Demo', 'Session Work', 'Compose', 'Improvise'
+              // Vocal-focused
+              'Sing Lead Vocals', 'Sing Background/Harmonies', 'Feature on Track', 'Write Topline/Melody',
+              // Instrumentalist-focused
+              'Play Instrument', 'Session Recording', 'Live Performance', 'Tour Support',
+              // DJ-focused
+              'DJ Set', 'DJ Private Event', 'DJ Club Night',
+              // General
+              'Record Demo', 'Collaborate', 'Improvise', 'Teach/Lesson'
           ];
-          case 'Engineer': return ['Mix', 'Master', 'Record', 'Edit', 'Sound Design'];
-          case 'Producer': return ['Produce', 'Remix', 'Arrange', 'Co-Write', 'Beat Production'];
-          case 'Studio': return ['Host Session', 'Rent Gear', 'Rent Space'];
-          case 'Composer': return ['Compose', 'Arrange', 'Orchestrate', 'Score'];
-          default: return ['Work', 'Collaborate'];
+          case 'Engineer': return [
+              'Mix Track', 'Mix Album/EP', 'Master Track', 'Master Album', 
+              'Record/Track Session', 'Edit/Comp', 'Tune Vocals', 
+              'Sound Design', 'Dolby Atmos Mix', 'Live Sound/FOH'
+          ];
+          case 'Producer': return [
+              'Produce Full Track', 'Co-Produce', 'Remix', 'Create Custom Beat',
+              'Arrange/Program', 'Vocal Production', 'Toplining', 
+              'Beat Lease', 'Beat Exclusive', 'Sound Design'
+          ];
+          case 'Studio': return [
+              'Host Recording Session', 'Host Mixing Session', 'Rent Rehearsal Space',
+              'Rent Gear/Backline', 'Full Day Lockout', 'Podcast Recording'
+          ];
+          case 'Composer': return [
+              'Compose Original Score', 'Arrange Song', 'Orchestrate', 
+              'Write Library Music', 'Create Jingle', 'Score Film/TV',
+              'Score Video Game', 'Ghostwrite'
+          ];
+          case 'Label': return ['Sign Artist', 'Distribution Deal', 'Licensing'];
+          case 'Agent': return ['Book Artist', 'Negotiate Deal', 'Represent'];
+          default: return ['Work', 'Collaborate', 'Consult'];
       }
   };
 

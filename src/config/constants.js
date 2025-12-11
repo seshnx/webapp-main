@@ -63,21 +63,89 @@ export const VOCAL_STYLES = [
     "World Music"
 ];
 
+// Instrument-specific experience levels
+export const PLAYING_EXPERIENCE = [
+    "Beginner (0-2 years)",
+    "Intermediate (2-5 years)",
+    "Advanced (5-10 years)",
+    "Professional (10+ years)",
+    "Session Veteran (20+ years)"
+];
+
+// DJ-specific data
+export const DJ_STYLES = [
+    "Club/Dance",
+    "Hip Hop",
+    "House",
+    "Techno",
+    "Drum & Bass",
+    "Dubstep",
+    "Trance",
+    "EDM/Festival",
+    "Open Format",
+    "Wedding/Corporate",
+    "Turntablism/Scratch",
+    "Radio"
+];
+
+// Producer-specific data
+export const PRODUCTION_STYLES = [
+    "Hip Hop/Trap",
+    "Pop",
+    "R&B",
+    "Electronic/EDM",
+    "Rock/Alternative",
+    "Country",
+    "Jazz",
+    "Classical/Orchestral",
+    "Film/TV Scoring",
+    "Lo-Fi/Ambient",
+    "Latin/Reggaeton",
+    "Gospel/Christian"
+];
+
+// Engineer-specific data  
+export const ENGINEERING_SPECIALTIES = [
+    "Tracking/Recording",
+    "Mixing",
+    "Mastering",
+    "Live Sound/FOH",
+    "Monitor Engineering",
+    "Broadcast/Podcast",
+    "Dolby Atmos/Spatial",
+    "Restoration/Forensic",
+    "Sound Design",
+    "ADR/Dialogue"
+];
+
 // Service types for bookings - organized by role relevance
 export const SERVICE_TYPES = {
-    general: ["Session", "Lesson", "Consultation", "Rehearsal"],
+    general: ["Session", "Lesson", "Consultation", "Rehearsal", "Collaboration"],
     talent: ["Vocal Recording", "Feature Verse", "Background Vocals", "Vocal Topline", "Live Performance", "Session Work", "Demo Recording"],
-    production: ["Mixing", "Mastering", "Beat Production", "Arrangement", "Sound Design"],
-    studio: ["Studio Rental", "Equipment Rental", "Recording Session", "Mixing Session"]
+    instrumentalist: ["Session Recording", "Live Gig", "Tour Support", "Recording Session", "Overdubs", "Arrangement"],
+    dj: ["Club Set", "Private Event", "Festival Set", "Radio Mix", "Corporate Event", "Wedding"],
+    production: ["Beat Production", "Full Production", "Co-Production", "Remix", "Arrangement", "Sound Design", "Composition"],
+    engineering: ["Mixing", "Mastering", "Tracking", "Editing", "Tuning/Comping", "Stem Mixing", "Atmos Mix"],
+    studio: ["Studio Rental", "Equipment Rental", "Recording Session", "Mixing Session", "Rehearsal Space"],
+    composer: ["Original Score", "Arrangement", "Orchestration", "Library Music", "Jingle/Commercial", "Songwriting"]
 };
 
-// Availability status options
+// Availability status options (shared across all professional roles)
 export const AVAILABILITY_STATUS = {
     AVAILABLE: { id: 'available', label: 'Available for Work', color: 'green' },
     BUSY: { id: 'busy', label: 'Busy - Limited Availability', color: 'yellow' },
     UNAVAILABLE: { id: 'unavailable', label: 'Not Available', color: 'red' },
     TOURING: { id: 'touring', label: 'On Tour', color: 'purple' }
 };
+
+// Sub-roles that are vocal-focused
+export const VOCAL_SUBROLES = ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"];
+
+// Sub-roles that are instrument-focused
+export const INSTRUMENTALIST_SUBROLES = ["Guitarist", "Bassist", "Drummer", "Keyboardist", "Pianist", "Violinist", "Cellist", "Saxophonist", "Trumpeter", "Multi-Instrumentalist", "Session Musician"];
+
+// Sub-roles that are DJ/electronic-focused
+export const DJ_SUBROLES = ["DJ", "Beatmaker"];
 
 // Helper function to get display role - shows subRole if available, otherwise shows accountType
 export const getDisplayRole = (userData) => {
@@ -184,10 +252,24 @@ export const PROFILE_SCHEMAS = {
     { key: "talentSubRole", label: "What best describes you?", type: "select", options: ["", ...TALENT_SUBROLES], isSubRole: true },
     { key: "profileName", label: "Artist / Stage Name", type: "text" }, 
     { key: "bio", label: "Biography", type: "textarea" },
+    
     // Vocal-specific fields - shown for singers/vocalists
-    { key: "vocalRange", label: "Vocal Range", type: "select", options: ["", ...VOCAL_RANGES], showFor: ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"] },
-    { key: "vocalStyles", label: "Vocal Styles", type: "multi_select", data: VOCAL_STYLES, showFor: ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"] },
-    { key: "demoReelUrl", label: "Demo Reel / Sample Link", type: "text", placeholder: "YouTube, SoundCloud, or Spotify link", showFor: ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"] },
+    { key: "vocalRange", label: "Vocal Range", type: "select", options: ["", ...VOCAL_RANGES], showFor: VOCAL_SUBROLES },
+    { key: "vocalStyles", label: "Vocal Styles", type: "multi_select", data: VOCAL_STYLES, showFor: VOCAL_SUBROLES },
+    { key: "demoReelUrl", label: "Demo Reel / Sample Link", type: "text", placeholder: "YouTube, SoundCloud, or Spotify link" },
+    
+    // Instrumentalist-specific fields
+    { key: "primaryInstrument", label: "Primary Instrument", type: "text", showFor: INSTRUMENTALIST_SUBROLES },
+    { key: "playingExperience", label: "Playing Experience", type: "select", options: ["", ...PLAYING_EXPERIENCE], showFor: INSTRUMENTALIST_SUBROLES },
+    { key: "canReadMusic", label: "Sight Reading Ability", type: "select", options: ["", "None", "Lead Sheets/Charts", "Standard Notation", "Expert/Classically Trained"], showFor: INSTRUMENTALIST_SUBROLES },
+    { key: "ownGear", label: "Own Professional Gear?", type: "select", options: ["", "Yes - Full Rig", "Yes - Basic Setup", "No - Need Backline"], showFor: INSTRUMENTALIST_SUBROLES },
+    
+    // DJ/Beatmaker-specific fields
+    { key: "djStyles", label: "DJ Styles", type: "multi_select", data: DJ_STYLES, showFor: DJ_SUBROLES },
+    { key: "djSetup", label: "DJ Setup", type: "select", options: ["", "CDJs/XDJs", "Turntables", "Controller", "Hybrid", "All of the Above"], showFor: DJ_SUBROLES },
+    { key: "canProvidePa", label: "Can Provide PA/Sound?", type: "select", options: ["", "Yes - Full System", "Yes - Basic Setup", "No"], showFor: DJ_SUBROLES },
+    
+    // General fields for all talent
     { key: "instruments", label: "Instruments & Skills", type: "nested_select", data: INSTRUMENT_DATA },
     { key: "genres", label: "Primary Genres", type: "multi_select", data: GENRE_DATA },
     { key: "availabilityStatus", label: "Current Availability", type: "select", options: ["", "Available for Work", "Busy - Limited Availability", "Not Available", "On Tour"] },
@@ -228,22 +310,40 @@ export const PROFILE_SCHEMAS = {
     { key: "hours", label: "Hours of Operation", type: "text" },
     { key: "dimensions", label: "Live Room Dimensions", type: "text" },
     { key: "parking", label: "Parking Situation", type: "text" },
-    { key: "amenities", label: "Amenities", type: "multi_select", data: AMENITIES_DATA }
+    { key: "amenities", label: "Amenities", type: "multi_select", data: AMENITIES_DATA },
+    { key: "availabilityStatus", label: "Current Availability", type: "select", options: ["", "Open - Accepting Bookings", "Limited Availability", "Fully Booked", "Closed for Maintenance"] },
+    { key: "hourlyRate", label: "Hourly Rate ($)", type: "number" },
+    { key: "dayRate", label: "Day Rate ($)", type: "number" },
+    { key: "virtualTourUrl", label: "Virtual Tour Link", type: "text", placeholder: "YouTube or 360° tour URL" },
+    { key: "gearList", label: "Equipment List URL", type: "text" }
   ],
   "Engineer": [
     ...NAME_FIELDS,
     { key: "bio", label: "Bio", type: "textarea" },
-    { key: "skills", label: "Specialties", type: "multi_select", data: ["Tracking", "Mixing", "Mastering", "Live Sound", "Broadcast", "Dolby Atmos", "Editing/Tuning"] },
+    { key: "skills", label: "Specialties", type: "multi_select", data: ENGINEERING_SPECIALTIES },
     { key: "daw", label: "DAWs", type: "multi_select", data: ["Pro Tools", "Logic Pro", "Ableton", "FL Studio", "Cubase", "Reaper", "Studio One", "Luna"] },
     { key: "outboard", label: "Favorite Outboard Gear", type: "textarea" },
-    { key: "credits", label: "Selected Credits", type: "textarea" }
+    { key: "credits", label: "Selected Credits", type: "textarea" },
+    { key: "availabilityStatus", label: "Current Availability", type: "select", options: ["", "Available for Work", "Busy - Limited Availability", "Not Available", "On Location"] },
+    { key: "hourlyRate", label: "Hourly Rate ($)", type: "number" },
+    { key: "projectRate", label: "Per-Song/Project Rate ($)", type: "number" },
+    { key: "sampleWorkUrl", label: "Sample Work / Reel Link", type: "text", placeholder: "SoundCloud, YouTube, or portfolio URL" },
+    { key: "remoteWork", label: "Remote Mixing Available?", type: "select", options: ["Yes", "No"] },
+    { key: "hasStudio", label: "Has Own Studio?", type: "select", options: ["Yes - Commercial", "Yes - Home Studio", "No - Freelance Only"] }
   ],
   "Producer": [ 
     ...NAME_FIELDS,
     { key: "bio", label: "Bio", type: "textarea" }, 
-    { key: "genres", label: "Genres", type: "multi_select", data: GENRE_DATA }, 
-    { key: "daw", label: "Primary DAW", type: "select", options: ["Pro Tools", "Logic Pro", "Ableton", "FL Studio", "Cubase", "Studio One"] },
-    { key: "credits", label: "Discography / Credits", type: "textarea" } 
+    { key: "genres", label: "Genres", type: "multi_select", data: GENRE_DATA },
+    { key: "productionStyles", label: "Production Styles", type: "multi_select", data: PRODUCTION_STYLES },
+    { key: "daw", label: "Primary DAW", type: "select", options: ["Pro Tools", "Logic Pro", "Ableton", "FL Studio", "Cubase", "Studio One", "Reason", "Bitwig"] },
+    { key: "credits", label: "Discography / Credits", type: "textarea" },
+    { key: "availabilityStatus", label: "Current Availability", type: "select", options: ["", "Available for Work", "Busy - Limited Availability", "Not Available", "In Studio"] },
+    { key: "beatLeasePrice", label: "Beat Lease Price ($)", type: "number" },
+    { key: "exclusivePrice", label: "Exclusive Beat Price ($)", type: "number" },
+    { key: "customBeatPrice", label: "Custom Production Rate ($)", type: "number" },
+    { key: "sampleWorkUrl", label: "Beat Catalog / Portfolio Link", type: "text", placeholder: "BeatStars, YouTube, or website URL" },
+    { key: "acceptsCollabs", label: "Open to Collaborations?", type: "select", options: ["Yes", "Paid Only", "No"] }
   ],
   "Composer": [ 
     ...NAME_FIELDS,
@@ -251,7 +351,12 @@ export const PROFILE_SCHEMAS = {
     { key: "compType", label: "Type", type: "multi_select", options:["Film/TV","Game Audio","Pop/Songwriting","Classical/Orchestral", "Library Music", "Jingles"] },
     { key: "instruments", label: "Primary Instruments", type: "nested_select", data: INSTRUMENT_DATA }, 
     { key: "libraries", label: "Key Sample Libraries", type: "textarea" },
-    { key: "credits", label: "Credits", type: "textarea" } 
+    { key: "credits", label: "Credits", type: "textarea" },
+    { key: "availabilityStatus", label: "Current Availability", type: "select", options: ["", "Available for Work", "Busy - Limited Availability", "Not Available", "On Project"] },
+    { key: "projectRate", label: "Project Rate ($/minute of music)", type: "number" },
+    { key: "reelUrl", label: "Demo Reel / Portfolio Link", type: "text", placeholder: "Vimeo, YouTube, or portfolio URL" },
+    { key: "canOrchestrate", label: "Orchestration Services?", type: "select", options: ["Yes", "No"] },
+    { key: "turnaroundTime", label: "Typical Turnaround", type: "select", options: ["24-48 hours", "3-5 days", "1-2 weeks", "Project Dependent"] }
   ],
   "Technician": [
     ...NAME_FIELDS,

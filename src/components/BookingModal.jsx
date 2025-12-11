@@ -26,13 +26,52 @@ export default function BookingModal({ user, userData, target, onClose }) {
         referenceLinks: '' // YouTube, Spotify links for reference
     });
     
-    // Get relevant service types based on target's role
+    // Get relevant service types based on target's role and sub-role
     const getServiceTypes = () => {
         const types = [...SERVICE_TYPES.general];
         const targetRoles = target.accountTypes || [];
-        if (targetRoles.includes('Talent')) types.push(...SERVICE_TYPES.talent);
-        if (targetRoles.includes('Producer') || targetRoles.includes('Engineer')) types.push(...SERVICE_TYPES.production);
-        if (targetRoles.includes('Studio')) types.push(...SERVICE_TYPES.studio);
+        const targetSubRole = target.talentSubRole || '';
+        
+        // Talent-specific types based on sub-role
+        if (targetRoles.includes('Talent')) {
+            // Vocal sub-roles
+            if (['Singer', 'Vocalist', 'Singer-Songwriter', 'Backup Singer', 'Rapper'].includes(targetSubRole)) {
+                types.push(...SERVICE_TYPES.talent);
+            }
+            // DJ sub-roles
+            else if (['DJ', 'Beatmaker'].includes(targetSubRole)) {
+                types.push(...(SERVICE_TYPES.dj || []));
+            }
+            // Instrumentalist sub-roles
+            else if (['Guitarist', 'Bassist', 'Drummer', 'Keyboardist', 'Pianist', 'Session Musician', 'Multi-Instrumentalist'].includes(targetSubRole)) {
+                types.push(...(SERVICE_TYPES.instrumentalist || []));
+            }
+            // Default talent types
+            else {
+                types.push(...SERVICE_TYPES.talent, ...(SERVICE_TYPES.instrumentalist || []));
+            }
+        }
+        
+        // Producer-specific types
+        if (targetRoles.includes('Producer')) {
+            types.push(...(SERVICE_TYPES.production || []));
+        }
+        
+        // Engineer-specific types
+        if (targetRoles.includes('Engineer')) {
+            types.push(...(SERVICE_TYPES.engineering || []));
+        }
+        
+        // Studio-specific types
+        if (targetRoles.includes('Studio')) {
+            types.push(...(SERVICE_TYPES.studio || []));
+        }
+        
+        // Composer-specific types
+        if (targetRoles.includes('Composer')) {
+            types.push(...(SERVICE_TYPES.composer || []));
+        }
+        
         return [...new Set(types)]; // Remove duplicates
     };
 

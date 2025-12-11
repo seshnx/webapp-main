@@ -613,13 +613,13 @@ export default function Dashboard({
                                 Quick Actions
                             </h3>
                             <div className="space-y-3">
-                                {/* Show talent-specific actions for Talent role */}
-                                {userData?.accountTypes?.includes('Talent') && (
+                                {/* Professional role-specific actions */}
+                                {userData?.accountTypes?.some(r => ['Talent', 'Producer', 'Engineer', 'Composer'].includes(r)) && (
                                     <>
                                         <QuickActionButton
                                             icon={<Zap size={18} className="text-yellow-600" />}
                                             label="Browse Open Gigs"
-                                            description="Find vocal opportunities near you"
+                                            description="Find work opportunities near you"
                                             onClick={() => setActiveTab('bookings')}
                                             color="bg-yellow-100 dark:bg-yellow-900/30"
                                         />
@@ -632,6 +632,29 @@ export default function Dashboard({
                                         />
                                     </>
                                 )}
+                                
+                                {/* Studio-specific actions */}
+                                {userData?.accountTypes?.includes('Studio') && (
+                                    <QuickActionButton
+                                        icon={<Calendar size={18} className="text-indigo-600" />}
+                                        label="Manage Bookings"
+                                        description="View and manage studio sessions"
+                                        onClick={() => setActiveTab('bookings')}
+                                        color="bg-indigo-100 dark:bg-indigo-900/30"
+                                    />
+                                )}
+                                
+                                {/* Label/Agent-specific actions */}
+                                {userData?.accountTypes?.some(r => ['Label', 'Agent'].includes(r)) && (
+                                    <QuickActionButton
+                                        icon={<Users size={18} className="text-teal-600" />}
+                                        label="Manage Roster"
+                                        description="View and manage your artists"
+                                        onClick={() => setActiveTab('business')}
+                                        color="bg-teal-100 dark:bg-teal-900/30"
+                                    />
+                                )}
+                                
                                 <QuickActionButton
                                     icon={<Edit2 size={18} className="text-blue-600" />}
                                     label="Create Post"
@@ -639,7 +662,9 @@ export default function Dashboard({
                                     onClick={() => setActiveTab('feed')}
                                     color="bg-blue-100 dark:bg-blue-900/30"
                                 />
-                                {!userData?.accountTypes?.includes('Talent') && (
+                                
+                                {/* Find talent for non-professional roles */}
+                                {!userData?.accountTypes?.some(r => ['Talent', 'Producer', 'Engineer', 'Composer', 'Studio'].includes(r)) && (
                                     <QuickActionButton
                                         icon={<Search size={18} className="text-purple-600" />}
                                         label="Find Talent"
@@ -648,6 +673,7 @@ export default function Dashboard({
                                         color="bg-purple-100 dark:bg-purple-900/30"
                                     />
                                 )}
+                                
                                 <QuickActionButton
                                     icon={<ShoppingBag size={18} className="text-amber-600" />}
                                     label="Marketplace"
