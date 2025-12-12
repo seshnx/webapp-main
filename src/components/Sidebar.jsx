@@ -133,11 +133,13 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
       </aside>
 
       {/* Mobile Backdrop */}
-      <div 
-        className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-all duration-300 ease-out lg:hidden ${sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} 
-        onClick={() => setSidebarOpen(false)}
-        aria-hidden="true"
-      />
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-all duration-300 ease-out lg:hidden opacity-100 pointer-events-auto" 
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
+        />
+      )}
 
       {/* Mobile Sidebar */}
       <aside 

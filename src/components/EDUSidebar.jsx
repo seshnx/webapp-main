@@ -92,12 +92,12 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
             </aside>
 
             {/* MOBILE OVERLAY */}
-            <div 
-                className={`fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-opacity duration-300 lg:hidden ${
-                sidebarOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-                }`} 
-                onClick={() => setSidebarOpen(false)}
-            />
+            {sidebarOpen && (
+                <div 
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-opacity duration-300 lg:hidden opacity-100 pointer-events-auto" 
+                    onClick={() => setSidebarOpen(false)}
+                />
+            )}
 
             {/* MOBILE DRAWER */}
             <aside 

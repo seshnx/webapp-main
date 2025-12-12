@@ -109,6 +109,22 @@ export default function App() {
 
   const toggleTheme = () => setDarkMode(!darkMode);
 
+  // Close sidebar when switching to desktop mode
+  useEffect(() => {
+    const handleResize = () => {
+      // lg breakpoint is 1024px in Tailwind
+      if (window.innerWidth >= 1024 && sidebarOpen) {
+        setSidebarOpen(false);
+      }
+    };
+
+    // Check on mount and listen for resize events
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    
+    return () => window.removeEventListener('resize', handleResize);
+  }, [sidebarOpen]);
+
   const auth = getAuth(app);
   const db = getFirestore(app);
 
