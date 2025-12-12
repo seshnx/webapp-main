@@ -18,7 +18,7 @@ const APP_NAME = 'SeshNx';
 const zohoUser = functions.config().email ? functions.config().email.user : process.env.ZOHO_USER;   
 const zohoPass = functions.config().email ? functions.config().email.pass : process.env.ZOHO_PASS;   
 const zohoAlias = functions.config().email ? functions.config().email.alias : process.env.ZOHO_ALIAS; 
-const appUrl = (functions.config().app && functions.config().app.url) || process.env.APP_URL || 'https://seshnx.com';
+const appUrl = (functions.config().app && functions.config().app.url) || process.env.APP_URL || 'https://app.seshnx.com';
 
 // Only create transport if credentials exist to avoid crash on deploy if env vars missing
 let mailTransport = null;

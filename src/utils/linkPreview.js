@@ -114,11 +114,11 @@ async function getClientSideLinkPreview(url) {
             data.description = 'View on Instagram';
         }
         // SeshNx internal links
-        else if (hostname.includes('seshnx.net') || hostname.includes('seshnx.com')) {
+        else if (hostname.includes('app.seshnx.com') || hostname.includes('seshnx.com')) {
             data.siteName = 'SeshNx';
             data.title = 'SeshNx Link';
             data.description = 'View on SeshNx platform';
-            data.image = 'https://seshnx.net/pwa-512x512.png';
+            data.image = 'https://app.seshnx.com/pwa-512x512.png';
         }
         // LinkedIn
         else if (hostname.includes('linkedin.com')) {

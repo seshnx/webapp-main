@@ -127,7 +127,7 @@ export default function MessageBubble({
     // Render link preview
     const renderLinkPreview = () => {
         if (!linkPreviewData) return null;
-        const isSeshNxLink = linkPreviewData.url?.includes('seshnx.net');
+        const isSeshNxLink = linkPreviewData.url?.includes('app.seshnx.com');
 
         return (
             <div className="mt-2 block border border-gray-300 dark:border-gray-600 rounded-lg overflow-hidden bg-white dark:bg-gray-800 max-w-[280px]">
