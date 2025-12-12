@@ -15,7 +15,7 @@ import LogoLight from '../assets/SeshNx-PNG cCropped.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped white text.png';
 
 // Roles to hide from public signup
-const HIDDEN_ROLES = ['Student', 'Instructor', 'Intern', 'Admin'];
+const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
 
 // --- SUB-COMPONENT: Zip Code Map ---
 function RecenterAutomatically({ lat, lng }) {

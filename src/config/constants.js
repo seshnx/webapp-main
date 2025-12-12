@@ -6,7 +6,7 @@ export const STRIPE_PUBLIC_KEY = "pk_test_TYooMQauvdEDq54NiTphI7jx";
 
 export const ACCOUNT_TYPES = [
     "Talent", "Engineer", "Producer", "Composer", "Studio", "Technician", "Fan",
-    "Student", "Instructor", "Label", "Agent" // Added Label & Agent for Distribution
+    "Student", "EDUStaff", "EDUAdmin", "Intern", "Label", "Agent", "GAdmin" // EDU roles: Student, EDUStaff, EDUAdmin, Intern; Platform: GAdmin
 ];
 
 // Talent sub-roles - displayed instead of "Talent" when selected
@@ -231,15 +231,19 @@ export const SCHOOL_PERMISSIONS = [
 ];
 
 // EDU Authentication & Permissions
-export const EDU_ROLES = ['Admin', 'Instructor', 'Student', 'Intern'];
+// Note: GAdmin (Global Admin) is NOT an EDU role - it's a platform-wide role managed in separate Admin App
+export const EDU_ROLES = ['EDUAdmin', 'EDUStaff', 'Student', 'Intern'];
 
 // EDU Role Hierarchy (highest to lowest)
-export const EDU_ROLE_HIERARCHY = ['Admin', 'Instructor', 'Intern', 'Student'];
+export const EDU_ROLE_HIERARCHY = ['EDUAdmin', 'EDUStaff', 'Intern', 'Student'];
+
+// Global Admin role (separate from EDU roles, managed in Admin App)
+export const GLOBAL_ADMIN_ROLE = 'GAdmin';
 
 // EDU Permissions mapping (role -> permissions)
 export const EDU_PERMISSIONS = {
-    'Admin': ['ALL'], // Global Admin has all permissions
-    'Instructor': [
+    'EDUAdmin': ['ALL'], // EDU Admin (School Admin) has all school permissions
+    'EDUStaff': [
         'manage_roster',
         'approve_hours',
         'grade_students',
@@ -249,6 +253,13 @@ export const EDU_PERMISSIONS = {
     'Intern': [], // Interns have no admin permissions
     'Student': [] // Students have no admin permissions
 };
+
+// Role Assignment Rules:
+// - Student: Only when enrolled in a school (check enrollments collection)
+// - Intern: Only when listed as "Active Internship" on school roster
+// - EDUStaff: Only when listed as "Staff" within a school
+// - EDUAdmin: Only granted by GAdmin from Global Admin App
+// - GAdmin: Only created in Global Admin App
 
 export const INSTRUMENT_DATA = { 
     "Vocals": ["Soprano", "Tenor", "Baritone", "Bass", "Falsetto", "Rapping", "Beatboxing", "Growling"], 

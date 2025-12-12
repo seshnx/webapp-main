@@ -42,7 +42,7 @@ export default function Navbar({
   const displayRole = getDisplayRole(userData); // Shows subRole if set for Talent
   const roles = userData?.accountTypes || [];
 
-  const eduRoles = ['Student', 'Instructor', 'Intern', 'Admin'];
+  const eduRoles = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin'];
   const hasEduAccess = roles.some(r => eduRoles.includes(r));
   const isEduTab = activeTab.startsWith('edu');
 

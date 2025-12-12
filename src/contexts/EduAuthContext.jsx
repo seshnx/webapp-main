@@ -31,7 +31,13 @@ export function EduAuthProvider({ children, user: mainUser, userData: mainUserDa
             return;
         }
 
-        // Check if user has EDU access
+        // Check if user has EDU access (EDUAdmin, EDUStaff, Student, Intern)
+        // Note: GAdmin (Global Admin) is NOT an EDU role - they use separate Admin App
+        // Role assignment rules:
+        // - Student: Only when enrolled in a school (enrollments collection)
+        // - Intern: Only when listed as "Active Internship" on school roster
+        // - EDUStaff: Only when listed as "Staff" within a school
+        // - EDUAdmin: Only granted by GAdmin from Global Admin App
         if (!mainUserData || !hasEduAccess(mainUserData)) {
             setEduUser(null);
             setEduUserData(null);
@@ -72,7 +78,11 @@ export function EduAuthProvider({ children, user: mainUser, userData: mainUserDa
         isAuthenticated: !!eduUser && eduSessionValid,
         hasEduAccess: eduSessionValid,
         eduRole: eduUserData ? getEduRole(eduUserData) : null,
-        canAccessSchool: (schoolId) => eduUserData ? canAccessSchool(eduUserData, schoolId) : false,
+        canAccessSchool: async (schoolId) => {
+            if (!eduUserData) return false;
+            // canAccessSchool is now async - it checks school assignments dynamically
+            return await canAccessSchool(eduUserData, schoolId);
+        },
         loading
     };
 

@@ -36,21 +36,30 @@ service cloud.firestore {
     match /schools/{schoolId} {
       // School document
       allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && 
+      
+      // Create: Only Global Admins (GAdmin) can create new schools
+      // GAdmin is only created in the separate Global Admin App
+      allow create: if isAuthenticated() && 
+        exists(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main) &&
+        get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin']);
+      
+      // Update/Delete: Global Admins (GAdmin) OR EDU Admins (EDUAdmin) OR school-specific admins can modify
+      allow update, delete: if isAuthenticated() && 
         (request.auth.uid in resource.data.admins || 
-         get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin']));
+         (exists(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main) &&
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin'])));
       
       // Courses
       match /courses/{courseId} {
         allow read: if isAuthenticated();
         allow create, update, delete: if isAuthenticated() && 
-          (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+          (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         
         // Lessons subcollection
         match /lessons/{lessonId} {
           allow read: if isAuthenticated();
           allow write: if isAuthenticated() && 
-            (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+            (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         }
       }
       
@@ -58,52 +67,52 @@ service cloud.firestore {
       match /learning_paths/{pathId} {
         allow read: if isAuthenticated();
         allow create, update, delete: if isAuthenticated() && 
-          (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+          (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
       }
       
       // Enrollments
       match /enrollments/{enrollmentId} {
         allow read: if isAuthenticated() && 
           (resource.data.studentId == request.auth.uid ||
-           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         allow create: if isAuthenticated();
         allow update: if isAuthenticated() && 
           (resource.data.studentId == request.auth.uid ||
-           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         allow delete: if isAuthenticated() && 
-          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']);
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'Instructor']);
       }
       
       // Certificates
       match /certificates/{certificateId} {
         allow read: if isAuthenticated() && 
           (resource.data.studentId == request.auth.uid ||
-           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         allow create: if isAuthenticated() && 
-          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']);
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'Instructor']);
         allow delete: if isAuthenticated() && 
-          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin']);
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin']);
       }
       
       // Badges
       match /badges/{badgeId} {
         allow read: if isAuthenticated() && 
           (resource.data.studentId == request.auth.uid ||
-           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         allow create: if isAuthenticated() && 
-          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']);
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'Instructor']);
         allow delete: if isAuthenticated() && 
-          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin']);
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin']);
       }
       
       // Student Progress
       match /student_progress/{studentId} {
         allow read: if isAuthenticated() && 
           (studentId == request.auth.uid ||
-           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         allow write: if isAuthenticated() && 
           (studentId == request.auth.uid ||
-           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
       }
     }
     

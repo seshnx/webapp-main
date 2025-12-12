@@ -10,6 +10,7 @@ import { useSchool } from '../../contexts/SchoolContext';
 import { exportToCSV } from '../../utils/dataExport';
 import { SCHOOL_PERMISSIONS } from '../../config/constants';
 import { useEduAuth } from '../../contexts/EduAuthContext';
+import { isGlobalAdmin } from '../../utils/eduPermissions';
 
 // --- MODULE IMPORTS ---
 import EduOverview from './modules/EduOverview';
@@ -53,11 +54,11 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [newSchoolForm, setNewSchoolForm] = useState({ name: '', address: '', primaryColor: '#4f46e5' });
 
-    const isGlobalAdmin = userData?.accountTypes?.includes('Admin');
+    const isGlobalAdminUser = isGlobalAdmin(userData);
 
     // --- 1. FETCH SCHOOLS (Global Admin) ---
     useEffect(() => {
-        if (isGlobalAdmin) {
+        if (isGlobalAdminUser) {
             const fetchSchools = async () => {
                 try {
                     const snap = await getDocs(collection(db, 'schools'));
@@ -74,7 +75,7 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
             };
             fetchSchools();
         }
-    }, [isGlobalAdmin, activeSchoolId]);
+    }, [isGlobalAdminUser, activeSchoolId]);
 
     // --- 2. FETCH ACTIVE SCHOOL DATA ---
     useEffect(() => {
@@ -119,6 +120,14 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
     // --- ACTION: CREATE NEW SCHOOL ---
     const handleCreateSchool = async () => {
         if (!newSchoolForm.name) return;
+        
+        // Double-check permissions before attempting to create
+        if (!isGlobalAdminUser) {
+            alert("Only SeshNx Platform Administrators can create new schools. Please contact a platform administrator.");
+            setShowCreateModal(false);
+            return;
+        }
+        
         try {
             const docRef = await addDoc(collection(db, 'schools'), { 
                 ...newSchoolForm, 
@@ -141,7 +150,11 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
             // Log is implied since we switch to the new school immediately
         } catch (e) {
             console.error("Error creating school:", e);
-            alert("Failed to create school.");
+            if (e.code === 'permission-denied') {
+                alert("Permission denied. Only SeshNx Platform Administrators can create new schools.");
+            } else {
+                alert("Failed to create school. Please try again.");
+            }
         }
     };
 
@@ -161,7 +174,7 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
                 <div className="flex-1 text-center md:text-left z-10">
                     <h1 className="text-3xl font-extrabold dark:text-white tracking-tight flex items-center justify-center md:justify-start gap-3">
                         {activeSchoolData?.name || 'Select School'}
-                        {isGlobalAdmin && !staffTitle && (
+                        {isGlobalAdminUser && !staffTitle && (
                             <div className="relative group">
                                 <select 
                                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -196,7 +209,7 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
                     </div>
                 </div>
 
-                {isGlobalAdmin && (
+                {isGlobalAdminUser && (
                     <div className="z-10">
                         <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition shadow-md">
                             <Plus size={16}/> New School

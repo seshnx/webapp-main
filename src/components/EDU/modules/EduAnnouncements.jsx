@@ -105,7 +105,7 @@ export default function EduAnnouncements({ schoolId, logAction, user, userData }
                             >
                                 <option value="All">Everyone</option>
                                 <option value="Student">Students Only</option>
-                                <option value="Instructor">Staff Only</option>
+                                <option value="EDUStaff">Staff Only</option>
                             </select>
                         </div>
                     </div>

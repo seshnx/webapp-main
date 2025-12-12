@@ -75,7 +75,7 @@ export default function EduEvaluations({ schoolId, logAction, graderName }) {
         try {
             const evaluationData = {
                 ...gradeForm,
-                evaluator: graderName || 'Instructor',
+                evaluator: graderName || 'EDUStaff',
                 date: serverTimestamp()
             };
 

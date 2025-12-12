@@ -56,13 +56,13 @@ function EduProtectedRoute({ children, user, userData }) {
  */
 function EduDashboardWrapper({ user, userData }) {
   const role = userData?.accountTypes?.find(role => 
-    ['Admin', 'Instructor', 'Intern'].includes(role)
+    ['EDUAdmin', 'EDUStaff', 'Intern'].includes(role)
   ) || 'Student';
   
   switch (role) {
-    case 'Admin':
+    case 'EDUAdmin':
       return <EduAdminDashboard key={`admin-${user?.uid}`} user={user} userData={userData} />;
-    case 'Instructor':
+    case 'EDUStaff':
       return <EduStaffDashboard key={`staff-${user?.uid}`} user={user} userData={userData} />;
     case 'Intern':
       return <EduInternDashboard key={`intern-${user?.uid}`} user={user} userData={userData} />;

@@ -17,7 +17,7 @@ import { db, getPaths } from '../config/firebase';
 import { ACCOUNT_TYPES } from '../config/constants';
 
 // Temporary list of extended roles to unlock
-const HIDDEN_ROLES = ['Student', 'Instructor', 'Intern', 'Admin'];
+const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
 
 export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) {
     const [localSettings, setLocalSettings] = useState(userData.settings || {

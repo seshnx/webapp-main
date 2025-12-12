@@ -42,7 +42,7 @@ const ROLE_CONFIG = {
         PERMISSIONS.CAN_LOG_HOURS,
         PERMISSIONS.CAN_VIEW_OWN_GRADES
     ],
-    'Instructor': [
+    'EDUStaff': [
         PERMISSIONS.CAN_POST,
         PERMISSIONS.CAN_COMMENT,
         PERMISSIONS.CAN_BOOK_STUDIO,

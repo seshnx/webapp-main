@@ -55,8 +55,10 @@ export function SchoolProvider({ children, user, userData }) {
                     });
                 }
 
-                // B. Check if STAFF (Instructor/Admin)
-                if (userData.accountTypes?.includes('Instructor') || userData.accountTypes?.includes('Admin')) {
+                // B. Check if STAFF (EDUStaff/EDUAdmin)
+                // Staff and EDUAdmins are determined by being listed in school staff collection
+                // Role assignment: Only listed in staff collection = EDUStaff or EDUAdmin
+                if (userData.accountTypes?.includes('EDUStaff') || userData.accountTypes?.includes('EDUAdmin')) {
                     // Find my staff entry to get Role ID
                     const q = query(collection(db, `schools/${userData.schoolId}/staff`), where('uid', '==', user.uid));
                     const staffSnap = await getDocs(q);
@@ -71,7 +73,7 @@ export function SchoolProvider({ children, user, userData }) {
                             if (roleSnap.exists()) {
                                 setMyPermissions(roleSnap.data().permissions || []);
                             }
-                        } else if (userData.accountTypes.includes('Admin')) {
+                        } else if (userData.accountTypes.includes('EDUAdmin')) {
                             setMyPermissions(['ALL']); 
                         }
                     }
@@ -126,7 +128,7 @@ export function SchoolProvider({ children, user, userData }) {
         myPermissions,
         internshipStudio,
         isStudent: !!studentProfile,
-        isStaff: !!staffProfile || userData?.accountTypes?.includes('Admin'),
+        isStaff: !!staffProfile || userData?.accountTypes?.includes('EDUAdmin'),
         checkIn,
         checkOut,
         loading

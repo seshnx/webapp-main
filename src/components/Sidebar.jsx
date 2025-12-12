@@ -19,7 +19,7 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
   ];
 
   // --- UPDATED: EDU Panel Logic ---
-  // Now checks for Students OR Staff (Instructors/Admins)
+  // Now checks for Students OR Staff (EDUStaff/EDUAdmins)
   const isIntern = userData?.accountTypes?.includes('Intern');
   
   if (isStudent || isIntern || isStaff || userData?.accountTypes?.includes('student')) {

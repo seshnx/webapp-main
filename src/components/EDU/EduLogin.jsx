@@ -67,6 +67,8 @@ export default function EduLogin() {
             }
 
             const userData = userDoc.data();
+            // Check for EDU access (EDUAdmin, EDUStaff, Student, Intern)
+            // GAdmin (Global Admin) should use the separate Global Admin App, not EDU login
             if (!hasEduAccess(userData)) {
                 setError('You do not have EDU access. Please contact your administrator.');
                 setLoading(false);
@@ -107,6 +109,8 @@ export default function EduLogin() {
             }
 
             const userData = userDoc.data();
+            // Check for EDU access (EDUAdmin, EDUStaff, Student, Intern)
+            // GAdmin (Global Admin) should use the separate Global Admin App, not EDU login
             if (!hasEduAccess(userData)) {
                 setError('You do not have EDU access. Please contact your administrator.');
                 setLoading(false);

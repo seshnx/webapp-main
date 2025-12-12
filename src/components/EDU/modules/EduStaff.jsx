@@ -71,12 +71,13 @@ export default function EduStaff({ schoolId, logAction }) {
             
             await addDoc(collection(db, `schools/${schoolId}/staff`), staffEntry);
 
-            // 4. Update User's Global Profile (Grant 'Instructor' Access)
+            // 4. Update User's Global Profile (Grant 'EDUStaff' Access)
             // This allows them to see the EDU dashboards
+            // Note: Role is determined by being listed in school staff collection
             const userProfilePath = getPaths(targetUid).userProfile;
             await updateDoc(doc(db, userProfilePath), {
                 schoolId: schoolId, // Link them to this school
-                accountTypes: arrayUnion('Instructor') // Grant generic staff access
+                accountTypes: arrayUnion('EDUStaff') // Grant EDUStaff access
             });
 
             // 5. Update Local State
@@ -92,7 +93,7 @@ export default function EduStaff({ schoolId, logAction }) {
     };
 
     const handleRemoveStaff = async (staffId, name) => {
-        // Note: This removes them from the school list, but doesn't strip the 'Instructor' role 
+        // Note: This removes them from the school list, but doesn't strip the 'EDUStaff' role 
         // from their main profile automatically (safer to leave manual, or add strict logic).
         // For MVP, we just remove the school record.
         if(!confirm(`Remove ${name} from staff?`)) return;
@@ -142,7 +143,7 @@ export default function EduStaff({ schoolId, logAction }) {
                     </button>
                 </div>
                 <p className="text-xs text-gray-500 mt-3">
-                    * The user must already have a SeshNx account. This will grant them <strong>Instructor</strong> access to this school.
+                    * The user must already have a SeshNx account. This will grant them <strong>EDUStaff</strong> access to this school.
                 </p>
             </div>
 

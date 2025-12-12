@@ -258,7 +258,7 @@ export default function App() {
   // React Router handles all routing - no need for custom render logic
 
   const isEduMode = activeTab.startsWith('edu-');
-  const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('Admin') || userData?.accountTypes?.includes('Instructor'));
+  const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('EDUAdmin') || userData?.accountTypes?.includes('EDUStaff'));
 
   const appContent = (
     <SchoolProvider user={user} userData={userData}>
@@ -298,7 +298,7 @@ export default function App() {
                         sidebarOpen={sidebarOpen}
                         setSidebarOpen={setSidebarOpen}
                         isStaff={userData.accountTypes?.includes('Instructor')} 
-                        isAdmin={userData.accountTypes?.includes('Admin')} 
+                        isAdmin={userData.accountTypes?.includes('EDUAdmin')} 
                     />
                 ) : (
                     <Sidebar 
