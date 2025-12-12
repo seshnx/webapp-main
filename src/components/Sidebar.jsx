@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, GraduationCap, ShieldCheck, Wrench, Briefcase } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -6,6 +6,18 @@ import { useSchool } from '../contexts/SchoolContext';
 
 export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) {
   const { isStudent, isStaff } = useSchool(); // Use Context Flags
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Track mobile viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 1024);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const links = [
     { id: 'dashboard', icon: <User size={18} />, label: 'Dashboard' },
@@ -133,9 +145,9 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
       </aside>
 
       {/* Mobile Backdrop */}
-      {sidebarOpen && (
+      {sidebarOpen && isMobile && (
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-all duration-300 ease-out lg:hidden opacity-100 pointer-events-auto" 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-all duration-300 ease-out opacity-100 pointer-events-auto" 
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />

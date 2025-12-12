@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Users, Clock, UserPlus, Key, Lock, Megaphone, 
     Briefcase, GraduationCap, Users as CohortIcon, 
@@ -9,6 +9,18 @@ import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
 
 export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, isGlobalAdmin }) {
+    const [isMobile, setIsMobile] = useState(false);
+
+    // Track mobile viewport
+    useEffect(() => {
+        const checkMobile = () => {
+            setIsMobile(window.innerWidth < 1024);
+        };
+        
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
     
     // Define the specific navigation items for the EDU Panel
     const adminLinks = [
@@ -92,9 +104,9 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
             </aside>
 
             {/* MOBILE OVERLAY */}
-            {sidebarOpen && (
+            {sidebarOpen && isMobile && (
                 <div 
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-opacity duration-300 lg:hidden opacity-100 pointer-events-auto" 
+                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-opacity duration-300 opacity-100 pointer-events-auto" 
                     onClick={() => setSidebarOpen(false)}
                 />
             )}
