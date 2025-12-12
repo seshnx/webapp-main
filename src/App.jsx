@@ -306,7 +306,7 @@ export default function App() {
         {/* 2. Content Area */}
         <div className="flex flex-1 overflow-hidden relative">
             
-            <div className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0 ${sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} bg-white dark:bg-[#23262f] border-r dark:border-gray-800`}>
+            <div className={`fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0 ${sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} bg-white dark:bg-[#23262f] border-r dark:border-gray-800 lg:hidden`}>
                 {showAdminSidebar ? (
                     <EDUSidebar 
                         activeTab={activeTab} 
