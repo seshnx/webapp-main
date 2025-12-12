@@ -297,7 +297,7 @@ export default function App() {
                         setActiveTab={setActiveTab} 
                         sidebarOpen={sidebarOpen}
                         setSidebarOpen={setSidebarOpen}
-                        isStaff={userData.accountTypes?.includes('Instructor')} 
+                        isStaff={userData.accountTypes?.includes('EDUStaff')} 
                         isAdmin={userData.accountTypes?.includes('EDUAdmin')} 
                     />
                 ) : (

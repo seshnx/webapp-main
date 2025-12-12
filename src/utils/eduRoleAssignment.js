@@ -16,27 +16,20 @@ export async function getUserAssignedSchools(userId, accountTypes = []) {
     try {
         // Check if user is a Student - enrolled in schools
         if (accountTypes.includes('Student')) {
-            // Check enrollments collection for each school
-            // Note: This requires iterating through schools or using a collection group query
-            // For now, we'll check the user's profile for schoolId as a fallback
-            // Full implementation should query enrollments collection
+            const studentSchools = await getSchoolsForRole(userId, 'Student');
+            studentSchools.forEach(schoolId => assignedSchools.push(schoolId));
         }
         
         // Check if user is an Intern - listed in school roster with "Active Internship" status
         if (accountTypes.includes('Intern')) {
-            // Query schools/{schoolId}/students/{userId} where status === "Active Internship"
-            // This requires collection group query or iterating through schools
+            const internSchools = await getSchoolsForRole(userId, 'Intern');
+            internSchools.forEach(schoolId => assignedSchools.push(schoolId));
         }
         
         // Check if user is EDUStaff - listed in school staff collection
         if (accountTypes.includes('EDUStaff')) {
-            // Query schools/{schoolId}/staff where uid === userId
-            // Use collection group query
-            const staffQuery = query(
-                collection(db, 'schools'),
-                // Note: Firestore doesn't support collection group queries on subcollections directly
-                // We need to iterate through schools or maintain a user-schools mapping
-            );
+            const staffSchools = await getSchoolsForRole(userId, 'EDUStaff');
+            staffSchools.forEach(schoolId => assignedSchools.push(schoolId));
         }
         
         // Check if user is EDUAdmin - listed in school admins array
@@ -168,15 +161,34 @@ export async function getSchoolsForRole(userId, role) {
     
     try {
         if (role === 'Student') {
-            // Query enrollments collection group (if available)
-            // For now, iterate through schools (inefficient but works)
-            // Better: maintain a user-schools mapping document
+            // Iterate through all schools and check enrollments/students collections
+            // Note: This is less efficient but works without collection group indexes
+            // Better long-term solution: maintain a user-schools mapping document
+            const schoolsSnap = await getDocs(collection(db, 'schools'));
+            for (const schoolDoc of schoolsSnap.docs) {
+                const schoolId = schoolDoc.id;
+                if (await isStudentInSchool(userId, schoolId)) {
+                    schoolIds.push(schoolId);
+                }
+            }
         } else if (role === 'Intern') {
-            // Query students collection group where status === "Active Internship"
-            // For now, iterate through schools
+            // Iterate through all schools and check students collection for "Active Internship" status
+            const schoolsSnap = await getDocs(collection(db, 'schools'));
+            for (const schoolDoc of schoolsSnap.docs) {
+                const schoolId = schoolDoc.id;
+                if (await isInternInSchool(userId, schoolId)) {
+                    schoolIds.push(schoolId);
+                }
+            }
         } else if (role === 'EDUStaff') {
-            // Query staff collection group where uid === userId
-            // For now, iterate through schools
+            // Iterate through all schools and check staff collection
+            const schoolsSnap = await getDocs(collection(db, 'schools'));
+            for (const schoolDoc of schoolsSnap.docs) {
+                const schoolId = schoolDoc.id;
+                if (await isStaffInSchool(userId, schoolId)) {
+                    schoolIds.push(schoolId);
+                }
+            }
         } else if (role === 'EDUAdmin') {
             // Query schools where admins array contains userId
             const schoolsQuery = query(

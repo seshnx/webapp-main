@@ -80,7 +80,7 @@ service cloud.firestore {
           (resource.data.studentId == request.auth.uid ||
            get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         allow delete: if isAuthenticated() && 
-          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'Instructor']);
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']);
       }
       
       // Certificates
@@ -89,7 +89,7 @@ service cloud.firestore {
           (resource.data.studentId == request.auth.uid ||
            get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         allow create: if isAuthenticated() && 
-          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'Instructor']);
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']);
         allow delete: if isAuthenticated() && 
           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin']);
       }
@@ -100,7 +100,7 @@ service cloud.firestore {
           (resource.data.studentId == request.auth.uid ||
            get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']));
         allow create: if isAuthenticated() && 
-          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'Instructor']);
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin', 'EDUStaff']);
         allow delete: if isAuthenticated() && 
           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['GAdmin', 'EDUAdmin']);
       }
