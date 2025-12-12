@@ -1,9 +1,24 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSchool } from '../../contexts/SchoolContext';
-import { MapPin, Clock, Briefcase, CheckCircle, AlertCircle, School } from 'lucide-react';
+import { MapPin, Clock, Briefcase, CheckCircle, AlertCircle, School, BookOpen, Award, Target } from 'lucide-react';
 import { formatHours } from '../../utils/eduTime';
+import { useEduAuth } from '../../contexts/EduAuthContext';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../config/firebase';
 
-export default function EduInternDashboard({ user, userData }) {
+export default function EduInternDashboard({ user: propUser, userData: propUserData }) {
+    // Use EduAuth hook if available, otherwise fall back to props (backward compatibility)
+    let eduAuth;
+    try {
+        eduAuth = useEduAuth();
+    } catch (e) {
+        // Not wrapped in EduAuthProvider, use props
+        eduAuth = null;
+    }
+    
+    const user = eduAuth?.user || propUser;
+    const userData = eduAuth?.userData || propUserData;
+    
     const { 
         schoolData, studentProfile, internshipStudio, 
         checkIn, checkOut 
@@ -11,6 +26,52 @@ export default function EduInternDashboard({ user, userData }) {
 
     const [description, setDescription] = useState('');
     const [loading, setLoading] = useState(false);
+    const [enrollments, setEnrollments] = useState([]);
+    const [badges, setBadges] = useState([]);
+    const [milestones, setMilestones] = useState([]);
+
+    const schoolId = userData?.schoolId;
+
+    useEffect(() => {
+        if (schoolId && user?.uid) {
+            loadEnrollments();
+            loadBadges();
+            loadMilestones();
+        }
+    }, [schoolId, user?.uid]);
+
+    const loadEnrollments = async () => {
+        try {
+            const q = query(
+                collection(db, `schools/${schoolId}/enrollments`),
+                where('studentId', '==', user.uid)
+            );
+            const snapshot = await getDocs(q);
+            setEnrollments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error('Error loading enrollments:', error);
+        }
+    };
+
+    const loadBadges = async () => {
+        try {
+            const q = query(
+                collection(db, `schools/${schoolId}/badges`),
+                where('studentId', '==', user.uid)
+            );
+            const snapshot = await getDocs(q);
+            setBadges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error('Error loading badges:', error);
+        }
+    };
+
+    const loadMilestones = async () => {
+        // Load internship milestones from student profile or separate collection
+        if (studentProfile?.milestones) {
+            setMilestones(studentProfile.milestones);
+        }
+    };
 
     const handleClockAction = async () => {
         setLoading(true);
@@ -129,6 +190,74 @@ export default function EduInternDashboard({ user, userData }) {
                     {studentProfile.hoursLogged} / {schoolData?.requiredHours || 100} Hours Required
                 </p>
             </div>
+
+            {/* Course Progress */}
+            {enrollments.length > 0 && (
+                <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm space-y-4">
+                    <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                        <BookOpen size={20} className="text-indigo-500" />
+                        Course Progress
+                    </h2>
+                    <div className="space-y-3">
+                        {enrollments.map(enrollment => (
+                            <div key={enrollment.id} className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="font-semibold dark:text-white">Course {enrollment.courseId}</span>
+                                    <span className="text-sm text-gray-600 dark:text-gray-400">{enrollment.progress || 0}%</span>
+                                </div>
+                                <div className="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-indigo-600 transition-all"
+                                        style={{ width: `${enrollment.progress || 0}%` }}
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Milestones */}
+            {milestones.length > 0 && (
+                <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm space-y-4">
+                    <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                        <Target size={20} className="text-purple-500" />
+                        Internship Milestones
+                    </h2>
+                    <div className="space-y-2">
+                        {milestones.map((milestone, idx) => (
+                            <div key={idx} className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                {milestone.completed ? (
+                                    <CheckCircle size={20} className="text-green-500" />
+                                ) : (
+                                    <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 rounded-full" />
+                                )}
+                                <span className={milestone.completed ? 'text-gray-600 dark:text-gray-400 line-through' : 'dark:text-white'}>
+                                    {milestone.name}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Badges */}
+            {badges.length > 0 && (
+                <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm space-y-4">
+                    <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                        <Award size={20} className="text-yellow-500" />
+                        Earned Badges
+                    </h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {badges.map(badge => (
+                            <div key={badge.id} className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                <Award size={32} className="mx-auto text-yellow-500 mb-2" />
+                                <p className="text-sm font-semibold dark:text-white">{badge.name}</p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

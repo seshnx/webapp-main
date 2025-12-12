@@ -2,8 +2,21 @@ import React from 'react';
 import { useSchool } from '../../contexts/SchoolContext';
 import EduAdminDashboard from './EduAdminDashboard';
 import { Lock } from 'lucide-react';
+import { useEduAuth } from '../../contexts/EduAuthContext';
 
-export default function EduStaffDashboard({ user, userData, currentView }) {
+export default function EduStaffDashboard({ user: propUser, userData: propUserData, currentView }) {
+    // Use EduAuth hook if available, otherwise fall back to props (backward compatibility)
+    let eduAuth;
+    try {
+        eduAuth = useEduAuth();
+    } catch (e) {
+        // Not wrapped in EduAuthProvider, use props
+        eduAuth = null;
+    }
+    
+    const user = eduAuth?.user || propUser;
+    const userData = eduAuth?.userData || propUserData;
+    
     const { myPermissions, staffProfile } = useSchool();
     
     // Map permissions to the Tabs available in EduAdminDashboard

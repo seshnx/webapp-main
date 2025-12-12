@@ -1,17 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import { useSchool } from '../../contexts/SchoolContext';
-import { doc, updateDoc, arrayUnion, arrayRemove, collection, query, where, getDocs } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
-import { MapPin, Search, CheckCircle, Clock, School } from 'lucide-react';
+import { MapPin, Search, CheckCircle, Clock, School, BookOpen, Award, Users, Calendar, Play } from 'lucide-react';
+import { useEduAuth } from '../../contexts/EduAuthContext';
 
-export default function EduStudentDashboard({ user, userData }) {
+export default function EduStudentDashboard({ user: propUser, userData: propUserData }) {
+    // Use EduAuth hook if available, otherwise fall back to props (backward compatibility)
+    let eduAuth;
+    try {
+        eduAuth = useEduAuth();
+    } catch (e) {
+        // Not wrapped in EduAuthProvider, use props
+        eduAuth = null;
+    }
+    
+    const user = eduAuth?.user || propUser;
+    const userData = eduAuth?.userData || propUserData;
+    
     const { schoolData, studentProfile } = useSchool();
     
     const [newInterest, setNewInterest] = useState('');
     const [studios, setStudios] = useState([]);
     const [loadingStudios, setLoadingStudios] = useState(false);
+    const [courses, setCourses] = useState([]);
+    const [enrollments, setEnrollments] = useState([]);
+    const [learningPaths, setLearningPaths] = useState([]);
+    const [badges, setBadges] = useState([]);
+    const [loadingCourses, setLoadingCourses] = useState(false);
 
     const interests = userData?.internshipCities || [];
+    const schoolId = userData?.schoolId;
     
     const handleAddInterest = async () => {
         const trimmed = newInterest.trim();
@@ -39,6 +58,15 @@ export default function EduStudentDashboard({ user, userData }) {
         }
     }, [userData?.programComplete, interests]);
 
+    useEffect(() => {
+        if (schoolId && user?.uid) {
+            loadCourses();
+            loadEnrollments();
+            loadLearningPaths();
+            loadBadges();
+        }
+    }, [schoolId, user?.uid]);
+
     const fetchAvailableStudios = async () => {
         setLoadingStudios(true);
         try {
@@ -58,6 +86,74 @@ export default function EduStudentDashboard({ user, userData }) {
         } catch (e) { console.error("Error fetching studios:", e); } 
         finally { setLoadingStudios(false); }
     };
+
+    const loadCourses = async () => {
+        setLoadingCourses(true);
+        try {
+            const q = query(collection(db, `schools/${schoolId}/courses`), where('status', '==', 'published'));
+            const snapshot = await getDocs(q);
+            setCourses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error('Error loading courses:', error);
+        }
+        setLoadingCourses(false);
+    };
+
+    const loadEnrollments = async () => {
+        try {
+            const q = query(
+                collection(db, `schools/${schoolId}/enrollments`),
+                where('studentId', '==', user.uid)
+            );
+            const snapshot = await getDocs(q);
+            setEnrollments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error('Error loading enrollments:', error);
+        }
+    };
+
+    const loadLearningPaths = async () => {
+        try {
+            const q = query(collection(db, `schools/${schoolId}/learning_paths`));
+            const snapshot = await getDocs(q);
+            setLearningPaths(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error('Error loading learning paths:', error);
+        }
+    };
+
+    const loadBadges = async () => {
+        try {
+            const q = query(
+                collection(db, `schools/${schoolId}/badges`),
+                where('studentId', '==', user.uid)
+            );
+            const snapshot = await getDocs(q);
+            setBadges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        } catch (error) {
+            console.error('Error loading badges:', error);
+        }
+    };
+
+    const handleEnroll = async (courseId) => {
+        try {
+            await addDoc(collection(db, `schools/${schoolId}/enrollments`), {
+                studentId: user.uid,
+                courseId,
+                enrolledAt: serverTimestamp(),
+                progress: 0,
+                status: 'active'
+            });
+            loadEnrollments();
+        } catch (error) {
+            console.error('Error enrolling:', error);
+            alert('Failed to enroll in course.');
+        }
+    };
+
+    const enrolledCourseIds = enrollments.map(e => e.courseId);
+    const availableCourses = courses.filter(c => !enrolledCourseIds.includes(c.id));
+    const myEnrolledCourses = courses.filter(c => enrolledCourseIds.includes(c.id));
     
     const progress = (studentProfile?.hoursLogged || 0) / (schoolData?.requiredHours || 100);
 
@@ -130,6 +226,112 @@ export default function EduStudentDashboard({ user, userData }) {
                 )}
             </div>
             
+            {/* My Courses */}
+            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
+                <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                    <BookOpen size={20} className="text-indigo-500" /> 
+                    My Courses
+                </h2>
+                {myEnrolledCourses.length === 0 ? (
+                    <p className="text-gray-500">You haven't enrolled in any courses yet.</p>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {myEnrolledCourses.map(course => {
+                            const enrollment = enrollments.find(e => e.courseId === course.id);
+                            return (
+                                <div key={course.id} className="p-4 border rounded-lg dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/5 transition">
+                                    <div className="flex items-start justify-between mb-2">
+                                        <h3 className="font-bold dark:text-white">{course.title}</h3>
+                                        <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 px-2 py-1 rounded">
+                                            Enrolled
+                                        </span>
+                                    </div>
+                                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                                        {course.description}
+                                    </p>
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-sm text-gray-500">
+                                            <Play size={14} />
+                                            <span>{course.lessonCount || 0} lessons</span>
+                                        </div>
+                                        <button className="text-indigo-600 text-sm font-semibold hover:underline">
+                                            Continue Learning →
+                                        </button>
+                                    </div>
+                                    {enrollment && (
+                                        <div className="mt-3">
+                                            <div className="flex justify-between text-xs mb-1">
+                                                <span className="text-gray-500">Progress</span>
+                                                <span className="text-gray-700 dark:text-gray-300">{enrollment.progress || 0}%</span>
+                                            </div>
+                                            <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                                <div 
+                                                    className="h-full bg-indigo-600 transition-all"
+                                                    style={{ width: `${enrollment.progress || 0}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Available Courses */}
+            {availableCourses.length > 0 && (
+                <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
+                    <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                        <BookOpen size={20} className="text-indigo-500" /> 
+                        Available Courses
+                    </h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {availableCourses.slice(0, 4).map(course => (
+                            <div key={course.id} className="p-4 border rounded-lg dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-white/5 transition">
+                                <h3 className="font-bold dark:text-white mb-1">{course.title}</h3>
+                                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">
+                                    {course.description}
+                                </p>
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                                        <Play size={14} />
+                                        <span>{course.lessonCount || 0} lessons</span>
+                                    </div>
+                                    <button
+                                        onClick={() => handleEnroll(course.id)}
+                                        className="px-4 py-1.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition"
+                                    >
+                                        Enroll
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {/* Badges & Certificates */}
+            {badges.length > 0 && (
+                <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">
+                    <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                        <Award size={20} className="text-yellow-500" /> 
+                        Earned Badges & Certificates
+                    </h2>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {badges.map(badge => (
+                            <div key={badge.id} className="text-center p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                                <Award size={32} className="mx-auto text-yellow-500 mb-2" />
+                                <p className="text-sm font-semibold dark:text-white">{badge.name}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {badge.earnedAt?.toDate?.().toLocaleDateString() || 'Recently'}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Available Studios */}
             {userData?.programComplete && (
                 <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm space-y-4">

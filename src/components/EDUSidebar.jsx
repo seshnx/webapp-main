@@ -2,7 +2,8 @@ import React from 'react';
 import { 
     Users, Clock, UserPlus, Key, Lock, Megaphone, 
     Briefcase, GraduationCap, Users as CohortIcon, 
-    Activity, Settings, LogOut, ArrowLeft, LayoutDashboard
+    Activity, Settings, LogOut, ArrowLeft, LayoutDashboard,
+    BookOpen, Target
 } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from '../config/firebase';
@@ -11,9 +12,11 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
     
     // Define the specific navigation items for the EDU Panel
     const adminLinks = [
-        { id: 'edu-overview', icon: LayoutDashboard, label: 'Overview' }, // NEW
+        { id: 'edu-overview', icon: LayoutDashboard, label: 'Overview' },
         { id: 'edu-roster', icon: Users, label: 'Student Roster' },
         { id: 'edu-hours', icon: Clock, label: 'Internship Hours' },
+        { id: 'edu-courses', icon: BookOpen, label: 'Courses' },
+        { id: 'edu-learning-paths', icon: Target, label: 'Learning Paths' },
         { id: 'edu-instructors', icon: UserPlus, label: 'Staff Management' },
         { id: 'edu-roles', icon: Key, label: 'Role Permissions' },
         { id: 'edu-resources', icon: Lock, label: 'Resource Rules' },

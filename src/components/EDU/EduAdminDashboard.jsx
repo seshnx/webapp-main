@@ -9,11 +9,14 @@ import { db } from '../../config/firebase';
 import { useSchool } from '../../contexts/SchoolContext';
 import { exportToCSV } from '../../utils/dataExport';
 import { SCHOOL_PERMISSIONS } from '../../config/constants';
+import { useEduAuth } from '../../contexts/EduAuthContext';
 
 // --- MODULE IMPORTS ---
 import EduOverview from './modules/EduOverview';
 import EduRoster from './modules/EduRoster';
 import EduHours from './modules/EduHours';
+import EduCourses from './modules/EduCourses';
+import EduLearningPaths from './modules/EduLearningPaths';
 import EduStaff from './modules/EduStaff';
 import EduRoles from './modules/EduRoles';
 import EduResources from './modules/EduResources';
@@ -24,7 +27,19 @@ import EduCohorts from './modules/EduCohorts';
 import EduAudit from './modules/EduAudit';
 import EduSettings from './modules/EduSettings';
 
-export default function EduAdminDashboard({ user, userData, allowedTabs, staffTitle, currentView }) {
+export default function EduAdminDashboard({ user: propUser, userData: propUserData, allowedTabs, staffTitle, currentView }) {
+    // Use EduAuth hook if available, otherwise fall back to props (backward compatibility)
+    let eduAuth;
+    try {
+        eduAuth = useEduAuth();
+    } catch (e) {
+        // Not wrapped in EduAuthProvider, use props
+        eduAuth = null;
+    }
+    
+    const user = eduAuth?.user || propUser;
+    const userData = eduAuth?.userData || propUserData;
+    
     const { schoolId: contextSchoolId } = useSchool();
     
     // Parse the view from the ID (e.g., 'edu-roster' -> 'roster'), default to 'overview'
@@ -208,6 +223,10 @@ export default function EduAdminDashboard({ user, userData, allowedTabs, staffTi
                         {activeTab === 'roster' && <EduRoster schoolId={activeSchoolId} logAction={logAction} />}
                         
                         {activeTab === 'hours' && <EduHours schoolId={activeSchoolId} />}
+                        
+                        {activeTab === 'courses' && <EduCourses schoolId={activeSchoolId} logAction={logAction} />}
+                        
+                        {activeTab === 'learning-paths' && <EduLearningPaths schoolId={activeSchoolId} logAction={logAction} />}
                         
                         {activeTab === 'instructors' && <EduStaff schoolId={activeSchoolId} logAction={logAction} />}
                         

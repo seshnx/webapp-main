@@ -230,6 +230,26 @@ export const SCHOOL_PERMISSIONS = [
     { id: 'edit_settings', label: 'School Settings', description: 'Change school name, address, and branding.' }
 ];
 
+// EDU Authentication & Permissions
+export const EDU_ROLES = ['Admin', 'Instructor', 'Student', 'Intern'];
+
+// EDU Role Hierarchy (highest to lowest)
+export const EDU_ROLE_HIERARCHY = ['Admin', 'Instructor', 'Intern', 'Student'];
+
+// EDU Permissions mapping (role -> permissions)
+export const EDU_PERMISSIONS = {
+    'Admin': ['ALL'], // Global Admin has all permissions
+    'Instructor': [
+        'manage_roster',
+        'approve_hours',
+        'grade_students',
+        'post_announcements',
+        'view_audit'
+    ],
+    'Intern': [], // Interns have no admin permissions
+    'Student': [] // Students have no admin permissions
+};
+
 export const INSTRUMENT_DATA = { 
     "Vocals": ["Soprano", "Tenor", "Baritone", "Bass", "Falsetto", "Rapping", "Beatboxing", "Growling"], 
     "Guitars": ["Electric Guitar", "Acoustic Guitar", "Bass Guitar", "Classical/Nylon", "12-String Acoustic", "Upright Bass"],

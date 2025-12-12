@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
 import { db, appId, getPaths } from '../config/firebase';
-import { Loader2, RefreshCw, Users, Compass, UserPlus } from 'lucide-react';
+import { Loader2, RefreshCw, Users, Compass, UserPlus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 import PostCard from './social/PostCard';
 import CreatePostWidget from './social/CreatePostWidget';
 import ReportModal from './ReportModal';
+import Discover from './social/Discover';
 import { useFollowSystem } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
@@ -14,7 +15,8 @@ import UserAvatar from './shared/UserAvatar';
 // Feed mode tabs
 const FEED_MODES = {
     FOR_YOU: 'for_you',
-    FOLLOWING: 'following'
+    FOLLOWING: 'following',
+    DISCOVER: 'discover'
 };
 
 export default function SocialFeed({ user, userData, openPublicProfile }) {
@@ -224,10 +226,27 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                         </span>
                     )}
                 </button>
+                <button
+                    onClick={() => setFeedMode(FEED_MODES.DISCOVER)}
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+                        feedMode === FEED_MODES.DISCOVER
+                            ? 'bg-brand-blue text-white shadow-md'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    }`}
+                >
+                    <Search size={16} />
+                    <span>Discover</span>
+                </button>
             </div>
 
             {/* Feed Content */}
-            {loading || followLoading ? (
+            {feedMode === FEED_MODES.DISCOVER ? (
+                <Discover 
+                    user={user} 
+                    userData={userData} 
+                    openPublicProfile={openPublicProfile}
+                />
+            ) : loading || followLoading ? (
                 <div className="flex justify-center py-10">
                     <Loader2 className="animate-spin text-brand-blue" size={32} />
                 </div>

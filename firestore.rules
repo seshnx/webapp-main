@@ -31,49 +31,124 @@ service cloud.firestore {
     match /artifacts/{appId}/public/data/service_requests/{document=**} {
       allow read, write: if isAuthenticated();
     }
+
+    // 6. EDU Collections
+    match /schools/{schoolId} {
+      // School document
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && 
+        (request.auth.uid in resource.data.admins || 
+         get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin']));
+      
+      // Courses
+      match /courses/{courseId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAuthenticated() && 
+          (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+        
+        // Lessons subcollection
+        match /lessons/{lessonId} {
+          allow read: if isAuthenticated();
+          allow write: if isAuthenticated() && 
+            (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+        }
+      }
+      
+      // Learning Paths
+      match /learning_paths/{pathId} {
+        allow read: if isAuthenticated();
+        allow create, update, delete: if isAuthenticated() && 
+          (get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+      }
+      
+      // Enrollments
+      match /enrollments/{enrollmentId} {
+        allow read: if isAuthenticated() && 
+          (resource.data.studentId == request.auth.uid ||
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+        allow create: if isAuthenticated();
+        allow update: if isAuthenticated() && 
+          (resource.data.studentId == request.auth.uid ||
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+        allow delete: if isAuthenticated() && 
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']);
+      }
+      
+      // Certificates
+      match /certificates/{certificateId} {
+        allow read: if isAuthenticated() && 
+          (resource.data.studentId == request.auth.uid ||
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+        allow create: if isAuthenticated() && 
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']);
+        allow delete: if isAuthenticated() && 
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin']);
+      }
+      
+      // Badges
+      match /badges/{badgeId} {
+        allow read: if isAuthenticated() && 
+          (resource.data.studentId == request.auth.uid ||
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+        allow create: if isAuthenticated() && 
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']);
+        allow delete: if isAuthenticated() && 
+          get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin']);
+      }
+      
+      // Student Progress
+      match /student_progress/{studentId} {
+        allow read: if isAuthenticated() && 
+          (studentId == request.auth.uid ||
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+        allow write: if isAuthenticated() && 
+          (studentId == request.auth.uid ||
+           get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/profiles/main).data.accountTypes.hasAny(['Admin', 'Instructor']));
+      }
+    }
     
-    // 6. Direct Messages
+    // 7. Direct Messages
     match /artifacts/{appId}/public/data/direct_messages/{document=**} {
       allow read, write: if isAuthenticated();
     }
     
-    // 7. Bookings (legacy path)
+    // 8. Bookings (legacy path)
     match /artifacts/{appId}/public/data/bookings/{document=**} {
       allow read, write: if isAuthenticated();
     }
 
-    // 8. Bookings (direct path)
+    // 9. Bookings (direct path)
     match /artifacts/{appId}/bookings/{document=**} {
       allow read, write: if isAuthenticated();
     }
 
-    // 9. Blocked Dates (for off-platform booking blocks)
+    // 10. Blocked Dates (for off-platform booking blocks)
     match /artifacts/{appId}/blockedDates/{document=**} {
       allow read, write: if isAuthenticated();
     }
 
-    // 10. Auth Background Images (Public read for login page)
+    // 11. Auth Background Images (Public read for login page)
     match /artifacts/{appId}/auth_backgrounds/{document=**} {
       allow read: if true; // Public read - needed for login/auth page
       allow write: if isAuthenticated(); // Only authenticated users can write
     }
 
-    // 11. Gear Offers (marketplace price negotiation)
+    // 12. Gear Offers (marketplace price negotiation)
     match /artifacts/{appId}/public/data/gear_offers/{document=**} {
       allow read, write: if isAuthenticated();
     }
 
-    // 12. Safe Exchange Transactions
+    // 13. Safe Exchange Transactions
     match /artifacts/{appId}/public/data/safe_exchange_transactions/{document=**} {
       allow read, write: if isAuthenticated();
     }
 
-    // 13. Gear Listings
+    // 14. Gear Listings
     match /artifacts/{appId}/public/data/gear_listings/{document=**} {
       allow read, write: if isAuthenticated();
     }
 
-    // 14. Gear Orders (standard purchase transactions)
+    // 15. Gear Orders (standard purchase transactions)
     match /artifacts/{appId}/public/data/gear_orders/{document=**} {
       allow read, write: if isAuthenticated();
     }

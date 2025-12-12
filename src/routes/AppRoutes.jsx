@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 
 // Import components directly (no lazy loading) to avoid hook count issues
 import Dashboard from '../components/Dashboard';
@@ -22,6 +22,31 @@ import EduStaffDashboard from '../components/EDU/EduStaffDashboard';
 import EduAdminDashboard from '../components/EDU/EduAdminDashboard';
 import EduInternDashboard from '../components/EDU/EduInternDashboard';
 import StudentEnrollment from '../components/EDU/StudentEnrollment';
+import EduLogin from '../components/EDU/EduLogin';
+import { EduAuthProvider, useEduAuth } from '../contexts/EduAuthContext';
+import { hasEduAccess } from '../utils/eduPermissions';
+import { Loader2 } from 'lucide-react';
+
+/**
+ * EDU Protected Route Wrapper
+ * 
+ * Protects EDU routes and redirects to login if user doesn't have EDU access
+ */
+function EduProtectedRoute({ children, user, userData }) {
+  const location = useLocation();
+  
+  // Check if user is authenticated
+  if (!user) {
+    return <Navigate to="/edu/login" state={{ from: location }} replace />;
+  }
+  
+  // Check if user has EDU access
+  if (!userData || !hasEduAccess(userData)) {
+    return <Navigate to="/edu/login" state={{ from: location }} replace />;
+  }
+  
+  return children;
+}
 
 /**
  * EDU Dashboard Wrapper
@@ -156,22 +181,38 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
 
         {/* EDU Routes */}
         <Route 
+          path="/edu/login" 
+          element={<EduLogin />}
+        />
+        <Route 
           path="/edu" 
           element={
-            <EduDashboardWrapper user={user} userData={userData} />
-          } 
+            <EduProtectedRoute user={user} userData={userData}>
+              <EduAuthProvider user={user} userData={userData}>
+                <EduDashboardWrapper user={user} userData={userData} />
+              </EduAuthProvider>
+            </EduProtectedRoute>
+          }
         />
         <Route 
           path="/edu/enroll" 
           element={
-            <StudentEnrollment user={user} userData={userData} />
-          } 
+            <EduProtectedRoute user={user} userData={userData}>
+              <EduAuthProvider user={user} userData={userData}>
+                <StudentEnrollment user={user} userData={userData} />
+              </EduAuthProvider>
+            </EduProtectedRoute>
+          }
         />
         <Route 
           path="/edu/:view" 
           element={
-            <EduDashboardWrapper user={user} userData={userData} />
-          } 
+            <EduProtectedRoute user={user} userData={userData}>
+              <EduAuthProvider user={user} userData={userData}>
+                <EduDashboardWrapper user={user} userData={userData} />
+              </EduAuthProvider>
+            </EduProtectedRoute>
+          }
         />
 
         {/* Fallback - redirect to dashboard */}
