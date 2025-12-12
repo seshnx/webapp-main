@@ -163,7 +163,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
     });
     resizeObserver.observe(contentRef.current);
     return () => resizeObserver.disconnect();
-  }, [step, mode, error, resetSent, form.zip, isStudent, schoolResults, sentCode]);
+  }, [step, mode, error, resetSent, form.zip, isStudent, schoolResults, sentCode, form.roles]);
 
   useEffect(() => { setError(''); }, [step]);
 
@@ -485,8 +485,14 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
                                 </div>
                                 
                                 {/* Talent Sub-Role Selector - Shows when Talent is selected */}
-                                {form.roles.includes('Talent') && (
-                                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                                <div 
+                                    className={`overflow-hidden transition-all duration-300 ease-out ${
+                                        form.roles.includes('Talent') 
+                                            ? 'max-h-48 opacity-100 mt-0' 
+                                            : 'max-h-0 opacity-0 -mt-2'
+                                    }`}
+                                >
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
                                         <label className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase mb-2 block">What type of talent are you?</label>
                                         <select 
                                             className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:text-white dark:border-blue-800 text-sm font-bold focus:ring-2 focus:ring-brand-blue outline-none"
@@ -500,7 +506,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess }) {
                                         </select>
                                         <p className="text-[10px] text-blue-600 dark:text-blue-400 mt-2">This helps clients find you for relevant opportunities.</p>
                                     </div>
-                                )}
+                                </div>
                                 
                                 <p className="text-[10px] text-gray-400 text-center px-4 leading-tight">
                                     By completing setup, you agree to our <button onClick={() => setShowLegalOverlay(true)} className="underline hover:text-brand-blue mx-1">Terms of Service</button> and <button onClick={() => setShowLegalOverlay(true)} className="underline hover:text-brand-blue mx-1">Privacy Policy</button>.
