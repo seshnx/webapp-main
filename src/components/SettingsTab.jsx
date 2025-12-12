@@ -16,7 +16,7 @@ import {
 import { db, getPaths } from '../config/firebase';
 import { ACCOUNT_TYPES } from '../config/constants';
 
-// Temporary list of extended roles to unlock
+// Roles that should never be shown in account settings (managed through other systems)
 const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
 
 export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) {
@@ -46,8 +46,6 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     const [securityForm, setSecurityForm] = useState({ newEmail: '', newPassword: '', currentPassword: '' });
     const [isSecurityLoading, setIsSecurityLoading] = useState(false);
 
-    // Toggle State
-    const [showHiddenRoles, setShowHiddenRoles] = useState(false);
 
     useEffect(() => {
         if (userData.activeProfileRole) {
@@ -217,9 +215,8 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         </div>
     );
 
-    const displayedRoles = showHiddenRoles 
-        ? [...new Set([...ACCOUNT_TYPES, ...HIDDEN_ROLES])]
-        : ACCOUNT_TYPES;
+    // Always filter out EDU and GAdmin roles from settings - they are managed through other systems
+    const displayedRoles = ACCOUNT_TYPES.filter(role => !HIDDEN_ROLES.includes(role));
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
@@ -229,17 +226,8 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Users size={18} className="text-purple-500"/> Roles & Workflow</h3>
                 
                 <div className="mb-6">
-                    <div className="flex justify-between items-center mb-2">
+                    <div className="mb-2">
                         <label className="text-xs font-bold text-gray-500 uppercase block">Active Account Types</label>
-                        <label className="flex items-center gap-2 cursor-pointer bg-yellow-50 dark:bg-yellow-900/10 px-2 py-1 rounded border border-yellow-200 dark:border-yellow-800">
-                            <input 
-                                type="checkbox" 
-                                checked={showHiddenRoles} 
-                                onChange={e => setShowHiddenRoles(e.target.checked)} 
-                                className="rounded text-yellow-600 focus:ring-yellow-500"
-                            />
-                            <span className="text-[10px] font-bold text-yellow-700 dark:text-yellow-400">Unlock All Roles</span>
-                        </label>
                     </div>
 
                     <div className="flex flex-wrap gap-2 mb-4">
@@ -263,7 +251,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                             value={preferredRole}
                             onChange={e => setPreferredRole(e.target.value)}
                         >
-                            {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                            {roles.filter(r => !HIDDEN_ROLES.includes(r)).map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                     </div>
 
@@ -274,7 +262,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                             value={activeRole}
                             onChange={e => setActiveRole(e.target.value)}
                         >
-                            {roles.map(r => <option key={r} value={r}>{r}</option>)}
+                            {roles.filter(r => !HIDDEN_ROLES.includes(r)).map(r => <option key={r} value={r}>{r}</option>)}
                         </select>
                     </div>
                 </div>
