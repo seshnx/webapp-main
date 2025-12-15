@@ -1,205 +1,149 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-    doc, 
-    setDoc, 
-    deleteDoc, 
-    getDoc, 
-    collection, 
-    query, 
-    onSnapshot,
-    serverTimestamp,
-    increment,
-    writeBatch,
-    orderBy,
-    limit
-} from 'firebase/firestore';
-import { db, appId, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 /**
- * Hook for managing the social follow system
- * @param {string} currentUserId - The authenticated user's UID
- * @param {object} currentUserData - The authenticated user's profile data
+ * Hook for managing the social follow system (Supabase Version)
+ * @param {string} currentUserId - The authenticated user's ID
  */
-export function useFollowSystem(currentUserId, currentUserData) {
-    const [following, setFollowing] = useState([]); // UIDs the current user follows
-    const [followers, setFollowers] = useState([]); // UIDs that follow the current user
+export function useFollowSystem(currentUserId) {
+    const [following, setFollowing] = useState([]); // List of profiles current user follows
+    const [followers, setFollowers] = useState([]); // List of profiles following current user
     const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
     const [loading, setLoading] = useState(true);
 
-    // Subscribe to current user's following list
-    useEffect(() => {
-        if (!currentUserId) {
-            setLoading(false);
-            return;
+    // Fetch Helper: Get detailed profiles for a list of IDs
+    const fetchProfiles = async (userIds) => {
+        if (!userIds || userIds.length === 0) return [];
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, first_name, last_name, avatar_url, active_role')
+            .in('id', userIds);
+        
+        if (error) {
+            console.error("Error fetching profiles:", error);
+            return [];
         }
+        
+        return data.map(p => ({
+            odId: p.id, // Keeping odId for compatibility with existing components
+            displayName: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+            photoURL: p.avatar_url,
+            role: p.active_role
+        }));
+    };
 
-        const followingRef = collection(db, getPaths(currentUserId).following);
-        const followersRef = collection(db, getPaths(currentUserId).followers);
-        const statsRef = doc(db, getPaths(currentUserId).socialStats);
+    const loadData = useCallback(async () => {
+        if (!currentUserId || !supabase) return;
 
-        // Listen to who current user follows
-        const unsubFollowing = onSnapshot(
-            query(followingRef, orderBy('timestamp', 'desc')),
-            (snapshot) => {
-                const followingList = snapshot.docs.map(d => ({
-                    odId: d.id,
-                    ...d.data()
-                }));
-                setFollowing(followingList);
-            },
-            (error) => console.error('Following listener error:', error)
-        );
+        try {
+            // 1. Get IDs of who I follow
+            const { data: followingData } = await supabase
+                .from('follows')
+                .select('following_id')
+                .eq('follower_id', currentUserId);
+            
+            const followingIds = followingData?.map(f => f.following_id) || [];
+            const followingProfiles = await fetchProfiles(followingIds);
+            setFollowing(followingProfiles);
 
-        // Listen to current user's followers
-        const unsubFollowers = onSnapshot(
-            query(followersRef, orderBy('timestamp', 'desc')),
-            (snapshot) => {
-                const followersList = snapshot.docs.map(d => ({
-                    odId: d.id,
-                    ...d.data()
-                }));
-                setFollowers(followersList);
-            },
-            (error) => console.error('Followers listener error:', error)
-        );
+            // 2. Get IDs of who follows me
+            const { data: followersData } = await supabase
+                .from('follows')
+                .select('follower_id')
+                .eq('following_id', currentUserId);
+            
+            const followerIds = followersData?.map(f => f.follower_id) || [];
+            const followerProfiles = await fetchProfiles(followerIds);
+            setFollowers(followerProfiles);
 
-        // Listen to stats document
-        const unsubStats = onSnapshot(statsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                setStats(snapshot.data());
-            }
+            // 3. Stats
+            setStats({
+                followingCount: followingIds.length,
+                followersCount: followerIds.length
+            });
+            
             setLoading(false);
-        });
-
-        return () => {
-            unsubFollowing();
-            unsubFollowers();
-            unsubStats();
-        };
+        } catch (err) {
+            console.error("Error loading follow data:", err);
+            setLoading(false);
+        }
     }, [currentUserId]);
 
-    /**
-     * Check if current user is following a specific user
-     */
+    // Initial Load & Realtime Subscription
+    useEffect(() => {
+        loadData();
+
+        if (!currentUserId || !supabase) return;
+
+        // Subscribe to changes in the 'follows' table that involve this user
+        const channel = supabase
+            .channel('public:follows')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'follows',
+                filter: `follower_id=eq.${currentUserId}` 
+            }, () => loadData())
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'follows',
+                filter: `following_id=eq.${currentUserId}` 
+            }, () => loadData())
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [currentUserId, loadData]);
+
     const isFollowing = useCallback((targetUserId) => {
         return following.some(f => f.odId === targetUserId);
     }, [following]);
 
-    /**
-     * Follow a user
-     */
-    const followUser = useCallback(async (targetUserId, targetUserData) => {
+    const followUser = useCallback(async (targetUserId) => {
         if (!currentUserId || !targetUserId || currentUserId === targetUserId) return;
+        
+        const { error } = await supabase
+            .from('follows')
+            .insert([{ follower_id: currentUserId, following_id: targetUserId }]);
 
-        const batch = writeBatch(db);
-
-        // Add to current user's following list
-        const followingDocRef = doc(db, getPaths(currentUserId).following, targetUserId);
-        batch.set(followingDocRef, {
-            displayName: targetUserData?.displayName || targetUserData?.firstName || 'User',
-            photoURL: targetUserData?.photoURL || null,
-            role: targetUserData?.activeProfileRole || 'User',
-            timestamp: serverTimestamp()
-        });
-
-        // Add to target user's followers list
-        const followerDocRef = doc(db, getPaths(targetUserId).followers, currentUserId);
-        batch.set(followerDocRef, {
-            displayName: currentUserData?.displayName || `${currentUserData?.firstName || ''} ${currentUserData?.lastName || ''}`.trim() || 'User',
-            photoURL: currentUserData?.photoURL || null,
-            role: currentUserData?.activeProfileRole || 'User',
-            timestamp: serverTimestamp()
-        });
-
-        // Update stats for current user
-        const currentUserStatsRef = doc(db, getPaths(currentUserId).socialStats);
-        batch.set(currentUserStatsRef, { followingCount: increment(1) }, { merge: true });
-
-        // Update stats for target user
-        const targetUserStatsRef = doc(db, getPaths(targetUserId).socialStats);
-        batch.set(targetUserStatsRef, { followersCount: increment(1) }, { merge: true });
-
-        // Create notification for target user
-        const notificationRef = doc(collection(db, getPaths(targetUserId).notifications));
-        batch.set(notificationRef, {
-            type: 'follow',
-            fromUserId: currentUserId,
-            fromUserName: currentUserData?.displayName || `${currentUserData?.firstName || ''} ${currentUserData?.lastName || ''}`.trim() || 'Someone',
-            fromUserPhoto: currentUserData?.photoURL || null,
-            message: 'started following you',
-            read: false,
-            timestamp: serverTimestamp()
-        });
-
-        try {
-            await batch.commit();
-            return { success: true };
-        } catch (error) {
+        if (error) {
             console.error('Follow error:', error);
             return { success: false, error };
         }
-    }, [currentUserId, currentUserData]);
+        
+        // Optimistic update
+        loadData();
+        return { success: true };
+    }, [currentUserId, loadData]);
 
-    /**
-     * Unfollow a user
-     */
     const unfollowUser = useCallback(async (targetUserId) => {
         if (!currentUserId || !targetUserId) return;
 
-        const batch = writeBatch(db);
+        const { error } = await supabase
+            .from('follows')
+            .delete()
+            .match({ follower_id: currentUserId, following_id: targetUserId });
 
-        // Remove from current user's following list
-        const followingDocRef = doc(db, getPaths(currentUserId).following, targetUserId);
-        batch.delete(followingDocRef);
-
-        // Remove from target user's followers list
-        const followerDocRef = doc(db, getPaths(targetUserId).followers, currentUserId);
-        batch.delete(followerDocRef);
-
-        // Update stats for current user
-        const currentUserStatsRef = doc(db, getPaths(currentUserId).socialStats);
-        batch.set(currentUserStatsRef, { followingCount: increment(-1) }, { merge: true });
-
-        // Update stats for target user
-        const targetUserStatsRef = doc(db, getPaths(targetUserId).socialStats);
-        batch.set(targetUserStatsRef, { followersCount: increment(-1) }, { merge: true });
-
-        try {
-            await batch.commit();
-            return { success: true };
-        } catch (error) {
+        if (error) {
             console.error('Unfollow error:', error);
             return { success: false, error };
         }
-    }, [currentUserId]);
 
-    /**
-     * Toggle follow state
-     */
-    const toggleFollow = useCallback(async (targetUserId, targetUserData) => {
+        // Optimistic update
+        loadData();
+        return { success: true };
+    }, [currentUserId, loadData]);
+
+    const toggleFollow = useCallback(async (targetUserId) => {
         if (isFollowing(targetUserId)) {
             return unfollowUser(targetUserId);
         } else {
-            return followUser(targetUserId, targetUserData);
+            return followUser(targetUserId);
         }
     }, [isFollowing, followUser, unfollowUser]);
 
-    /**
-     * Get social stats for any user
-     */
-    const getUserStats = useCallback(async (userId) => {
-        try {
-            const statsDoc = await getDoc(doc(db, getPaths(userId).socialStats));
-            return statsDoc.exists() ? statsDoc.data() : { followersCount: 0, followingCount: 0 };
-        } catch (error) {
-            console.error('Get stats error:', error);
-            return { followersCount: 0, followingCount: 0 };
-        }
-    }, []);
-
-    /**
-     * Get list of UIDs that the current user follows (for feed filtering)
-     */
     const getFollowingIds = useCallback(() => {
         return following.map(f => f.odId);
     }, [following]);
@@ -213,36 +157,43 @@ export function useFollowSystem(currentUserId, currentUserData) {
         followUser,
         unfollowUser,
         toggleFollow,
-        getUserStats,
         getFollowingIds
     };
 }
 
 /**
  * Hook for fetching social stats for a specific user (read-only)
- * Use this in profile views for users other than the current user
  */
 export function useUserSocialStats(userId) {
     const [stats, setStats] = useState({ followersCount: 0, followingCount: 0 });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!userId) {
+        if (!userId || !supabase) {
             setLoading(false);
             return;
         }
 
-        const statsRef = doc(db, getPaths(userId).socialStats);
-        const unsub = onSnapshot(statsRef, (snapshot) => {
-            if (snapshot.exists()) {
-                setStats(snapshot.data());
-            }
-            setLoading(false);
-        });
+        const fetchStats = async () => {
+            const { count: followers } = await supabase
+                .from('follows')
+                .select('*', { count: 'exact', head: true })
+                .eq('following_id', userId);
 
-        return () => unsub();
+            const { count: following } = await supabase
+                .from('follows')
+                .select('*', { count: 'exact', head: true })
+                .eq('follower_id', userId);
+
+            setStats({
+                followersCount: followers || 0,
+                followingCount: following || 0
+            });
+            setLoading(false);
+        };
+
+        fetchStats();
     }, [userId]);
 
     return { stats, loading };
 }
-
