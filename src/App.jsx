@@ -1,7 +1,6 @@
-// src/App.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from './config/supabase'; // New Import
+import { supabase } from './config/supabase'; 
 import { Loader2 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
@@ -25,112 +24,156 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // ... (Keep existing getActiveTab, setActiveTab, activeTab logic) ...
+  // Tab Logic
   const getActiveTab = () => {
-      // (Your existing logic)
-      const path = location.pathname;
-      if (path === '/' || path === '/dashboard' || path === '/home') return 'dashboard';
-      // ...
-      return path.substring(1) || 'dashboard';
-  };
-  const activeTab = getActiveTab();
-  const setActiveTab = (newTab) => {
-      // (Your existing logic)
-      navigate(newTab === 'dashboard' ? '/' : `/${newTab}`);
+    const path = location.pathname;
+    if (path === '/' || path === '/dashboard' || path === '/home') return 'dashboard';
+    if (path === '/feed' || path === '/social') return 'feed';
+    if (path === '/bookings' || path === '/find-talent') return 'bookings';
+    if (path.startsWith('/edu')) {
+      return path === '/edu/enroll' ? 'edu-enroll' : 'edu-overview';
+    }
+    return path.substring(1) || 'dashboard';
   };
 
+  const activeTab = getActiveTab();
+  
+  const setActiveTab = (newTab) => {
+    const routeMap = {
+      'dashboard': '/', 'home': '/', 'feed': '/feed', 'social': '/feed',
+      'bookings': '/bookings', 'find-talent': '/bookings', 'marketplace': '/marketplace',
+      'seshfx': '/marketplace?tab=fx', 'messages': '/messages', 'settings': '/settings',
+      'profile': '/profile', 'edu-enroll': '/edu/enroll', 'edu-overview': '/edu',
+    };
+    
+    if (newTab.startsWith('edu-') && !routeMap[newTab]) {
+       navigate(`/edu/${newTab.replace('edu-', '')}`);
+    } else {
+       navigate(routeMap[newTab] || '/');
+    }
+  };
+  
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [tokenBalance, setTokenBalance] = useState(0);
   const [pendingChatTarget, setPendingChatTarget] = useState(null);
 
-  // ... (Keep Dark Mode Logic) ...
+  // Dark Mode
   const [darkMode, setDarkMode] = useState(() => {
-    // ...
+    if (typeof window !== 'undefined') {
+        return localStorage.getItem('theme') === 'dark' ||
+            (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
     return false;
   });
-  // ... (Keep Sidebar Resize Logic) ...
 
-  // --- SUPABASE AUTH LISTENER ---
   useEffect(() => {
-    // 1. Check active session
+    if (darkMode) {
+        document.documentElement.classList.add('dark');
+        localStorage.setItem('theme', 'dark');
+    } else {
+        document.documentElement.classList.remove('dark');
+        localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  const toggleTheme = () => setDarkMode(!darkMode);
+
+  // --- SUPABASE AUTH & DATA LISTENER ---
+  useEffect(() => {
+    if (!supabase) {
+        setLoading(false);
+        return;
+    }
+
+    // 1. Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+        if (!session) {
+            setLoading(false);
+        }
+        // The onAuthStateChange will fire and handle the rest
     });
 
-    // 2. Listen for changes
+    // 2. Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
 
-      if (session?.user) {
-        // FETCH USER PROFILE FROM SUPABASE 'profiles' TABLE
-        const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-            
-        if (profile) {
-            // Map snake_case to camelCase if your app expects it, or update app to use snake_case
-            setUserData({
-                ...profile,
-                firstName: profile.first_name,
-                lastName: profile.last_name,
-                accountTypes: profile.account_types,
-                activeProfileRole: profile.active_role
-            });
+        if (currentUser) {
+            try {
+                // Fetch Profile from 'profiles' table
+                const { data: profile, error } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', currentUser.id)
+                    .single();
+                
+                if (profile) {
+                    // Normalize data structure for the app
+                    setUserData({
+                        ...profile,
+                        firstName: profile.first_name,
+                        lastName: profile.last_name,
+                        accountTypes: profile.account_types || ['Fan'],
+                        activeProfileRole: profile.active_role || 'Fan',
+                        photoURL: profile.avatar_url
+                    });
+                }
+
+                // Fetch Wallet
+                const { data: wallet } = await supabase
+                    .from('wallets')
+                    .select('balance')
+                    .eq('user_id', currentUser.id)
+                    .single();
+                
+                if (wallet) setTokenBalance(wallet.balance);
+            } catch (err) {
+                console.error("Error fetching user data:", err);
+            }
+        } else {
+            setUserData(null);
+            setSubProfiles({});
         }
-        
-        // Fetch Wallet
-        const { data: wallet } = await supabase
-            .from('wallets')
-            .select('balance')
-            .eq('user_id', session.user.id)
-            .single();
-        if (wallet) setTokenBalance(wallet.balance);
-      } else {
-          setUserData(null);
-          setSubProfiles({});
-      }
+        setLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
   const handleLogout = useCallback(async () => {
-      await supabase.auth.signOut();
+      if (supabase) await supabase.auth.signOut();
       setUser(null);
       setUserData(null);
       navigate('/');
   }, [navigate]);
 
-  // ... (Keep Auto-Logout Logic) ...
-
   const openPublicProfile = (uid, name) => setViewingProfile({ uid, name });
 
   const handleRoleSwitch = async (newRole) => {
-      if (!user) return;
-      // Update local state immediately for UI snap
+      if (!user || !supabase) return;
+      
+      // Optimistic update
       setUserData(prev => ({ ...prev, activeProfileRole: newRole }));
       
-      // Update Supabase
-      await supabase
-          .from('profiles')
-          .update({ active_role: newRole })
-          .eq('id', user.id);
+      try {
+          await supabase
+              .from('profiles')
+              .update({ active_role: newRole })
+              .eq('id', user.id);
+      } catch (e) {
+          console.error("Role switch failed:", e);
+      }
   };
 
-  // Render logic...
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
+  
   if (!user) return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} />;
-  // Note: Supabase user creation is atomic, we usually have a profile immediately, 
-  // but if you have a "new user" wizard flow, check for userData being empty.
-  if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} />;
+  
+  // If user exists but no profile yet (e.g. midway through signup), show wizard
+  if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.reload()} />;
 
   const isEduMode = activeTab.startsWith('edu-');
-  // Optional chaining for safety
   const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('EDUAdmin') || userData?.accountTypes?.includes('EDUStaff'));
 
   return (
