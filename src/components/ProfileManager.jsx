@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, MapPin, Briefcase, Music, Save, Loader2, DollarSign, Settings, Users, ChevronRight, Check, ToggleLeft, ToggleRight } from 'lucide-react';
+import { User, Mail, MapPin, Briefcase, Music, Save, Loader2, DollarSign, Settings, Users, ChevronRight, Check, ToggleLeft, ToggleRight, Camera, Eye, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db, appId, getPaths } from '../config/firebase';
 import { useForm, Controller } from 'react-hook-form'; 
@@ -30,13 +30,15 @@ const getInitials = (first, last, display) => {
     return ((first?.[0] || '') + (last?.[0] || '')).toUpperCase() || 'U';
 };
 
-export default function ProfileManager({ user, userData, subProfiles = {}, handleLogout }) {
+// Added openPublicProfile to props
+export default function ProfileManager({ user, userData, subProfiles = {}, handleLogout, openPublicProfile }) {
     const [activeSubTab, setActiveSubTab] = useState('details');
     const [selectedRole, setSelectedRole] = useState('Main');
     const [saving, setSaving] = useState(false);
     const { uploadImage, uploading } = useImageUpload();
+    const [bannerUploading, setBannerUploading] = useState(false); // New state for banner
 
-    // Toggle States for Display Name Logic
+    // Toggle States
     const [useLegalNameOnly, setUseLegalNameOnly] = useState(userData?.useLegalNameOnly || false);
     const [useUserNameOnly, setUseUserNameOnly] = useState(userData?.useUserNameOnly || false);
 
@@ -74,12 +76,10 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
         }
     });
 
-    // --- 1. MAIN SUBMIT HANDLER (With Public Sync) ---
     const onMainSubmit = async (data) => {
         setSaving(true);
         const toastId = toast.loading('Saving main profile...');
         try {
-            // Calculate Effective Display Name based on Toggles
             let effectiveName = `${data.firstName} ${data.lastName}`;
             if (useLegalNameOnly) effectiveName = `${data.firstName} ${data.lastName}`;
             else if (useUserNameOnly && data.displayName) effectiveName = data.displayName;
@@ -92,7 +92,6 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                 effectiveName.toLowerCase()
             ].filter(Boolean);
 
-            // A. Update PRIVATE Main Profile (Source of Truth)
             const userRef = doc(db, getPaths(user.uid).userProfile);
             await updateDoc(userRef, {
                 ...data,
@@ -102,16 +101,15 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                 searchTerms
             });
 
-            // B. SYNC to PUBLIC Profile (The Fix!)
-            // We use setDoc with merge:true to ensure it exists and update it
+            // Sync to Public Profile
             const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
             await setDoc(publicRef, {
                 firstName: data.firstName,
                 lastName: data.lastName,
-                displayName: effectiveName, // Sync the preferred name
+                displayName: effectiveName,
                 bio: data.bio,
                 zip: data.zip,
-                rate: data.hourlyRate, // Map hourlyRate to 'rate' for public view
+                rate: data.hourlyRate,
                 website: data.website,
                 searchTerms
             }, { merge: true });
@@ -125,26 +123,47 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
         }
     };
 
-    // --- 2. PHOTO UPLOAD HANDLER (With Public Sync) ---
     const handlePhotoUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const toastId = toast.loading('Uploading photo...');
         try {
             const url = await uploadImage(file, `users/${user.uid}/avatars`);
-            
-            // A. Update Private Profile
             const userRef = doc(db, getPaths(user.uid).userProfile);
             await updateDoc(userRef, { photoURL: url });
-
-            // B. Sync to Public Profile (The Fix!)
             const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
             await updateDoc(publicRef, { photoURL: url });
-
-            toast.success('Photo updated everywhere!', { id: toastId });
+            toast.success('Photo updated!', { id: toastId });
         } catch (err) {
             console.error(err);
             toast.error('Photo upload failed', { id: toastId });
+        }
+    };
+
+    // --- NEW: Handle Banner Upload ---
+    const handleBannerUpload = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        setBannerUploading(true);
+        const toastId = toast.loading('Uploading cover banner...');
+        try {
+            // Use same path structure as PublicProfileModal
+            const url = await uploadImage(file, `artifacts/${user.uid}/images/banners`);
+            
+            // 1. Update Main Profile (Private)
+            const userRef = doc(db, getPaths(user.uid).userProfile);
+            await updateDoc(userRef, { bannerURL: url });
+
+            // 2. Sync to Public Profile
+            const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
+            await updateDoc(publicRef, { bannerURL: url });
+
+            toast.success('Cover banner updated!', { id: toastId });
+        } catch (err) {
+            console.error(err);
+            toast.error('Banner upload failed', { id: toastId });
+        } finally {
+            setBannerUploading(false);
         }
     };
 
@@ -172,9 +191,19 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                     <User className="text-brand-blue"/> {activeSubTab === 'details' ? 'Edit Profile' : 'Account Settings'}
                 </h1>
                 
-                <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex gap-1 self-start md:self-auto">
-                    <button onClick={() => setActiveSubTab('details')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${activeSubTab === 'details' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>Edit Details</button>
-                    <button onClick={() => setActiveSubTab('settings')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${activeSubTab === 'settings' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}><Settings size={14}/> Settings</button>
+                <div className="flex gap-3 self-end">
+                    {/* NEW: View Public Profile Button */}
+                    <button 
+                        onClick={() => openPublicProfile(user.uid)} 
+                        className="bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition shadow-lg"
+                    >
+                        <Eye size={16}/> View Public Profile
+                    </button>
+
+                    <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex gap-1">
+                        <button onClick={() => setActiveSubTab('details')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${activeSubTab === 'details' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>Edit Details</button>
+                        <button onClick={() => setActiveSubTab('settings')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${activeSubTab === 'settings' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}><Settings size={14}/> Settings</button>
+                    </div>
                 </div>
             </div>
 
@@ -195,13 +224,37 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                     <div className="lg:col-span-3">
                         {selectedRole === 'Main' ? (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                                <div className="md:col-span-1 space-y-4">
-                                    <div className="relative group w-full aspect-square rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-700 shadow-md">
-                                        {userData?.photoURL ? <img src={userData.photoURL} alt="Profile" className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full bg-gradient-to-tr from-brand-blue to-purple-500 text-white font-bold text-4xl">{getInitials(userData?.firstName, userData?.lastName, userData?.displayName)}</div>}
-                                        <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"><span className="text-white font-bold text-sm">Change Photo</span><input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} /></label>
-                                        {uploading && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Loader2 className="animate-spin text-white"/></div>}
+                                <div className="md:col-span-1 space-y-6">
+                                    {/* Avatar Upload */}
+                                    <div className="space-y-2">
+                                        <div className="text-xs font-bold text-gray-500 uppercase">Profile Photo</div>
+                                        <div className="relative group w-full aspect-square rounded-full overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-700 shadow-md">
+                                            {userData?.photoURL ? <img src={userData.photoURL} alt="Profile" className="w-full h-full object-cover" /> : <div className="flex items-center justify-center h-full bg-gradient-to-tr from-brand-blue to-purple-500 text-white font-bold text-4xl">{getInitials(userData?.firstName, userData?.lastName, userData?.displayName)}</div>}
+                                            <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"><span className="text-white font-bold text-sm flex items-center gap-1"><Camera size={16}/> Change</span><input type="file" className="hidden" accept="image/*" onChange={handlePhotoUpload} disabled={uploading} /></label>
+                                            {uploading && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Loader2 className="animate-spin text-white"/></div>}
+                                        </div>
                                     </div>
-                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl text-xs text-blue-800 dark:text-blue-200"><p className="font-bold mb-1">Pro Tip:</p>High-quality profile photos increase booking rates by 40%.</div>
+
+                                    {/* NEW: Banner Upload */}
+                                    <div className="space-y-2">
+                                        <div className="text-xs font-bold text-gray-500 uppercase">Cover Banner</div>
+                                        <div className="relative group w-full aspect-[3/1] rounded-xl overflow-hidden bg-gray-100 dark:bg-gray-800 border-2 border-dashed border-gray-300 dark:border-gray-700 shadow-sm">
+                                            {userData?.bannerURL ? (
+                                                <img src={userData.bannerURL} alt="Banner" className="w-full h-full object-cover" />
+                                            ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                                                    <ImageIcon size={24}/>
+                                                </div>
+                                            )}
+                                            <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                                                <span className="text-white font-bold text-xs flex items-center gap-1"><Camera size={14}/> Upload Cover</span>
+                                                <input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} disabled={bannerUploading} />
+                                            </label>
+                                            {bannerUploading && <div className="absolute inset-0 bg-black/50 flex items-center justify-center"><Loader2 className="animate-spin text-white"/></div>}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl text-xs text-blue-800 dark:text-blue-200"><p className="font-bold mb-1">Pro Tip:</p>High-quality profile photos & banners increase booking rates by 40%.</div>
                                 </div>
 
                                 <div className="md:col-span-2">
@@ -212,7 +265,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                                         </div>
                                         <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">User Name (Display Name)</label><input {...register("displayName")} className={inputClass(errors.displayName)} placeholder="e.g. SeshMaster" /></div>
                                         
-                                        {/* Name Preferences Toggle */}
+                                        {/* Name Toggle Logic */}
                                         <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600 space-y-3">
                                             <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Display Name Preferences</label>
                                             <div className="flex items-center justify-between"><span className="text-sm dark:text-gray-200">Use Legal Name Only</span><button type="button" onClick={toggleLegalOnly} className="text-brand-blue">{useLegalNameOnly ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button></div>
@@ -245,12 +298,10 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
     );
 }
 
-// --- Dynamic Form Component (Unchanged but included for completeness) ---
+// ... (DynamicSubProfileForm remains unchanged from previous version) ...
 function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
     const [formData, setFormData] = useState(initialData);
     const [isSaving, setIsSaving] = useState(false);
-    
-    // Toggle States
     const [followMainProfile, setFollowMainProfile] = useState(initialData.followMainProfile ?? true);
     const [useLegalNameOnly, setUseLegalNameOnly] = useState(initialData.useLegalNameOnly ?? false);
     const [useUserNameOnly, setUseUserNameOnly] = useState(initialData.useUserNameOnly ?? false);
@@ -285,12 +336,10 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
             const subRef = doc(db, getPaths(user.uid).userSubProfile(role));
             await setDoc(subRef, dataToSave, { merge: true });
             
-            // Sync to Public Profile IF this is the active role
             if (userData.activeProfileRole === role) {
                 const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
                 await updateDoc(publicRef, { displayName: effectiveName, searchTerms: [effectiveName.toLowerCase()] });
             }
-            // Sync Studio Ops if needed
             if (role === 'Studio' && syncStudioOps) {
                 const mainRef = doc(db, getPaths(user.uid).userProfile);
                 await updateDoc(mainRef, { studioName: effectiveName });
@@ -302,7 +351,6 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
 
     if (schema.length === 0) return <div className="p-10 text-center text-gray-500">No configuration available for this role.</div>;
     
-    // Schema Filter logic
     const currentSubRole = formData.talentSubRole || '';
     const filteredSchema = schema.filter(f => {
         if (f.key === 'profileName' || f.key === 'useRealName') return false;
@@ -316,7 +364,6 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
         <form onSubmit={handleSave} className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm space-y-6">
             <h2 className="text-xl font-bold dark:text-white border-b dark:border-gray-700 pb-2">{role} Identity & Details</h2>
             
-            {/* Identity Toggles */}
             <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600 space-y-3">
                 <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Identity Settings</label>
                 <div className="flex items-center justify-between">
@@ -339,7 +386,6 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
                 )}
             </div>
 
-            {/* Dynamic Fields */}
             {filteredSchema.map((field) => {
                 if (field.isToggle) return null; 
                 return (
