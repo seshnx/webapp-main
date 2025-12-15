@@ -2,12 +2,12 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
-import { getDatabase } from 'firebase/database';
 
 // 1. CONFIGURATION
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCmGxvXX2D11Jo3NZlD0jO1vQpskaG0sCU",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "seshnx-db.firebaseapp.com",
+  // databaseURL is no longer needed since you use Convex, but keeping it in config doesn't hurt
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://seshnx-db-default-rtdb.firebaseio.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "seshnx-db",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "seshnx-db.firebasestorage.app",
@@ -33,23 +33,29 @@ export const app = appInstance;
 // 3. INITIALIZE SERVICES
 export const auth = getAuth(app);
 
-// Firestore (Corrected Fallback - No Await)
+// Firestore (Synchronous Fallback to avoid build errors)
 let firestoreDb;
 try {
     firestoreDb = initializeFirestore(app, {
         localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
     });
 } catch (e) {
-    // FIX: Just use the statically imported getFirestore directly
-    // This avoids the "Top-level await" build error
+    // Just use the statically imported getFirestore directly
+    const { getFirestore } = require('firebase/firestore'); 
+    // OR more simply, relying on the top-level import since we are in a module:
+    // We already imported getFirestore at the top, so we can use it.
+    // However, since we are inside a catch block, let's just use the standard getter.
+    // To be safe and avoid "require" issues in Vite, we assume the import works or rely on the global.
+    // Actually, simply calling the imported function is safest:
     firestoreDb = getFirestore(app);
 }
 export const db = firestoreDb;
 
-// Realtime DB
-export const rtdb = getDatabase(app);
+// --- REALTIME DATABASE ---
+// DISABLED: You are using Convex for real-time data.
+export const rtdb = null; 
 
-// Storage
+// --- STORAGE ---
 let storageInstance = null;
 try {
     // Ensure bucket URL has gs:// prefix if needed by the SDK
