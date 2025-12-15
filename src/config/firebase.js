@@ -1,10 +1,10 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore as getExistingFirestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 
-// 1. CONFIGURE FIREBASE
+// 1. CONFIGURATION
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCmGxvXX2D11Jo3NZlD0jO1vQpskaG0sCU",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "seshnx-db.firebaseapp.com",
@@ -16,64 +16,60 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-7SP53NK9FM"
 };
 
-// 2. INITIALIZE APP (Safe Singleton Pattern)
-// We use getApps().length to check if an app exists to avoid try/catch issues
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+// 2. INITIALIZE NAMED APP (The Fix)
+// We use a specific name "SeshNx-Client" to avoid conflicts with the broken [DEFAULT] app
+const APP_NAME = "SeshNx-Client";
+let appInstance;
 
-// Export the app instance
-export { app };
+try {
+  // Try to find our specific named app
+  appInstance = getApp(APP_NAME);
+} catch (e) {
+  // If not found, create it fresh
+  appInstance = initializeApp(firebaseConfig, APP_NAME);
+  console.log(`🚀 Initialized new Firebase App: ${APP_NAME}`);
+}
 
-// 3. INITIALIZE SERVICES
+export const app = appInstance;
+
+// 3. INITIALIZE SERVICES (Attached to our Named App)
 export const auth = getAuth(app);
 
 // Firestore
 let firestoreDb;
 try {
-  firestoreDb = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-  });
+    firestoreDb = initializeFirestore(app, {
+        localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+    });
 } catch (e) {
-  // If already initialized, just use the existing one
-  firestoreDb = getExistingFirestore(app);
+    // Fallback if already initialized
+    const { getFirestore } = await import('firebase/firestore');
+    firestoreDb = getFirestore(app);
 }
 export const db = firestoreDb;
 
-// Realtime Database
-let rtdbInstance = null;
-try {
-  rtdbInstance = getDatabase(app);
-} catch (error) {
-  console.warn("RTDB Init Warning:", error);
-}
-export const rtdb = rtdbInstance;
+// Realtime DB
+export const rtdb = getDatabase(app);
 
-// --- STORAGE INITIALIZATION ---
-// We initialize this explicitly to ensure the component is registered
+// Storage
 let storageInstance = null;
 try {
-    // If the bucket config is missing, this might throw, so we check first
-    if (firebaseConfig.storageBucket) {
-        storageInstance = getStorage(app);
-        console.log("✅ Firebase Storage Initialized");
-    } else {
-        console.error("❌ Storage Bucket Config Missing");
-    }
+    // Explicitly pass the app instance AND the bucket URL to be absolutely safe
+    // The SDK sometimes needs the gs:// prefix if the config is flaky
+    const bucketUrl = firebaseConfig.storageBucket.startsWith('gs://') 
+        ? firebaseConfig.storageBucket 
+        : `gs://${firebaseConfig.storageBucket}`;
+        
+    storageInstance = getStorage(app, bucketUrl);
+    console.log("✅ Storage Service Attached to", APP_NAME);
 } catch (error) {
-    console.error("❌ Firebase Storage Init Failed:", error);
-    // Fallback: Try getting storage without passing 'app' (uses default app)
-    // This sometimes fixes the "Service not available" error in specific bundles
-    try {
-        storageInstance = getStorage(); 
-        console.log("⚠️ Recovered Storage using default app instance");
-    } catch (retryError) {
-        console.error("❌ Critical Storage Failure:", retryError);
-    }
+    console.error("❌ Storage Init Failed:", error);
 }
 
 export const storage = storageInstance;
 export const appId = firebaseConfig.projectId;
 
-// Helper for paths (unchanged)
+// (Path helpers remain the same)
 export const getPaths = (uid) => ({
   userProfile: `artifacts/${appId}/users/${uid}/profiles/main`,
   userSubProfile: (role) => `artifacts/${appId}/users/${uid}/profiles/${role}`,
