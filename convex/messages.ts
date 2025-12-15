@@ -15,6 +15,25 @@ export const getMessages = query({
   },
 });
 
+// Get recent messages that contain media (for MediaGallery).
+export const getMediaMessages = query({
+  args: { chatId: v.string(), limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const scanLimit = Math.min(Math.max(args.limit || 500, 1), 2000);
+    const rows = await ctx.db
+      .query("messages")
+      .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+      .order("desc")
+      .take(scanLimit);
+
+    const media = rows
+      .filter((m) => !!m.media && !m.deleted && !m.deletedForAll)
+      .reverse(); // chronological
+
+    return media;
+  },
+});
+
 // Send a message
 export const sendMessage = mutation({
   args: {

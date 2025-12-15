@@ -16,6 +16,13 @@ export default defineConfig({
       // Use browser-safe API for client-side builds
       // The generated api.js imports from convex/server which is server-side only
       "convex/_generated/api": path.resolve(__dirname, "./convex/_generated/api-browser.js"),
+      // Firebase client SDK has been removed; map legacy imports to local shims.
+      "firebase/app": path.resolve(__dirname, "./src/adapters/firebase/app.js"),
+      "firebase/auth": path.resolve(__dirname, "./src/adapters/firebase/auth.js"),
+      "firebase/firestore": path.resolve(__dirname, "./src/adapters/firebase/firestore.js"),
+      "firebase/storage": path.resolve(__dirname, "./src/adapters/firebase/storage.js"),
+      "firebase/functions": path.resolve(__dirname, "./src/adapters/firebase/functions.js"),
+      "firebase/database": path.resolve(__dirname, "./src/adapters/firebase/database.js"),
     },
   },
   build: {
@@ -31,7 +38,6 @@ export default defineConfig({
           // Code splitting strategy for better caching and performance
           if (id.includes('node_modules')) {
             // Large libraries get their own chunks for better caching
-            if (id.includes('firebase')) return 'vendor-firebase';
             if (id.includes('convex/react')) return 'vendor-convex';
             if (id.includes('framer-motion')) return 'vendor-framer';
             if (id.includes('react-leaflet') || id.includes('leaflet')) return 'vendor-maps';

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { doc, collection, onSnapshot, getDoc, query, where } from 'firebase/firestore';
-import { ref, onValue } from 'firebase/database';
-import { db, rtdb, getPaths, appId } from '../config/firebase';
+import { db, getPaths, appId } from '../config/firebase';
 
 export const useUserSubProfiles = (uid, roles) => {
     const [subProfiles, setSubProfiles] = useState({});
@@ -50,7 +49,7 @@ export const useBookingRequests = (uid) => {
 export const useNotifications = (uid) => {
     const [notifications, setNotifications] = useState([]);
     const [bookingNotifs, setBookingNotifs] = useState([]);
-    const [messageNotifs, setMessageNotifs] = useState([]);
+    const [messageNotifs, setMessageNotifs] = useState([]); // Chat notifications should come from Convex conversations
     
     // 1. Booking Requests (Firestore)
     useEffect(() => {
@@ -74,32 +73,12 @@ export const useNotifications = (uid) => {
         });
     }, [uid]);
 
-    // 2. Unread Messages (Realtime DB)
+    // 2. Unread Messages (Convex-backed in chat UI)
+    // NOTE: This legacy hook previously relied on Firebase RTDB. We intentionally
+    // keep this empty here; the main app uses Convex conversations/unreadCount instead.
     useEffect(() => {
-        if (!uid || !rtdb) return;
-        const convosRef = ref(rtdb, `conversations/${uid}`);
-        
-        return onValue(convosRef, (snapshot) => {
-            const data = snapshot.val();
-            if (!data) {
-                setMessageNotifs([]);
-                return;
-            }
-            
-            // Filter for conversations with unreadCount > 0
-            const unread = Object.entries(data)
-                .filter(([_, val]) => val.uc > 0) 
-                .map(([key, val]) => ({
-                    id: key,
-                    type: 'message',
-                    title: 'New Message',
-                    text: `${val.uc} unread message${val.uc > 1 ? 's' : ''} from ${val.n}`,
-                    timestamp: val.lmt, // RTDB Timestamp (number)
-                    actionData: val
-                }));
-            setMessageNotifs(unread);
-        });
-    }, [uid, rtdb]);
+        setMessageNotifs([]);
+    }, [uid]);
 
     // 3. Merge & Sort
     useEffect(() => {

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { Users, Plus, X, Search, Trash2, ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { ref, push, update, set, serverTimestamp, remove } from 'firebase/database';
 import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
-import { rtdb, db } from '../../config/firebase';
+import { db } from '../../config/firebase';
+import { useMutation } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import { isConvexAvailable } from '../../config/convex';
 import ConversationItem from './ConversationItem';
 import UserAvatar from '../shared/UserAvatar';
 
@@ -17,6 +19,10 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
     const [groupMembers, setGroupMembers] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [searchResults, setSearchResults] = useState([]);
+
+    // Convex mutations
+    const createGroupChatMutation = useMutation(api.conversations.createGroupChat);
+    const deleteConversationMutation = useMutation(api.conversations.deleteConversation);
 
     // ... (Search & Group Functions unchanged) ...
     const handleUserSearch = async (term) => {
@@ -80,41 +86,19 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
 
     const handleCreateGroup = async () => {
         if (!groupName || groupMembers.length === 0) return alert("Name and members required.");
-        if (!rtdb) {
-            alert("Chat functionality is not available. Realtime Database is not configured.");
+        if (!isConvexAvailable()) {
+            alert("Chat functionality is not available. Convex is not configured.");
             return;
         }
         setIsCreating(true);
 
         try {
-            const newGroupRef = push(ref(rtdb, 'chats'));
-            const newGroupId = newGroupRef.key;
-            const timestamp = serverTimestamp();
-            
-            const allMembers = [user.uid, ...groupMembers.map(m => m.id)];
-            
-            const chatData = {
-                meta: { name: groupName, createdBy: user.uid, createdAt: timestamp },
-                members: {}
-            };
-            allMembers.forEach(uid => chatData.members[uid] = true);
-
-            await set(ref(rtdb, `chats/${newGroupId}`), chatData);
-
-            const updates = {};
-            allMembers.forEach(uid => {
-                updates[`conversations/${uid}/${newGroupId}`] = {
-                    uid: newGroupId, 
-                    n: groupName, 
-                    type: 'group', 
-                    lmt: timestamp, 
-                    lm: "Group created", 
-                    ls: user.uid, 
-                    uc: uid === user.uid ? 0 : 1
-                };
+            const memberIds = groupMembers.map(m => m.id);
+            const { chatId: newGroupId } = await createGroupChatMutation({
+                creatorId: user.uid,
+                chatName: groupName,
+                memberIds,
             });
-
-            await update(ref(rtdb), updates);
 
             setShowGroupModal(false);
             onSelectChat({ id: newGroupId, name: groupName, type: 'group' });
@@ -130,12 +114,12 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
     const handleDeleteChat = async (e, chatId) => {
         e.stopPropagation();
         if (!window.confirm("Delete this conversation?")) return;
-        if (!rtdb) {
-            alert("Chat functionality is not available. Realtime Database is not configured.");
+        if (!isConvexAvailable()) {
+            alert("Chat functionality is not available. Convex is not configured.");
             return;
         }
         try {
-            await remove(ref(rtdb, `conversations/${user.uid}/${chatId}`));
+            await deleteConversationMutation({ userId: user.uid, chatId });
             if (activeChat?.id === chatId) onSelectChat(null);
         } catch (err) { console.error(err); }
     };
