@@ -1,13 +1,17 @@
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { 
+  getFirestore, 
+  initializeFirestore, 
+  persistentLocalCache, 
+  persistentMultipleTabManager 
+} from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 
 // 1. CONFIGURATION
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCmGxvXX2D11Jo3NZlD0jO1vQpskaG0sCU",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "seshnx-db.firebaseapp.com",
-  // databaseURL is no longer needed since you use Convex, but keeping it in config doesn't hurt
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://seshnx-db-default-rtdb.firebaseio.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "seshnx-db",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "seshnx-db.firebasestorage.app",
@@ -33,20 +37,16 @@ export const app = appInstance;
 // 3. INITIALIZE SERVICES
 export const auth = getAuth(app);
 
-// Firestore (Synchronous Fallback to avoid build errors)
+// --- FIRESTORE ---
 let firestoreDb;
 try {
+    // Attempt advanced initialization with persistence
     firestoreDb = initializeFirestore(app, {
         localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
     });
 } catch (e) {
-    // Just use the statically imported getFirestore directly
-    const { getFirestore } = require('firebase/firestore'); 
-    // OR more simply, relying on the top-level import since we are in a module:
-    // We already imported getFirestore at the top, so we can use it.
-    // However, since we are inside a catch block, let's just use the standard getter.
-    // To be safe and avoid "require" issues in Vite, we assume the import works or rely on the global.
-    // Actually, simply calling the imported function is safest:
+    // Fallback to standard initialization if persistence fails (e.g., in some environments)
+    console.warn("Firestore advanced init failed, falling back to standard:", e);
     firestoreDb = getFirestore(app);
 }
 export const db = firestoreDb;
@@ -58,12 +58,9 @@ export const rtdb = null;
 // --- STORAGE ---
 let storageInstance = null;
 try {
-    // Ensure bucket URL has gs:// prefix if needed by the SDK
-    const bucketUrl = firebaseConfig.storageBucket.startsWith('gs://') 
-        ? firebaseConfig.storageBucket 
-        : `gs://${firebaseConfig.storageBucket}`;
-        
-    storageInstance = getStorage(app, bucketUrl);
+    // FIX: Simply pass the app instance. 
+    // The SDK automatically uses the 'storageBucket' defined in firebaseConfig above.
+    storageInstance = getStorage(app);
     console.log("✅ Storage Service Attached to", APP_NAME);
 } catch (error) {
     console.error("❌ Storage Init Failed:", error);
@@ -72,7 +69,7 @@ try {
 export const storage = storageInstance;
 export const appId = firebaseConfig.projectId;
 
-// (Path helpers remain the same)
+// --- PATH HELPERS ---
 export const getPaths = (uid) => ({
   userProfile: `artifacts/${appId}/users/${uid}/profiles/main`,
   userSubProfile: (role) => `artifacts/${appId}/users/${uid}/profiles/${role}`,
