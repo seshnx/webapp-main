@@ -21,7 +21,6 @@ const firebaseConfig = {
 };
 
 // 2. INITIALIZE NAMED APP
-// Using a specific name "SeshNx-Client" isolates us from any broken [DEFAULT] instances
 const APP_NAME = "SeshNx-Client";
 let appInstance;
 
@@ -40,33 +39,32 @@ export const auth = getAuth(app);
 // --- FIRESTORE ---
 let firestoreDb;
 try {
-    // Attempt advanced initialization with persistence
+    // Attempt offline persistence
     firestoreDb = initializeFirestore(app, {
         localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
     });
 } catch (e) {
-    // Fallback to standard initialization if persistence fails (e.g., in some environments)
-    console.warn("Firestore advanced init failed, falling back to standard:", e);
+    // Fallback to standard initialization if persistence fails
+    console.warn("Firestore persistence init failed, using standard:", e);
     firestoreDb = getFirestore(app);
 }
 export const db = firestoreDb;
 
 // --- REALTIME DATABASE ---
-// DISABLED: You are using Convex for real-time data.
 export const rtdb = null; 
 
-// --- STORAGE ---
+// --- STORAGE (IMAGES) ---
+// FIX: We simply pass the app. We do NOT pass the bucket URL manually.
+// This allows the SDK to use the default bucket defined in firebaseConfig.
 let storageInstance = null;
 try {
-    // FIX: Simply pass the app instance. 
-    // The SDK automatically uses the 'storageBucket' defined in firebaseConfig above.
     storageInstance = getStorage(app);
-    console.log("✅ Storage Service Attached to", APP_NAME);
+    console.log("✅ Storage Service Attached (Images)");
 } catch (error) {
     console.error("❌ Storage Init Failed:", error);
 }
-
 export const storage = storageInstance;
+
 export const appId = firebaseConfig.projectId;
 
 // --- PATH HELPERS ---
