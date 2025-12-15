@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Mail, MapPin, Briefcase, Music, Save, Loader2, DollarSign, Settings, Users, ChevronRight, Check, ToggleLeft, ToggleRight } from 'lucide-react';
 import { doc, updateDoc, setDoc } from 'firebase/firestore';
 import { db, appId, getPaths } from '../config/firebase';
-import { useForm, Controller } from 'react-hook-form'; // Added Controller
+import { useForm, Controller } from 'react-hook-form'; 
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { clsx } from 'clsx';
@@ -12,9 +12,9 @@ import toast from 'react-hot-toast';
 import SettingsTab from './SettingsTab';
 import { PROFILE_SCHEMAS, GENRE_DATA, INSTRUMENT_DATA } from '../config/constants';
 import { MultiSelect, NestedSelect } from './shared/Inputs';
-import EquipmentAutocomplete from './shared/EquipmentAutocomplete'; // Added Import
+import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
 
-// ... (Schemas and Helper functions remain unchanged) ...
+// --- Validation Schemas ---
 const mainProfileSchema = z.object({
     firstName: z.string().min(2, "First name too short"),
     lastName: z.string().min(2, "Last name too short"),
@@ -31,12 +31,12 @@ const getInitials = (first, last, display) => {
 };
 
 export default function ProfileManager({ user, userData, subProfiles = {}, handleLogout }) {
-    // ... (State and handlers remain unchanged) ...
     const [activeSubTab, setActiveSubTab] = useState('details');
     const [selectedRole, setSelectedRole] = useState('Main');
     const [saving, setSaving] = useState(false);
     const { uploadImage, uploading } = useImageUpload();
 
+    // Toggle States for Display Name Logic
     const [useLegalNameOnly, setUseLegalNameOnly] = useState(userData?.useLegalNameOnly || false);
     const [useUserNameOnly, setUseUserNameOnly] = useState(userData?.useUserNameOnly || false);
 
@@ -74,25 +74,49 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
         }
     });
 
-    // ... (onMainSubmit, handlePhotoUpload, handleSettingsUpdate unchanged) ...
+    // --- 1. MAIN SUBMIT HANDLER (With Public Sync) ---
     const onMainSubmit = async (data) => {
         setSaving(true);
         const toastId = toast.loading('Saving main profile...');
         try {
+            // Calculate Effective Display Name based on Toggles
             let effectiveName = `${data.firstName} ${data.lastName}`;
             if (useLegalNameOnly) effectiveName = `${data.firstName} ${data.lastName}`;
             else if (useUserNameOnly && data.displayName) effectiveName = data.displayName;
             else if (data.displayName) effectiveName = `${data.firstName} "${data.displayName}" ${data.lastName}`;
 
+            const searchTerms = [
+                data.firstName.toLowerCase(), 
+                data.lastName.toLowerCase(), 
+                (data.displayName || '').toLowerCase(), 
+                effectiveName.toLowerCase()
+            ].filter(Boolean);
+
+            // A. Update PRIVATE Main Profile (Source of Truth)
             const userRef = doc(db, getPaths(user.uid).userProfile);
             await updateDoc(userRef, {
                 ...data,
                 useLegalNameOnly,
                 useUserNameOnly,
                 effectiveDisplayName: effectiveName,
-                searchTerms: [data.firstName.toLowerCase(), data.lastName.toLowerCase(), (data.displayName || '').toLowerCase(), effectiveName.toLowerCase()].filter(Boolean)
+                searchTerms
             });
-            toast.success('Main Profile Updated!', { id: toastId });
+
+            // B. SYNC to PUBLIC Profile (The Fix!)
+            // We use setDoc with merge:true to ensure it exists and update it
+            const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
+            await setDoc(publicRef, {
+                firstName: data.firstName,
+                lastName: data.lastName,
+                displayName: effectiveName, // Sync the preferred name
+                bio: data.bio,
+                zip: data.zip,
+                rate: data.hourlyRate, // Map hourlyRate to 'rate' for public view
+                website: data.website,
+                searchTerms
+            }, { merge: true });
+
+            toast.success('Profile Updated & Synced!', { id: toastId });
         } catch (error) {
             console.error("Update failed", error);
             toast.error("Failed to update profile.", { id: toastId });
@@ -101,15 +125,23 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
         }
     };
 
+    // --- 2. PHOTO UPLOAD HANDLER (With Public Sync) ---
     const handlePhotoUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const toastId = toast.loading('Uploading photo...');
         try {
             const url = await uploadImage(file, `users/${user.uid}/avatars`);
+            
+            // A. Update Private Profile
             const userRef = doc(db, getPaths(user.uid).userProfile);
             await updateDoc(userRef, { photoURL: url });
-            toast.success('Photo uploaded!', { id: toastId });
+
+            // B. Sync to Public Profile (The Fix!)
+            const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
+            await updateDoc(publicRef, { photoURL: url });
+
+            toast.success('Photo updated everywhere!', { id: toastId });
         } catch (err) {
             console.error(err);
             toast.error('Photo upload failed', { id: toastId });
@@ -180,7 +212,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                                         </div>
                                         <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">User Name (Display Name)</label><input {...register("displayName")} className={inputClass(errors.displayName)} placeholder="e.g. SeshMaster" /></div>
                                         
-                                        {/* Name Toggle Logic (Abbreviated for brevity, kept same as prior logic) */}
+                                        {/* Name Preferences Toggle */}
                                         <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600 space-y-3">
                                             <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Display Name Preferences</label>
                                             <div className="flex items-center justify-between"><span className="text-sm dark:text-gray-200">Use Legal Name Only</span><button type="button" onClick={toggleLegalOnly} className="text-brand-blue">{useLegalNameOnly ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button></div>
@@ -193,6 +225,8 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                                             <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block flex items-center gap-1"><MapPin size={12}/> ZIP Code</label><input {...register("zip")} className={inputClass(errors.zip)} /></div>
                                             <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block flex items-center gap-1"><DollarSign size={12}/> Hourly Rate ($)</label><input type="number" {...register("hourlyRate", { valueAsNumber: true })} className={inputClass(errors.hourlyRate)} /></div>
                                         </div>
+                                        <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Website</label><input {...register("website")} className={inputClass(errors.website)} placeholder="https://..." /></div>
+
                                         <div className="pt-4 border-t dark:border-gray-700 flex justify-end">
                                             <button type="button" onClick={handleSubmit(onMainSubmit)} disabled={saving} className={clsx("px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg", saving ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed" : "bg-brand-blue text-white hover:bg-blue-600 hover:scale-105")}>{saving ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20}/> Save Changes</>}</button>
                                         </div>
@@ -211,11 +245,12 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
     );
 }
 
-// --- Dynamic Form Component ---
+// --- Dynamic Form Component (Unchanged but included for completeness) ---
 function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
     const [formData, setFormData] = useState(initialData);
     const [isSaving, setIsSaving] = useState(false);
-    // ... (Toggle States logic remains same) ...
+    
+    // Toggle States
     const [followMainProfile, setFollowMainProfile] = useState(initialData.followMainProfile ?? true);
     const [useLegalNameOnly, setUseLegalNameOnly] = useState(initialData.useLegalNameOnly ?? false);
     const [useUserNameOnly, setUseUserNameOnly] = useState(initialData.useUserNameOnly ?? false);
@@ -250,10 +285,12 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
             const subRef = doc(db, getPaths(user.uid).userSubProfile(role));
             await setDoc(subRef, dataToSave, { merge: true });
             
+            // Sync to Public Profile IF this is the active role
             if (userData.activeProfileRole === role) {
                 const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
                 await updateDoc(publicRef, { displayName: effectiveName, searchTerms: [effectiveName.toLowerCase()] });
             }
+            // Sync Studio Ops if needed
             if (role === 'Studio' && syncStudioOps) {
                 const mainRef = doc(db, getPaths(user.uid).userProfile);
                 await updateDoc(mainRef, { studioName: effectiveName });
@@ -265,13 +302,10 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
 
     if (schema.length === 0) return <div className="p-10 text-center text-gray-500">No configuration available for this role.</div>;
     
-    // Get current sub-role (for Talent profiles)
+    // Schema Filter logic
     const currentSubRole = formData.talentSubRole || '';
-    
-    // Filter schema - hide profileName/useRealName and filter by showFor
     const filteredSchema = schema.filter(f => {
         if (f.key === 'profileName' || f.key === 'useRealName') return false;
-        // If field has showFor restriction, check if current sub-role matches
         if (f.showFor && Array.isArray(f.showFor)) {
             return f.showFor.includes(currentSubRole);
         }
@@ -282,7 +316,7 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
         <form onSubmit={handleSave} className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm space-y-6">
             <h2 className="text-xl font-bold dark:text-white border-b dark:border-gray-700 pb-2">{role} Identity & Details</h2>
             
-            {/* Identity Toggles (Same as before) */}
+            {/* Identity Toggles */}
             <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600 space-y-3">
                 <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Identity Settings</label>
                 <div className="flex items-center justify-between">
@@ -319,18 +353,15 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
                             <MultiSelect label="" fieldKey={field.key} options={field.data || field.options || []} initialValues={formData[field.key] || []} onChange={handleChange} />
                         ) : field.type === 'nested_select' ? (
                             <NestedSelect label="" fieldKey={field.key} data={field.data} initialValues={formData[field.key] || []} onChange={handleChange} />
-                        ) : (
-                            /* FIX: Replaced simple input with EquipmentAutocomplete for "equipment" field */
-                            field.key === 'equipment' ? (
+                        ) : field.key === 'equipment' ? (
                                 <EquipmentAutocomplete 
                                     multi={true} 
                                     value={formData[field.key] || ''} 
                                     onChange={(val) => handleChange(field.key, val)}
                                     placeholder="Add gear..." 
                                 />
-                            ) : (
-                                <input type={field.type === 'number' ? 'number' : 'text'} className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-brand-blue outline-none" value={formData[field.key] || ''} onChange={e => handleChange(field.key, e.target.value)} />
-                            )
+                        ) : (
+                            <input type={field.type === 'number' ? 'number' : 'text'} className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-brand-blue outline-none" value={formData[field.key] || ''} onChange={e => handleChange(field.key, e.target.value)} />
                         )}
                     </div>
                 );
