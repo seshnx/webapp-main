@@ -208,7 +208,8 @@ function applyFieldOps(existing, updates) {
       continue;
     }
     if (v === SERVER_TIMESTAMP) {
-      out = setByDottedPath(out, k, new Date().toISOString());
+      // Prefer numeric epoch millis for broad compatibility with existing UI code.
+      out = setByDottedPath(out, k, Date.now());
       continue;
     }
     if (v && typeof v === 'object' && v.__op === 'increment') {
@@ -335,17 +336,45 @@ function applyClientSideConstraints(rows, constraints) {
   const order = constraints.find((c) => c?.__type === 'orderBy');
   const lim = constraints.find((c) => c?.__type === 'limit');
 
+  const getFieldValue = (row, fieldPath) => {
+    const parts = String(fieldPath).split('.').filter(Boolean);
+    let cur = row?.data;
+    for (const p of parts) {
+      if (!cur || typeof cur !== 'object') return undefined;
+      cur = cur[p];
+    }
+    return cur;
+  };
+
   for (const w of wheres) {
     const { field, op, value } = w;
-    if (op !== '==' && op !== '!=') {
-      // Minimal compatibility: support == and != only.
-      continue;
-    }
+
     out = out.filter((r) => {
-      const v = r?.data ? r.data[field] : undefined;
-      if (op === '==') return v === value;
-      if (op === '!=') return v !== value;
-      return true;
+      const v = getFieldValue(r, field);
+
+      switch (op) {
+        case '==':
+          return v === value;
+        case '!=':
+          return v !== value;
+        case '>':
+          return v > value;
+        case '>=':
+          return v >= value;
+        case '<':
+          return v < value;
+        case '<=':
+          return v <= value;
+        case 'in':
+          return Array.isArray(value) ? value.includes(v) : false;
+        case 'array-contains':
+          return Array.isArray(v) ? v.includes(value) : false;
+        case 'array-contains-any':
+          return Array.isArray(v) && Array.isArray(value) ? value.some((x) => v.includes(x)) : false;
+        default:
+          // Unsupported op: don't filter.
+          return true;
+      }
     });
   }
 
@@ -353,8 +382,8 @@ function applyClientSideConstraints(rows, constraints) {
     const dir = order.direction === 'desc' ? -1 : 1;
     const field = order.field;
     out.sort((a, b) => {
-      const av = a?.data?.[field];
-      const bv = b?.data?.[field];
+      const av = getFieldValue(a, field);
+      const bv = getFieldValue(b, field);
       if (av === bv) return 0;
       if (av === undefined) return 1;
       if (bv === undefined) return -1;

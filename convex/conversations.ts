@@ -98,7 +98,7 @@ export const getChatMembers = query({
     
     return members.map(m => ({
       id: m._id,
-      oduserId: m.userId,
+      userId: m.userId,
       role: m.role,
       joinedAt: m.joinedAt,
     }));
@@ -130,6 +130,70 @@ export const addChatMember = mutation({
       role: args.role,
       joinedAt: Date.now(),
     });
+  },
+});
+
+// Create a group chat (Convex-native; replaces Firebase RTDB group creation).
+export const createGroupChat = mutation({
+  args: {
+    creatorId: v.string(),
+    chatName: v.string(),
+    memberIds: v.array(v.string()), // does not need to include creatorId; we'll enforce it
+    chatPhoto: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const uniqueSuffix = `${now}_${Math.random().toString(16).slice(2)}`;
+    const chatId = `group_${uniqueSuffix}`;
+
+    const allMembers = Array.from(new Set([args.creatorId, ...(args.memberIds || [])]));
+
+    // Create membership records
+    for (const uid of allMembers) {
+      await ctx.db.insert("chatMembers", {
+        chatId,
+        userId: uid,
+        role: uid === args.creatorId ? "admin" : "member",
+        joinedAt: now,
+      });
+    }
+
+    // Create conversations for all members so the group appears immediately
+    for (const uid of allMembers) {
+      await ctx.db.insert("conversations", {
+        userId: uid,
+        chatId,
+        lastMessage: "Group created",
+        lastMessageTime: now,
+        unreadCount: uid === args.creatorId ? 0 : 1,
+        lastSenderId: args.creatorId,
+        chatName: args.chatName,
+        chatPhoto: args.chatPhoto,
+        chatType: "group",
+        otherUserId: undefined,
+      });
+    }
+
+    return { chatId };
+  },
+});
+
+// Delete (hide) a conversation for a single user (does not delete the chat/messages).
+export const deleteConversation = mutation({
+  args: {
+    userId: v.string(),
+    chatId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const conversation = await ctx.db
+      .query("conversations")
+      .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+      .filter((q) => q.eq(q.field("userId"), args.userId))
+      .first();
+
+    if (conversation) {
+      await ctx.db.delete(conversation._id);
+    }
   },
 });
 

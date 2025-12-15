@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Image as ImageIcon, Video, FileText, Music, ChevronLeft, ChevronRight, Download } from 'lucide-react';
-import { ref, onValue, query, orderByChild, limitToLast } from 'firebase/database';
-import { rtdb } from '../../../config/firebase';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import { isConvexAvailable } from '../../../config/convex';
 
 /**
  * Media gallery component to view all shared media in a chat
@@ -17,42 +18,32 @@ export default function MediaGallery({
     const [selectedMedia, setSelectedMedia] = useState(null);
     const [filter, setFilter] = useState('all'); // 'all' | 'images' | 'videos' | 'audio' | 'files'
 
+    const convexAvailable = isConvexAvailable();
+    const mediaQuery = (chatId && convexAvailable) ? { chatId, limit: 500 } : "skip";
+    const mediaMessages = useQuery(api.messages.getMediaMessages, mediaQuery);
+
     useEffect(() => {
-        if (!chatId || !rtdb) return;
-
-        const messagesRef = query(
-            ref(rtdb, `messages/${chatId}`),
-            orderByChild('t'),
-            limitToLast(500)
-        );
-
-        const unsubscribe = onValue(messagesRef, (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                const messages = Object.entries(data).map(([id, msg]) => ({
-                    id,
-                    ...msg
-                }));
-                const mediaItems = messages
-                    .filter(msg => msg.media && !msg.deleted && !msg.deletedForAll)
-                    .map(msg => ({
-                        id: msg.id,
-                        ...msg.media,
-                        messageId: msg.id,
-                        timestamp: msg.t,
-                        sender: msg.n
-                    }))
-                    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)); // Sort by timestamp ascending (oldest first)
-                
-                setMedia(mediaItems);
-            } else {
-                setMedia([]);
-            }
+        if (!chatId || !convexAvailable) {
+            setMedia([]);
             setLoading(false);
-        });
+            return;
+        }
+        if (!mediaMessages) return;
 
-        return () => unsubscribe();
-    }, [chatId, rtdb]);
+        const mediaItems = (mediaMessages || [])
+            .filter(msg => msg.media && !msg.deleted && !msg.deletedForAll)
+            .map(msg => ({
+                id: msg._id,
+                ...(msg.media || {}),
+                messageId: msg._id,
+                timestamp: msg.timestamp,
+                sender: msg.senderName
+            }))
+            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+
+        setMedia(mediaItems);
+        setLoading(false);
+    }, [chatId, convexAvailable, mediaMessages]);
 
     const filteredMedia = filter === 'all' 
         ? media 
