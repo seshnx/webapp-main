@@ -62,6 +62,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // TEMP: force-remove old cached bundles (including any prior Firebase chunks).
+      // Once the migration is fully rolled out everywhere, we can re-enable PWA caching.
+      selfDestroying: true,
       includeAssets: ['favicon.png', 'apple-touch-icon.png', 'mask-icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
         name: 'SeshNx Creator Platform',
@@ -100,6 +103,9 @@ export default defineConfig({
       workbox: {
         // FIX: Increase the limit to 4 MiB (default is 2 MiB)
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
         
         // Cache Google Fonts and local assets for offline use
         runtimeCaching: [
