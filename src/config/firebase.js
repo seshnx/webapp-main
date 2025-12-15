@@ -5,29 +5,23 @@ import { getStorage } from 'firebase/storage';
 import { getDatabase } from 'firebase/database';
 
 // 1. CONFIGURE FIREBASE
-// We log the bucket here to verify Vercel is passing it correctly
-const bucketName = import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "seshnx-db.firebasestorage.app";
-console.log("🔧 Configuring Firebase Storage with bucket:", bucketName);
-
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyCmGxvXX2D11Jo3NZlD0jO1vQpskaG0sCU",
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "seshnx-db.firebaseapp.com",
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://seshnx-db-default-rtdb.firebaseio.com",
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "seshnx-db",
-  storageBucket: bucketName, // <--- Using the variable we logged above
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "seshnx-db.firebasestorage.app",
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "718084970004",
   appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:718084970004:web:d68ba48c5eb493af9db901",
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-7SP53NK9FM"
 };
 
-// 2. INITIALIZE APP
-let existingApp = null;
-try {
-  existingApp = getApp();
-} catch (e) {
-  existingApp = null;
-}
-export const app = existingApp || initializeApp(firebaseConfig);
+// 2. INITIALIZE APP (Safe Singleton Pattern)
+// We use getApps().length to check if an app exists to avoid try/catch issues
+const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+
+// Export the app instance
+export { app };
 
 // 3. INITIALIZE SERVICES
 export const auth = getAuth(app);
@@ -39,6 +33,7 @@ try {
     localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
   });
 } catch (e) {
+  // If already initialized, just use the existing one
   firestoreDb = getExistingFirestore(app);
 }
 export const db = firestoreDb;
@@ -46,22 +41,33 @@ export const db = firestoreDb;
 // Realtime Database
 let rtdbInstance = null;
 try {
-    rtdbInstance = getDatabase(app);
+  rtdbInstance = getDatabase(app);
 } catch (error) {
-    console.warn("RTDB Init Warning:", error);
+  console.warn("RTDB Init Warning:", error);
 }
 export const rtdb = rtdbInstance;
 
-// --- STORAGE INITIALIZATION (CRITICAL FIX) ---
+// --- STORAGE INITIALIZATION ---
+// We initialize this explicitly to ensure the component is registered
 let storageInstance = null;
 try {
-  // We force initialization to see the real error if it fails
-  storageInstance = getStorage(app);
-  console.log("✅ Firebase Storage Successfully Initialized");
+    // If the bucket config is missing, this might throw, so we check first
+    if (firebaseConfig.storageBucket) {
+        storageInstance = getStorage(app);
+        console.log("✅ Firebase Storage Initialized");
+    } else {
+        console.error("❌ Storage Bucket Config Missing");
+    }
 } catch (error) {
-  // This will now print the REAL reason why it's failing
-  console.error("❌ CRITICAL: Firebase Storage Init Failed!", error);
-  console.error("Config used:", firebaseConfig);
+    console.error("❌ Firebase Storage Init Failed:", error);
+    // Fallback: Try getting storage without passing 'app' (uses default app)
+    // This sometimes fixes the "Service not available" error in specific bundles
+    try {
+        storageInstance = getStorage(); 
+        console.log("⚠️ Recovered Storage using default app instance");
+    } catch (retryError) {
+        console.error("❌ Critical Storage Failure:", retryError);
+    }
 }
 
 export const storage = storageInstance;
