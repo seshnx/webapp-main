@@ -16,34 +16,32 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-7SP53NK9FM"
 };
 
-// 2. INITIALIZE NAMED APP (The Fix)
-// We use a specific name "SeshNx-Client" to avoid conflicts with the broken [DEFAULT] app
+// 2. INITIALIZE NAMED APP
+// Using a specific name "SeshNx-Client" isolates us from any broken [DEFAULT] instances
 const APP_NAME = "SeshNx-Client";
 let appInstance;
 
 try {
-  // Try to find our specific named app
   appInstance = getApp(APP_NAME);
 } catch (e) {
-  // If not found, create it fresh
   appInstance = initializeApp(firebaseConfig, APP_NAME);
   console.log(`🚀 Initialized new Firebase App: ${APP_NAME}`);
 }
 
 export const app = appInstance;
 
-// 3. INITIALIZE SERVICES (Attached to our Named App)
+// 3. INITIALIZE SERVICES
 export const auth = getAuth(app);
 
-// Firestore
+// Firestore (Corrected Fallback - No Await)
 let firestoreDb;
 try {
     firestoreDb = initializeFirestore(app, {
         localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
     });
 } catch (e) {
-    // Fallback if already initialized
-    const { getFirestore } = await import('firebase/firestore');
+    // FIX: Just use the statically imported getFirestore directly
+    // This avoids the "Top-level await" build error
     firestoreDb = getFirestore(app);
 }
 export const db = firestoreDb;
@@ -54,8 +52,7 @@ export const rtdb = getDatabase(app);
 // Storage
 let storageInstance = null;
 try {
-    // Explicitly pass the app instance AND the bucket URL to be absolutely safe
-    // The SDK sometimes needs the gs:// prefix if the config is flaky
+    // Ensure bucket URL has gs:// prefix if needed by the SDK
     const bucketUrl = firebaseConfig.storageBucket.startsWith('gs://') 
         ? firebaseConfig.storageBucket 
         : `gs://${firebaseConfig.storageBucket}`;
