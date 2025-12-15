@@ -16,11 +16,6 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 };
 
-// Ensure databaseURL is always set
-if (!firebaseConfig.databaseURL) {
-  firebaseConfig.databaseURL = import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://seshnx-db-default-rtdb.firebaseio.com";
-}
-
 // 1. Singleton Pattern for App (Fixes HMR/Re-init issues and _checkNotDeleted error)
 // CRITICAL: Always initialize with databaseURL included
 let existingApp = null;
