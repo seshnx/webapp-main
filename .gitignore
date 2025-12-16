@@ -7,3 +7,4 @@ functions/.env
 node_modules/
 .pnp
 .pnp.js
+supabase-schema-fixed.sql
