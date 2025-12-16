@@ -10,7 +10,7 @@ import AuthWizardBackground from './AuthWizardBackground';
 
 // Assets
 import LogoLight from '../assets/SeshNx-PNG cCropped.png';
-import LogoDark from '../assets/SeshNx-PNG cCropped white text.png';
+import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 
 const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
 const publicRoles = ACCOUNT_TYPES.filter(role => !HIDDEN_ROLES.includes(role));
@@ -491,7 +491,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           <div className="relative w-full h-48 mb-6 flex justify-center shrink-0">
             <div className={`absolute transition-all duration-500 ${mode === 'signup' || mode === 'onboarding' ? 'top-0 scale-90' : 'top-8 scale-100'}`}>
               <img
-                src={darkMode ? LogoDark : LogoLight}
+                src={darkMode ? LogoWhite : LogoLight}
                 alt="SeshNx"
                 className="w-96 h-40 object-contain drop-shadow-md"
               />

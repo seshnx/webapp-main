@@ -1,58 +1,66 @@
 import React, { useState } from 'react';
 import { X, DollarSign, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { addDoc, collection, serverTimestamp, doc, updateDoc, arrayUnion } from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 export default function BidModal({ user, userData, broadcast, onClose }) {
-    const [bidRate, setBidRate] = useState(Math.floor(broadcast.offerAmount / (broadcast.duration || 1)));
+    const [bidRate, setBidRate] = useState(Math.floor((broadcast.offer_amount || broadcast.offerAmount) / (broadcast.duration || 1)));
     const [message, setMessage] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Calculate total based on rate * duration
     const totalBid = bidRate * (broadcast.duration || 1);
-    const maxBudget = broadcast.offerAmount; 
+    const maxBudget = broadcast.offer_amount || broadcast.offerAmount; 
     const isOverBudget = totalBid > maxBudget;
 
     const handleSubmit = async () => {
         if (!bidRate || !message) return alert("Please enter a rate and a message.");
         if (isOverBudget) return alert("Your bid exceeds the client's budget.");
 
+        if (!supabase) {
+            alert("Database unavailable.");
+            return;
+        }
+
         setIsSubmitting(true);
         try {
-            // FIX: Save as a standard booking request in the main collection.
+            const userId = user?.id || user?.uid;
+            
+            // Save as a standard booking request in Supabase
             // This ensures it uses existing permissions and appears in the 
             // broadcaster's "Incoming Requests" dashboard automatically.
-            const bidData = {
-                type: 'Bid', // Distinguish this from a regular 'Direct' booking
-                broadcastId: broadcast.id, // Reference the original broadcast
-                
-                // Routing: Send this TO the broadcaster
-                targetId: broadcast.senderId, 
-                targetName: broadcast.senderName,
-                
-                // Sender Info (The Pro bidding)
-                senderId: user.uid,
-                senderName: `${userData.firstName} ${userData.lastName}`,
-                
-                // Details
-                serviceType: `Bid: ${broadcast.serviceType || 'Session'}`,
-                offerAmount: totalBid,
-                ratePerHour: parseInt(bidRate),
-                message: message,
-                
-                // Metadata
-                status: 'Pending',
-                date: 'Flexible', // Bids on broadcasts usually imply flexibility
-                timestamp: serverTimestamp()
-            };
+            const { error } = await supabase
+                .from('bookings')
+                .insert({
+                    type: 'Bid', // Distinguish this from a regular 'Direct' booking
+                    broadcast_id: broadcast.id, // Reference the original broadcast
+                    
+                    // Routing: Send this TO the broadcaster
+                    target_id: broadcast.sender_id || broadcast.senderId, 
+                    target_name: broadcast.sender_name || broadcast.senderName,
+                    
+                    // Sender Info (The Pro bidding)
+                    sender_id: userId,
+                    sender_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
+                    
+                    // Details
+                    service_type: `Bid: ${broadcast.service_type || broadcast.serviceType || 'Session'}`,
+                    offer_amount: totalBid,
+                    rate_per_hour: parseInt(bidRate),
+                    message: message,
+                    
+                    // Metadata
+                    status: 'Pending',
+                    date: 'Flexible', // Bids on broadcasts usually imply flexibility
+                    timestamp: new Date().toISOString()
+                });
 
-            await addDoc(collection(db, `artifacts/${appId}/public/data/bookings`), bidData);
+            if (error) throw error;
 
             alert("Bid submitted successfully! The client has been notified.");
             onClose();
         } catch (e) {
             console.error("Error submitting bid:", e);
-            alert("Failed to submit bid.");
+            alert("Failed to submit bid: " + (e.message || "Unknown error"));
         }
         setIsSubmitting(false);
     };
