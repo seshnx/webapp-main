@@ -32,7 +32,7 @@ export default function TechBookingModal({ user, userData, target, onClose }) {
                 .from('bookings')
                 .insert({
                     sender_id: userId,
-                    sender_name: `${userData.firstName} ${userData.lastName}`,
+                    sender_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
                     target_id: target.id,
                     target_name: target.firstName ? `${target.firstName} ${target.lastName}` : target.name,
                     type: 'TechRequest',

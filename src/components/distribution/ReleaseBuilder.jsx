@@ -279,7 +279,7 @@ export default function ReleaseBuilder({ user, userData, initialData, onCancel, 
     // Initial State Template
     const [formData, setFormData] = useState(initialData || {
         title: '',
-        primaryArtist: `${userData.firstName} ${userData.lastName}`, // Default to user
+        primaryArtist: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Artist' : 'Artist', // Default to user
         type: 'single',
         genre: '',
         releaseDate: '',

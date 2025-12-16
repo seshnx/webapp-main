@@ -112,11 +112,11 @@ export default function App() {
                 
                 setUserData({
                     ...profile,
-                    firstName: profile.first_name,
-                    lastName: profile.last_name,
+                    firstName: profile.first_name || '',
+                    lastName: profile.last_name || '',
                     accountTypes: accountTypes,
                     activeProfileRole: profile.active_role || accountTypes[0],
-                    photoURL: profile.avatar_url
+                    photoURL: profile.avatar_url || null
                 });
                 
                 console.log('Profile loaded:', { 
@@ -124,11 +124,23 @@ export default function App() {
                     hasAccountTypes: profile.account_types?.length > 0,
                     accountTypes: accountTypes 
                 });
-            } else if (profileError && profileError.code !== 'PGRST116') {
-                // PGRST116 = no rows returned (user doesn't have profile yet)
-                console.error("Error fetching profile:", profileError);
-            } else if (profileError?.code === 'PGRST116') {
-                console.log('Profile not found yet - trigger should create it');
+            } else {
+                // Profile doesn't exist or error - set default userData to prevent crashes
+                console.log('Profile not found or error, setting default userData');
+                setUserData({
+                    id: userId,
+                    firstName: '',
+                    lastName: '',
+                    accountTypes: ['Fan'],
+                    activeProfileRole: 'Fan',
+                    photoURL: null,
+                    email: null,
+                    settings: {}
+                });
+                
+                if (profileError && profileError.code !== 'PGRST116') {
+                    console.error("Error fetching profile:", profileError);
+                }
             }
 
             // Fetch Wallet (optional, don't fail if missing)
@@ -210,29 +222,51 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
         console.log('Auth state changed:', event, session?.user?.id);
         const currentUser = session?.user ?? null;
-        setUser(currentUser);
-
-        if (currentUser) {
+        
+        if (currentUser && currentUser.id) {
+            setUser(currentUser);
+            // Load user data - this is critical for OAuth callbacks
             await loadUserData(currentUser.id);
             
             // If this is a SIGNED_IN event (like OAuth callback) and profile has no account_types,
-            // we might need to show onboarding
+            // set a default so components don't crash
             if (event === 'SIGNED_IN') {
                 // Check if profile needs setup
                 const { data: profile } = await supabase
                     .from('profiles')
-                    .select('account_types')
+                    .select('account_types, first_name, last_name, avatar_url, active_role')
                     .eq('id', currentUser.id)
                     .single();
                 
-                // If profile exists but has no account_types, it's a new OAuth user
+                // If profile exists but has no account_types, set default
                 if (profile && (!profile.account_types || profile.account_types.length === 0)) {
-                    console.log('New OAuth user detected - profile needs setup');
-                    // Don't redirect to onboarding automatically - let them use the app
-                    // They can complete profile later
+                    console.log('New OAuth user detected - setting default account_types');
+                    // Update profile with default Fan role
+                    await supabase
+                        .from('profiles')
+                        .update({ 
+                            account_types: ['Fan'],
+                            active_role: 'Fan',
+                            preferred_role: 'Fan'
+                        })
+                        .eq('id', currentUser.id);
+                    
+                    // Reload user data
+                    await loadUserData(currentUser.id);
+                } else if (!profile) {
+                    // Profile doesn't exist yet - set temporary userData so components don't crash
+                    setUserData({
+                        id: currentUser.id,
+                        firstName: currentUser.user_metadata?.first_name || currentUser.user_metadata?.given_name || '',
+                        lastName: currentUser.user_metadata?.last_name || currentUser.user_metadata?.family_name || '',
+                        accountTypes: ['Fan'],
+                        activeProfileRole: 'Fan',
+                        photoURL: currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture || null
+                    });
                 }
             }
         } else {
+            setUser(null);
             setUserData(null);
             setSubProfiles({});
             setTokenBalance(0);
