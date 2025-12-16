@@ -142,31 +142,105 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
   // --- ACTIONS ---
   const handleLogin = async () => {
     if (!form.email || !form.password) return setError("Please fill in all fields.");
+    if (!supabase) {
+      setError("Authentication service unavailable. Please check your configuration.");
+      return;
+    }
     setIsLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: form.email, password: form.password });
-    if (error) { setError(error.message); setIsLoading(false); }
-    // On success, App.jsx listener handles redirect
+    setError('');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ 
+        email: form.email.trim(), 
+        password: form.password 
+      });
+      if (error) {
+        console.error('Login error:', error);
+        // Provide more helpful error messages
+        if (error.message?.includes('Invalid login credentials') || error.message?.includes('Email not confirmed')) {
+          setError("Invalid email or password. Please check your credentials.");
+        } else if (error.message?.includes('Email rate limit')) {
+          setError("Too many login attempts. Please try again later.");
+        } else {
+          setError(error.message || "Failed to sign in. Please try again.");
+        }
+        setIsLoading(false);
+      } else {
+        // Success - App.jsx listener handles redirect
+        console.log('Login successful:', data.user?.id);
+      }
+    } catch (err) {
+      console.error('Unexpected login error:', err);
+      setError("An unexpected error occurred. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   const handleGoogleLogin = async () => {
+    if (!supabase) {
+      setError("Authentication service unavailable. Please check your configuration.");
+      return;
+    }
     setError(''); setIsLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google', options: { queryParams: { access_type: 'offline', prompt: 'consent' } } });
-    if (error) { setError(error.message); setIsLoading(false); }
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({ 
+        provider: 'google', 
+        options: { 
+          queryParams: { access_type: 'offline', prompt: 'consent' },
+          redirectTo: window.location.origin
+        } 
+      });
+      if (error) { 
+        console.error('Google login error:', error);
+        setError(error.message || "Failed to sign in with Google."); 
+        setIsLoading(false); 
+      }
+      // OAuth redirects, so we don't need to handle success here
+    } catch (err) {
+      console.error('Unexpected Google login error:', err);
+      setError("An unexpected error occurred. Please try again.");
+      setIsLoading(false);
+    }
   };
 
   const handleSignup = async () => {
     if (mode === 'signup' && !isPasswordValid) return setError("Password requirements not met.");
+    if (!supabase) {
+      setError("Authentication service unavailable. Please check your configuration.");
+      return;
+    }
     setIsLoading(true);
+    setError('');
     try {
       let uid = user?.id;
       // 1. Register if not already
       if (!uid) {
           const { data, error: signUpError } = await supabase.auth.signUp({
-              email: form.email, password: form.password,
-              options: { data: { first_name: form.firstName, last_name: form.lastName } }
+              email: form.email.trim(), 
+              password: form.password,
+              options: { 
+                data: { first_name: form.firstName, last_name: form.lastName },
+                emailRedirectTo: window.location.origin
+              }
           });
-          if (signUpError) throw signUpError;
-          uid = data.user.id;
+          if (signUpError) {
+            console.error('Signup error:', signUpError);
+            // Provide more helpful error messages
+            if (signUpError.message?.includes('already registered') || signUpError.message?.includes('already exists')) {
+              setError("An account with this email already exists. Please sign in instead.");
+            } else if (signUpError.message?.includes('Password')) {
+              setError("Password does not meet requirements. Please check and try again.");
+            } else {
+              setError(signUpError.message || "Failed to create account. Please try again.");
+            }
+            setIsLoading(false);
+            return;
+          }
+          uid = data.user?.id;
+          if (!uid) {
+            setError("Account created but unable to retrieve user ID. Please try signing in.");
+            setIsLoading(false);
+            return;
+          }
       }
 
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
