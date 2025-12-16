@@ -267,7 +267,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       console.log('Creating profile with roles:', finalRoles);
       
       // 2. Insert Profile
-      const { error: profileError } = await supabase.from('profiles').upsert({
+      const profileData = {
           id: uid,
           first_name: form.firstName,
           last_name: form.lastName,
@@ -277,9 +277,11 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           active_role: finalRoles[0],
           talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
           avatar_url: currentUser?.user_metadata?.avatar_url || null,
-          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-      }, {
+      };
+      
+      // Only add created_at if the field exists (some tables auto-generate it)
+      const { error: profileError } = await supabase.from('profiles').upsert(profileData, {
         onConflict: 'id'
       });
       
