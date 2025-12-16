@@ -223,7 +223,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         provider: 'google',
         options: {
           queryParams: { access_type: 'offline', prompt: 'consent' },
-          redirectTo: window.location.origin
+          redirectTo: `${window.location.origin}?intent=signup` // Add intent parameter for OAuth callback
         }
       });
 
@@ -299,23 +299,42 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
       
+      // Calculate effective display name and search terms
+      const effectiveDisplayName = form.firstName && form.lastName
+        ? `${form.firstName} ${form.lastName}`
+        : form.firstName || form.lastName || form.email.trim().split('@')[0] || 'User';
+      
+      const searchTerms = [
+        form.firstName?.toLowerCase(),
+        form.lastName?.toLowerCase(),
+        effectiveDisplayName.toLowerCase(),
+        finalRoles[0]?.toLowerCase(),
+        form.talentSubRole?.toLowerCase()
+      ].filter(Boolean);
+      
       // Update profile with roles and additional info
       // Use a simple timeout to prevent hanging
       const updateProfile = async () => {
         try {
+          const profileData = {
+            first_name: form.firstName,
+            last_name: form.lastName,
+            email: form.email.trim(),
+            zip_code: form.zip || null,
+            account_types: finalRoles,
+            active_role: finalRoles[0],
+            preferred_role: finalRoles[0],
+            talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
+            effective_display_name: effectiveDisplayName,
+            search_terms: searchTerms,
+            settings: {},
+            updated_at: new Date().toISOString()
+          };
+
+          // Try update first
           const { error: profileError } = await supabase
             .from('profiles')
-            .update({
-              first_name: form.firstName,
-              last_name: form.lastName,
-              email: form.email.trim(),
-              zip_code: form.zip || null,
-              account_types: finalRoles,
-              active_role: finalRoles[0],
-              preferred_role: finalRoles[0],
-              talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
-              updated_at: new Date().toISOString()
-            })
+            .update(profileData)
             .eq('id', userId);
 
           if (profileError) {
@@ -325,28 +344,50 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                 .from('profiles')
                 .insert({
                   id: userId,
-                  email: form.email.trim(),
-                  first_name: form.firstName,
-                  last_name: form.lastName,
-                  zip_code: form.zip || null,
-                  account_types: finalRoles,
-                  active_role: finalRoles[0],
-                  preferred_role: finalRoles[0],
-                  talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
-                  settings: {},
-                  updated_at: new Date().toISOString()
+                  ...profileData
                 });
               
               if (insertError) {
                 console.warn('Profile insert failed (trigger should handle it):', insertError.message);
+                // If insert fails, the trigger should have created it - try update again
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                const { error: retryError } = await supabase
+                  .from('profiles')
+                  .update(profileData)
+                  .eq('id', userId);
+                
+                if (retryError) {
+                  console.error('Profile retry update failed:', retryError.message);
+                } else {
+                  console.log('Profile created via retry');
+                }
               } else {
                 console.log('Profile created successfully');
               }
             } else {
-              console.warn('Profile update failed (may be due to Tracking Prevention):', profileError.message);
+              console.warn('Profile update failed:', profileError.message);
             }
           } else {
             console.log('Profile updated successfully');
+          }
+          
+          // Ensure public_profiles is synced (trigger should handle it, but verify)
+          // The trigger sync_public_profile should automatically create/update public_profiles
+          // But we can verify it exists
+          const { data: publicProfile } = await supabase
+            .from('public_profiles')
+            .select('id')
+            .eq('id', userId)
+            .single();
+          
+          if (!publicProfile) {
+            // Trigger might not have fired, manually sync
+            console.log('Public profile not found, ensuring sync...');
+            // Re-trigger by updating profile again (triggers sync)
+            await supabase
+              .from('profiles')
+              .update({ updated_at: new Date().toISOString() })
+              .eq('id', userId);
           }
         } catch (err) {
           console.warn('Profile operation error (continuing anyway):', err.message);
@@ -363,10 +404,39 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       supabase
         .from('wallets')
         .upsert({ user_id: userId, balance: 0 }, { onConflict: 'user_id' })
-        .catch(() => {}); // Ignore errors - trigger should handle it
+        .catch((err) => {
+          console.warn('Wallet upsert failed (trigger should handle it):', err.message);
+        });
+      
+      // Step 4: Create sub-profiles for selected roles (if needed)
+      // Only create sub-profiles for roles that require them (Talent, Studio, Producer, etc.)
+      const rolesNeedingSubProfiles = finalRoles.filter(role => 
+        ['Talent', 'Studio', 'Producer', 'Technician'].includes(role)
+      );
+      
+      if (rolesNeedingSubProfiles.length > 0) {
+        for (const role of rolesNeedingSubProfiles) {
+          try {
+            await supabase
+              .from('sub_profiles')
+              .upsert({
+                user_id: userId,
+                role: role,
+                data: {},
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'user_id,role' });
+          } catch (err) {
+            console.warn(`Sub-profile creation for ${role} failed:`, err.message);
+          }
+        }
+      }
 
-      // Success - redirect to home (not reload) to avoid loop
+      // Success - wait a moment for database to sync, then redirect
       console.log('✅ Signup completed successfully - redirecting...');
+      
+      // Give database triggers time to complete
+      await new Promise(resolve => setTimeout(resolve, 1500));
+      
       setIsLoading(false);
       
       // Clear form to prevent re-triggering
@@ -380,10 +450,30 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         talentSubRole: ''
       });
       
-      // Redirect to home page (not reload) to avoid onboarding loop
-      setTimeout(() => {
-        window.location.href = '/'; // Use href instead of reload
-      }, 1000);
+      // Call onSuccess callback if provided (for OAuth onboarding)
+      if (onSuccess && typeof onSuccess === 'function') {
+        onSuccess();
+      }
+      
+      // Redirect to home page
+      // For OAuth users, the session should already be active
+      // For email/password signup, we need to wait for email confirmation or auto-login
+      if (mode === 'onboarding') {
+        // OAuth user - session is active, just redirect
+        window.location.href = '/';
+      } else {
+        // Email/password signup - may need email confirmation
+        // Check if user is already logged in
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && session.user) {
+          window.location.href = '/';
+        } else {
+          // Email confirmation required
+          setError('');
+          setMode('login');
+          alert('Account created! Please check your email to confirm your account, then sign in.');
+        }
+      }
 
     } catch (err) {
       console.error('Signup error:', err);
@@ -719,9 +809,9 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                   <button
                     className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition"
                     onClick={handleSignup}
-                    disabled={isLoading || form.roles.length === 0}
+                    disabled={isLoading || form.roles.length === 0 || (mode === 'signup' && !isPasswordValid)}
                   >
-                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
+                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : mode === 'onboarding' ? "Complete Setup" : "Create Account"}
                   </button>
                   <button
                     className="w-full text-gray-400 text-xs hover:text-gray-600 dark:hover:text-gray-300"
