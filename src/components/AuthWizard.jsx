@@ -265,8 +265,14 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       // 3. Init Wallet
       await supabase.from('wallets').insert([{ user_id: uid, balance: 0 }]).catch(()=>{});
 
-      if (onSuccess) onSuccess(); 
-    } catch (e) { setError(e.message); setIsLoading(false); }
+      // Success - reload the page to trigger auth state change
+      console.log('Signup successful, reloading...');
+      window.location.reload();
+    } catch (e) { 
+      console.error('Signup error:', e);
+      setError(e.message || 'Failed to complete setup. Please try again.'); 
+      setIsLoading(false); 
+    }
   };
 
   const handleForgotPassword = async () => {
@@ -372,11 +378,20 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                                     <div key={role} onClick={() => { 
                                         const newRoles = form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role]; 
                                         setForm({...form, roles: newRoles});
-                                    }} className={`p-3 border-2 rounded-xl cursor-pointer text-center font-bold text-sm ${form.roles.includes(role) ? 'border-brand-blue bg-blue-50 text-brand-blue' : 'border-gray-100'}`}>{role}</div>
+                                    }} className={`p-3 border-2 rounded-xl cursor-pointer text-center font-bold text-sm transition ${form.roles.includes(role) ? 'border-brand-blue bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:border-blue-500' : 'border-gray-100 dark:border-gray-700 hover:border-gray-300'}`}>{role}</div>
                                 ))}
                             </div>
-                            <button className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold" onClick={handleSignup} disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : "Complete Setup"}</button>
-                            <button className="w-full text-gray-400 text-xs" onClick={()=>setStep(2)}>Back</button>
+                            {form.roles.length === 0 && (
+                                <p className="text-xs text-red-500 dark:text-red-400 text-center">Please select at least one role to continue</p>
+                            )}
+                            <button 
+                                className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition" 
+                                onClick={handleSignup} 
+                                disabled={isLoading || form.roles.length === 0}
+                            >
+                                {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
+                            </button>
+                            <button className="w-full text-gray-400 text-xs hover:text-gray-600 dark:hover:text-gray-300" onClick={()=>setStep(2)}>Back</button>
                         </div>
                     )}
                 </div>
