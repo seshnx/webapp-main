@@ -5,8 +5,7 @@ import {
     Activity, Settings, LogOut, ArrowLeft, LayoutDashboard,
     BookOpen, Target
 } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, isGlobalAdmin }) {
     const [isMobile, setIsMobile] = useState(false);
@@ -88,7 +87,9 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
                         <p className="text-xs font-bold dark:text-white truncate">EDU Admin</p>
                         <p className="text-[10px] text-gray-500 truncate">School Management</p>
                     </div>
-                    <button onClick={() => signOut(auth)} className="text-gray-400 hover:text-red-500">
+                    <button onClick={async () => {
+                        if (supabase) await supabase.auth.signOut();
+                    }} className="text-gray-400 hover:text-red-500">
                         <LogOut size={16}/>
                     </button>
                 </div>

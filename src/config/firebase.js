@@ -1,13 +1,11 @@
 // Legacy Firebase config shim.
 //
 // This project has been migrated off Firebase. These exports exist only so older
-// components can continue to function while using Supabase-backed adapters.
-
-import { auth as supaAuth } from '../adapters/firebase/auth';
+// components can continue to function. Authentication should use Supabase directly.
 
 export const appId = import.meta.env.VITE_APP_ID || 'seshnx-70c04';
 
-// Placeholder objects. The adapters ignore these but callers still import them.
+// Placeholder objects for legacy compatibility
 export const app = { id: appId };
 export const db = { __type: 'supabase-firestore-compat' };
 export const rtdb = null;
@@ -16,7 +14,9 @@ export const storage = {
   bucket: import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'public',
 };
 
-export const auth = supaAuth;
+// Auth is no longer exported - use Supabase directly via supabase.auth
+// This prevents adapter dependencies and ensures direct Supabase usage
+export const auth = null;
 
 export const getPaths = (uid) => {
   // When called without uid, return shared constants.

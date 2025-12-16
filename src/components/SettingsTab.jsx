@@ -1,19 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { doc, setDoc, updateDoc, getDoc } from 'firebase/firestore';
-import { 
-    deleteUser, 
-    EmailAuthProvider, 
-    reauthenticateWithCredential, 
-    updatePassword, 
-    updateEmail 
-} from 'firebase/auth';
-// import { getFunctions, httpsCallable } from 'firebase/functions';
 import { 
     X, Loader2, Settings, Bell, Shield, Moon, Users, RefreshCw, Star, 
     Filter, Lock, AlertTriangle, Key, Mail, CheckCircle, Eye, MapPin, 
     MessageSquare, UserX, Download
 } from 'lucide-react';
-import { db, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { ACCOUNT_TYPES } from '../config/constants';
 
 // Roles that should never be shown in account settings (managed through other systems)
@@ -77,26 +68,25 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     };
 
     const updateAccountTypes = async () => {
-        if (roles.length === 0) return alert("You must have at least one role.");
+        if (roles.length === 0 || !supabase) return alert("You must have at least one role.");
         setSavingRoles(true);
         try {
-            await updateDoc(doc(db, getPaths(user.uid).userProfile), { 
-                accountTypes: roles,
-                preferredRole: preferredRole,
-                activeProfileRole: activeRole
-            });
+            await supabase
+                .from('profiles')
+                .update({ 
+                    account_types: roles,
+                    preferred_role: preferredRole,
+                    active_role: activeRole,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', user.id);
             
             if (activeRole !== userData.activeProfileRole && onRoleSwitch) {
                 onRoleSwitch(activeRole);
             }
 
-            for (const role of roles) {
-                const subRef = doc(db, getPaths(user.uid).userSubProfile(role));
-                const snap = await getDoc(subRef);
-                if (!snap.exists()) {
-                    await setDoc(subRef, { useRealName: true, useGlobalName: true });
-                }
-            }
+            // Note: Sub-profiles can be handled separately if needed
+            // For now, we'll just update the main profile
             alert("Roles & Preferences updated!");
         } catch (e) {
             console.error(e);
@@ -117,22 +107,44 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     };
 
     const handleSecurityUpdate = async () => {
-        if (!securityForm.currentPassword) return alert("Current password is required to verify your identity.");
+        if (!securityForm.currentPassword || !supabase) {
+            if (!securityForm.currentPassword) alert("Current password is required to verify your identity.");
+            return;
+        }
         setIsSecurityLoading(true);
 
         try {
-            const credential = EmailAuthProvider.credential(user.email, securityForm.currentPassword);
-            await reauthenticateWithCredential(user, credential);
+            // Verify current password by attempting to sign in
+            const { error: verifyError } = await supabase.auth.signInWithPassword({
+                email: user.email,
+                password: securityForm.currentPassword
+            });
+            
+            if (verifyError) {
+                throw new Error("Incorrect current password.");
+            }
 
             if (securityAction === 'email') {
                 if (!securityForm.newEmail) throw new Error("New email address is required.");
-                await updateEmail(user, securityForm.newEmail);
-                await updateDoc(doc(db, getPaths(user.uid).userProfile), { email: securityForm.newEmail });
+                const { error: emailError } = await supabase.auth.updateUser({ 
+                    email: securityForm.newEmail 
+                });
+                if (emailError) throw emailError;
+                
+                // Update profile email
+                await supabase
+                    .from('profiles')
+                    .update({ email: securityForm.newEmail, updated_at: new Date().toISOString() })
+                    .eq('id', user.id);
+                
                 alert("Email updated successfully.");
             } 
             else if (securityAction === 'password') {
                 if (securityForm.newPassword.length < 6) throw new Error("Password must be at least 6 characters.");
-                await updatePassword(user, securityForm.newPassword);
+                const { error: passwordError } = await supabase.auth.updateUser({ 
+                    password: securityForm.newPassword 
+                });
+                if (passwordError) throw passwordError;
                 alert("Password updated successfully.");
             }
 
@@ -141,9 +153,13 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
 
         } catch (e) {
             console.error("Security Update Error:", e);
-            if (e.code === 'auth/wrong-password') alert("Incorrect current password.");
-            else if (e.code === 'auth/email-already-in-use') alert("This email is already associated with another account.");
-            else alert("Failed to update: " + e.message);
+            if (e.message?.includes('Incorrect current password') || e.message?.includes('Invalid')) {
+                alert("Incorrect current password.");
+            } else if (e.message?.includes('already registered') || e.message?.includes('already in use')) {
+                alert("This email is already associated with another account.");
+            } else {
+                alert("Failed to update: " + e.message);
+            }
         }
         setIsSecurityLoading(false);
     };
@@ -180,17 +196,21 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
 
     // --- DELETION LOGIC ---
     const handleDeleteAccount = async () => {
-        if (deleteConfirm !== 'DELETE') return;
+        if (deleteConfirm !== 'DELETE' || !supabase) return;
         setIsDeleting(true);
         try {
-            await deleteUser(user);
+            // Supabase requires admin access to delete users
+            // For now, we'll show a message that this requires admin assistance
+            // In production, you'd call a backend API endpoint with admin privileges
+            alert("Account deletion requires admin assistance. Please contact support to delete your account.");
+            setIsDeleting(false);
+            setShowDeleteModal(false);
+            
+            // TODO: Implement backend API endpoint for account deletion
+            // Example: await fetch('/api/admin/delete-user', { method: 'POST', body: JSON.stringify({ userId: user.id }) });
         } catch (error) {
             console.error("Deletion Error:", error);
-            if (error.code === 'auth/requires-recent-login') {
-                alert("For security, please log out and log back in before deleting your account.");
-            } else {
-                alert("Failed to delete account: " + error.message);
-            }
+            alert("Failed to delete account: " + error.message);
             setIsDeleting(false);
         }
     };

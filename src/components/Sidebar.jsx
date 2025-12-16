@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, GraduationCap, ShieldCheck, Wrench, Briefcase } from 'lucide-react';
-import { signOut } from 'firebase/auth';
-import { auth } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { useSchool } from '../contexts/SchoolContext';
 
 export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) {
@@ -60,7 +59,9 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
     ['Studio', 'Label', 'Agent', 'Talent', 'Producer', 'Engineer'].includes(t)
   );
 
-  const onLogout = handleLogout || (() => signOut(auth));
+  const onLogout = handleLogout || (async () => {
+    if (supabase) await supabase.auth.signOut();
+  });
 
   const handleNavigation = (id) => {
     setActiveTab(id);
