@@ -86,63 +86,83 @@ export default function App() {
         return;
     }
 
-    // 1. Get initial session
-    // 1. Check initial session
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
+    // Helper function to load user data
+    const loadUserData = async (userId) => {
+        if (!userId) {
+            setUserData(null);
+            setSubProfiles({});
+            setTokenBalance(0);
+            return;
+        }
+
+        try {
+            // Fetch Profile from 'profiles' table
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+            
+            if (profile && !profileError) {
+                // Normalize data structure for the app
+                setUserData({
+                    ...profile,
+                    firstName: profile.first_name,
+                    lastName: profile.last_name,
+                    accountTypes: profile.account_types || ['Fan'],
+                    activeProfileRole: profile.active_role || 'Fan',
+                    photoURL: profile.avatar_url
+                });
+            } else if (profileError && profileError.code !== 'PGRST116') {
+                // PGRST116 = no rows returned (user doesn't have profile yet)
+                console.error("Error fetching profile:", profileError);
+            }
+
+            // Fetch Wallet (optional, don't fail if missing)
+            const { data: wallet } = await supabase
+                .from('wallets')
+                .select('balance')
+                .eq('user_id', userId)
+                .single();
+            
+            if (wallet) setTokenBalance(wallet.balance);
+        } catch (err) {
+            console.error("Error fetching user data:", err);
+        }
+    };
+
+    // 1. Get initial session and load data immediately
+    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
         if (error) {
             console.error("Error getting session:", error);
             setLoading(false);
             return;
         }
-        if (!session) {
-            setLoading(false);
+        
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        
+        if (currentUser) {
+            await loadUserData(currentUser.id);
+        } else {
+            setUserData(null);
+            setSubProfiles({});
+            setTokenBalance(0);
         }
-        // The onAuthStateChange will fire and handle the rest
+        
+        setLoading(false);
     }).catch((err) => {
         console.error("Session check failed:", err);
         setLoading(false);
     });
 
-    // 2. Listen for auth changes
+    // 2. Listen for auth changes (for subsequent logins/logouts)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
         const currentUser = session?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
-            try {
-                // Fetch Profile from 'profiles' table
-                const { data: profile, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', currentUser.id)
-                    .single();
-                
-                if (profile && !profileError) {
-                    // Normalize data structure for the app
-                    setUserData({
-                        ...profile,
-                        firstName: profile.first_name,
-                        lastName: profile.last_name,
-                        accountTypes: profile.account_types || ['Fan'],
-                        activeProfileRole: profile.active_role || 'Fan',
-                        photoURL: profile.avatar_url
-                    });
-                } else if (profileError && profileError.code !== 'PGRST116') {
-                    // PGRST116 = no rows returned (user doesn't have profile yet)
-                    console.error("Error fetching profile:", profileError);
-                }
-
-                // Fetch Wallet (optional, don't fail if missing)
-                const { data: wallet } = await supabase
-                    .from('wallets')
-                    .select('balance')
-                    .eq('user_id', currentUser.id)
-                    .single();
-                
-                if (wallet) setTokenBalance(wallet.balance);
-            } catch (err) {
-                console.error("Error fetching user data:", err);
-            }
+            await loadUserData(currentUser.id);
         } else {
             setUserData(null);
             setSubProfiles({});
@@ -151,7 +171,16 @@ export default function App() {
         setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    // 3. Safety timeout - ensure loading always resolves
+    const timeoutId = setTimeout(() => {
+        console.warn("Loading timeout - forcing loading to false");
+        setLoading(false);
+    }, 10000); // 10 second timeout
+
+    return () => {
+        subscription.unsubscribe();
+        clearTimeout(timeoutId);
+    };
   }, []);
 
   const handleLogout = useCallback(async () => {
