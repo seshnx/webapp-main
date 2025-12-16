@@ -132,17 +132,14 @@ export default function App() {
     };
 
     // 1. Get initial session and load data immediately
-    // Use Promise.race to timeout after 5 seconds
+    // Use Promise.race to timeout after 3 seconds (reduced from 5)
     const sessionPromise = supabase.auth.getSession();
-    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 5000));
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 3000));
     
     Promise.race([sessionPromise, timeoutPromise]).then(async (result) => {
         if (result.timeout) {
-            console.warn("Session check timed out - clearing any invalid session");
-            // Clear any potentially invalid session
-            if (supabase) {
-                await supabase.auth.signOut().catch(() => {});
-            }
+            console.warn("Session check timed out - this may be due to Tracking Prevention blocking storage");
+            // Don't try to signOut if storage is blocked - it will fail
             setUser(null);
             setUserData(null);
             setSubProfiles({});
@@ -155,6 +152,10 @@ export default function App() {
         
         if (error) {
             console.error("Error getting session:", error);
+            // If error is related to storage, it's likely Tracking Prevention
+            if (error.message?.includes('storage') || error.message?.includes('localStorage')) {
+                console.warn("Storage access blocked - session cannot be persisted");
+            }
             setUser(null);
             setUserData(null);
             setSubProfiles({});
@@ -167,25 +168,9 @@ export default function App() {
         const currentUser = session?.user ?? null;
         
         if (currentUser && currentUser.id) {
-            // Verify the user actually exists by checking if we can access their profile
-            try {
-                const { data: profileCheck } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .eq('id', currentUser.id)
-                    .single()
-                    .timeout(3000); // 3 second timeout
-                
-                // If profile check fails or times out, the user might not be valid
-                // But we'll still try to load data - profile might just not exist yet
-                setUser(currentUser);
-                await loadUserData(currentUser.id);
-            } catch (profileError) {
-                // Profile doesn't exist or check failed - still set user but mark as needing onboarding
-                console.log("Profile check:", profileError);
-                setUser(currentUser);
-                setUserData(null);
-            }
+            setUser(currentUser);
+            // Load user data without additional timeout - if it fails, user just won't have profile yet
+            await loadUserData(currentUser.id);
         } else {
             // No valid session
             setUser(null);
@@ -197,6 +182,10 @@ export default function App() {
         setLoading(false);
     }).catch((err) => {
         console.error("Session check failed:", err);
+        // Check if it's a storage-related error
+        if (err.message?.includes('storage') || err.message?.includes('localStorage') || err.name === 'QuotaExceededError') {
+            console.warn("Storage access blocked - continuing without session persistence");
+        }
         setUser(null);
         setUserData(null);
         setSubProfiles({});
@@ -219,13 +208,13 @@ export default function App() {
         setLoading(false);
     });
 
-    // 3. Safety timeout - ensure loading always resolves (reduced from 10s to 5s)
+    // 3. Safety timeout - ensure loading always resolves (reduced to 3s to match session timeout)
     const timeoutId = setTimeout(() => {
         console.warn("Loading timeout - forcing loading to false");
         setUser(null);
         setUserData(null);
         setLoading(false);
-    }, 5000); // 5 second timeout
+    }, 3000); // 3 second timeout
 
     return () => {
         subscription.unsubscribe();

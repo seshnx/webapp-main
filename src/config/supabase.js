@@ -24,15 +24,33 @@ if (!supabaseUrl || !supabaseAnonKey) {
   });
 }
 
+// Check if storage is available (not blocked by tracking prevention)
+const isStorageAvailable = () => {
+  try {
+    const test = '__storage_test__';
+    localStorage.setItem(test, test);
+    localStorage.removeItem(test);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        persistSession: true,
-        autoRefreshToken: true,
+        persistSession: isStorageAvailable(), // Only persist if storage is available
+        autoRefreshToken: isStorageAvailable(),
         detectSessionInUrl: true,
         flowType: 'pkce' // Use PKCE flow for better security
       }
     })
   : null;
+
+// Warn if storage is blocked
+if (supabase && !isStorageAvailable()) {
+  console.warn('⚠️ Browser storage is blocked (likely due to Tracking Prevention). Session persistence is disabled.');
+  console.warn('   Users will need to sign in on each page refresh.');
+}
 
 export const isSupabaseAvailable = () => !!supabase;
