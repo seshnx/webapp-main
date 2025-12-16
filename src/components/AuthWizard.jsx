@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../config/supabase';
-import { Loader2, AlertCircle, ArrowLeft, Check, Sun, Moon, MapPin, User, Crosshair, School, Search, Mail, Key, ShieldCheck, X } from 'lucide-react';
+import { Loader2, AlertCircle, Check, Sun, Moon, MapPin, Crosshair, X } from 'lucide-react';
 import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ACCOUNT_TYPES, TALENT_SUBROLES } from '../config/constants';
-import { fetchZipLocation } from '../utils/geocode'; 
+import { fetchZipLocation } from '../utils/geocode';
 import LegalDocs from './LegalDocs';
 import AuthWizardBackground from './AuthWizardBackground';
 
@@ -13,6 +13,7 @@ import LogoLight from '../assets/SeshNx-PNG cCropped.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped white text.png';
 
 const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
+const publicRoles = ACCOUNT_TYPES.filter(role => !HIDDEN_ROLES.includes(role));
 
 // Map Components
 function RecenterAutomatically({ lat, lng }) {
@@ -23,8 +24,10 @@ function RecenterAutomatically({ lat, lng }) {
 
 function ZipUserMap({ zip }) {
   const [mapState, setMapState] = useState({
-    center: [34.0522, -118.2437], userCount: 0, densityColor: 'gray',
-    locationName: '', regionLabel: '', isValid: false, loading: false
+    center: [34.0522, -118.2437],
+    locationName: '',
+    isValid: false,
+    loading: false
   });
 
   useEffect(() => {
@@ -34,264 +37,247 @@ function ZipUserMap({ zip }) {
       try {
         const location = await fetchZipLocation(zip);
         if (location) {
-          // Mock data until geo-backend is migrated
           setMapState({
             center: [location.lat, location.lng],
-            userCount: 50, 
-            densityColor: '#0066ff',
             locationName: location.cityState,
-            regionLabel: 'Active Area',
             isValid: true,
             loading: false
           });
         } else {
-           setMapState(prev => ({ ...prev, loading: false }));
+          setMapState(prev => ({ ...prev, loading: false }));
         }
       } catch (e) {
         setMapState(prev => ({ ...prev, loading: false }));
       }
     };
-    const timer = setTimeout(loadData, 800); 
+    const timer = setTimeout(loadData, 800);
     return () => clearTimeout(timer);
   }, [zip]);
 
   return (
     <div className="w-full h-36 rounded-xl overflow-hidden relative border dark:border-gray-600 shadow-inner bg-gray-100 dark:bg-[#1f2128]">
-        <MapContainer center={mapState.center} zoom={11} scrollWheelZoom={false} zoomControl={false} className="h-full w-full" style={{ background: 'transparent' }}>
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
-            <RecenterAutomatically lat={mapState.center[0]} lng={mapState.center[1]} />
-            {mapState.isValid && (
-                <Circle center={mapState.center} radius={4000} pathOptions={{ color: mapState.densityColor, fillColor: mapState.densityColor, fillOpacity: 0.15, stroke: false }} />
-            )}
-        </MapContainer>
+      <MapContainer center={mapState.center} zoom={11} scrollWheelZoom={false} zoomControl={false} className="h-full w-full" style={{ background: 'transparent' }}>
+        <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
+        <RecenterAutomatically lat={mapState.center[0]} lng={mapState.center[1]} />
         {mapState.isValid && (
-             <div className="absolute bottom-3 right-3 bg-white/95 dark:bg-black/85 backdrop-blur-md p-2 rounded-lg shadow-lg z-[400] text-xs font-bold border dark:border-gray-700 dark:text-white">
-                {mapState.locationName}
-             </div>
+          <Circle center={mapState.center} radius={4000} pathOptions={{ color: '#0066ff', fillColor: '#0066ff', fillOpacity: 0.15, stroke: false }} />
         )}
+      </MapContainer>
+      {mapState.isValid && (
+        <div className="absolute bottom-3 right-3 bg-white/95 dark:bg-black/85 backdrop-blur-md p-2 rounded-lg shadow-lg z-[400] text-xs font-bold border dark:border-gray-700 dark:text-white">
+          {mapState.locationName}
+        </div>
+      )}
     </div>
   );
 }
 
 export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isNewUser }) {
+  const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'forgot' | 'onboarding'
   const [step, setStep] = useState(1);
-  const [mode, setMode] = useState('login');
-  const [backgroundImagesLoaded, setBackgroundImagesLoaded] = useState(false); 
   const [isLoading, setIsLoading] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '', firstName: '', lastName: '', zip: '', roles: [], talentSubRole: '' });
   const [error, setError] = useState('');
   const [resetSent, setResetSent] = useState(false);
-  const [cardHeight, setCardHeight] = useState('auto');
+  const [backgroundImagesLoaded, setBackgroundImagesLoaded] = useState(false);
   const [locating, setLocating] = useState(false);
   const [showLegalOverlay, setShowLegalOverlay] = useState(false);
   const contentRef = useRef(null);
+  const [cardHeight, setCardHeight] = useState('auto');
 
-  // Student State
-  const [isStudent, setIsStudent] = useState(false);
-  const [schoolQuery, setSchoolQuery] = useState('');
-  const [schoolResults, setSchoolResults] = useState([]);
-  const [selectedSchool, setSelectedSchool] = useState(null);
-  const [studentIdInput, setStudentIdInput] = useState('');
-  const [studentEmailInput, setStudentEmailInput] = useState('');
-  const [authCode, setAuthCode] = useState('');
-  const [sentCode, setSentCode] = useState(null);
+  const [form, setForm] = useState({
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+    zip: '',
+    roles: [],
+    talentSubRole: ''
+  });
 
-  const publicRoles = ACCOUNT_TYPES.filter(role => !HIDDEN_ROLES.includes(role));
-  const getHeaderText = () => mode === 'signup' ? "Create Account" : mode === 'forgot' ? "Recovery" : mode === 'onboarding' ? "Finalize Setup" : null;
+  const [passwordValidations, setPasswordValidations] = useState({
+    hasUpper: false,
+    hasLower: false,
+    hasNumber: false,
+    isLength: false
+  });
 
+  // Initialize mode based on user state
   useEffect(() => {
-    // Only show onboarding if we have a valid user with an ID
-    // Check both user and isNewUser, but ensure user actually exists
     if ((user && user.id) || isNewUser) {
-        setMode('onboarding');
-        setStep(1); 
-        const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
-        const names = fullName.split(' ');
-        setForm(prev => ({
-            ...prev,
-            email: user?.email || '',
-            firstName: names[0] || '',
-            lastName: names.slice(1).join(' ') || ''
-        }));
+      setMode('onboarding');
+      setStep(1);
+      const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
+      const names = fullName.split(' ');
+      setForm(prev => ({
+        ...prev,
+        email: user?.email || '',
+        firstName: names[0] || '',
+        lastName: names.slice(1).join(' ') || ''
+      }));
     } else {
-        setMode('login');
-        setStep(1);
+      setMode('login');
+      setStep(1);
     }
   }, [user, isNewUser]);
 
-  const [passwordValidations, setPasswordValidations] = useState({ hasUpper: false, hasLower: false, hasNumber: false, isLength: false });
+  // Password validation
   useEffect(() => {
-      const p = form.password;
-      setPasswordValidations({ hasUpper: /[A-Z]/.test(p), hasLower: /[a-z]/.test(p), hasNumber: /[0-9]/.test(p), isLength: p.length >= 6 });
+    const p = form.password;
+    setPasswordValidations({
+      hasUpper: /[A-Z]/.test(p),
+      hasLower: /[a-z]/.test(p),
+      hasNumber: /[0-9]/.test(p),
+      isLength: p.length >= 6
+    });
   }, [form.password]);
+
   const isPasswordValid = Object.values(passwordValidations).every(Boolean);
 
-  // Resize Observer
+  // Resize observer for card height
   useEffect(() => {
     if (!contentRef.current) return;
     const resizeObserver = new ResizeObserver(() => {
       if (contentRef.current) {
-          const h = contentRef.current.scrollHeight + 80;
-          if (h > 200) setCardHeight(`${h}px`); 
+        const h = contentRef.current.scrollHeight + 80;
+        if (h > 200) setCardHeight(`${h}px`);
       }
     });
     resizeObserver.observe(contentRef.current);
     return () => resizeObserver.disconnect();
-  }, [step, mode, error, resetSent, form.zip, isStudent, schoolResults, sentCode, form.roles]);
+  }, [step, mode, error, resetSent, form.zip, form.roles]);
 
   useEffect(() => { setError(''); }, [step]);
 
-  // --- ACTIONS ---
+  // === AUTHENTICATION HANDLERS ===
+
   const handleLogin = async () => {
-    if (!form.email || !form.password) return setError("Please fill in all fields.");
-    if (!supabase) {
-      setError("Authentication service unavailable. Please check your configuration.");
+    if (!form.email || !form.password) {
+      setError("Please fill in all fields.");
       return;
     }
+    if (!supabase) {
+      setError("Authentication service unavailable.");
+      return;
+    }
+
     setIsLoading(true);
     setError('');
+
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({ 
-        email: form.email.trim(), 
-        password: form.password 
+      const { error: loginError } = await supabase.auth.signInWithPassword({
+        email: form.email.trim(),
+        password: form.password
       });
-      if (error) {
-        console.error('Login error:', error);
-        // Provide more helpful error messages
-        if (error.message?.includes('Invalid login credentials') || error.message?.includes('Email not confirmed')) {
-          setError("Invalid email or password. Please check your credentials.");
-        } else if (error.message?.includes('Email rate limit')) {
-          setError("Too many login attempts. Please try again later.");
+
+      if (loginError) {
+        if (loginError.message?.includes('Invalid login credentials') || loginError.message?.includes('Email not confirmed')) {
+          setError("Invalid email or password.");
         } else {
-          setError(error.message || "Failed to sign in. Please try again.");
+          setError(loginError.message || "Failed to sign in.");
         }
         setIsLoading(false);
-      } else {
-        // Success - App.jsx listener handles redirect
-        console.log('Login successful:', data.user?.id);
       }
+      // Success - App.jsx handles redirect
     } catch (err) {
-      console.error('Unexpected login error:', err);
-      setError("An unexpected error occurred. Please try again.");
+      console.error('Login error:', err);
+      setError("An unexpected error occurred.");
       setIsLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
     if (!supabase) {
-      setError("Authentication service unavailable. Please check your configuration.");
+      setError("Authentication service unavailable.");
       return;
     }
-    setError(''); setIsLoading(true);
+
+    setError('');
+    setIsLoading(true);
+
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({ 
-        provider: 'google', 
-        options: { 
+      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
           queryParams: { access_type: 'offline', prompt: 'consent' },
           redirectTo: window.location.origin
-        } 
+        }
       });
-      if (error) { 
-        console.error('Google login error:', error);
-        setError(error.message || "Failed to sign in with Google."); 
-        setIsLoading(false); 
+
+      if (oauthError) {
+        setError(oauthError.message || "Failed to sign in with Google.");
+        setIsLoading(false);
       }
-      // OAuth redirects, so we don't need to handle success here
+      // OAuth redirects - no need to handle success
     } catch (err) {
-      console.error('Unexpected Google login error:', err);
-      setError("An unexpected error occurred. Please try again.");
+      console.error('Google login error:', err);
+      setError("An unexpected error occurred.");
       setIsLoading(false);
     }
   };
 
   const handleSignup = async () => {
+    if (!supabase) {
+      setError("Authentication service unavailable.");
+      return;
+    }
+
     if (mode === 'signup' && !isPasswordValid) {
       setError("Password requirements not met.");
       return;
     }
-    if (!supabase) {
-      setError("Authentication service unavailable. Please check your configuration.");
-      return;
-    }
+
     if (form.roles.length === 0) {
       setError("Please select at least one role.");
       return;
     }
-    
+
     setIsLoading(true);
     setError('');
-    
-    // Set a timeout to prevent infinite loading (increased to 20 seconds)
-    const signupTimeout = setTimeout(() => {
-      console.warn('⚠️ Signup process taking longer than expected, but account should be created. Reloading...');
-      setIsLoading(false);
-      // Even if timeout, try to reload - the account should exist
-      setTimeout(() => {
-        window.location.reload();
-      }, 1000);
-    }, 20000); // 20 second timeout (enough time for all operations even with delays)
-    
+
     try {
-      let uid = user?.id;
-      let currentUser = user;
-      
-      // 1. Register if not already
-      if (!uid) {
-          console.log('Creating new user account...');
-          const signUpPromise = supabase.auth.signUp({
-              email: form.email.trim(), 
-              password: form.password,
-              options: { 
-                data: { first_name: form.firstName, last_name: form.lastName },
-                emailRedirectTo: window.location.origin
-              }
-          });
-          
-          // Add timeout to signup
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Signup request timed out')), 8000)
-          );
-          
-          const { data, error: signUpError } = await Promise.race([signUpPromise, timeoutPromise]);
-          
-          if (signUpError) {
-            clearTimeout(signupTimeout);
-            console.error('Signup error:', signUpError);
-            // Provide more helpful error messages
-            if (signUpError.message?.includes('already registered') || signUpError.message?.includes('already exists')) {
-              setError("An account with this email already exists. Please sign in instead.");
-            } else if (signUpError.message?.includes('Password')) {
-              setError("Password does not meet requirements. Please check and try again.");
-            } else {
-              setError(signUpError.message || "Failed to create account. Please try again.");
-            }
-            setIsLoading(false);
-            return;
+      let userId = user?.id;
+
+      // Step 1: Create user account if needed
+      if (!userId) {
+        const { data: signupData, error: signupError } = await supabase.auth.signUp({
+          email: form.email.trim(),
+          password: form.password,
+          options: {
+            data: {
+              first_name: form.firstName,
+              last_name: form.lastName
+            },
+            emailRedirectTo: window.location.origin
           }
-          
-          uid = data?.user?.id;
-          currentUser = data?.user;
-          
-          if (!uid) {
-            clearTimeout(signupTimeout);
-            setError("Account created but unable to retrieve user ID. Please try signing in.");
-            setIsLoading(false);
-            return;
+        });
+
+        if (signupError) {
+          if (signupError.message?.includes('already registered') || signupError.message?.includes('already exists')) {
+            setError("An account with this email already exists. Please sign in instead.");
+          } else {
+            setError(signupError.message || "Failed to create account.");
           }
-          
-          console.log('User account created:', uid);
+          setIsLoading(false);
+          return;
+        }
+
+        userId = signupData?.user?.id;
+        if (!userId) {
+          setError("Account created but unable to retrieve user ID. Please try signing in.");
+          setIsLoading(false);
+          return;
+        }
       }
 
+      // Step 2: Wait for trigger to create profile, then update it
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
-      console.log('Updating profile with roles:', finalRoles);
       
-      // 2. Update Profile (trigger should have created it automatically)
-      // The handle_new_user() trigger creates a basic profile, we just need to update it with roles
-      // Due to Tracking Prevention, operations may timeout - we'll try but not fail if they do
-      console.log('Waiting for trigger to create profile...');
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for trigger
-      
-      const profileUpdateData = {
+      // Update profile with roles and additional info
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
           first_name: form.firstName,
           last_name: form.lastName,
           email: form.email.trim(),
@@ -300,271 +286,455 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           active_role: finalRoles[0],
           preferred_role: finalRoles[0],
           talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
-          avatar_url: currentUser?.user_metadata?.avatar_url || null,
-          updated_at: new Date().toISOString(),
-      };
-      
-      // Try to update profile with a shorter timeout
-      // If it fails, we'll continue anyway since the trigger created the basic profile
-      console.log('Updating profile with account data...');
-      let profileUpdated = false;
-      
-      try {
-        const updatePromise = supabase
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (profileError && profileError.code !== 'PGRST116') {
+        // PGRST116 = no rows (profile doesn't exist yet)
+        console.warn('Profile update warning:', profileError);
+        // Try to insert instead
+        const { error: insertError } = await supabase
           .from('profiles')
-          .update(profileUpdateData)
-          .eq('id', uid);
-        
-        const updateTimeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Profile update timed out')), 4000)
-        );
-        
-        const { error: updateError } = await Promise.race([updatePromise, updateTimeout]);
-        
-        if (updateError) {
-          // If update fails (profile doesn't exist or RLS issue), try insert
-          if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows')) {
-            console.log('Profile not found, trying to create...');
-            const insertPromise = supabase
-              .from('profiles')
-              .insert({
-                id: uid,
-                ...profileUpdateData
-              });
-            
-            const insertTimeout = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Profile creation timed out')), 4000)
-            );
-            
-            const { error: insertError } = await Promise.race([insertPromise, insertTimeout]);
-            
-            if (!insertError) {
-              console.log('Profile created successfully');
-              profileUpdated = true;
-            } else {
-              console.warn('Profile insert also failed:', insertError.message);
-            }
-          } else {
-            console.warn('Profile update failed:', updateError.message);
-          }
-        } else {
-          console.log('Profile updated successfully');
-          profileUpdated = true;
+          .insert({
+            id: userId,
+            email: form.email.trim(),
+            first_name: form.firstName,
+            last_name: form.lastName,
+            zip_code: form.zip || null,
+            account_types: finalRoles,
+            active_role: finalRoles[0],
+            preferred_role: finalRoles[0],
+            talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
+            settings: {},
+            updated_at: new Date().toISOString()
+          });
+
+        if (insertError) {
+          console.warn('Profile insert also failed:', insertError);
+          // Continue anyway - trigger should have created it
         }
-      } catch (profileErr) {
-        console.warn('Profile operation error (continuing anyway):', profileErr.message);
-      }
-      
-      // If profile update failed, log a warning but continue
-      // The trigger should have created a basic profile, user can update it later
-      if (!profileUpdated) {
-        console.warn('⚠️ Profile update timed out or failed. Basic profile should exist (created by trigger). User can update profile later.');
       }
 
-      // 3. Init Wallet (don't fail if it already exists or times out)
-      // The trigger should have created it, but we'll try to ensure it exists
-      try {
-        const walletPromise = supabase.from('wallets').upsert({
-          user_id: uid, 
-          balance: 0
-        }, {
-          onConflict: 'user_id'
-        });
-        
-        const walletTimeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Wallet creation timed out')), 2000)
-        );
-        
-        const { error: walletError } = await Promise.race([walletPromise, walletTimeout]);
-        
-        if (walletError) {
-          console.warn('Wallet creation warning (continuing anyway):', walletError.message);
-          // Don't fail the whole signup if wallet creation fails - trigger should have created it
-        } else {
-          console.log('Wallet created/updated successfully');
-        }
-      } catch (walletErr) {
-        console.warn('Wallet creation skipped (continuing anyway):', walletErr.message);
-        // Continue anyway - wallet is optional and trigger should have created it
-      }
-      
-      console.log('All signup operations completed (some may have timed out due to Tracking Prevention)');
-      clearTimeout(signupTimeout);
-      
-      // Success - reload the page to trigger auth state change
-      console.log('✅ Signup process completed! Reloading page in 1 second...');
-      setIsLoading(false); // Reset loading before reload
-      setError(''); // Clear any errors
-      
-      // Reload after a brief delay
+      // Step 3: Ensure wallet exists (trigger should have created it)
+      await supabase
+        .from('wallets')
+        .upsert({ user_id: userId, balance: 0 }, { onConflict: 'user_id' })
+        .catch(() => {}); // Ignore errors - trigger should handle it
+
+      // Success - reload page
+      console.log('✅ Signup completed successfully');
+      setIsLoading(false);
       setTimeout(() => {
-        console.log('Reloading now...');
         window.location.reload();
-      }, 1000);
-      
-    } catch (e) { 
-      clearTimeout(signupTimeout);
-      console.error('Signup error:', e);
-      const errorMessage = e.message || e.error?.message || e.toString() || 'Failed to complete setup. Please try again.';
-      setError(errorMessage); 
+      }, 500);
+
+    } catch (err) {
+      console.error('Signup error:', err);
+      setError(err.message || "Failed to complete setup. Please try again.");
       setIsLoading(false);
     }
   };
-  
-  // Safety timeout - if loading takes too long, reset it (only for signup/onboarding)
-  useEffect(() => {
-    if (isLoading && (mode === 'signup' || mode === 'onboarding')) {
-      const timeout = setTimeout(() => {
-        console.warn('Signup process timed out - resetting loading state');
-        setIsLoading(false);
-        setError('The signup process is taking longer than expected. This may be due to browser privacy settings blocking storage. Please try disabling Tracking Prevention or use a different browser.');
-      }, 12000); // 12 second timeout (longer than individual operation timeouts)
-      
-      return () => clearTimeout(timeout);
-    }
-  }, [isLoading, mode]);
 
   const handleForgotPassword = async () => {
-      if (!form.email) return setError("Enter email address.");
-      setIsLoading(true);
-      const { error } = await supabase.auth.resetPasswordForEmail(form.email, { redirectTo: window.location.origin });
-      if (error) setError(error.message); else { setResetSent(true); setError(''); }
-      setIsLoading(false);
+    if (!form.email) {
+      setError("Enter email address.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(form.email, {
+        redirectTo: window.location.origin
+      });
+
+      if (resetError) {
+        setError(resetError.message);
+      } else {
+        setResetSent(true);
+        setError('');
+      }
+    } catch (err) {
+      setError("Failed to send reset email.");
+    }
+
+    setIsLoading(false);
   };
 
   const handleUseLocation = () => {
-    if (!navigator.geolocation) return setError("Geolocation not supported.");
+    if (!navigator.geolocation) {
+      setError("Geolocation not supported.");
+      return;
+    }
+
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(async (pos) => {
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
         try {
-            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
-            const data = await res.json();
-            if (data.address.postcode) setForm(prev => ({ ...prev, zip: data.address.postcode.split('-')[0] }));
-            else setError("Could not determine Zip Code.");
-        } catch (e) { setError("Failed to find location."); }
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${pos.coords.latitude}&lon=${pos.coords.longitude}`);
+          const data = await res.json();
+          if (data.address?.postcode) {
+            setForm(prev => ({ ...prev, zip: data.address.postcode.split('-')[0] }));
+          } else {
+            setError("Could not determine Zip Code.");
+          }
+        } catch (e) {
+          setError("Failed to find location.");
+        }
         setLocating(false);
-    }, () => { setError("Permission denied."); setLocating(false); });
+      },
+      () => {
+        setError("Permission denied.");
+        setLocating(false);
+      }
+    );
   };
 
-  const Requirement = ({ met, text }) => (<div className={`flex items-center gap-1.5 text-xs ${met ? 'text-green-600' : 'text-gray-400'}`}>{met ? <Check size={12}/> : <div className="w-3 h-3 border rounded-full"/>}{text}</div>);
+  // === UI COMPONENTS ===
+
+  const Requirement = ({ met, text }) => (
+    <div className={`flex items-center gap-1.5 text-xs ${met ? 'text-green-600' : 'text-gray-400'}`}>
+      {met ? <Check size={12} /> : <div className="w-3 h-3 border rounded-full" />}
+      {text}
+    </div>
+  );
+
+  const getHeaderText = () => {
+    if (mode === 'signup') return "Create Account";
+    if (mode === 'forgot') return "Recovery";
+    if (mode === 'onboarding') return "Finalize Setup";
+    return null;
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
-      <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}><AuthWizardBackground onImagesLoaded={setBackgroundImagesLoaded} /></div>
-      <div className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-black transition-opacity duration-1000" style={{ opacity: backgroundImagesLoaded ? 0 : 1, pointerEvents: 'none' }} />
-      
-      <div className="absolute top-6 right-6 z-20"><button onClick={toggleTheme} className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border dark:border-gray-700">{darkMode ? <Sun size={20} /> : <Moon size={20} />}</button></div>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
+        <AuthWizardBackground onImagesLoaded={setBackgroundImagesLoaded} />
+      </div>
+      <div
+        className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-black transition-opacity duration-1000"
+        style={{ opacity: backgroundImagesLoaded ? 0 : 1, pointerEvents: 'none' }}
+      />
 
-      <div className="bg-white/95 dark:bg-[#1a1d21]/95 dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden transition-[height] duration-500 z-10 backdrop-blur-md" style={{ height: cardHeight, minHeight: '500px' }}>
+      <div className="absolute top-6 right-6 z-20">
+        <button
+          onClick={toggleTheme}
+          className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border dark:border-gray-700"
+        >
+          {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+        </button>
+      </div>
+
+      <div
+        className="bg-white/95 dark:bg-[#1a1d21]/95 dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden transition-[height] duration-500 z-10 backdrop-blur-md"
+        style={{ height: cardHeight, minHeight: '500px' }}
+      >
         <div ref={contentRef} className="pt-12 px-8 pb-8">
-            <div className="relative w-full h-48 mb-6 flex justify-center shrink-0"> 
-                <div className={`absolute transition-all duration-500 ${mode === 'signup' || mode === 'onboarding' ? 'top-0 scale-90' : 'top-8 scale-100'}`}>
-                    <img src={darkMode ? LogoDark : LogoLight} alt="SeshNx" className="w-96 h-40 object-contain drop-shadow-md" />
-                </div>
-                {getHeaderText() && <div className="absolute bottom-2 w-full text-center"><p className="text-sm font-bold text-gray-500 uppercase tracking-wider">{getHeaderText()}</p></div>}
+          <div className="relative w-full h-48 mb-6 flex justify-center shrink-0">
+            <div className={`absolute transition-all duration-500 ${mode === 'signup' || mode === 'onboarding' ? 'top-0 scale-90' : 'top-8 scale-100'}`}>
+              <img
+                src={darkMode ? LogoDark : LogoLight}
+                alt="SeshNx"
+                className="w-96 h-40 object-contain drop-shadow-md"
+              />
             </div>
+            {getHeaderText() && (
+              <div className="absolute bottom-2 w-full text-center">
+                <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">{getHeaderText()}</p>
+              </div>
+            )}
+          </div>
 
-            {error && <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4"><AlertCircle size={16}/>{error}</div>}
-            {resetSent && <div className="bg-green-50 text-green-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4"><Check size={16}/>Check your email.</div>}
-            
-            {mode === 'login' && (
+          {error && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4">
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
+
+          {resetSent && (
+            <div className="bg-green-50 text-green-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4">
+              <Check size={16} />
+              Check your email.
+            </div>
+          )}
+
+          {/* LOGIN MODE */}
+          {mode === 'login' && (
+            <div className="space-y-4">
+              <input
+                className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                placeholder="Email"
+                value={form.email}
+                onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+              />
+              <input
+                className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                type="password"
+                placeholder="Password"
+                value={form.password}
+                onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}
+                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+              />
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setMode('forgot')}
+                  className="text-xs text-gray-500 hover:text-brand-blue"
+                >
+                  Forgot Password?
+                </button>
+              </div>
+              <button
+                className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold hover:bg-blue-600 disabled:opacity-50"
+                onClick={handleLogin}
+                disabled={isLoading}
+              >
+                {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Sign In'}
+              </button>
+              <button
+                onClick={handleGoogleLogin}
+                className="w-full border dark:border-gray-600 py-3.5 rounded-xl font-bold dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                Continue with Google
+              </button>
+              <p
+                className="text-center text-sm text-gray-500 cursor-pointer hover:text-brand-blue pt-2"
+                onClick={() => setMode('signup')}
+              >
+                New here? Create Account
+              </p>
+            </div>
+          )}
+
+          {/* SIGNUP / ONBOARDING MODE */}
+          {(mode === 'signup' || mode === 'onboarding') && (
+            <div>
+              {/* Step 1: Welcome / Email & Password */}
+              {step === 1 && (
                 <div className="space-y-4">
-                    <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white" placeholder="Email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} />
-                    <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white" type="password" placeholder="Password" value={form.password} onChange={e=>setForm({...form, password:e.target.value})} onKeyDown={e => e.key === 'Enter' && handleLogin()} />
-                    <div className="flex justify-end"><button onClick={() => setMode('forgot')} className="text-xs text-gray-500 hover:text-brand-blue">Forgot Password?</button></div>
-                    <button className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold hover:bg-blue-600" onClick={handleLogin} disabled={isLoading}>{isLoading ? <Loader2 className="animate-spin" /> : 'Sign In'}</button>
-                    <button onClick={handleGoogleLogin} className="w-full border dark:border-gray-600 py-3.5 rounded-xl font-bold dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800">Continue with Google</button>
-                    <p className="text-center text-sm text-gray-500 cursor-pointer hover:text-brand-blue pt-2" onClick={() => setMode('signup')}>New here? Create Account</p>
+                  {mode === 'signup' ? (
+                    <>
+                      <input
+                        className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                        placeholder="Email"
+                        type="email"
+                        value={form.email}
+                        onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+                      />
+                      <input
+                        className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                        type="password"
+                        placeholder="Create Password"
+                        value={form.password}
+                        onChange={(e) => setForm(prev => ({ ...prev, password: e.target.value }))}
+                      />
+                      <div className="grid grid-cols-2 gap-2 pl-1">
+                        <Requirement met={passwordValidations.hasUpper} text="Uppercase" />
+                        <Requirement met={passwordValidations.isLength} text="6+ Chars" />
+                        <Requirement met={passwordValidations.hasLower} text="Lowercase" />
+                        <Requirement met={passwordValidations.hasNumber} text="Number" />
+                      </div>
+                      <button
+                        className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold disabled:opacity-50"
+                        onClick={() => {
+                          if (isPasswordValid && form.email) setStep(2);
+                        }}
+                        disabled={!isPasswordValid || !form.email}
+                      >
+                        Continue
+                      </button>
+                      <p
+                        className="text-center text-sm text-gray-500 cursor-pointer pt-2"
+                        onClick={() => setMode('login')}
+                      >
+                        Have an account? Log In
+                      </p>
+                    </>
+                  ) : (
+                    <div className="text-center space-y-4">
+                      <h3 className="text-2xl font-bold dark:text-white">Welcome!</h3>
+                      <button
+                        className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold"
+                        onClick={() => setStep(2)}
+                      >
+                        Let's Go
+                      </button>
+                    </div>
+                  )}
                 </div>
-            )}
+              )}
 
-            {(mode === 'signup' || mode === 'onboarding') && (
-                <div>
-                    {step === 1 && (
-                        <div className="space-y-4">
-                           {mode === 'signup' ? (
-                                <>
-                                   <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white" placeholder="Email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} />
-                                   <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white" type="password" placeholder="Create Password" value={form.password} onChange={e=>setForm({...form, password:e.target.value})} />
-                                   <div className="grid grid-cols-2 gap-2 pl-1"><Requirement met={passwordValidations.hasUpper} text="Uppercase" /><Requirement met={passwordValidations.isLength} text="6+ Chars" /></div>
-                                   <button className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold" onClick={() => { if(isPasswordValid && form.email) setStep(2); }} disabled={!isPasswordValid || !form.email}>Continue</button>
-                                   <p className="text-center text-sm text-gray-500 cursor-pointer pt-2" onClick={() => setMode('login')}>Have an account? Log In</p>
-                                </>
-                           ) : (
-                                <div className="text-center space-y-4">
-                                    <h3 className="text-2xl font-bold dark:text-white">Welcome!</h3>
-                                    <button className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold" onClick={() => setStep(2)}>Let's Go</button>
-                                </div>
-                           )}
-                        </div>
-                    )}
-
-                    {step === 2 && (
-                        <div className="space-y-4">
-                            <div className="flex gap-3">
-                                <input className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white" placeholder="First Name" value={form.firstName} onChange={e=>setForm({...form, firstName:e.target.value})} />
-                                <input className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white" placeholder="Last Name" value={form.lastName} onChange={e=>setForm({...form, lastName:e.target.value})} />
-                            </div>
-                            <div className="relative flex gap-2">
-                                <div className="relative flex-1">
-                                    <input className="w-full p-3.5 pl-10 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white" placeholder="Zip Code" maxLength={5} value={form.zip} onChange={e=>setForm({...form, zip:e.target.value})} />
-                                    <MapPin className="absolute left-3 top-3.5 text-gray-400" size={18} />
-                                </div>
-                                <button onClick={handleUseLocation} className="p-3.5 border dark:border-gray-600 rounded-xl text-brand-blue">{locating ? <Loader2 className="animate-spin" /> : <Crosshair />}</button>
-                            </div>
-                            <ZipUserMap zip={form.zip} />
-                            <div className="flex justify-between pt-2">
-                                <button className="text-gray-500" onClick={()=>setStep(1)}>Back</button>
-                                <button className="bg-black dark:bg-white dark:text-black text-white px-6 py-2.5 rounded-xl font-bold" onClick={() => { if(form.firstName && form.zip) setStep(5); }}>Next</button>
-                            </div>
-                        </div>
-                    )}
-
-                    {step === 5 && (
-                        <div className="space-y-5">
-                            <div className="grid grid-cols-2 gap-2.5">
-                                {publicRoles.map(role => (
-                                    <div key={role} onClick={() => { 
-                                        const newRoles = form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role]; 
-                                        setForm({...form, roles: newRoles});
-                                    }} className={`p-3 border-2 rounded-xl cursor-pointer text-center font-bold text-sm transition ${form.roles.includes(role) ? 'border-brand-blue bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:border-blue-500' : 'border-gray-100 dark:border-gray-700 hover:border-gray-300'}`}>{role}</div>
-                                ))}
-                            </div>
-                            {form.roles.length === 0 && (
-                                <p className="text-xs text-red-500 dark:text-red-400 text-center">Please select at least one role to continue</p>
-                            )}
-                            {error && error.includes('Tracking Prevention') && (
-                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3 text-xs text-yellow-800 dark:text-yellow-200">
-                                    <p className="font-bold mb-1">⚠️ Browser Privacy Settings Detected</p>
-                                    <p>Your browser is blocking storage access. To complete signup:</p>
-                                    <ul className="list-disc list-inside mt-1 space-y-0.5">
-                                        <li>Disable Tracking Prevention in Safari settings, or</li>
-                                        <li>Use a different browser (Chrome, Firefox, Edge)</li>
-                                    </ul>
-                                </div>
-                            )}
-                            <button 
-                                className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition" 
-                                onClick={handleSignup} 
-                                disabled={isLoading || form.roles.length === 0}
-                            >
-                                {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
-                            </button>
-                            <button className="w-full text-gray-400 text-xs hover:text-gray-600 dark:hover:text-gray-300" onClick={()=>setStep(2)}>Back</button>
-                        </div>
-                    )}
-                </div>
-            )}
-
-            {mode === 'forgot' && (
+              {/* Step 2: Name & Location */}
+              {step === 2 && (
                 <div className="space-y-4">
-                    <input className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white" placeholder="Email" value={form.email} onChange={e=>setForm({...form, email:e.target.value})} />
-                    <button className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold" onClick={handleForgotPassword} disabled={isLoading || resetSent}>{resetSent ? 'Sent!' : 'Send Link'}</button>
-                    <button className="w-full text-gray-500 text-sm" onClick={()=>setMode('login')}>Back</button>
+                  <div className="flex gap-3">
+                    <input
+                      className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      placeholder="First Name"
+                      value={form.firstName}
+                      onChange={(e) => setForm(prev => ({ ...prev, firstName: e.target.value }))}
+                    />
+                    <input
+                      className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      placeholder="Last Name"
+                      value={form.lastName}
+                      onChange={(e) => setForm(prev => ({ ...prev, lastName: e.target.value }))}
+                    />
+                  </div>
+                  <div className="relative flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        className="w-full p-3.5 pl-10 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                        placeholder="Zip Code"
+                        maxLength={5}
+                        value={form.zip}
+                        onChange={(e) => setForm(prev => ({ ...prev, zip: e.target.value.replace(/\D/g, '') }))}
+                      />
+                      <MapPin className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                    </div>
+                    <button
+                      onClick={handleUseLocation}
+                      className="p-3.5 border dark:border-gray-600 rounded-xl text-brand-blue"
+                      disabled={locating}
+                    >
+                      {locating ? <Loader2 className="animate-spin" size={18} /> : <Crosshair size={18} />}
+                    </button>
+                  </div>
+                  <ZipUserMap zip={form.zip} />
+                  <div className="flex justify-between pt-2">
+                    <button className="text-gray-500" onClick={() => setStep(1)}>
+                      Back
+                    </button>
+                    <button
+                      className="bg-black dark:bg-white dark:text-black text-white px-6 py-2.5 rounded-xl font-bold disabled:opacity-50"
+                      onClick={() => {
+                        if (form.firstName && form.zip) setStep(3);
+                      }}
+                      disabled={!form.firstName || !form.zip}
+                    >
+                      Next
+                    </button>
+                  </div>
                 </div>
-            )}
+              )}
+
+              {/* Step 3: Role Selection */}
+              {step === 3 && (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {publicRoles.map(role => (
+                      <div
+                        key={role}
+                        onClick={() => {
+                          const newRoles = form.roles.includes(role)
+                            ? form.roles.filter(r => r !== role)
+                            : [...form.roles, role];
+                          setForm(prev => ({ ...prev, roles: newRoles }));
+                        }}
+                        className={`p-3 border-2 rounded-xl cursor-pointer text-center font-bold text-sm transition ${
+                          form.roles.includes(role)
+                            ? 'border-brand-blue bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:border-blue-500'
+                            : 'border-gray-100 dark:border-gray-700 hover:border-gray-300'
+                        }`}
+                      >
+                        {role}
+                      </div>
+                    ))}
+                  </div>
+                  {form.roles.includes('Talent') && (
+                    <select
+                      className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      value={form.talentSubRole}
+                      onChange={(e) => setForm(prev => ({ ...prev, talentSubRole: e.target.value }))}
+                    >
+                      <option value="">Select Talent Type (Optional)</option>
+                      {TALENT_SUBROLES.map(subRole => (
+                        <option key={subRole} value={subRole}>{subRole}</option>
+                      ))}
+                    </select>
+                  )}
+                  {form.roles.length === 0 && (
+                    <p className="text-xs text-red-500 dark:text-red-400 text-center">
+                      Please select at least one role to continue
+                    </p>
+                  )}
+                  <button
+                    className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    onClick={handleSignup}
+                    disabled={isLoading || form.roles.length === 0}
+                  >
+                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
+                  </button>
+                  <button
+                    className="w-full text-gray-400 text-xs hover:text-gray-600 dark:hover:text-gray-300"
+                    onClick={() => setStep(2)}
+                  >
+                    Back
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FORGOT PASSWORD MODE */}
+          {mode === 'forgot' && (
+            <div className="space-y-4">
+              <input
+                className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                placeholder="Email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
+              />
+              <button
+                className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold disabled:opacity-50"
+                onClick={handleForgotPassword}
+                disabled={isLoading || resetSent}
+              >
+                {resetSent ? 'Sent!' : isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Send Link'}
+              </button>
+              <button
+                className="w-full text-gray-500 text-sm"
+                onClick={() => setMode('login')}
+              >
+                Back
+              </button>
+            </div>
+          )}
+
+          {/* Legal Links */}
+          <div className="mt-6 pt-4 border-t dark:border-gray-700 text-center">
+            <button
+              onClick={() => setShowLegalOverlay(true)}
+              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            >
+              Terms of Service • Privacy Policy
+            </button>
+          </div>
         </div>
       </div>
+
+      {/* Legal Overlay */}
+      {showLegalOverlay && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#1a1d21] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+              <h2 className="text-xl font-bold dark:text-white">Legal Documents</h2>
+              <button
+                onClick={() => setShowLegalOverlay(false)}
+                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              <LegalDocs isEmbedded={true} />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
