@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, MapPin, DollarSign, CheckCircle, Play, Mic2, Car, FileText, User, ChevronRight } from 'lucide-react';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 
@@ -30,12 +29,22 @@ export default function SessionDetailsModal({ booking, user, onClose }) {
     const currentStepIndex = getCurrentStepIndex(status);
 
     const updateStatus = async (newStatus) => {
+        if (!supabase) return;
         setLoading(true);
         try {
-            await updateDoc(doc(db, `artifacts/${appId}/public/data/bookings`, booking.id), {
-                status: newStatus,
-                [`statusTimestamps.${newStatus}`]: serverTimestamp()
-            });
+            const now = new Date().toISOString();
+            const statusTimestamps = booking.statusTimestamps || {};
+            statusTimestamps[newStatus] = now;
+            
+            await supabase
+                .from('bookings')
+                .update({
+                    status: newStatus,
+                    status_timestamps: statusTimestamps,
+                    updated_at: now
+                })
+                .eq('id', booking.id);
+            
             setStatus(newStatus);
             toast.success(`Session ${newStatus}`);
         } catch (e) {

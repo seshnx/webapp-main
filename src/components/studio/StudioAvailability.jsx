@@ -3,8 +3,7 @@ import {
     Clock, Calendar, Save, Loader2, Plus, Trash2, 
     Moon, Sun, AlertCircle, X, Copy
 } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 
 const DAYS_OF_WEEK = [
@@ -38,15 +37,21 @@ export default function StudioAvailability({ user, userData, onUpdate }) {
     const [showAddBlackout, setShowAddBlackout] = useState(false);
 
     const handleSave = async () => {
+        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving availability...');
+        const userId = user?.id || user?.uid;
         
         try {
-            const userRef = doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`);
-            await updateDoc(userRef, { 
-                operatingHours: hours,
-                blackoutDates: blackoutDates
-            });
+            await supabase
+                .from('profiles')
+                .update({ 
+                    operating_hours: hours,
+                    blackout_dates: blackoutDates,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userId);
+            
             toast.success('Availability saved!', { id: toastId });
             if (onUpdate) onUpdate({ operatingHours: hours, blackoutDates });
         } catch (error) {

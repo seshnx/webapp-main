@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    collection, query, where, orderBy, limit, onSnapshot, addDoc, serverTimestamp, 
-    doc, updateDoc, setDoc, arrayUnion, increment 
-} from 'firebase/firestore';
-import { 
     Database, CheckCircle, Loader2, User, ThumbsUp, ThumbsDown, Copy 
 } from 'lucide-react';
-import { db, getPaths, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { EQUIP_CATEGORIES } from '../../config/constants';
 
 export default function TechGearDatabase({ user, isTech }) {
@@ -15,55 +11,140 @@ export default function TechGearDatabase({ user, isTech }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const q = query(
-            collection(db, getPaths(user.uid).equipmentSubmissions), 
-            where('status', '==', 'pending'),
-            orderBy('timestamp', 'desc'),
-            limit(20)
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            setPendingItems(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setLoading(false);
-        });
-        return () => unsub();
-    }, [user.uid]);
+        if (!supabase) return;
+        
+        const channel = supabase
+            .channel('equipment-submissions')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'equipment_submissions',
+                filter: 'status=eq.pending'
+            }, () => {
+                loadPendingItems();
+            })
+            .subscribe();
+
+        loadPendingItems();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, user?.uid]);
+
+    const loadPendingItems = async () => {
+        if (!supabase) return;
+        setLoading(true);
+        try {
+            const { data: itemsData, error } = await supabase
+                .from('equipment_submissions')
+                .select('*')
+                .eq('status', 'pending')
+                .order('timestamp', { ascending: false })
+                .limit(20);
+            
+            if (error) throw error;
+            
+            setPendingItems((itemsData || []).map(item => ({
+                id: item.id,
+                ...item,
+                submittedBy: item.submitted_by,
+                timestamp: item.timestamp
+            })));
+        } catch (error) {
+            console.error('Error loading pending items:', error);
+        }
+        setLoading(false);
+    };
 
     const handleVote = async (itemId, voteType, currentData) => {
-        if (!isTech) return alert("Only verified Technicians can vote on gear accuracy.");
+        if (!isTech || !supabase) {
+            if (!isTech) alert("Only verified Technicians can vote on gear accuracy.");
+            return;
+        }
         
+        const userId = user?.id || user?.uid;
         try {
-            const itemRef = doc(db, getPaths(user.uid).equipmentSubmissions, itemId);
-            const userVoteField = `votes.${voteType}`;
+            // Get current votes and add new vote
+            const currentVotes = currentData.votes || {};
+            const voteArray = currentVotes[voteType] || [];
+            if (voteArray.includes(userId)) {
+                alert("You've already voted on this item.");
+                return;
+            }
             
-            await updateDoc(itemRef, { [userVoteField]: arrayUnion(user.uid) });
+            const updatedVotes = {
+                ...currentVotes,
+                [voteType]: [...voteArray, userId]
+            };
+            
+            await supabase
+                .from('equipment_submissions')
+                .update({ votes: updatedVotes })
+                .eq('id', itemId);
 
             const YES_THRESHOLD = 3;
             const REJECT_THRESHOLD = 3;
 
-            const yesVotes = (currentData.votes?.yes?.length || 0) + (voteType === 'yes' ? 1 : 0);
-            const fakeVotes = (currentData.votes?.fake?.length || 0) + (voteType === 'fake' ? 1 : 0);
-            const dupVotes = (currentData.votes?.duplicate?.length || 0) + (voteType === 'duplicate' ? 1 : 0);
+            const yesVotes = (updatedVotes.yes?.length || 0);
+            const fakeVotes = (updatedVotes.fake?.length || 0);
+            const dupVotes = (updatedVotes.duplicate?.length || 0);
 
             if (yesVotes >= YES_THRESHOLD) {
-                const realDbRef = doc(db, `artifacts/${appId}/public/data/equipment_database/${currentData.category}/items`, currentData.model.replace(/\s+/g, '_'));
-                await setDoc(realDbRef, {
-                    name: currentData.model,
-                    brand: currentData.brand,
-                    category: currentData.category,
-                    subCategory: currentData.subCategory,
-                    specs: currentData.specs,
-                    verifiedBy: arrayUnion(user.uid),
-                    addedBy: currentData.submittedBy,
-                    addedAt: serverTimestamp()
-                });
+                // Add to equipment database
+                await supabase
+                    .from('equipment_database')
+                    .insert({
+                        name: currentData.model,
+                        brand: currentData.brand,
+                        category: currentData.category,
+                        sub_category: currentData.subCategory,
+                        specs: currentData.specs,
+                        verified_by: [userId],
+                        added_by: currentData.submittedBy,
+                        added_at: new Date().toISOString()
+                    });
                 
-                await updateDoc(itemRef, { status: 'approved' });
-                await updateDoc(doc(db, getPaths(currentData.submittedBy).userWallet), { balance: increment(50) });
-                await updateDoc(doc(db, getPaths(user.uid).userWallet), { balance: increment(5) });
+                // Update submission status
+                await supabase
+                    .from('equipment_submissions')
+                    .update({ status: 'approved' })
+                    .eq('id', itemId);
+                
+                // Update wallets (using RPC or direct update)
+                const { data: submitterWallet } = await supabase
+                    .from('wallets')
+                    .select('balance')
+                    .eq('user_id', currentData.submittedBy)
+                    .single();
+                
+                const { data: voterWallet } = await supabase
+                    .from('wallets')
+                    .select('balance')
+                    .eq('user_id', userId)
+                    .single();
+                
+                if (submitterWallet) {
+                    await supabase
+                        .from('wallets')
+                        .update({ balance: (submitterWallet.balance || 0) + 50 })
+                        .eq('user_id', currentData.submittedBy);
+                }
+                
+                if (voterWallet) {
+                    await supabase
+                        .from('wallets')
+                        .update({ balance: (voterWallet.balance || 0) + 5 })
+                        .eq('user_id', userId);
+                }
+                
                 alert("Consensus reached! Item approved and rewards distributed.");
 
             } else if (fakeVotes >= REJECT_THRESHOLD || dupVotes >= REJECT_THRESHOLD) {
-                await updateDoc(itemRef, { status: 'rejected' });
+                await supabase
+                    .from('equipment_submissions')
+                    .update({ status: 'rejected' })
+                    .eq('id', itemId);
             }
         } catch (e) { console.error("Voting failed:", e); }
     };

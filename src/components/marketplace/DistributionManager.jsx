@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { Plus, Disc, Globe, AlertCircle, CheckCircle, Clock, Edit2, Trash2, X, Music } from 'lucide-react';
-import { db, getPaths, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import ReleaseBuilder from '../distribution/ReleaseBuilder';
 
 export default function DistributionManager({ user, userData }) {
@@ -12,27 +11,62 @@ export default function DistributionManager({ user, userData }) {
 
     // Fetch User's Releases
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user?.id && !user?.uid || !supabase) return;
+        const userId = user?.id || user?.uid;
         
         // Query releases where the current user is the primary artist/uploader
-        const q = query(
-            collection(db, getPaths(user.uid).distributionReleases), 
-            where('uploaderId', '==', user.uid),
-            orderBy('updatedAt', 'desc')
-        );
+        const channel = supabase
+            .channel('distribution-releases')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'distribution_releases',
+                filter: `uploader_id=eq.${userId}`
+            }, (payload) => {
+                loadReleases();
+            })
+            .subscribe();
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            setReleases(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-            setLoading(false);
-        });
+        loadReleases();
 
-        return () => unsubscribe();
-    }, [user?.uid]);
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, user?.uid]);
+
+    const loadReleases = async () => {
+        if (!supabase) return;
+        const userId = user?.id || user?.uid;
+        setLoading(true);
+        try {
+            const { data: releasesData, error } = await supabase
+                .from('distribution_releases')
+                .select('*')
+                .eq('uploader_id', userId)
+                .order('updated_at', { ascending: false });
+            
+            if (error) throw error;
+            
+            setReleases((releasesData || []).map(r => ({
+                id: r.id,
+                ...r,
+                uploaderId: r.uploader_id,
+                updatedAt: r.updated_at,
+                createdAt: r.created_at
+            })));
+        } catch (error) {
+            console.error('Error loading releases:', error);
+        }
+        setLoading(false);
+    };
 
     const handleDelete = async (releaseId, title) => {
-        if (!confirm(`Are you sure you want to delete "${title}"? This cannot be undone if already distributed.`)) return;
+        if (!confirm(`Are you sure you want to delete "${title}"? This cannot be undone if already distributed.`) || !supabase) return;
         try {
-            await deleteDoc(doc(db, getPaths(user.uid).distributionReleases, releaseId));
+            await supabase
+                .from('distribution_releases')
+                .delete()
+                .eq('id', releaseId);
         } catch (e) {
             console.error(e);
             alert("Failed to delete release.");

@@ -4,8 +4,7 @@ import {
     LayoutGrid, Save, Loader2, ChevronDown, ChevronUp,
     Copy, Map, List
 } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import FloorplanEditor from './FloorplanEditor';
@@ -36,16 +35,22 @@ export default function StudioRooms({ user, userData, onUpdate }) {
     };
 
     const handleSave = async (updatedRooms, updatedWalls = walls, updatedStructures = structures) => {
+        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving rooms...');
+        const userId = user?.id || user?.uid;
         
         try {
-            const userRef = doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`);
-            await updateDoc(userRef, { 
-                rooms: updatedRooms,
-                floorplanWalls: updatedWalls,
-                floorplanStructures: updatedStructures
-            });
+            await supabase
+                .from('profiles')
+                .update({ 
+                    rooms: updatedRooms,
+                    floorplan_walls: updatedWalls,
+                    floorplan_structures: updatedStructures,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userId);
+            
             setRooms(updatedRooms);
             setWalls(updatedWalls);
             setStructures(updatedStructures);
@@ -68,22 +73,30 @@ export default function StudioRooms({ user, userData, onUpdate }) {
     };
 
     const handleWallsChange = async (newWalls) => {
+        if (!supabase) return;
         setWalls(newWalls);
+        const userId = user?.id || user?.uid;
         // Auto-save walls
         try {
-            const userRef = doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`);
-            await updateDoc(userRef, { floorplanWalls: newWalls });
+            await supabase
+                .from('profiles')
+                .update({ floorplan_walls: newWalls, updated_at: new Date().toISOString() })
+                .eq('id', userId);
         } catch (error) {
             console.error('Error saving walls:', error);
         }
     };
 
     const handleStructuresChange = async (newStructures) => {
+        if (!supabase) return;
         setStructures(newStructures);
+        const userId = user?.id || user?.uid;
         // Auto-save structures
         try {
-            const userRef = doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`);
-            await updateDoc(userRef, { floorplanStructures: newStructures });
+            await supabase
+                .from('profiles')
+                .update({ floorplan_structures: newStructures, updated_at: new Date().toISOString() })
+                .eq('id', userId);
         } catch (error) {
             console.error('Error saving structures:', error);
         }

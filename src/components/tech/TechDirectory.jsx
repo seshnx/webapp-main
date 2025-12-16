@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collectionGroup, query, where, limit, getDocs } from 'firebase/firestore';
 import { Search, Loader2, User, Briefcase, Wrench } from 'lucide-react';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { TECH_SPECIALTIES } from '../../config/constants';
 import TechBookingModal from './TechBookingModal';
 
@@ -13,18 +12,37 @@ export default function TechDirectory({ user, userData, openPublicProfile }) {
     const [selectedTech, setSelectedTech] = useState(null);
 
     const runSearch = async () => {
+        if (!supabase) return;
         setLoading(true);
+        const userId = user?.id || user?.uid;
         try {
-            const constraints = [
-                where('accountTypes', 'array-contains', 'Technician'),
-                limit(20)
-            ];
+            let query = supabase
+                .from('profiles')
+                .select('id, first_name, last_name, photo_url, account_types, sub_roles, skills, rate, search_terms')
+                .contains('account_types', ['Technician'])
+                .limit(20);
             
-            if (search) constraints.push(where('searchTerms', 'array-contains', search.toLowerCase()));
+            if (search) {
+                query = query.ilike('search_terms', `%${search.toLowerCase()}%`);
+            }
             
-            const q = query(collectionGroup(db, 'public_profile'), ...constraints);
-            const snap = await getDocs(q);
-            let results = snap.docs.map(d => ({ id: d.ref.parent.parent.id, ...d.data() })).filter(t => t.id !== user.uid);
+            const { data: profilesData, error } = await query;
+            
+            if (error) throw error;
+            
+            let results = (profilesData || [])
+                .filter(t => t.id !== userId)
+                .map(t => ({
+                    id: t.id,
+                    firstName: t.first_name,
+                    lastName: t.last_name,
+                    photoURL: t.photo_url,
+                    accountTypes: t.account_types,
+                    subRoles: t.sub_roles,
+                    skills: t.skills,
+                    rate: t.rate,
+                    searchTerms: t.search_terms
+                }));
 
             if (specialtyFilter) {
                 results = results.filter(t => t.subRoles && t.subRoles.includes(specialtyFilter));

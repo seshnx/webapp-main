@@ -1,15 +1,12 @@
 // src/components/marketplace/SafeExchangeTransaction.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-    doc, onSnapshot, updateDoc, serverTimestamp, addDoc, collection, getDoc 
-} from 'firebase/firestore';
-import { 
     Shield, MapPin, Camera, CheckCircle, Clock, AlertTriangle, 
     Navigation, Phone, MessageCircle, X, ChevronRight, User,
     DollarSign, Lock, Unlock, ArrowRight, Package, Loader2,
     Calendar, CreditCard, Map, Check, XCircle
 } from 'lucide-react';
-import { db, appId, getPaths } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { 
     SAFE_EXCHANGE_STATUS, 
     SAFE_EXCHANGE_STEPS,
@@ -42,8 +39,9 @@ export default function SafeExchangeTransaction({
     const [photoMode, setPhotoMode] = useState(null); // 'seller_depart' | 'buyer_inspect' | null
 
     // Get current role
-    const isSeller = transaction?.sellerId === user?.uid;
-    const isBuyer = transaction?.buyerId === user?.uid;
+    const userId = user?.id || user?.uid;
+    const isSeller = transaction?.sellerId === userId;
+    const isBuyer = transaction?.buyerId === userId;
     const role = isSeller ? 'seller' : 'buyer';
 
     // GPS verification hook
@@ -64,33 +62,72 @@ export default function SafeExchangeTransaction({
 
     // Subscribe to transaction updates
     useEffect(() => {
-        if (!transactionId) return;
+        if (!transactionId || !supabase) return;
 
-        const transactionRef = doc(db, `artifacts/${appId}/public/data/safe_exchange_transactions`, transactionId);
-        const unsubscribe = onSnapshot(transactionRef, (snap) => {
-            if (snap.exists()) {
-                setTransaction({ id: snap.id, ...snap.data() });
-            }
-            setLoading(false);
-        });
+        const channel = supabase
+            .channel(`safe-exchange-${transactionId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'safe_exchange_transactions',
+                filter: `id=eq.${transactionId}`
+            }, () => {
+                loadTransaction();
+            })
+            .subscribe();
 
-        return () => unsubscribe();
+        loadTransaction();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [transactionId]);
+
+    const loadTransaction = async () => {
+        if (!supabase) return;
+        setLoading(true);
+        try {
+            const { data: transactionData, error } = await supabase
+                .from('safe_exchange_transactions')
+                .select('*')
+                .eq('id', transactionId)
+                .single();
+            
+            if (error) throw error;
+            
+            if (transactionData) {
+                setTransaction({
+                    id: transactionData.id,
+                    ...transactionData,
+                    buyerId: transactionData.buyer_id,
+                    sellerId: transactionData.seller_id,
+                    listingId: transactionData.listing_id
+                });
+            }
+        } catch (error) {
+            console.error('Error loading transaction:', error);
+        }
+        setLoading(false);
+    };
 
     // Update user's position in transaction
     useEffect(() => {
-        if (!transaction || !currentPosition) return;
+        if (!transaction || !currentPosition || !supabase) return;
 
         const updatePosition = async () => {
             try {
-                const transactionRef = doc(db, `artifacts/${appId}/public/data/safe_exchange_transactions`, transactionId);
-                await updateDoc(transactionRef, {
-                    [`${role}Location`]: {
-                        lat: currentPosition.lat,
-                        lng: currentPosition.lng,
-                        updatedAt: Date.now()
-                    }
-                });
+                const locationField = role === 'seller' ? 'seller_location' : 'buyer_location';
+                await supabase
+                    .from('safe_exchange_transactions')
+                    .update({
+                        [locationField]: {
+                            lat: currentPosition.lat,
+                            lng: currentPosition.lng,
+                            updated_at: Date.now()
+                        },
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', transactionId);
             } catch (error) {
                 console.error('Failed to update position:', error);
             }
@@ -108,20 +145,33 @@ export default function SafeExchangeTransaction({
 
     // Update transaction status
     const updateStatus = useCallback(async (newStatus, additionalData = {}) => {
-        if (!transactionId) return;
+        if (!transactionId || !supabase) return;
 
         setActionLoading(true);
+        const userId = user?.id || user?.uid;
         try {
-            const transactionRef = doc(db, `artifacts/${appId}/public/data/safe_exchange_transactions`, transactionId);
-            await updateDoc(transactionRef, {
-                status: newStatus,
-                [`statusHistory.${newStatus}`]: {
-                    timestamp: Date.now(),
-                    userId: user.uid
-                },
-                ...additionalData,
-                updatedAt: serverTimestamp()
-            });
+            const statusHistory = transaction?.status_history || {};
+            statusHistory[newStatus] = {
+                timestamp: Date.now(),
+                userId: userId
+            };
+            
+            // Convert camelCase keys to snake_case for Supabase
+            const convertedData = Object.keys(additionalData).reduce((acc, key) => {
+                const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+                acc[snakeKey] = additionalData[key];
+                return acc;
+            }, {});
+            
+            await supabase
+                .from('safe_exchange_transactions')
+                .update({
+                    status: newStatus,
+                    status_history: statusHistory,
+                    updated_at: new Date().toISOString(),
+                    ...convertedData
+                })
+                .eq('id', transactionId);
 
             // Send notification to other party
             await sendNotification(newStatus, additionalData);
@@ -130,16 +180,16 @@ export default function SafeExchangeTransaction({
             alert('Failed to update transaction. Please try again.');
         }
         setActionLoading(false);
-    }, [transactionId, user?.uid]);
+    }, [transactionId, transaction, user?.id, user?.uid]);
 
     // Send notification to other party
     const sendNotification = async (status, data = {}) => {
+        if (!supabase || !transaction) return;
         const otherUserId = isSeller ? transaction.buyerId : transaction.sellerId;
-        const notificationRef = collection(db, getPaths(otherUserId).notifications);
         
         // Use data passed from updateStatus for values that may not be in React state yet
         const messages = {
-            [SAFE_EXCHANGE_STATUS.MEETUP_SCHEDULED]: `Meetup scheduled for ${data.meetupDate || transaction.meetupDate} at ${data.meetupTime || transaction.meetupTime}`,
+            [SAFE_EXCHANGE_STATUS.MEETUP_SCHEDULED]: `Meetup scheduled for ${data.meetupDate || transaction.meetup_date} at ${data.meetupTime || transaction.meetup_time}`,
             [SAFE_EXCHANGE_STATUS.SELLER_EN_ROUTE]: 'Seller is on their way to the exchange location',
             [SAFE_EXCHANGE_STATUS.BUYER_EN_ROUTE]: 'Buyer is on their way to the exchange location',
             [SAFE_EXCHANGE_STATUS.AT_SAFE_ZONE]: `${isSeller ? 'Seller' : 'Buyer'} has arrived at the safe zone`,
@@ -150,14 +200,17 @@ export default function SafeExchangeTransaction({
             [SAFE_EXCHANGE_STATUS.DISPUTED]: '⚠️ A dispute has been raised on the transaction'
         };
 
-        await addDoc(notificationRef, {
-            type: 'safe_exchange',
-            transactionId,
-            message: messages[status] || `Transaction status updated: ${status}`,
-            itemTitle: transaction.itemTitle,
-            read: false,
-            createdAt: serverTimestamp()
-        });
+        await supabase
+            .from('notifications')
+            .insert({
+                user_id: otherUserId,
+                type: 'safe_exchange',
+                transaction_id: transactionId,
+                message: messages[status] || `Transaction status updated: ${status}`,
+                item_title: transaction.item_title,
+                read: false,
+                created_at: new Date().toISOString()
+            });
     };
 
     // Schedule meetup
@@ -234,19 +287,22 @@ export default function SafeExchangeTransaction({
 
     // Complete transaction and release funds
     const completeTransaction = async () => {
+        if (!supabase) return;
+        const userId = user?.id || user?.uid;
         await updateStatus(SAFE_EXCHANGE_STATUS.COMPLETED, {
-            completedAt: serverTimestamp()
+            completedAt: new Date().toISOString()
         });
 
         // Release escrow funds (in production, this would call a cloud function)
         // For now, we mark it as released
-        await updateDoc(
-            doc(db, `artifacts/${appId}/public/data/safe_exchange_transactions`, transactionId),
-            {
-                fundsReleased: true,
-                fundsReleasedAt: serverTimestamp()
-            }
-        );
+        await supabase
+            .from('safe_exchange_transactions')
+            .update({
+                funds_released: true,
+                funds_released_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', transactionId);
 
         onComplete?.();
     };
@@ -256,10 +312,10 @@ export default function SafeExchangeTransaction({
         if (!confirm('Are you sure you want to cancel this transaction? This may affect your seller rating.')) {
             return;
         }
-
+        const userId = user?.id || user?.uid;
         await updateStatus(SAFE_EXCHANGE_STATUS.CANCELLED, {
-            cancelledBy: user.uid,
-            cancelledAt: serverTimestamp()
+            cancelledBy: userId,
+            cancelledAt: new Date().toISOString()
         });
 
         onClose?.();
@@ -267,10 +323,11 @@ export default function SafeExchangeTransaction({
 
     // Raise dispute
     const handleDispute = async (reason) => {
+        const userId = user?.id || user?.uid;
         await updateStatus(SAFE_EXCHANGE_STATUS.DISPUTED, {
             disputeReason: reason,
-            disputeRaisedBy: user.uid,
-            disputeRaisedAt: serverTimestamp()
+            disputeRaisedBy: userId,
+            disputeRaisedAt: new Date().toISOString()
         });
     };
 

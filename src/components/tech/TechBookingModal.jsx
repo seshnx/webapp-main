@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { X, Wrench, Calendar, DollarSign, Loader2, Video } from 'lucide-react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { SERVICE_CATALOGUE } from '../../config/constants';
 
@@ -22,26 +21,32 @@ export default function TechBookingModal({ user, userData, target, onClose }) {
     };
 
     const handleSubmit = async () => {
-        if (!form.equipmentName || !form.issueDescription) return alert("Please describe the equipment and the issue.");
+        if (!form.equipmentName || !form.issueDescription || !supabase) {
+            if (!form.equipmentName || !form.issueDescription) alert("Please describe the equipment and the issue.");
+            return;
+        }
         setSubmitting(true);
+        const userId = user?.id || user?.uid;
         try {
-            await addDoc(collection(db, `artifacts/${appId}/public/data/bookings`), {
-                senderId: user.uid,
-                senderName: `${userData.firstName} ${userData.lastName}`,
-                targetId: target.id,
-                targetName: target.firstName ? `${target.firstName} ${target.lastName}` : target.name,
-                type: 'TechRequest',
-                serviceType: form.serviceCategory,
-                equipment: form.equipmentName,
-                description: form.issueDescription,
-                logistics: form.logistics,
-                budgetCap: form.budgetCap,
-                status: 'Pending',
-                date: form.preferredDate || 'Flexible',
-                message: `[${form.serviceCategory}] ${form.equipmentName}: ${form.issueDescription}`,
-                attachments: attachments,
-                timestamp: serverTimestamp()
-            });
+            await supabase
+                .from('bookings')
+                .insert({
+                    sender_id: userId,
+                    sender_name: `${userData.firstName} ${userData.lastName}`,
+                    target_id: target.id,
+                    target_name: target.firstName ? `${target.firstName} ${target.lastName}` : target.name,
+                    type: 'TechRequest',
+                    service_type: form.serviceCategory,
+                    equipment: form.equipmentName,
+                    description: form.issueDescription,
+                    logistics: form.logistics,
+                    budget_cap: form.budgetCap || null,
+                    status: 'Pending',
+                    date: form.preferredDate || 'Flexible',
+                    message: `[${form.serviceCategory}] ${form.equipmentName}: ${form.issueDescription}`,
+                    attachments: attachments || [],
+                    timestamp: new Date().toISOString()
+                });
             alert("Service request sent!");
             onClose();
         } catch (e) { alert("Failed to send."); }

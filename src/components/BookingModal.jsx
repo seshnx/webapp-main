@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, DollarSign, MessageSquare, Loader2, Music, AlertCircle, User, Briefcase, FileText } from 'lucide-react';
-import { addDoc, collection, serverTimestamp, getDocs } from 'firebase/firestore';
-import { db, appId, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { SERVICE_TYPES, GENRE_DATA } from '../config/constants';
 
 export default function BookingModal({ user, userData, target, onClose }) {
@@ -77,17 +76,30 @@ export default function BookingModal({ user, userData, target, onClose }) {
 
     // Fetch Roster if Agent/Label
     useEffect(() => {
-        if (isAgentOrLabel) {
+        if (isAgentOrLabel && supabase) {
+            const userId = user?.id || user?.uid;
             const fetchRoster = async () => {
                 try {
-                    const snap = await getDocs(collection(db, getPaths(user.uid).labelRoster(user.uid)));
-                    const artists = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const { data: rosterData, error } = await supabase
+                        .from('label_roster')
+                        .select('*')
+                        .eq('label_id', userId);
+                    
+                    if (error) throw error;
+                    
+                    const artists = (rosterData || []).map(r => ({
+                        id: r.id,
+                        artistId: r.artist_id,
+                        name: r.name,
+                        photoURL: r.photo_url,
+                        ...r
+                    }));
                     setRoster(artists);
                 } catch (e) { console.error("Roster fetch error", e); }
             };
             fetchRoster();
         }
-    }, [isAgentOrLabel, user.uid]);
+    }, [isAgentOrLabel, user?.id, user?.uid]);
 
     const handleDurationChange = (e) => {
         const val = e.target.value;
@@ -126,30 +138,33 @@ export default function BookingModal({ user, userData, target, onClose }) {
                 }
             }
 
-            await addDoc(collection(db, `artifacts/${appId}/public/data/bookings`), {
-                ...senderInfo,
-                targetId: target.id,
-                targetName: target.firstName ? `${target.firstName} ${target.lastName}` : target.name,
-                
-                serviceType: form.serviceType,
-                date: form.date,
-                time: form.time,
-                duration: Number(form.duration),
-                offerAmount: Number(form.offerAmount),
-                message: form.message,
-                
-                // Project details for better context
-                projectDetails: {
-                    genre: form.projectGenre || null,
-                    projectType: form.projectType || null,
-                    referenceLinks: form.referenceLinks || null
-                },
-                
-                status: 'Pending',
-                timestamp: serverTimestamp(),
-                bookingStart: bookingDateTime,
-                type: 'Direct'
-            });
+            if (!supabase) throw new Error('Supabase not initialized');
+            
+            const userId = user?.id || user?.uid;
+            await supabase
+                .from('bookings')
+                .insert({
+                    sender_id: userId,
+                    sender_name: senderInfo.senderName,
+                    on_behalf_of: senderInfo.onBehalfOf,
+                    target_id: target.id,
+                    target_name: target.firstName ? `${target.firstName} ${target.lastName}` : target.name,
+                    service_type: form.serviceType,
+                    date: form.date,
+                    time: form.time,
+                    duration: Number(form.duration),
+                    offer_amount: Number(form.offerAmount),
+                    message: form.message,
+                    project_details: {
+                        genre: form.projectGenre || null,
+                        project_type: form.projectType || null,
+                        reference_links: form.referenceLinks || null
+                    },
+                    status: 'Pending',
+                    timestamp: new Date().toISOString(),
+                    booking_start: bookingDateTime.toISOString(),
+                    type: 'Direct'
+                });
 
             alert("Booking request sent successfully!");
             onClose();

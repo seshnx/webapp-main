@@ -4,8 +4,7 @@ import {
     Search, RefreshCw, ChevronLeft, ChevronRight,
     CheckCircle, XCircle, Clock3, Eye, Ban, Trash2
 } from 'lucide-react';
-import { collection, query, where, orderBy, onSnapshot, doc, updateDoc, Timestamp, addDoc, deleteDoc } from 'firebase/firestore';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 
 const STATUS_CONFIG = {
@@ -55,74 +54,129 @@ export default function StudioBookings({ user, onNavigateToChat }) {
     const [customStartTime, setCustomStartTime] = useState('09:00');
     const [customEndTime, setCustomEndTime] = useState('17:00');
 
-    // Fetch bookings from Firestore
+    // Fetch bookings from Supabase
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user?.id && !user?.uid || !supabase) return;
+        const userId = user?.id || user?.uid;
 
-        const bookingsRef = collection(db, `artifacts/${appId}/bookings`);
-        const q = query(
-            bookingsRef,
-            where('studioOwnerId', '==', user.uid),
-            orderBy('createdAt', 'desc')
-        );
+        const channel = supabase
+            .channel('studio-bookings')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'bookings',
+                filter: `studio_owner_id=eq.${userId}`
+            }, () => {
+                loadBookings();
+            })
+            .subscribe();
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const bookingsData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                // Convert Firestore timestamps
-                date: doc.data().date?.toDate?.() || new Date(doc.data().date),
-                createdAt: doc.data().createdAt?.toDate?.() || new Date()
+        loadBookings();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, user?.uid]);
+
+    const loadBookings = async () => {
+        if (!supabase) return;
+        const userId = user?.id || user?.uid;
+        setLoading(true);
+        try {
+            const { data: bookingsData, error } = await supabase
+                .from('bookings')
+                .select('*')
+                .eq('studio_owner_id', userId)
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            
+            const bookingsList = (bookingsData || []).map(b => ({
+                id: b.id,
+                ...b,
+                studioOwnerId: b.studio_owner_id,
+                clientId: b.client_id,
+                clientName: b.client_name,
+                date: b.date ? new Date(b.date) : new Date(),
+                createdAt: b.created_at ? new Date(b.created_at) : new Date()
             }));
-            setBookings(bookingsData);
-            setLoading(false);
-        }, (error) => {
+            setBookings(bookingsList);
+        } catch (error) {
             console.error('Error fetching bookings:', error);
-            setLoading(false);
-        });
-
-        return () => unsubscribe();
-    }, [user?.uid]);
+        }
+        setLoading(false);
+    };
 
     // Fetch blocked dates
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user?.id && !user?.uid || !supabase) return;
+        const userId = user?.id || user?.uid;
 
-        const blockedRef = collection(db, `artifacts/${appId}/blockedDates`);
-        const q = query(
-            blockedRef,
-            where('studioOwnerId', '==', user.uid)
-        );
+        const channel = supabase
+            .channel('blocked-dates')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'blocked_dates',
+                filter: `studio_owner_id=eq.${userId}`
+            }, () => {
+                loadBlockedDates();
+            })
+            .subscribe();
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const blockedData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                date: doc.data().date?.toDate?.() || new Date(doc.data().date)
+        loadBlockedDates();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, user?.uid]);
+
+    const loadBlockedDates = async () => {
+        if (!supabase) return;
+        const userId = user?.id || user?.uid;
+        try {
+            const { data: blockedData, error } = await supabase
+                .from('blocked_dates')
+                .select('*')
+                .eq('studio_owner_id', userId);
+            
+            if (error) throw error;
+            
+            const blockedList = (blockedData || []).map(b => ({
+                id: b.id,
+                ...b,
+                studioOwnerId: b.studio_owner_id,
+                date: b.date ? new Date(b.date) : new Date()
             }));
-            // Sort client-side to avoid needing composite index
-            blockedData.sort((a, b) => new Date(a.date) - new Date(b.date));
-            setBlockedDates(blockedData);
-        }, (error) => {
+            // Sort client-side
+            blockedList.sort((a, b) => new Date(a.date) - new Date(b.date));
+            setBlockedDates(blockedList);
+        } catch (error) {
             console.error('Error fetching blocked dates:', error);
-            // Don't break the UI if blocked dates can't be fetched
             setBlockedDates([]);
-        });
-
-        return () => unsubscribe();
-    }, [user?.uid]);
+        }
+    };
 
     const handleUpdateStatus = async (bookingId, newStatus) => {
+        if (!supabase) return;
         setUpdating(bookingId);
         const toastId = toast.loading(`Updating booking...`);
         
         try {
-            const bookingRef = doc(db, `artifacts/${appId}/bookings/${bookingId}`);
-            await updateDoc(bookingRef, { 
+            const now = new Date().toISOString();
+            const updateData = {
                 status: newStatus,
-                updatedAt: Timestamp.now(),
-                [`${newStatus}At`]: Timestamp.now()
-            });
+                updated_at: now,
+                [`${newStatus}_at`]: now
+            };
+            
+            const { error } = await supabase
+                .from('bookings')
+                .update(updateData)
+                .eq('id', bookingId);
+            
+            if (error) throw error;
+            
             toast.success(`Booking ${newStatus}!`, { id: toastId });
         } catch (error) {
             console.error('Update failed:', error);
@@ -134,21 +188,25 @@ export default function StudioBookings({ user, onNavigateToChat }) {
 
     // Handle blocking a date (off-platform booking)
     const handleBlockDate = async () => {
-        if (!selectedDate || !user?.uid) return;
+        if (!selectedDate || (!user?.id && !user?.uid) || !supabase) return;
+        const userId = user?.id || user?.uid;
         
         const toastId = toast.loading('Blocking time slot...');
         
         try {
-            const blockedRef = collection(db, `artifacts/${appId}/blockedDates`);
-            await addDoc(blockedRef, {
-                studioOwnerId: user.uid,
-                date: Timestamp.fromDate(selectedDate),
-                reason: blockReason || 'Off-platform booking',
-                timeSlot: blockTimeSlot,
-                startTime: blockTimeSlot === 'custom' ? customStartTime : null,
-                endTime: blockTimeSlot === 'custom' ? customEndTime : null,
-                createdAt: Timestamp.now()
-            });
+            const { error } = await supabase
+                .from('blocked_dates')
+                .insert({
+                    studio_owner_id: userId,
+                    date: selectedDate.toISOString(),
+                    reason: blockReason || 'Off-platform booking',
+                    time_slot: blockTimeSlot,
+                    start_time: blockTimeSlot === 'custom' ? customStartTime : null,
+                    end_time: blockTimeSlot === 'custom' ? customEndTime : null,
+                    created_at: new Date().toISOString()
+                });
+            
+            if (error) throw error;
             
             toast.success('Time slot blocked!', { id: toastId });
             setShowBlockModal(false);
@@ -163,10 +221,15 @@ export default function StudioBookings({ user, onNavigateToChat }) {
 
     // Handle unblocking a date
     const handleUnblockDate = async (blockedId) => {
+        if (!supabase) return;
         const toastId = toast.loading('Removing block...');
         
         try {
-            await deleteDoc(doc(db, `artifacts/${appId}/blockedDates/${blockedId}`));
+            await supabase
+                .from('blocked_dates')
+                .delete()
+                .eq('id', blockedId);
+            
             toast.success('Block removed!', { id: toastId });
         } catch (error) {
             console.error('Error unblocking date:', error);

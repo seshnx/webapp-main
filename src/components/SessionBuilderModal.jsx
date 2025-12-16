@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, DollarSign, Users, Trash2, Zap, CheckCircle, Loader2 } from 'lucide-react';
-// import { httpsCallable, getFunctions } from 'firebase/functions';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -87,26 +85,30 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
                 paymentIntentId = paymentResult.paymentIntentId;
             } */
 
+            if (!supabase) throw new Error('Supabase not initialized');
+            
+            const userId = user?.id || user?.uid;
             const groupId = `session_${Date.now()}`;
             const bookingPromises = lineItems.map(item => {
-                return addDoc(collection(db, `artifacts/${appId}/public/data/bookings`), {
-                    groupId,
-                    sessionName: data.sessionName,
-                    senderId: user.uid,
-                    senderName: `${userData.firstName} ${userData.lastName}`,
-                    targetId: item.id,
-                    targetName: `${item.firstName} ${item.lastName}`,
-                    serviceType: item.accountTypes?.[0] || 'Session',
-                    // FIX: Default to 'Flexible' if empty
-                    date: data.date || 'Flexible',
-                    time: data.time || 'Flexible',
-                    duration: data.duration,
-                    offerAmount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
-                    status: 'Pending', // Pending Payment or Confirmation
-                    paymentIntentId: paymentIntentId,
-                    timestamp: serverTimestamp(),
-                    type: 'GroupSession'
-                });
+                return supabase
+                    .from('bookings')
+                    .insert({
+                        group_id: groupId,
+                        session_name: data.sessionName,
+                        sender_id: userId,
+                        sender_name: `${userData.firstName} ${userData.lastName}`,
+                        target_id: item.id,
+                        target_name: `${item.firstName} ${item.lastName}`,
+                        service_type: item.accountTypes?.[0] || 'Session',
+                        date: data.date || 'Flexible',
+                        time: data.time || 'Flexible',
+                        duration: data.duration,
+                        offer_amount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
+                        status: 'Pending',
+                        payment_intent_id: paymentIntentId,
+                        timestamp: new Date().toISOString(),
+                        type: 'GroupSession'
+                    });
             });
 
             await Promise.all(bookingPromises);

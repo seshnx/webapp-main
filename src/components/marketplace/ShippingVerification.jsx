@@ -1,14 +1,11 @@
 // src/components/marketplace/ShippingVerification.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
-    doc, onSnapshot, updateDoc, serverTimestamp, addDoc, collection 
-} from 'firebase/firestore';
-import { 
     Package, Camera, Truck, MapPin, CheckCircle, Clock, AlertTriangle,
     X, Upload, ChevronRight, ChevronLeft, Loader2, Box, Scissors,
     Image as ImageIcon, Check, XCircle, ExternalLink, Copy
 } from 'lucide-react';
-import { db, appId, getPaths } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { SHIPPING_VERIFICATION_STATUS, SHIPPING_VERIFICATION_STEPS } from '../../config/constants';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import UserAvatar from '../shared/UserAvatar';
@@ -40,24 +37,62 @@ export default function ShippingVerification({
     const streamRef = useRef(null);
     const [showCamera, setShowCamera] = useState(false);
 
-    const isSeller = transaction?.sellerId === user?.uid;
-    const isBuyer = transaction?.buyerId === user?.uid;
+    const userId = user?.id || user?.uid;
+    const isSeller = transaction?.sellerId === userId;
+    const isBuyer = transaction?.buyerId === userId;
     const role = isSeller ? 'seller' : 'buyer';
 
     // Subscribe to transaction updates
     useEffect(() => {
-        if (!transactionId) return;
+        if (!transactionId || !supabase) return;
 
-        const transactionRef = doc(db, `artifacts/${appId}/public/data/shipping_transactions`, transactionId);
-        const unsubscribe = onSnapshot(transactionRef, (snap) => {
-            if (snap.exists()) {
-                setTransaction({ id: snap.id, ...snap.data() });
-            }
-            setLoading(false);
-        });
+        const channel = supabase
+            .channel(`shipping-${transactionId}`)
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'shipping_transactions',
+                filter: `id=eq.${transactionId}`
+            }, () => {
+                loadTransaction();
+            })
+            .subscribe();
 
-        return () => unsubscribe();
+        loadTransaction();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [transactionId]);
+
+    const loadTransaction = async () => {
+        if (!supabase) return;
+        setLoading(true);
+        try {
+            const { data: transactionData, error } = await supabase
+                .from('shipping_transactions')
+                .select('*')
+                .eq('id', transactionId)
+                .single();
+            
+            if (error) throw error;
+            
+            if (transactionData) {
+                setTransaction({
+                    id: transactionData.id,
+                    ...transactionData,
+                    buyerId: transactionData.buyer_id,
+                    sellerId: transactionData.seller_id,
+                    listingId: transactionData.listing_id,
+                    itemTitle: transactionData.item_title,
+                    trackingNumber: transactionData.tracking_number
+                });
+            }
+        } catch (error) {
+            console.error('Error loading transaction:', error);
+        }
+        setLoading(false);
+    };
 
     // Camera functions
     const startCamera = useCallback(async () => {
@@ -131,27 +166,43 @@ export default function ShippingVerification({
 
     // Update transaction status
     const updateStatus = async (newStatus, additionalData = {}) => {
-        if (!transactionId) return;
+        if (!transactionId || !supabase) return;
         setActionLoading(true);
+        const userId = user?.id || user?.uid;
         try {
-            const transactionRef = doc(db, `artifacts/${appId}/public/data/shipping_transactions`, transactionId);
-            await updateDoc(transactionRef, {
-                status: newStatus,
-                [`statusHistory.${newStatus}`]: { timestamp: Date.now(), userId: user.uid },
-                ...additionalData,
-                updatedAt: serverTimestamp()
-            });
+            const statusHistory = transaction?.status_history || {};
+            statusHistory[newStatus] = { timestamp: Date.now(), userId: userId };
+            
+            // Convert camelCase keys to snake_case for Supabase
+            const convertedData = Object.keys(additionalData).reduce((acc, key) => {
+                const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
+                acc[snakeKey] = additionalData[key];
+                return acc;
+            }, {});
+            
+            await supabase
+                .from('shipping_transactions')
+                .update({
+                    status: newStatus,
+                    status_history: statusHistory,
+                    updated_at: new Date().toISOString(),
+                    ...convertedData
+                })
+                .eq('id', transactionId);
 
             // Notify other party
             const otherUserId = isSeller ? transaction.buyerId : transaction.sellerId;
-            await addDoc(collection(db, getPaths(otherUserId).notifications), {
-                type: 'shipping_verification',
-                transactionId,
-                message: getNotificationMessage(newStatus),
-                itemTitle: transaction.itemTitle,
-                read: false,
-                createdAt: serverTimestamp()
-            });
+            await supabase
+                .from('notifications')
+                .insert({
+                    user_id: otherUserId,
+                    type: 'shipping_verification',
+                    transaction_id: transactionId,
+                    message: getNotificationMessage(newStatus),
+                    item_title: transaction.itemTitle,
+                    read: false,
+                    created_at: new Date().toISOString()
+                });
         } catch (error) {
             console.error('Update failed:', error);
             alert('Failed to update. Please try again.');

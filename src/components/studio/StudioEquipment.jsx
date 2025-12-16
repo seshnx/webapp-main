@@ -4,8 +4,7 @@ import {
     Trash2, Edit2, Save, Loader2, X, 
     Package
 } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import { EQUIP_CATEGORIES } from '../../config/constants';
@@ -22,12 +21,20 @@ export default function StudioEquipment({ user, userData, onUpdate }) {
     const [editingItem, setEditingItem] = useState(null);
 
     const handleSave = async (updatedEquipment) => {
+        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving equipment...');
+        const userId = user?.id || user?.uid;
         
         try {
-            const userRef = doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`);
-            await updateDoc(userRef, { studioEquipment: updatedEquipment });
+            await supabase
+                .from('profiles')
+                .update({ 
+                    studio_equipment: updatedEquipment,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userId);
+            
             setEquipment(updatedEquipment);
             toast.success('Equipment saved!', { id: toastId });
             if (onUpdate) onUpdate({ studioEquipment: updatedEquipment });

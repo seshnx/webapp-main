@@ -3,9 +3,8 @@ import {
     Image, Upload, Trash2, Star, 
     Loader2, X, Plus, Eye, Move
 } from 'lucide-react';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, storage, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
+import { useMediaUpload } from '../../hooks/useMediaUpload';
 import toast from 'react-hot-toast';
 
 /**
@@ -13,15 +12,23 @@ import toast from 'react-hot-toast';
  */
 export default function StudioGallery({ user, userData, onUpdate }) {
     const [photos, setPhotos] = useState(userData?.studioPhotos || []);
-    const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [selectedPhoto, setSelectedPhoto] = useState(null);
     const [draggingIndex, setDraggingIndex] = useState(null);
+    const { uploadMedia, uploading } = useMediaUpload();
+    const userId = user?.id || user?.uid;
 
     const savePhotos = useCallback(async (updatedPhotos) => {
+        if (!supabase) return false;
         try {
-            const userRef = doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`);
-            await updateDoc(userRef, { studioPhotos: updatedPhotos });
+            await supabase
+                .from('profiles')
+                .update({ 
+                    studio_photos: updatedPhotos,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userId);
+            
             setPhotos(updatedPhotos);
             if (onUpdate) onUpdate({ studioPhotos: updatedPhotos });
             return true;
@@ -30,7 +37,7 @@ export default function StudioGallery({ user, userData, onUpdate }) {
             toast.error('Failed to save photos');
             return false;
         }
-    }, [user.uid, onUpdate]);
+    }, [userId, onUpdate]);
 
     const handleUpload = useCallback(async (files) => {
         if (!files || files.length === 0) return;
@@ -41,7 +48,6 @@ export default function StudioGallery({ user, userData, onUpdate }) {
             return;
         }
 
-        setUploading(true);
         const toastId = toast.loading('Uploading photos...');
         
         const newPhotos = [];
@@ -59,34 +65,19 @@ export default function StudioGallery({ user, userData, onUpdate }) {
 
             try {
                 const timestamp = Date.now();
-                const filename = `${timestamp}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
-                const storageRef = ref(storage, `studios/${user.uid}/gallery/${filename}`);
+                const result = await uploadMedia(file, `studio/gallery/${userId}`);
                 
-                const uploadTask = uploadBytesResumable(storageRef, file);
-                
-                await new Promise((resolve, reject) => {
-                    uploadTask.on(
-                        'state_changed',
-                        (snapshot) => {
-                            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                            setUploadProgress(progress);
-                        },
-                        (error) => reject(error),
-                        async () => {
-                            const url = await getDownloadURL(uploadTask.snapshot.ref);
-                            newPhotos.push({
-                                id: timestamp.toString(),
-                                url,
-                                path: storageRef.fullPath,
-                                filename,
-                                caption: '',
-                                isCover: photos.length === 0 && newPhotos.length === 0, // First photo is cover
-                                uploadedAt: new Date().toISOString()
-                            });
-                            resolve();
-                        }
-                    );
-                });
+                if (result?.url) {
+                    newPhotos.push({
+                        id: timestamp.toString(),
+                        url: result.url,
+                        path: result.storageRef || `studio/gallery/${userId}/${timestamp}_${file.name}`,
+                        filename: file.name,
+                        caption: '',
+                        isCover: photos.length === 0 && newPhotos.length === 0, // First photo is cover
+                        uploadedAt: new Date().toISOString()
+                    });
+                }
             } catch (error) {
                 console.error('Upload error:', error);
                 toast.error(`Failed to upload ${file.name}`);
@@ -102,9 +93,8 @@ export default function StudioGallery({ user, userData, onUpdate }) {
             toast.dismiss(toastId);
         }
         
-        setUploading(false);
         setUploadProgress(0);
-    }, [photos, user.uid, savePhotos]);
+    }, [photos, userId, savePhotos, uploadMedia]);
 
     const handleDelete = async (photoIndex) => {
         const photo = photos[photoIndex];
@@ -113,11 +103,8 @@ export default function StudioGallery({ user, userData, onUpdate }) {
         const toastId = toast.loading('Deleting...');
         
         try {
-            // Delete from storage
-            if (photo.path) {
-                const storageRef = ref(storage, photo.path);
-                await deleteObject(storageRef).catch(() => {}); // Ignore if already deleted
-            }
+            // Note: File deletion from MinIO storage should be handled by backend API
+            // For now, we just remove it from the database
             
             // Update photos array
             let updatedPhotos = photos.filter((_, i) => i !== photoIndex);

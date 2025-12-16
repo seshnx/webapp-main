@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, AlertCircle, ChevronRight, Search, Loader2 } from 'lucide-react';
-import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import LocationPicker from './shared/LocationPicker';
 // Distance calculation is handled by inline calcDist function
 import StudioMap from './shared/StudioMap';
@@ -30,16 +29,19 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
 
     // --- STEP 2: STUDIO FETCHING ---
     const fetchStudios = async () => {
+        if (!supabase) return;
         setLoadingStudios(true);
         try {
-            // Fetch all studios (Optimization: Real app needs GeoFire or bounded queries)
-            const q = query(collectionGroup(db, 'public_profile'), where('accountTypes', 'array-contains', 'Studio'));
-            const snap = await getDocs(q);
+            // Fetch all studios with Studio account type
+            const { data: profilesData, error } = await supabase
+                .from('profiles')
+                .select('id, display_name, location, account_types, city, state')
+                .contains('account_types', ['Studio']);
             
-            const rawStudios = snap.docs.map(d => ({ id: d.ref.parent.parent.id, ...d.data() }));
+            if (error) throw error;
             
             // Client-side filtering for distance
-            const filtered = rawStudios.filter(studio => {
+            const filtered = (profilesData || []).filter(studio => {
                 if (!studio.location || !sessionParams.location) return false;
                 const dist = calcDist(
                     sessionParams.location.lat, sessionParams.location.lng,

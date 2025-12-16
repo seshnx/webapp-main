@@ -3,8 +3,7 @@ import {
     Settings, Save, Loader2, Home, MapPin, Mail,
     Wifi, Shield, EyeOff
 } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -77,30 +76,38 @@ export default function StudioSettings({ user, userData, onUpdate }) {
     };
 
     const onSubmit = async (data) => {
+        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving settings...');
 
         try {
-            const userRef = doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`);
-            await updateDoc(userRef, {
-                studioName: data.studioName,
-                profileName: data.studioName, // Keep in sync
-                address: data.address,
-                city: data.city,
-                state: data.state,
-                zip: data.zip,
-                lat: data.lat,
-                lng: data.lng,
-                studioDescription: data.studioDescription,
-                email: data.email,
-                phoneCell: data.phoneCell,
-                phoneLand: data.phoneLand,
-                website: data.website,
-                hours: data.hours,
-                amenities: data.amenities,
-                hideAddress: data.hideAddress,
-                isStudio: true
-            });
+            const userId = user?.id || user?.uid;
+            await supabase
+                .from('profiles')
+                .update({
+                    studio_name: data.studioName,
+                    profile_name: data.studioName,
+                    address: data.address,
+                    city: data.city,
+                    state: data.state,
+                    zip: data.zip,
+                    lat: data.lat,
+                    lng: data.lng,
+                    studio_description: data.studioDescription,
+                    email: data.email,
+                    phone_cell: data.phoneCell,
+                    phone_land: data.phoneLand,
+                    website: data.website,
+                    hours: data.hours,
+                    amenities: data.amenities,
+                    hide_address: data.hideAddress,
+                    is_studio: true,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userId);
+            
+            if (error) throw error;
+            
             toast.success("Settings saved!", { id: toastId });
             if (onUpdate) onUpdate(data);
         } catch (error) {

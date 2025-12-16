@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { addDoc, collection, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
 import { 
     ChevronRight, ChevronLeft, Upload, Music, Image as ImageIcon, 
     CheckCircle, AlertCircle, Loader2, Info, X, Calendar 
 } from 'lucide-react';
-import { db, getPaths, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { DDEX_GENRES, DISTRIBUTION_STORES, RELEASE_TYPES } from '../../config/constants';
 
@@ -300,24 +299,39 @@ export default function ReleaseBuilder({ user, userData, initialData, onCancel, 
     };
 
     const handleFinalSubmit = async () => {
+        if (!supabase) return;
         setSubmitting(true);
+        const userId = user?.id || user?.uid;
         try {
             const payload = {
-                ...formData,
-                uploaderId: user.uid,
-                updatedAt: serverTimestamp(),
+                uploader_id: userId,
+                title: formData.title,
+                primary_artist: formData.primaryArtist,
+                type: formData.type,
+                genre: formData.genre,
+                release_date: formData.releaseDate,
+                label_name: formData.labelName || null,
+                artwork_url: formData.artworkUrl || null,
+                tracks: formData.tracks || [],
+                updated_at: new Date().toISOString(),
                 status: 'Processing' // Move to processing queue
             };
 
             if (initialData?.id) {
                 // Update existing
-                await updateDoc(doc(db, getPaths(user.uid).distributionReleases, initialData.id), payload);
+                await supabase
+                    .from('distribution_releases')
+                    .update(payload)
+                    .eq('id', initialData.id)
+                    .eq('uploader_id', userId);
             } else {
                 // Create new
-                await addDoc(collection(db, getPaths(user.uid).distributionReleases), {
-                    ...payload,
-                    createdAt: serverTimestamp()
-                });
+                await supabase
+                    .from('distribution_releases')
+                    .insert({
+                        ...payload,
+                        created_at: new Date().toISOString()
+                    });
             }
             
             alert("Release submitted successfully! It is now in the review queue.");

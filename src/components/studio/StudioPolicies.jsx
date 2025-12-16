@@ -3,8 +3,7 @@ import {
     FileText, Save, Loader2, DollarSign, Clock, AlertTriangle,
     Shield, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 
 /**
@@ -48,12 +47,20 @@ export default function StudioPolicies({ user, userData, onUpdate }) {
     const [expandedSection, setExpandedSection] = useState('booking');
 
     const handleSave = async () => {
+        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving policies...');
+        const userId = user?.id || user?.uid;
         
         try {
-            const userRef = doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`);
-            await updateDoc(userRef, { policies });
+            await supabase
+                .from('profiles')
+                .update({ 
+                    policies: policies,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', userId);
+            
             toast.success('Policies saved!', { id: toastId });
             if (onUpdate) onUpdate({ policies });
         } catch (error) {
