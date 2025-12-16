@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
-// import { httpsCallable } from 'firebase/functions';
 import { Check, Plus, Zap, TrendingUp, DollarSign, Loader2, Shield, Star, Lock, ArrowRight, AlertCircle } from 'lucide-react';
-import { db, getPaths } from '../config/firebase';
-// import { functions } from '../config/firebase'; // TEMPORARILY DISABLED 
+import { supabase } from '../config/supabase'; 
 import { SUBSCRIPTION_PLAN_KEYS } from '../config/constants';
 import { useDynamicConfig } from '../hooks/useDynamicConfig';
 import { handlePayout } from '../utils/paymentUtils';
@@ -23,44 +20,92 @@ export default function PaymentsManager({ user, userData }) {
   );
 
   useEffect(() => {
-      if (!user?.uid) return;
-      const unsubWallet = onSnapshot(doc(db, getPaths(user.uid).userWallet), (snap) => {
-          if (snap.exists()) {
-              const data = snap.data();
-              setWalletData({
-                  balance: data.balance || 0,
-                  escrowBalance: data.escrowBalance || 0,
-                  payoutBalance: data.payoutBalance || 0 
-              });
+      if (!user?.id && !user?.uid || !supabase) return;
+      const userId = user?.id || user?.uid;
+      
+      const loadWallet = async () => {
+          try {
+              const { data, error } = await supabase
+                  .from('wallets')
+                  .select('*')
+                  .eq('user_id', userId)
+                  .single();
+              
+              if (error && error.code !== 'PGRST116') {
+                  console.error('Error loading wallet:', error);
+                  return;
+              }
+              
+              if (data) {
+                  setWalletData({
+                      balance: data.balance || 0,
+                      escrowBalance: data.escrow_balance || 0,
+                      payoutBalance: data.payout_balance || 0 
+                  });
+              } else {
+                  // Wallet doesn't exist yet - set defaults
+                  setWalletData({
+                      balance: 0,
+                      escrowBalance: 0,
+                      payoutBalance: 0
+                  });
+              }
+          } catch (err) {
+              console.error('Wallet load error:', err);
           }
-      });
-      return () => unsubWallet();
-  }, [user.uid]);
+      };
+      
+      loadWallet();
+      
+      // Subscribe to wallet changes
+      const channel = supabase
+          .channel(`wallet-${userId}`)
+          .on('postgres_changes', {
+              event: '*',
+              schema: 'public',
+              table: 'wallets',
+              filter: `user_id=eq.${userId}`
+          }, () => {
+              loadWallet();
+          })
+          .subscribe();
+      
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [user?.id, user?.uid]);
 
   const handleCheckout = async (priceId, mode = 'payment') => {
+      if (!supabase) {
+          alert("Payment system unavailable. Please refresh and try again.");
+          return;
+      }
+      
       setProcessing(true);
       try {
-          // TEMPORARILY DISABLED: Firebase Functions not available
-          throw new Error("Checkout functionality is temporarily unavailable. Firebase Functions service is not configured.");
-          
-          /* // Use exported functions instance
-          const createSession = httpsCallable(functions, 'createStripeCheckoutSession');
-          const { data } = await createSession({
-              price: priceId,
-              mode: mode,
-              success_url: window.location.href,
-              cancel_url: window.location.href,
+          // Use Supabase Edge Function for checkout
+          const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+              body: {
+                  price: priceId,
+                  mode: mode,
+                  success_url: window.location.href,
+                  cancel_url: window.location.href,
+              }
           });
           
-          if (data && data.url) {
+          if (error) throw error;
+          
+          if (data?.url) {
             window.location.assign(data.url);
           } else {
-             throw new Error("Failed to create checkout session.");
-          } */
-
+             throw new Error("Failed to create checkout session. Please try again or contact support.");
+          }
       } catch (error) {
           console.error("Checkout Error:", error);
-          alert(`Checkout failed: ${error.message}`);
+          const errorMsg = error.message?.includes('Function not found') || error.message?.includes('404')
+              ? "Payment system not configured. Please set up Supabase Edge Function 'create-checkout-session'."
+              : error.message || "Checkout failed. Please try again.";
+          alert(`Checkout failed: ${errorMsg}`);
       } finally {
           setProcessing(false);
       }

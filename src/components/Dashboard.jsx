@@ -338,7 +338,11 @@ export default function Dashboard({
                                 <span className="text-white/80 text-lg font-medium">{greeting.text}</span>
                             </div>
                             <h1 className="text-4xl md:text-5xl font-black text-white tracking-tight">
-                                {userData?.firstName || 'Creator'}
+                                {userData?.effectiveDisplayName || 
+                                 userData?.displayName ||
+                                 (userData?.firstName && userData?.lastName ? `${userData.firstName} ${userData.lastName}` : userData?.firstName || userData?.lastName) ||
+                                 userData?.email?.split('@')[0] ||
+                                 'Creator'}
                             </h1>
                             <p className="text-white/60 mt-2 text-lg">Your creative command center</p>
                         </div>

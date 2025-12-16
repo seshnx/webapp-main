@@ -165,18 +165,46 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     };
 
     const handleDataExport = async () => {
+        if (!supabase || !user) {
+            alert("Unable to export data. Please ensure you're logged in.");
+            return;
+        }
+        
         setExporting(true);
         try {
-            // TEMPORARILY DISABLED: Firebase Functions not available
-            throw new Error("Data export functionality is temporarily unavailable. Firebase Functions service is not configured.");
+            const userId = user.id;
             
-            /* const functions = getFunctions();
-            const exportFn = httpsCallable(functions, 'exportUserData');
+            // Collect all user data from Supabase
+            const [profile, wallet, bookings, reviews, follows, notifications] = await Promise.all([
+                supabase.from('profiles').select('*').eq('id', userId).single(),
+                supabase.from('wallets').select('*').eq('user_id', userId).single(),
+                supabase.from('bookings').select('*').or(`sender_id.eq.${userId},target_id.eq.${userId}`).limit(1000),
+                supabase.from('reviews').select('*').or(`reviewer_id.eq.${userId},target_id.eq.${userId}`).limit(1000),
+                supabase.from('follows').select('*').or(`follower_id.eq.${userId},following_id.eq.${userId}`).limit(1000),
+                supabase.from('notifications').select('*').eq('user_id', userId).limit(1000)
+            ]);
             
-            const result = await exportFn();
-            const jsonString = result.data.data; // Backend returns { data: "string" }
+            // Also check for sub_profiles
+            const { data: subProfiles } = await supabase
+                .from('sub_profiles')
+                .select('*')
+                .eq('user_id', userId);
             
-            // Create a Blob and trigger download
+            // Compile export data
+            const exportData = {
+                exportDate: new Date().toISOString(),
+                userId: userId,
+                profile: profile.data || null,
+                wallet: wallet.data || null,
+                subProfiles: subProfiles || [],
+                bookings: bookings.data || [],
+                reviews: reviews.data || [],
+                follows: follows.data || [],
+                notifications: notifications.data || []
+            };
+            
+            // Create JSON blob and download
+            const jsonString = JSON.stringify(exportData, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
@@ -185,11 +213,12 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url);
             
-            alert("Your data has been downloaded successfully."); */
+            alert("Your data has been downloaded successfully.");
         } catch (e) {
-            console.error(e);
-            alert("Failed to export data. Please try again later.");
+            console.error("Data export error:", e);
+            alert("Failed to export data: " + (e.message || "Unknown error"));
         }
         setExporting(false);
     };

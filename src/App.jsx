@@ -96,6 +96,9 @@ export default function App() {
         }
 
         try {
+            // Get current auth user for metadata fallback
+            const { data: { user: authUser } } = await supabase.auth.getUser();
+            
             // Fetch Profile from 'profiles' table
             const { data: profile, error: profileError } = await supabase
                 .from('profiles')
@@ -110,32 +113,168 @@ export default function App() {
                     ? profile.account_types 
                     : ['Fan'];
                 
+                // Get user email from auth if not in profile
+                let userEmail = profile.email;
+                if (!userEmail && user?.email) {
+                    userEmail = user.email;
+                }
+                
+                // Get name from profile or auth metadata
+                const firstName = profile.first_name || user?.user_metadata?.first_name || user?.user_metadata?.given_name || '';
+                const lastName = profile.last_name || user?.user_metadata?.last_name || user?.user_metadata?.family_name || '';
+                
+                // If profile exists but has no name, try to update it from auth metadata
+                if (profile && (!firstName || !lastName) && (authUser?.user_metadata || user?.user_metadata)) {
+                    const metadata = authUser?.user_metadata || user?.user_metadata;
+                    const updates = {};
+                    let needsUpdate = false;
+                    
+                    if (!firstName && (metadata.first_name || metadata.given_name)) {
+                        updates.first_name = metadata.first_name || metadata.given_name;
+                        needsUpdate = true;
+                    }
+                    if (!lastName && (metadata.last_name || metadata.family_name)) {
+                        updates.last_name = metadata.last_name || metadata.family_name;
+                        needsUpdate = true;
+                    }
+                    if (!userEmail && (authUser?.email || user?.email)) {
+                        updates.email = authUser?.email || user?.email;
+                        needsUpdate = true;
+                    }
+                    
+                // Calculate effective display name and search terms
+                const effectiveFirstName = updates.first_name || firstName;
+                const effectiveLastName = updates.last_name || lastName;
+                const effectiveEmail = updates.email || userEmail;
+                
+                if (effectiveFirstName || effectiveLastName) {
+                    const effectiveName = effectiveFirstName && effectiveLastName 
+                        ? `${effectiveFirstName} ${effectiveLastName}`
+                        : effectiveFirstName || effectiveLastName || effectiveEmail?.split('@')[0] || 'User';
+                    updates.effective_display_name = effectiveName;
+                    
+                    // Also update search_terms
+                    updates.search_terms = [
+                        effectiveFirstName?.toLowerCase(),
+                        effectiveLastName?.toLowerCase(),
+                        effectiveName.toLowerCase()
+                    ].filter(Boolean);
+                    
+                    needsUpdate = true;
+                }
+                    
+                    if (needsUpdate) {
+                        updates.updated_at = new Date().toISOString();
+                        // Silently update profile with auth metadata
+                        const { error: updateError } = await supabase
+                            .from('profiles')
+                            .update(updates)
+                            .eq('id', userId);
+                        
+                        if (updateError) {
+                            console.warn('Failed to sync auth metadata to profile:', updateError);
+                        } else {
+                            // Reload profile after update
+                            const { data: updatedProfile } = await supabase
+                                .from('profiles')
+                                .select('*')
+                                .eq('id', userId)
+                                .single();
+                            
+                            if (updatedProfile) {
+                                // Use updated profile data
+                                const updatedFirstName = updatedProfile.first_name || '';
+                                const updatedLastName = updatedProfile.last_name || '';
+                                const updatedEmail = updatedProfile.email || authUser?.email || user?.email || '';
+                                
+                                setUserData({
+                                    ...updatedProfile,
+                                    firstName: updatedFirstName,
+                                    lastName: updatedLastName,
+                                    email: updatedEmail,
+                                    accountTypes: accountTypes,
+                                    activeProfileRole: updatedProfile.active_role || accountTypes[0],
+                                    photoURL: updatedProfile.avatar_url || authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || null,
+                                    displayName: updatedProfile.display_name || null,
+                                    effectiveDisplayName: updatedProfile.effective_display_name || 
+                                        (updatedFirstName && updatedLastName ? `${updatedFirstName} ${updatedLastName}` : updatedFirstName || updatedLastName || updatedEmail?.split('@')[0] || 'User')
+                                });
+                                return; // Exit early since we've set userData
+                            }
+                        }
+                    }
+                }
+                
                 setUserData({
                     ...profile,
-                    firstName: profile.first_name || '',
-                    lastName: profile.last_name || '',
+                    firstName: firstName,
+                    lastName: lastName,
+                    email: userEmail || profile.email || user?.email || null,
                     accountTypes: accountTypes,
                     activeProfileRole: profile.active_role || accountTypes[0],
-                    photoURL: profile.avatar_url || null
+                    photoURL: profile.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null,
+                    displayName: profile.display_name || null,
+                    effectiveDisplayName: profile.effective_display_name || 
+                        (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || userEmail?.split('@')[0] || 'User')
                 });
                 
                 console.log('Profile loaded:', { 
                     userId, 
+                    firstName,
+                    lastName,
                     hasAccountTypes: profile.account_types?.length > 0,
                     accountTypes: accountTypes 
                 });
             } else {
-                // Profile doesn't exist or error - set default userData to prevent crashes
-                console.log('Profile not found or error, setting default userData');
+                // Profile doesn't exist - create it from auth data
+                console.log('Profile not found, creating from auth data');
+                
+                const firstName = user?.user_metadata?.first_name || user?.user_metadata?.given_name || '';
+                const lastName = user?.user_metadata?.last_name || user?.user_metadata?.family_name || '';
+                const email = user?.email || '';
+                
+                // Calculate effective display name
+                const effectiveName = firstName && lastName 
+                    ? `${firstName} ${lastName}`
+                    : firstName || lastName || email?.split('@')[0] || 'User';
+                
+                // Try to create profile
+                const { error: createError } = await supabase
+                    .from('profiles')
+                    .insert({
+                        id: userId,
+                        email: email,
+                        first_name: firstName,
+                        last_name: lastName,
+                        avatar_url: user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null,
+                        account_types: ['Fan'],
+                        active_role: 'Fan',
+                        preferred_role: 'Fan',
+                        effective_display_name: effectiveName,
+                        search_terms: [
+                            firstName?.toLowerCase(),
+                            lastName?.toLowerCase(),
+                            effectiveName.toLowerCase()
+                        ].filter(Boolean),
+                        settings: {},
+                        updated_at: new Date().toISOString()
+                    });
+                
+                if (createError && createError.code !== '23505') { // Ignore duplicate key errors
+                    console.error("Error creating profile:", createError);
+                }
+                
+                // Set userData even if creation failed (will retry on next load)
                 setUserData({
                     id: userId,
-                    firstName: '',
-                    lastName: '',
+                    firstName: firstName,
+                    lastName: lastName,
+                    email: email,
                     accountTypes: ['Fan'],
                     activeProfileRole: 'Fan',
-                    photoURL: null,
-                    email: null,
-                    settings: {}
+                    photoURL: user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null,
+                    settings: {},
+                    effectiveDisplayName: firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || email?.split('@')[0] || 'User'
                 });
                 
                 if (profileError && profileError.code !== 'PGRST116') {

@@ -62,28 +62,34 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
         const toastId = toast.loading('Initializing Session...');
 
         try {
-            // TEMPORARILY DISABLED: Firebase Functions not available
-            // Payment functionality disabled - sessions can still be created without payment
+            // Handle payment if total > 0
             let paymentIntentId = null;
             
-            /* const functions = getFunctions();
-            // Optional: Check if payment is needed (if total > 0)
-            
-            if (finalTotal > 0) {
-                const createSplitPayment = httpsCallable(functions, 'createSplitPayment');
-                const paymentPayload = {
-                    totalAmount: finalTotal,
-                    description: `Session: ${data.sessionName}`,
-                    transfers: lineItems.map(item => ({
-                        recipientId: item.id,
-                        amount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
-                        role: item.accountTypes?.[0] || 'Creative'
-                    }))
-                };
-                const { data: paymentResult } = await createSplitPayment(paymentPayload);
-                if (!paymentResult.clientSecret) throw new Error("Payment initialization failed");
-                paymentIntentId = paymentResult.paymentIntentId;
-            } */
+            if (finalTotal > 0 && supabase) {
+                try {
+                    const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('create-split-payment', {
+                        body: {
+                            totalAmount: finalTotal,
+                            description: `Session: ${data.sessionName}`,
+                            transfers: lineItems.map(item => ({
+                                recipientId: item.id,
+                                amount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
+                                role: item.accountTypes?.[0] || 'Creative'
+                            }))
+                        }
+                    });
+                    
+                    if (paymentError) {
+                        console.warn("Payment initialization failed, continuing without payment:", paymentError);
+                        // Continue without payment - session can still be created
+                    } else if (paymentResult?.paymentIntentId) {
+                        paymentIntentId = paymentResult.paymentIntentId;
+                    }
+                } catch (paymentErr) {
+                    console.warn("Payment setup error, continuing without payment:", paymentErr);
+                    // Continue without payment - allow session creation
+                }
+            }
 
             if (!supabase) throw new Error('Supabase not initialized');
             
