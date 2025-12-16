@@ -105,17 +105,30 @@ export default function App() {
             
             if (profile && !profileError) {
                 // Normalize data structure for the app
+                // Even if account_types is empty, set a default so user can use the app
+                const accountTypes = profile.account_types && profile.account_types.length > 0 
+                    ? profile.account_types 
+                    : ['Fan'];
+                
                 setUserData({
                     ...profile,
                     firstName: profile.first_name,
                     lastName: profile.last_name,
-                    accountTypes: profile.account_types || ['Fan'],
-                    activeProfileRole: profile.active_role || 'Fan',
+                    accountTypes: accountTypes,
+                    activeProfileRole: profile.active_role || accountTypes[0],
                     photoURL: profile.avatar_url
+                });
+                
+                console.log('Profile loaded:', { 
+                    userId, 
+                    hasAccountTypes: profile.account_types?.length > 0,
+                    accountTypes: accountTypes 
                 });
             } else if (profileError && profileError.code !== 'PGRST116') {
                 // PGRST116 = no rows returned (user doesn't have profile yet)
                 console.error("Error fetching profile:", profileError);
+            } else if (profileError?.code === 'PGRST116') {
+                console.log('Profile not found yet - trigger should create it');
             }
 
             // Fetch Wallet (optional, don't fail if missing)
@@ -193,13 +206,32 @@ export default function App() {
         setLoading(false);
     });
 
-    // 2. Listen for auth changes (for subsequent logins/logouts)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // 2. Listen for auth changes (for subsequent logins/logouts, including OAuth callbacks)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+        console.log('Auth state changed:', event, session?.user?.id);
         const currentUser = session?.user ?? null;
         setUser(currentUser);
 
         if (currentUser) {
             await loadUserData(currentUser.id);
+            
+            // If this is a SIGNED_IN event (like OAuth callback) and profile has no account_types,
+            // we might need to show onboarding
+            if (event === 'SIGNED_IN') {
+                // Check if profile needs setup
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('account_types')
+                    .eq('id', currentUser.id)
+                    .single();
+                
+                // If profile exists but has no account_types, it's a new OAuth user
+                if (profile && (!profile.account_types || profile.account_types.length === 0)) {
+                    console.log('New OAuth user detected - profile needs setup');
+                    // Don't redirect to onboarding automatically - let them use the app
+                    // They can complete profile later
+                }
+            }
         } else {
             setUserData(null);
             setSubProfiles({});

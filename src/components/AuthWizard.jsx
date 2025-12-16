@@ -106,16 +106,37 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     // Only show onboarding if explicitly marked as new user AND user exists
     // Don't auto-trigger onboarding on every user detection
     if (isNewUser && user && user.id) {
-      setMode('onboarding');
-      setStep(1);
-      const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
-      const names = fullName.split(' ');
-      setForm(prev => ({
-        ...prev,
-        email: user?.email || '',
-        firstName: names[0] || '',
-        lastName: names.slice(1).join(' ') || ''
-      }));
+      // Check if profile already has account_types (from OAuth or previous setup)
+      const checkProfile = async () => {
+        if (!supabase) return;
+        
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('account_types')
+          .eq('id', user.id)
+          .single();
+        
+        // If profile exists and has account_types, skip onboarding
+        if (profile && profile.account_types && profile.account_types.length > 0) {
+          console.log('Profile already has account_types, skipping onboarding');
+          setMode('login'); // Will redirect to app
+          return;
+        }
+        
+        // Otherwise, show onboarding
+        setMode('onboarding');
+        setStep(1);
+        const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
+        const names = fullName.split(' ');
+        setForm(prev => ({
+          ...prev,
+          email: user?.email || '',
+          firstName: names[0] || '',
+          lastName: names.slice(1).join(' ') || ''
+        }));
+      };
+      
+      checkProfile();
     } else if (!user || !user.id) {
       setMode('login');
       setStep(1);
