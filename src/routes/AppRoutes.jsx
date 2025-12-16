@@ -1,5 +1,6 @@
 import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import AuthWizard from '../components/AuthWizard';
 
 // Import components directly (no lazy loading) to avoid hook count issues
 import Dashboard from '../components/Dashboard';
@@ -28,12 +29,47 @@ import { hasEduAccess } from '../utils/eduPermissions';
 import { Loader2 } from 'lucide-react';
 
 /**
+ * Protected Route Wrapper
+ * 
+ * Protects routes and redirects to login if user is not authenticated
+ */
+function ProtectedRoute({ children, user, loading }) {
+  const location = useLocation();
+  
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="animate-spin text-brand-blue" size={32} />
+      </div>
+    );
+  }
+  
+  // Check if user is authenticated
+  if (!user) {
+    // Store the attempted location so we can redirect back after login
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  
+  return children;
+}
+
+/**
  * EDU Protected Route Wrapper
  * 
  * Protects EDU routes and redirects to login if user doesn't have EDU access
  */
-function EduProtectedRoute({ children, user, userData }) {
+function EduProtectedRoute({ children, user, userData, loading }) {
   const location = useLocation();
+  
+  // Show loading while checking auth
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="animate-spin text-brand-blue" size={32} />
+      </div>
+    );
+  }
   
   // Check if user is authenticated
   if (!user) {
@@ -77,21 +113,42 @@ function EduDashboardWrapper({ user, userData }) {
  * Handles all application routes with proper component lifecycle management.
  * React Router ensures components are properly mounted/unmounted on route changes.
  */
-export default function AppRoutes({ user, userData, subProfiles, tokenBalance, setActiveTab, handleLogout, openPublicProfile, pendingChatTarget, clearPendingChatTarget }) {
+export default function AppRoutes({ user, userData, subProfiles, tokenBalance, setActiveTab, handleLogout, openPublicProfile, pendingChatTarget, clearPendingChatTarget, loading }) {
 
   return (
     <Routes>
-        {/* Main App Routes */}
+        {/* Public Routes */}
+        <Route 
+          path="/login" 
+          element={
+            <AuthWizard 
+              darkMode={false} 
+              toggleTheme={() => {}} 
+              onSuccess={() => {}} 
+              isNewUser={false} 
+            />
+          } 
+        />
+        <Route 
+          path="/legal" 
+          element={
+            <LegalDocs />
+          } 
+        />
+        
+        {/* Protected Main App Routes */}
         <Route 
           path="/" 
           element={
-            <Dashboard 
-              user={user} 
-              userData={userData} 
-              subProfiles={subProfiles} 
-              setActiveTab={setActiveTab} 
-              tokenBalance={tokenBalance}
-            />
+            <ProtectedRoute user={user} loading={loading}>
+              <Dashboard 
+                user={user} 
+                userData={userData} 
+                subProfiles={subProfiles} 
+                setActiveTab={setActiveTab} 
+                tokenBalance={tokenBalance}
+              />
+            </ProtectedRoute>
           } 
         />
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
@@ -99,14 +156,20 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
         
         <Route 
           path="/feed" 
-          element={<SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />} 
+          element={
+            <ProtectedRoute user={user} loading={loading}>
+              <SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />
+            </ProtectedRoute>
+          } 
         />
         <Route path="/social" element={<Navigate to="/feed" replace />} />
         
         <Route 
           path="/bookings" 
           element={
-            <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />
+            <ProtectedRoute user={user} loading={loading}>
+              <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />
+            </ProtectedRoute>
           } 
         />
         <Route path="/find-talent" element={<Navigate to="/bookings" replace />} />
@@ -114,27 +177,33 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
         <Route 
           path="/marketplace" 
           element={
-            <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />
+            <ProtectedRoute user={user} loading={loading}>
+              <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />
+            </ProtectedRoute>
           } 
         />
         
         <Route 
           path="/messages" 
           element={
-            <ChatInterface 
-              user={user} 
-              userData={userData} 
-              openPublicProfile={openPublicProfile}
-              pendingChatTarget={pendingChatTarget}
-              clearPendingChatTarget={clearPendingChatTarget}
-            />
+            <ProtectedRoute user={user} loading={loading}>
+              <ChatInterface 
+                user={user} 
+                userData={userData} 
+                openPublicProfile={openPublicProfile}
+                pendingChatTarget={pendingChatTarget}
+                clearPendingChatTarget={clearPendingChatTarget}
+              />
+            </ProtectedRoute>
           } 
         />
         
         <Route 
           path="/tech" 
           element={
-            <TechServices user={user} userData={userData} />
+            <ProtectedRoute user={user} loading={loading}>
+              <TechServices user={user} userData={userData} />
+            </ProtectedRoute>
           } 
         />
         
@@ -142,7 +211,9 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
         <Route 
           path="/business-center" 
           element={
-            <BusinessCenter user={user} userData={userData} />
+            <ProtectedRoute user={user} loading={loading}>
+              <BusinessCenter user={user} userData={userData} />
+            </ProtectedRoute>
           } 
         />
         
@@ -154,28 +225,27 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
         <Route 
           path="/payments" 
           element={
-            <PaymentsManager user={user} userData={userData} />
+            <ProtectedRoute user={user} loading={loading}>
+              <PaymentsManager user={user} userData={userData} />
+            </ProtectedRoute>
           } 
         />
         
         <Route 
           path="/profile" 
           element={
-            <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />
+            <ProtectedRoute user={user} loading={loading}>
+              <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />
+            </ProtectedRoute>
           } 
         />
         
         <Route 
           path="/settings" 
           element={
-            <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />
-          } 
-        />
-        
-        <Route 
-          path="/legal" 
-          element={
-            <LegalDocs />
+            <ProtectedRoute user={user} loading={loading}>
+              <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />
+            </ProtectedRoute>
           } 
         />
 
@@ -187,7 +257,7 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
         <Route 
           path="/edu" 
           element={
-            <EduProtectedRoute user={user} userData={userData}>
+            <EduProtectedRoute user={user} userData={userData} loading={loading}>
               <EduAuthProvider user={user} userData={userData}>
                 <EduDashboardWrapper user={user} userData={userData} />
               </EduAuthProvider>
@@ -197,7 +267,7 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
         <Route 
           path="/edu/enroll" 
           element={
-            <EduProtectedRoute user={user} userData={userData}>
+            <EduProtectedRoute user={user} userData={userData} loading={loading}>
               <EduAuthProvider user={user} userData={userData}>
                 <StudentEnrollment user={user} userData={userData} />
               </EduAuthProvider>
@@ -207,7 +277,7 @@ export default function AppRoutes({ user, userData, subProfiles, tokenBalance, s
         <Route 
           path="/edu/:view" 
           element={
-            <EduProtectedRoute user={user} userData={userData}>
+            <EduProtectedRoute user={user} userData={userData} loading={loading}>
               <EduAuthProvider user={user} userData={userData}>
                 <EduDashboardWrapper user={user} userData={userData} />
               </EduAuthProvider>

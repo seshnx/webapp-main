@@ -318,14 +318,15 @@ export default function App() {
             // Validate session exists and has a valid user
             const currentUser = session?.user ?? null;
             
-            if (currentUser && currentUser.id) {
+            // Strict check: user must exist AND have a valid ID AND session must be valid
+            if (currentUser && currentUser.id && session && session.access_token) {
                 console.log('Session found, user ID:', currentUser.id);
                 setUser(currentUser);
                 // Load user data without additional timeout - if it fails, user just won't have profile yet
                 await loadUserData(currentUser.id);
             } else {
-                // No valid session
-                console.log('No active session found');
+                // No valid session - explicitly clear everything
+                console.log('No active session found - clearing user state');
                 setUser(null);
                 setUserData(null);
                 setSubProfiles({});
@@ -398,6 +399,8 @@ export default function App() {
                 }
             }
         } else {
+            // Explicitly clear user state on logout or session end
+            console.log('Auth state changed: No user - clearing state');
             setUser(null);
             setUserData(null);
             setSubProfiles({});
@@ -461,10 +464,19 @@ export default function App() {
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
   
-  // Only show AuthWizard if there's no user
+  // Only show AuthWizard if there's no user AND we're not already on the login route
   // Don't show onboarding automatically - let user complete signup flow first
-  if (!user || !user.id) {
-    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} isNewUser={false} />;
+  if ((!user || !user.id) && location.pathname !== '/login') {
+    // Redirect to login instead of showing AuthWizard directly
+    // This allows routes to handle the login page properly
+    navigate('/login', { replace: true });
+    return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
+  }
+  
+  // If on login page and user is authenticated, redirect to dashboard
+  if (user && user.id && location.pathname === '/login') {
+    navigate('/', { replace: true });
+    return null;
   }
   
   // If user exists but no profile data AND we're coming from signup (check URL or session)
@@ -472,6 +484,11 @@ export default function App() {
   const isFromSignup = new URLSearchParams(window.location.search).get('intent') === 'signup';
   if (user && user.id && !userData && isFromSignup) {
     return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.href = '/'} />;
+  }
+  
+  // If no user and on login page, show AuthWizard
+  if ((!user || !user.id) && location.pathname === '/login') {
+    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} isNewUser={false} />;
   }
 
   const isEduMode = activeTab.startsWith('edu-');
@@ -531,6 +548,7 @@ export default function App() {
                       openPublicProfile={openPublicProfile}
                       pendingChatTarget={pendingChatTarget}
                       clearPendingChatTarget={() => setPendingChatTarget(null)}
+                      loading={loading}
                     />
                 </PageTransition>
             </main>
