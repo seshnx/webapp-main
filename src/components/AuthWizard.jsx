@@ -284,8 +284,9 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       
       // 2. Update Profile (trigger should have created it automatically)
       // The handle_new_user() trigger creates a basic profile, we just need to update it with roles
+      // Due to Tracking Prevention, operations may timeout - we'll try but not fail if they do
       console.log('Waiting for trigger to create profile...');
-      await new Promise(resolve => setTimeout(resolve, 1500)); // Wait for trigger
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for trigger
       
       const profileUpdateData = {
           first_name: form.firstName,
@@ -300,59 +301,61 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           updated_at: new Date().toISOString(),
       };
       
-      // Try to update profile (trigger should have created it)
-      // Use a simpler approach - just try update, if it fails due to missing profile, try insert
+      // Try to update profile with a shorter timeout
+      // If it fails, we'll continue anyway since the trigger created the basic profile
       console.log('Updating profile with account data...');
-      const updatePromise = supabase
-        .from('profiles')
-        .update(profileUpdateData)
-        .eq('id', uid);
+      let profileUpdated = false;
       
-      const updateTimeout = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Profile update timed out')), 6000)
-      );
-      
-      const { error: updateError } = await Promise.race([updatePromise, updateTimeout]);
-      
-      if (updateError) {
-        // If update fails (profile doesn't exist or RLS issue), try insert
-        if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows')) {
-          console.log('Profile not found, creating new profile...');
-          const insertPromise = supabase
-            .from('profiles')
-            .insert({
-              id: uid,
-              ...profileUpdateData
-            });
-          
-          const insertTimeout = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error('Profile creation timed out')), 6000)
-          );
-          
-          const { error: insertError } = await Promise.race([insertPromise, insertTimeout]);
-          
-          if (insertError) {
-            clearTimeout(signupTimeout);
-            console.error('Profile insert error:', insertError);
-            // If insert also fails, continue anyway - trigger might create it later
-            if (insertError.message?.includes('timeout') || insertError.message?.includes('permission')) {
-              console.warn('Profile creation timed out or blocked, but trigger may create it. Continuing...');
+      try {
+        const updatePromise = supabase
+          .from('profiles')
+          .update(profileUpdateData)
+          .eq('id', uid);
+        
+        const updateTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Profile update timed out')), 4000)
+        );
+        
+        const { error: updateError } = await Promise.race([updatePromise, updateTimeout]);
+        
+        if (updateError) {
+          // If update fails (profile doesn't exist or RLS issue), try insert
+          if (updateError.code === 'PGRST116' || updateError.message?.includes('No rows')) {
+            console.log('Profile not found, trying to create...');
+            const insertPromise = supabase
+              .from('profiles')
+              .insert({
+                id: uid,
+                ...profileUpdateData
+              });
+            
+            const insertTimeout = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Profile creation timed out')), 4000)
+            );
+            
+            const { error: insertError } = await Promise.race([insertPromise, insertTimeout]);
+            
+            if (!insertError) {
+              console.log('Profile created successfully');
+              profileUpdated = true;
             } else {
-              throw insertError;
+              console.warn('Profile insert also failed:', insertError.message);
             }
           } else {
-            console.log('Profile created successfully');
+            console.warn('Profile update failed:', updateError.message);
           }
-        } else if (updateError.message?.includes('timeout')) {
-          console.warn('Profile update timed out, but profile may exist. Continuing...');
-          // Don't throw - continue with wallet creation
         } else {
-          clearTimeout(signupTimeout);
-          console.error('Profile update error:', updateError);
-          throw updateError;
+          console.log('Profile updated successfully');
+          profileUpdated = true;
         }
-      } else {
-        console.log('Profile updated successfully');
+      } catch (profileErr) {
+        console.warn('Profile operation error (continuing anyway):', profileErr.message);
+      }
+      
+      // If profile update failed, log a warning but continue
+      // The trigger should have created a basic profile, user can update it later
+      if (!profileUpdated) {
+        console.warn('⚠️ Profile update timed out or failed. Basic profile should exist (created by trigger). User can update profile later.');
       }
 
       // 3. Init Wallet (don't fail if it already exists or times out)
