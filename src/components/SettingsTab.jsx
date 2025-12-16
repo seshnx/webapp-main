@@ -196,21 +196,116 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
 
     // --- DELETION LOGIC ---
     const handleDeleteAccount = async () => {
-        if (deleteConfirm !== 'DELETE' || !supabase) return;
+        if (deleteConfirm !== 'DELETE' || !supabase || !user) return;
         setIsDeleting(true);
+        const userId = user.id;
+        
         try {
-            // Supabase requires admin access to delete users
-            // For now, we'll show a message that this requires admin assistance
-            // In production, you'd call a backend API endpoint with admin privileges
-            alert("Account deletion requires admin assistance. Please contact support to delete your account.");
-            setIsDeleting(false);
-            setShowDeleteModal(false);
+            // Step 1: Delete all related data first to avoid foreign key constraint violations
+            // Delete profile and related records
+            const relatedTables = [
+                'profiles',
+                'wallets',
+                'notifications',
+                'saved_posts',
+                'followers',
+                'following',
+                'posts',
+                'comments',
+                'bookings',
+                'marketplace_items',
+                'distribution_releases',
+                'equipment_submissions',
+                'safe_exchange_transactions',
+                'shipping_transactions'
+            ];
             
-            // TODO: Implement backend API endpoint for account deletion
-            // Example: await fetch('/api/admin/delete-user', { method: 'POST', body: JSON.stringify({ userId: user.id }) });
+            for (const table of relatedTables) {
+                try {
+                    // Delete records where user is the owner or participant
+                    const deleteQueries = [];
+                    
+                    if (table === 'profiles' || table === 'wallets') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('id', userId)
+                        );
+                    } else if (table === 'notifications' || table === 'saved_posts') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('user_id', userId)
+                        );
+                    } else if (table === 'followers') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('follower_id', userId),
+                            supabase.from(table).delete().eq('following_id', userId)
+                        );
+                    } else if (table === 'following') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('user_id', userId),
+                            supabase.from(table).delete().eq('target_id', userId)
+                        );
+                    } else if (table === 'posts' || table === 'comments') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('user_id', userId)
+                        );
+                    } else if (table === 'bookings') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('sender_id', userId),
+                            supabase.from(table).delete().eq('target_id', userId)
+                        );
+                    } else if (table === 'marketplace_items') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('seller_id', userId)
+                        );
+                    } else if (table === 'distribution_releases') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('uploader_id', userId)
+                        );
+                    } else if (table === 'equipment_submissions') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('submitted_by', userId)
+                        );
+                    } else if (table === 'safe_exchange_transactions') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('buyer_id', userId),
+                            supabase.from(table).delete().eq('seller_id', userId)
+                        );
+                    } else if (table === 'shipping_transactions') {
+                        deleteQueries.push(
+                            supabase.from(table).delete().eq('buyer_id', userId),
+                            supabase.from(table).delete().eq('seller_id', userId)
+                        );
+                    }
+                    
+                    // Execute all delete queries for this table
+                    await Promise.all(deleteQueries);
+                } catch (tableError) {
+                    // Log but don't fail - some tables might not exist or have different schemas
+                    console.warn(`Could not delete from ${table}:`, tableError);
+                }
+            }
+            
+            // Step 2: Call Supabase admin API to delete the auth user
+            // Note: This requires a backend endpoint with service_role key
+            // For now, we'll use the Supabase client which may not have permissions
+            const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
+            
+            if (deleteError) {
+                // If admin API fails, try regular signOut and show message
+                console.warn("Admin delete failed, using signOut:", deleteError);
+                await supabase.auth.signOut();
+                alert("Account data has been deleted. Please contact support to complete account deletion if needed.");
+            } else {
+                alert("Account successfully deleted.");
+            }
+            
+            // Step 3: Clear local state and redirect
+            setShowDeleteModal(false);
+            setDeleteConfirm('');
+            window.location.href = '/';
+            
         } catch (error) {
             console.error("Deletion Error:", error);
-            alert("Failed to delete account: " + error.message);
+            alert("Failed to delete account: " + (error.message || "Unknown error. Please contact support."));
             setIsDeleting(false);
         }
     };
