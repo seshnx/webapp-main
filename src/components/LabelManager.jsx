@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, getDocs, addDoc, doc, deleteDoc, onSnapshot, serverTimestamp, collectionGroup } from 'firebase/firestore';
+import { supabase } from '../config/supabase';
 import { Users, Search, UserPlus, Trash2, Shield, User } from 'lucide-react';
-import { db, getPaths } from '../config/firebase';
 
 export default function LabelManager({ user }) {
     const [roster, setRoster] = useState([]);
@@ -12,31 +11,95 @@ export default function LabelManager({ user }) {
 
     // 1. Fetch Roster
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user?.id && !user?.uid || !supabase) return;
+        const userId = user.id || user.uid;
         
-        // Listen to the label's specific roster collection
-        const q = collection(db, getPaths(user.uid).labelRoster(user.uid));
-        const unsub = onSnapshot(q, (snap) => {
-            setRoster(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        return () => unsub();
-    }, [user?.uid]);
+        // Initial fetch
+        supabase
+            .from('label_roster')
+            .select('*')
+            .eq('label_id', userId)
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error('Error fetching roster:', error);
+                    return;
+                }
+                setRoster((data || []).map(item => ({
+                    id: item.id,
+                    artistId: item.artist_id,
+                    name: item.name,
+                    email: item.email,
+                    photoURL: item.photo_url,
+                    status: item.status,
+                    signedAt: item.signed_at
+                })));
+            });
+
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`label-roster-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'label_roster',
+                    filter: `label_id=eq.${userId}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('label_roster')
+                        .select('*')
+                        .eq('label_id', userId);
+                    
+                    if (data) {
+                        setRoster(data.map(item => ({
+                            id: item.id,
+                            artistId: item.artist_id,
+                            name: item.name,
+                            email: item.email,
+                            photoURL: item.photo_url,
+                            status: item.status,
+                            signedAt: item.signed_at
+                        })));
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, user?.uid]);
 
     // 2. Search for Artists to Sign
     const handleSearch = async () => {
-        if (searchQuery.length < 3) return;
+        if (searchQuery.length < 3 || !supabase) return;
         setSearching(true);
         try {
-            // Search public profiles
-            const q = query(
-                collectionGroup(db, 'public_profile'), 
-                where('searchTerms', 'array-contains', searchQuery.toLowerCase())
-            );
-            const snap = await getDocs(q);
+            const userId = user?.id || user?.uid;
+            const searchLower = searchQuery.toLowerCase();
+            
+            // Search public profiles using native Supabase
+            const { data, error } = await supabase
+                .from('public_profiles')
+                .select('*')
+                .contains('search_terms', [searchLower])
+                .limit(20);
+
+            if (error) throw error;
+
             // Filter out self and already signed artists
-            const results = snap.docs
-                .map(d => ({ id: d.ref.parent.parent.id, ...d.data() }))
-                .filter(u => u.id !== user.uid && !roster.some(r => r.artistId === u.id));
+            const results = (data || [])
+                .filter(u => u.id !== userId && !roster.some(r => r.artistId === u.id))
+                .map(profile => ({
+                    id: profile.id,
+                    firstName: profile.first_name,
+                    lastName: profile.last_name,
+                    email: profile.email,
+                    photoURL: profile.avatar_url,
+                    displayName: profile.display_name
+                }));
             
             setSearchResults(results);
         } catch (e) {
@@ -47,32 +110,50 @@ export default function LabelManager({ user }) {
 
     // 3. "Sign" Artist (Add to Roster)
     const signArtist = async (artist) => {
+        if (!supabase) {
+            alert("Database unavailable.");
+            return;
+        }
+
         try {
-            await addDoc(collection(db, getPaths(user.uid).labelRoster(user.uid)), {
-                artistId: artist.id,
-                name: `${artist.firstName} ${artist.lastName}`,
-                email: artist.email || 'N/A',
-                photoURL: artist.photoURL || null,
-                signedAt: serverTimestamp(),
-                status: 'Active'
-            });
-            alert(`Signed ${artist.firstName} to roster!`);
+            const userId = user?.id || user?.uid;
+            
+            const { error } = await supabase
+                .from('label_roster')
+                .insert({
+                    label_id: userId,
+                    artist_id: artist.id,
+                    name: `${artist.firstName || ''} ${artist.lastName || ''}`.trim(),
+                    email: artist.email || 'N/A',
+                    photo_url: artist.photoURL || null,
+                    status: 'Active'
+                });
+
+            if (error) throw error;
+
+            alert(`Signed ${artist.firstName || artist.displayName} to roster!`);
             setSearchQuery('');
             setSearchResults([]);
             setView('list');
         } catch (e) {
             console.error("Signing failed:", e);
-            alert("Failed to add artist.");
+            alert("Failed to add artist: " + (e.message || "Unknown error"));
         }
     };
 
     // 4. Remove Artist
     const releaseArtist = async (rosterId, name) => {
-        if (!confirm(`Release ${name} from your roster?`)) return;
+        if (!confirm(`Release ${name} from your roster?`) || !supabase) return;
         try {
-            await deleteDoc(doc(db, getPaths(user.uid).labelRoster(user.uid), rosterId));
+            const { error } = await supabase
+                .from('label_roster')
+                .delete()
+                .eq('id', rosterId);
+
+            if (error) throw error;
         } catch (e) {
             console.error(e);
+            alert("Failed to release artist: " + (e.message || "Unknown error"));
         }
     };
 

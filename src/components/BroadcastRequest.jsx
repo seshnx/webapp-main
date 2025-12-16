@@ -160,7 +160,7 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
                   date: date || 'Flexible',
                   time: time || 'Flexible',
                   offer_amount: budget ? parseInt(budget) : null,
-                  references,
+                  reference_links: references,
                   experience_level: experienceLevel,
                   payment_type: paymentType,
 

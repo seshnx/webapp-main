@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { doc, onSnapshot } from 'firebase/firestore';
 import { BarChart2, TrendingUp, DollarSign, Music, Globe, ArrowUpRight } from 'lucide-react';
-import { db, appId, getPaths } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import StatCard from '../shared/StatCard';
 
 export default function AnalyticsDashboard({ user }) {
@@ -12,16 +11,62 @@ export default function AnalyticsDashboard({ user }) {
     });
 
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user?.id && !user?.uid || !supabase) return;
+        const userId = user.id || user.uid;
         
-        // Listen to the Stats Document
-        const unsub = onSnapshot(doc(db, getPaths(user.uid).distributionStats), (doc) => {
-            if (doc.exists()) {
-                setStats(doc.data());
-            }
-        });
-        return () => unsub();
-    }, [user?.uid]);
+        // Initial fetch
+        supabase
+            .from('distribution_stats')
+            .select('*')
+            .eq('user_id', userId)
+            .single()
+            .then(({ data, error }) => {
+                if (error && error.code !== 'PGRST116') {
+                    console.error('Error fetching distribution stats:', error);
+                    return;
+                }
+                if (data) {
+                    setStats({
+                        lifetimeStreams: data.lifetime_streams || 0,
+                        lifetimeEarnings: data.lifetime_earnings || 0,
+                        monthlyListeners: data.monthly_listeners || 0
+                    });
+                }
+            });
+
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`distribution-stats-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'distribution_stats',
+                    filter: `user_id=eq.${userId}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('distribution_stats')
+                        .select('*')
+                        .eq('user_id', userId)
+                        .single();
+                    
+                    if (data) {
+                        setStats({
+                            lifetimeStreams: data.lifetime_streams || 0,
+                            lifetimeEarnings: data.lifetime_earnings || 0,
+                            monthlyListeners: data.monthly_listeners || 0
+                        });
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, user?.uid]);
 
     return (
         <div className="space-y-6 animate-in fade-in">

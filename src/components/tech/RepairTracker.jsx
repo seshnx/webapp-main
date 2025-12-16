@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { doc, onSnapshot, updateDoc, arrayUnion, serverTimestamp } from 'firebase/firestore';
 import { Wrench, CheckCircle, MessageSquare, Image as ImageIcon, Send, FileText } from 'lucide-react';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import InspectionEditor from './InspectionEditor';
 
@@ -24,23 +23,112 @@ export default function RepairTracker({ bookingId, currentUser }) {
     const [logImage, setLogImage] = useState(null);
 
     useEffect(() => {
-        if (!bookingId) return;
-        return onSnapshot(doc(db, `artifacts/${appId}/public/data/bookings`, bookingId), (snap) => setBooking({ id: snap.id, ...snap.data() }));
+        if (!bookingId || !supabase) return;
+        
+        // Initial fetch
+        supabase
+            .from('bookings')
+            .select('*')
+            .eq('id', bookingId)
+            .single()
+            .then(({ data, error }) => {
+                if (error && error.code !== 'PGRST116') {
+                    console.error('Error fetching booking:', error);
+                    return;
+                }
+                if (data) {
+                    setBooking({ id: data.id, ...data });
+                }
+            });
+
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`booking-${bookingId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'bookings',
+                    filter: `id=eq.${bookingId}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('bookings')
+                        .select('*')
+                        .eq('id', bookingId)
+                        .single();
+                    
+                    if (data) {
+                        setBooking({ id: data.id, ...data });
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [bookingId]);
 
-    const isTech = currentUser.uid === booking?.targetId;
-    const isClient = currentUser.uid === booking?.senderId;
+    const userId = currentUser?.id || currentUser?.uid;
+    const isTech = userId === booking?.target_id;
+    const isClient = userId === booking?.sender_id;
 
     const handleStatusUpdate = async (newStatus) => {
-        if (!isTech) return;
-        await updateDoc(doc(db, `artifacts/${appId}/public/data/bookings`, bookingId), { repairStatus: newStatus, lastUpdated: serverTimestamp() });
+        if (!isTech || !supabase) return;
+        
+        const { error } = await supabase
+            .from('bookings')
+            .update({ 
+                repair_status: newStatus,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', bookingId);
+        
+        if (error) {
+            console.error('Error updating status:', error);
+            return;
+        }
+        
         await addLogEntry(`Status updated to: ${REPAIR_STAGES.find(s=>s.id===newStatus)?.label}`, false);
     };
 
     const addLogEntry = async (text, isPrivate = false, imageUrl = null) => {
-        const entry = { text, timestamp: new Date().toISOString(), authorId: currentUser.uid, authorName: currentUser.displayName || 'User', isPrivate, imageUrl };
-        await updateDoc(doc(db, `artifacts/${appId}/public/data/bookings`, bookingId), { repairLogs: arrayUnion(entry) });
-        setNewLog(''); setLogImage(null);
+        if (!supabase) return;
+        
+        const userId = currentUser?.id || currentUser?.uid;
+        const entry = { 
+            text, 
+            timestamp: new Date().toISOString(), 
+            author_id: userId, 
+            author_name: currentUser?.displayName || currentUser?.firstName || 'User', 
+            is_private: isPrivate, 
+            image_url: imageUrl 
+        };
+        
+        // Get current repair logs and append new entry
+        const { data: booking } = await supabase
+            .from('bookings')
+            .select('repair_logs')
+            .eq('id', bookingId)
+            .single();
+        
+        const currentLogs = booking?.repair_logs || [];
+        const updatedLogs = [...currentLogs, entry];
+        
+        const { error } = await supabase
+            .from('bookings')
+            .update({ repair_logs: updatedLogs })
+            .eq('id', bookingId);
+        
+        if (error) {
+            console.error('Error adding log entry:', error);
+            return;
+        }
+        
+        setNewLog(''); 
+        setLogImage(null);
     };
 
     const handleLogSubmit = async () => {
@@ -54,19 +142,29 @@ export default function RepairTracker({ bookingId, currentUser }) {
     };
 
     const handleSaveInspection = async (data) => {
-        if (!activeInspection) return;
+        if (!activeInspection || !supabase) return;
         try {
-            const field = activeInspection === 'Pre' ? 'preInspection' : 'postInspection';
-            await updateDoc(doc(db, `artifacts/${appId}/public/data/bookings`, bookingId), { [field]: data });
-            await addLogEntry(`${activeInspection}-Inspection completed. ${data.markers.length} issues noted.`, false);
+            const field = activeInspection === 'Pre' ? 'pre_inspection' : 'post_inspection';
+            const { error } = await supabase
+                .from('bookings')
+                .update({ [field]: data })
+                .eq('id', bookingId);
+            
+            if (error) throw error;
+            
+            await addLogEntry(`${activeInspection}-Inspection completed. ${data.markers?.length || 0} issues noted.`, false);
             setActiveInspection(null);
-        } catch (e) { alert("Failed to save inspection."); }
+        } catch (e) { 
+            console.error(e);
+            alert("Failed to save inspection: " + (e.message || "Unknown error"));
+        }
     };
 
     if (!booking) return <div className="p-8 text-center">Loading...</div>;
-    const currentStageIndex = REPAIR_STAGES.findIndex(s => s.id === (booking.repairStatus || 'Pending'));
+    const currentStageIndex = REPAIR_STAGES.findIndex(s => s.id === (booking.repair_status || booking.repairStatus || 'Pending'));
     const progressPercent = ((currentStageIndex) / (REPAIR_STAGES.length - 1)) * 100;
-    const visibleLogs = (booking.repairLogs || []).filter(l => isTech || !l.isPrivate);
+    const repairLogs = booking.repair_logs || booking.repairLogs || [];
+    const visibleLogs = repairLogs.filter(l => isTech || !(l.is_private || l.isPrivate));
 
     if (activeInspection) return <div className="fixed inset-0 z-[80] bg-black/80 flex items-center justify-center p-4"><div className="w-full max-w-5xl h-full"><InspectionEditor type={activeInspection} initialData={booking[activeInspection === 'Pre' ? 'preInspection' : 'postInspection']} onSave={handleSaveInspection} onCancel={() => setActiveInspection(null)}/></div></div>;
 
@@ -75,7 +173,7 @@ export default function RepairTracker({ bookingId, currentUser }) {
             <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm">
                 <div className="flex justify-between items-start mb-6">
                     <div><h2 className="text-xl font-bold dark:text-white flex items-center gap-2"><Wrench className="text-orange-500"/> Repair Ticket #{booking.id.slice(-6)}</h2><p className="text-sm text-gray-500">{booking.equipment} - {booking.serviceType}</p></div>
-                    {isClient && <button onClick={() => { addLogEntry("Customer requested update.", true); alert("Update requested."); }} className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-200">Request Update</button>}
+                    {isClient && <button onClick={async () => { await addLogEntry("Customer requested update.", true); alert("Update requested."); }} className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-200">Request Update</button>}
                 </div>
                 <div className="relative mb-8 px-2">
                     <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full w-full absolute top-1/2 -translate-y-1/2 z-0"></div>
@@ -96,7 +194,22 @@ export default function RepairTracker({ bookingId, currentUser }) {
             <div className="lg:col-span-2 space-y-4">
                 <h3 className="font-bold dark:text-white flex items-center gap-2"><FileText size={18} className="text-gray-400"/> Repair Log</h3>
                 <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-4 max-h-[400px] overflow-y-auto">
-                    {visibleLogs.map((log, i) => (<div key={i} className={`mb-4 pl-4 border-l-2 ${log.isPrivate ? 'border-yellow-500' : 'border-blue-500'}`}><div className="flex justify-between items-start"><span className="text-xs font-bold dark:text-white">{log.authorName}</span><span className="text-[10px] text-gray-500">{new Date(log.timestamp).toLocaleString()}</span></div><p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-wrap">{log.text}</p>{log.imageUrl && <img src={log.imageUrl} className="mt-2 rounded-lg max-h-48 border dark:border-gray-600"/>}{log.isPrivate && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded ml-2">Internal Note</span>}</div>))}
+                    {visibleLogs.map((log, i) => {
+                        const isPrivate = log.is_private || log.isPrivate;
+                        const authorName = log.author_name || log.authorName;
+                        const imageUrl = log.image_url || log.imageUrl;
+                        return (
+                            <div key={i} className={`mb-4 pl-4 border-l-2 ${isPrivate ? 'border-yellow-500' : 'border-blue-500'}`}>
+                                <div className="flex justify-between items-start">
+                                    <span className="text-xs font-bold dark:text-white">{authorName}</span>
+                                    <span className="text-[10px] text-gray-500">{new Date(log.timestamp).toLocaleString()}</span>
+                                </div>
+                                <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-wrap">{log.text}</p>
+                                {imageUrl && <img src={imageUrl} className="mt-2 rounded-lg max-h-48 border dark:border-gray-600"/>}
+                                {isPrivate && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded ml-2">Internal Note</span>}
+                            </div>
+                        );
+                    })}
                 </div>
                 {isTech && (<div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700"><textarea className="w-full p-2 bg-white dark:bg-[#1f2128] border dark:border-gray-600 rounded-lg text-sm mb-2 outline-none focus:ring-2 focus:ring-orange-500 dark:text-white" placeholder="Add update..." value={newLog} onChange={e => setNewLog(e.target.value)}/><div className="flex justify-between items-center"><div className="flex gap-2"><label className="flex items-center gap-1 cursor-pointer text-gray-500 hover:text-brand-blue"><ImageIcon size={18}/><input type="file" className="hidden" onChange={e => setLogImage(e.target.files[0])}/></label><label className="flex items-center gap-1 cursor-pointer text-gray-500 hover:text-yellow-500"><input type="checkbox" checked={isPrivateLog} onChange={e => setIsPrivateLog(e.target.checked)} className="rounded text-yellow-500"/><span className="text-xs font-bold">Private</span></label></div><button onClick={handleLogSubmit} disabled={uploading} className="bg-orange-600 text-white px-4 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1">{uploading ? '...' : <><Send size={14}/> Add Log</>}</button></div></div>)}
             </div>

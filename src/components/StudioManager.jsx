@@ -3,8 +3,7 @@ import {
     Home, LayoutGrid, Image, Clock, FileText, Calendar, 
     Package, Settings, ChevronRight, Briefcase
 } from 'lucide-react';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 // Import sub-components
 import StudioOverview from './studio/StudioOverview';
@@ -42,27 +41,30 @@ export default function StudioManager({ user, userData }) {
     // Fetch booking stats
     useEffect(() => {
         const fetchStats = async () => {
-            if (!user?.uid) return;
+            if (!user?.id && !user?.uid || !supabase) return;
+            const userId = user.id || user.uid;
             
             try {
-                const bookingsRef = collection(db, `artifacts/${appId}/bookings`);
-                const q = query(bookingsRef, where('studioOwnerId', '==', user.uid));
-                const snapshot = await getDocs(q);
-                
-                const bookings = snapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    date: doc.data().date?.toDate?.() || new Date(doc.data().date)
-                }));
+                // Fetch bookings where user is the target (studio owner receiving bookings)
+                const { data: bookings, error } = await supabase
+                    .from('bookings')
+                    .select('*')
+                    .eq('target_id', userId)
+                    .order('date', { ascending: true });
 
-                const pending = bookings.filter(b => b.status === 'pending').length;
+                if (error) throw error;
+
+                const pending = bookings.filter(b => b.status === 'Pending').length;
                 const recent = bookings
-                    .filter(b => b.date >= new Date())
-                    .sort((a, b) => a.date - b.date)
+                    .filter(b => {
+                        const bookingDate = new Date(b.date);
+                        return bookingDate >= new Date();
+                    })
+                    .sort((a, b) => new Date(a.date) - new Date(b.date))
                     .slice(0, 5);
                 const revenue = bookings
-                    .filter(b => b.status === 'completed')
-                    .reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+                    .filter(b => b.status === 'Completed')
+                    .reduce((sum, b) => sum + (b.offer_amount || 0), 0);
 
                 setStats({
                     pendingBookings: pending,
@@ -75,7 +77,7 @@ export default function StudioManager({ user, userData }) {
         };
 
         fetchStats();
-    }, [user?.uid]);
+    }, [user?.id, user?.uid]);
 
     // Handle updates from child components
     const handleUpdate = (updates) => {

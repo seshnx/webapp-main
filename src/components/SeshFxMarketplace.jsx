@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-// UPDATED IMPORTS: Added 'increment' for atomic transactions
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, getDocs, where, increment } from 'firebase/firestore';
 import { Search, Disc, Sliders, Download, ShoppingCart, CheckCircle, Zap, Plus, X, Upload, Loader2, FileAudio, Image as ImageIcon, Play, Pause, Volume2, Info, Music, Tag } from 'lucide-react';
-import { db, getPaths, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { useMediaUpload } from '../hooks/useMediaUpload';
 import StarFieldVisualizer from './shared/StarFieldVisualizer';
 
@@ -21,24 +19,115 @@ export default function SeshFxMarketplace({ user, userData, tokenBalance, refres
   
   // 1. Fetch Market Items
   useEffect(() => {
-      const q = query(collection(db, getPaths(user.uid).marketplaceItems), orderBy('timestamp', 'desc'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
-      return () => unsubscribe();
-  }, [user.uid]);
+      if (!user?.id && !user?.uid || !supabase) return;
+      const userId = user.id || user.uid;
+      
+      // Initial fetch
+      supabase
+          .from('marketplace_items')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .then(({ data, error }) => {
+              if (error) {
+                  console.error('Error fetching market items:', error);
+                  return;
+              }
+              setItems((data || []).map(item => ({
+                  id: item.id,
+                  ...item,
+                  timestamp: item.created_at,
+                  author: item.seller_name || 'Unknown'
+              })));
+          });
+
+      // Subscribe to realtime changes
+      const channel = supabase
+          .channel('marketplace-items')
+          .on(
+              'postgres_changes',
+              {
+                  event: '*',
+                  schema: 'public',
+                  table: 'marketplace_items'
+              },
+              async () => {
+                  const { data } = await supabase
+                      .from('marketplace_items')
+                      .select('*')
+                      .order('created_at', { ascending: false });
+                  
+                  if (data) {
+                      setItems(data.map(item => ({
+                          id: item.id,
+                          ...item,
+                          timestamp: item.created_at,
+                          author: item.seller_name || 'Unknown',
+                          downloadUrl: item.download_url,
+                          authorId: item.seller_id
+                      })));
+                  }
+              }
+          )
+          .subscribe();
+
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [user?.id, user?.uid]);
 
   // 2. Fetch Owned Items
   useEffect(() => {
-      if (!user?.uid) return;
-      const q = collection(db, getPaths(user.uid).userLibrary);
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          setOwnedItemIds(new Set(snapshot.docs.map(doc => doc.data().itemId)));
-      });
-      return () => unsubscribe();
-  }, [user?.uid]);
+      if (!user?.id && !user?.uid || !supabase) return;
+      const userId = user.id || user.uid;
+      
+      // Initial fetch
+      supabase
+          .from('user_library')
+          .select('item_id')
+          .eq('user_id', userId)
+          .then(({ data, error }) => {
+              if (error) {
+                  console.error('Error fetching owned items:', error);
+                  return;
+              }
+              setOwnedItemIds(new Set((data || []).map(item => item.item_id)));
+          });
+
+      // Subscribe to realtime changes
+      const channel = supabase
+          .channel(`user-library-${userId}`)
+          .on(
+              'postgres_changes',
+              {
+                  event: '*',
+                  schema: 'public',
+                  table: 'user_library',
+                  filter: `user_id=eq.${userId}`
+              },
+              async () => {
+                  const { data } = await supabase
+                      .from('user_library')
+                      .select('item_id')
+                      .eq('user_id', userId);
+                  
+                  if (data) {
+                      setOwnedItemIds(new Set(data.map(item => item.item_id)));
+                  }
+              }
+          )
+          .subscribe();
+
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [user?.id, user?.uid]);
 
   const handlePurchase = async (item) => {
+      if (!supabase) {
+          alert("Database unavailable.");
+          return;
+      }
+
       // Client-side check for UI feedback only (Server rules should also enforce this)
       if (tokenBalance < item.price) {
           alert("Insufficient tokens! Please top up in the Billing tab.");
@@ -47,28 +136,57 @@ export default function SeshFxMarketplace({ user, userData, tokenBalance, refres
       
       if(!confirm(`Purchase ${item.title} for ${item.price} Tokens?`)) return;
       
+      const userId = user?.id || user?.uid;
+      
       try {
-          // FINANCIAL FIX: Use atomic increment(-price) instead of setting absolute value
-          // This prevents race conditions where a user could spend the same tokens twice.
-          const walletRef = doc(db, getPaths(user.uid).userWallet); 
-          await updateDoc(walletRef, { balance: increment(-item.price) });
+          // Use Supabase RPC for atomic wallet update (if available) or direct update
+          // First, update wallet balance atomically
+          const { data: walletData, error: walletError } = await supabase
+              .from('wallets')
+              .select('balance')
+              .eq('user_id', userId)
+              .single();
+
+          if (walletError) throw walletError;
+
+          if (walletData.balance < item.price) {
+              alert("Insufficient tokens!");
+              return;
+          }
+
+          // Update wallet
+          const { error: updateError } = await supabase
+              .from('wallets')
+              .update({ balance: walletData.balance - item.price })
+              .eq('user_id', userId);
+
+          if (updateError) throw updateError;
           
-          await addDoc(collection(db, getPaths(user.uid).userLibrary), {
-              itemId: item.id,
-              title: item.title,
-              type: item.type,
-              pricePaid: item.price,
-              purchaseDate: serverTimestamp(),
-              downloadUrl: item.downloadUrl 
-          });
+          // Add to user library
+          const { error: libraryError } = await supabase
+              .from('user_library')
+              .insert({
+                  user_id: userId,
+                  item_id: item.id,
+                  title: item.title,
+                  type: item.type,
+                  price_paid: item.price,
+                  download_url: item.download_url
+              });
+
+          if (libraryError) throw libraryError;
           
           if(refreshWallet) refreshWallet();
-      } catch(e) { console.error(e); alert("Transaction failed."); }
+          alert("Purchase successful!");
+      } catch(e) { 
+          console.error(e); 
+          alert("Transaction failed: " + (e.message || "Unknown error"));
+      }
   };
 
   const handleDownload = (item) => {
       if (!ownedItemIds.has(item.id)) return;
-      window.open(item.downloadUrl, '_blank');
+      window.open(item.download_url || item.downloadUrl, '_blank');
   };
 
   const filteredItems = items.filter(i => 
@@ -147,7 +265,7 @@ export default function SeshFxMarketplace({ user, userData, tokenBalance, refres
                             <div className="text-[10px] text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded">{item.tags?.[0]}</div>
                         </div>
                         <h3 className="font-bold text-gray-900 dark:text-white mb-1 truncate cursor-pointer hover:text-brand-blue transition" onClick={() => setSelectedItem(item)}>{item.title}</h3>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">by {item.author}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">by {item.seller_name || item.author || 'Unknown'}</p>
                         
                         <div className="mt-auto flex items-center justify-between pt-3 border-t dark:border-gray-700">
                             {isOwned ? (
@@ -189,27 +307,40 @@ function SellItemModal({ user, userData, onClose }) {
     const { uploadMedia, uploading } = useMediaUpload();
 
     const handleSubmit = async () => {
-        if(!form.title || !form.price || !audioFile) return alert("Title, Price, and Audio File are required.");
+        if(!form.title || !form.price || !audioFile || !supabase) {
+            if (!form.title || !form.price || !audioFile) alert("Title, Price, and Audio File are required.");
+            return;
+        }
         
         try {
+            const userId = user?.id || user?.uid;
+            
             setStatus('Uploading Audio Asset...');
             // Single file upload serves as both preview and product for now
-            const downloadUrl = await uploadMedia(audioFile, getPaths(user.uid).marketAssets);
+            const downloadUrl = await uploadMedia(audioFile, `market_assets/${userId}`);
 
             setStatus('Listing Item...');
-            await addDoc(collection(db, getPaths(user.uid).marketplaceItems), {
-                ...form,
-                price: parseInt(form.price),
-                tags: form.tags.split(',').map(t => t.trim()),
-                author: `${userData.firstName} ${userData.lastName}`,
-                authorId: user.uid,
-                downloadUrl, // This URL acts as both source and download
-                timestamp: serverTimestamp()
-            });
+            const { error } = await supabase
+                .from('marketplace_items')
+                .insert({
+                    seller_id: userId,
+                    title: form.title,
+                    description: form.description,
+                    type: form.type,
+                    price: parseInt(form.price),
+                    tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
+                    download_url: downloadUrl,
+                    preview_url: downloadUrl // Same URL for preview and download
+                });
+
+            if (error) throw error;
             
             setStatus('Success!');
             setTimeout(onClose, 1000);
-        } catch(e) { console.error(e); setStatus('Error'); }
+        } catch(e) { 
+            console.error(e); 
+            setStatus('Error: ' + (e.message || "Unknown error"));
+        }
     };
 
     return (
@@ -262,13 +393,13 @@ function ItemDetailModal({ item, isOwned, onClose, onBuy, onDownload }) {
                         {item.type === 'Presets' ? <Sliders size={80}/> : <Disc size={80}/>}
                      </div>
                      <h2 className="text-2xl font-bold dark:text-white mb-2">{item.title}</h2>
-                     <div className="text-brand-blue font-medium mb-6">by {item.author}</div>
+                     <div className="text-brand-blue font-medium mb-6">by {item.seller_name || item.author || 'Unknown'}</div>
                      
                      {/* Large Preview Player with TRUNCATION */}
-                     {item.downloadUrl && (
+                     {(item.download_url || item.downloadUrl) && (
                          <div className="w-full">
                              {/* Passes isOwned check to enable/disable truncation logic in visualizer */}
-                             <StarFieldVisualizer audioUrl={item.downloadUrl} fileName="Preview Track" previewMode={!isOwned} />
+                             <StarFieldVisualizer audioUrl={item.download_url || item.downloadUrl} fileName="Preview Track" previewMode={!isOwned} />
                          </div>
                      )}
                 </div>

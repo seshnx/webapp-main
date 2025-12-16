@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { Save, Loader2 } from 'lucide-react';
-import { db, getPaths } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { TECH_SPECIALTIES } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
 
@@ -10,15 +9,59 @@ export default function TechProfileEditor({ user }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        getDoc(doc(db, getPaths(user.uid).userSubProfile('Technician'))).then(snap => {
-            if (snap.exists()) setData(snap.data());
+        if (!user?.id && !user?.uid || !supabase) {
             setLoading(false);
-        });
-    }, [user.uid]);
+            return;
+        }
+        
+        const userId = user.id || user.uid;
+        
+        // Fetch sub-profile data from profiles table or sub_profiles
+        supabase
+            .from('sub_profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .eq('role', 'Technician')
+            .single()
+            .then(({ data, error }) => {
+                if (error && error.code !== 'PGRST116') {
+                    console.error('Error fetching tech profile:', error);
+                }
+                if (data) {
+                    setData({
+                        skills: data.skills || '',
+                        rate: data.rate || '',
+                        serviceRadius: data.service_radius || data.serviceRadius || '',
+                        subRoles: data.sub_roles || data.subRoles || []
+                    });
+                }
+                setLoading(false);
+            });
+    }, [user?.id, user?.uid]);
 
     const handleSave = async () => {
+        if (!supabase) {
+            alert("Database unavailable.");
+            return;
+        }
+
         try {
-            await updateDoc(doc(db, getPaths(user.uid).userSubProfile('Technician')), data);
+            const userId = user?.id || user?.uid;
+            
+            // Update sub-profile
+            const { error: subProfileError } = await supabase
+                .from('sub_profiles')
+                .upsert({
+                    user_id: userId,
+                    role: 'Technician',
+                    skills: data.skills,
+                    rate: data.rate ? parseInt(data.rate) : null,
+                    service_radius: data.serviceRadius ? parseInt(data.serviceRadius) : null,
+                    sub_roles: data.subRoles || [],
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'user_id,role' });
+
+            if (subProfileError) throw subProfileError;
             
             // Sync searchable fields to public profile
             const searchTerms = [
@@ -26,13 +69,22 @@ export default function TechProfileEditor({ user }) {
                 ...(data.subRoles ? data.subRoles.map(r => r.toLowerCase()) : [])
             ];
 
-            await updateDoc(doc(db, getPaths(user.uid).userPublicProfile), {
-                rate: parseInt(data.rate) || 0,
-                subRoles: data.subRoles || [],
-                searchTerms: searchTerms
-            });
+            const { error: publicProfileError } = await supabase
+                .from('public_profiles')
+                .update({
+                    rate: parseInt(data.rate) || 0,
+                    sub_roles: data.subRoles || [],
+                    search_terms: searchTerms
+                })
+                .eq('id', userId);
+
+            if (publicProfileError) throw publicProfileError;
+
             alert("Tech Profile Updated Successfully");
-        } catch (e) { alert("Update failed"); }
+        } catch (e) { 
+            console.error(e);
+            alert("Update failed: " + (e.message || "Unknown error"));
+        }
     };
 
     if (loading) return <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto"/></div>;

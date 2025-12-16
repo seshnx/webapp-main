@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, doc } from 'firebase/firestore'; 
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 // Main categories matching your Firestore layout
 const COLLECTIONS = [
@@ -17,30 +16,46 @@ export const useEquipmentDatabase = () => {
 
     useEffect(() => {
         const fetchData = async () => {
+            if (!supabase) {
+                setLoading(false);
+                return;
+            }
+
             setLoading(true);
             const newData = {};
 
             try {
-                // Base Path: /artifacts/{appId}/public/data/equipment_database
-                const basePath = `artifacts/${appId}/public/data/equipment_database`;
+                // Fetch all equipment items grouped by category
+                const { data, error } = await supabase
+                    .from('equipment_items')
+                    .select('*')
+                    .order('category_id')
+                    .order('subcategory_id');
 
-                await Promise.all(COLLECTIONS.map(async (col) => {
-                    // 1. Reference the Category Document
-                    const categoryDocRef = doc(db, basePath, col.id); 
-                    
-                    // 2. Reference the 'items' Subcollection
-                    const itemsCollectionRef = collection(categoryDocRef, 'items'); 
+                if (error) throw error;
 
-                    const snapshot = await getDocs(itemsCollectionRef);
+                // Group by category and subcategory to match original structure
+                COLLECTIONS.forEach(col => {
+                    const categoryItems = (data || []).filter(item => item.category_id === col.id);
                     
                     const colItems = {};
-                    snapshot.forEach(doc => {
-                        // Document ID = SubCategory Name (e.g., "Audio_Interfaces")
-                        // Data = { Types: [Items...] } structure
-                        colItems[doc.id] = doc.data();
+                    categoryItems.forEach(item => {
+                        const subcatId = item.subcategory_id || 'default';
+                        if (!colItems[subcatId]) {
+                            colItems[subcatId] = { Types: [] };
+                        }
+                        // Store item data in the expected format
+                        colItems[subcatId].Types.push({
+                            ...item.data,
+                            id: item.id,
+                            name: item.name,
+                            manufacturer: item.manufacturer,
+                            model: item.model
+                        });
                     });
+                    
                     newData[col.id] = colItems;
-                }));
+                });
                 
                 setDbData(newData);
             } catch (error) {

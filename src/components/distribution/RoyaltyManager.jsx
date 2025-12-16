@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, doc, updateDoc, increment, writeBatch } from 'firebase/firestore';
 import { Upload, FileText, CheckCircle, AlertCircle, Download, DollarSign, PieChart } from 'lucide-react';
-import { db, getPaths, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { parseRoyaltyCSV, generateSampleCSV } from '../../utils/csvParser';
 
 export default function RoyaltyManager({ user, userData }) {
@@ -11,16 +10,60 @@ export default function RoyaltyManager({ user, userData }) {
 
     // 1. Fetch Report History
     useEffect(() => {
-        if (!user?.uid) return;
-        const q = query(
-            collection(db, getPaths(user.uid).royaltyReports), 
-            orderBy('createdAt', 'desc')
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            setReports(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        });
-        return () => unsub();
-    }, [user?.uid]);
+        if (!user?.id && !user?.uid || !supabase) return;
+        const userId = user.id || user.uid;
+        
+        // Initial fetch
+        supabase
+            .from('royalty_reports')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error('Error fetching royalty reports:', error);
+                    return;
+                }
+                setReports((data || []).map(item => ({
+                    id: item.id,
+                    ...item,
+                    createdAt: item.created_at
+                })));
+            });
+
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`royalty-reports-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'royalty_reports',
+                    filter: `user_id=eq.${userId}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('royalty_reports')
+                        .select('*')
+                        .eq('user_id', userId)
+                        .order('created_at', { ascending: false });
+                    
+                    if (data) {
+                        setReports(data.map(item => ({
+                            id: item.id,
+                            ...item,
+                            createdAt: item.created_at
+                        })));
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, user?.uid]);
 
     // 2. Handle File Upload
     const handleFileUpload = async (e) => {
@@ -34,36 +77,59 @@ export default function RoyaltyManager({ user, userData }) {
             // A. Parse File Client-Side
             const { items, summary } = await parseRoyaltyCSV(file);
 
+            if (!supabase) {
+                throw new Error('Database unavailable');
+            }
+
+            const userId = user?.id || user?.uid;
+
             // B. Create Report Document
-            const reportRef = await addDoc(collection(db, getPaths(user.uid).royaltyReports), {
-                filename: file.name,
-                summary,
-                status: 'Processed',
-                createdAt: serverTimestamp(),
-                processedBy: user.uid
-            });
+            const { data: reportData, error: reportError } = await supabase
+                .from('royalty_reports')
+                .insert({
+                    user_id: userId,
+                    filename: file.name,
+                    summary: summary,
+                    status: 'Processed',
+                    processed_by: userId
+                })
+                .select('id')
+                .single();
 
-            // C. Update Aggregates (Batch Write)
-            // In a real app, you'd update specific track stats. Here we update Global Totals for the Dashboard.
-            const batch = writeBatch(db);
-            const statsRef = doc(db, `artifacts/${appId}/distribution/stats/${user.uid}`);
-            
-            // Ensure document exists (merge update)
-            await updateDoc(statsRef, {
-                lifetimeStreams: increment(summary.totalStreams),
-                lifetimeEarnings: increment(summary.totalEarnings),
-                lastUpdated: serverTimestamp()
-            }).catch(async () => {
-                // Create if missing
-                await setDoc(statsRef, {
-                    lifetimeStreams: summary.totalStreams,
-                    lifetimeEarnings: summary.totalEarnings,
-                    lastUpdated: serverTimestamp()
-                });
-            });
+            if (reportError) throw reportError;
 
-            // Commit transaction
-            // (Simulated batch for MVP - Real app would write individual track docs here)
+            // C. Update Aggregates
+            // Get current stats or create new
+            const { data: currentStats } = await supabase
+                .from('distribution_stats')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
+
+            if (currentStats) {
+                // Update existing stats
+                const { error: updateError } = await supabase
+                    .from('distribution_stats')
+                    .update({
+                        lifetime_streams: (currentStats.lifetime_streams || 0) + summary.totalStreams,
+                        lifetime_earnings: (currentStats.lifetime_earnings || 0) + summary.totalEarnings,
+                        last_updated: new Date().toISOString()
+                    })
+                    .eq('user_id', userId);
+
+                if (updateError) throw updateError;
+            } else {
+                // Create new stats record
+                const { error: insertError } = await supabase
+                    .from('distribution_stats')
+                    .insert({
+                        user_id: userId,
+                        lifetime_streams: summary.totalStreams,
+                        lifetime_earnings: summary.totalEarnings
+                    });
+
+                if (insertError) throw insertError;
+            }
             
             setUploadStatus({ type: 'success', msg: `Successfully processed ${summary.rowCount} rows. Added $${summary.totalEarnings.toFixed(2)}.` });
 

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { User, MessageCircle } from 'lucide-react';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { SERVICE_CATALOGUE } from '../../config/constants';
 
 export default function ServiceJobBoard({ user }) {
@@ -9,9 +8,61 @@ export default function ServiceJobBoard({ user }) {
     const [filter, setFilter] = useState('All');
 
     useEffect(() => {
-        const q = query(collection(db, `artifacts/${appId}/public/data/service_requests`), orderBy('timestamp', 'desc'), limit(50));
-        const unsub = onSnapshot(q, (snap) => setRequests(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
+        if (!supabase) return;
+
+        // Initial fetch
+        supabase
+            .from('service_requests')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(50)
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error('Error fetching service requests:', error);
+                    return;
+                }
+                setRequests((data || []).map(item => ({
+                    id: item.id,
+                    ...item,
+                    timestamp: item.created_at,
+                    userId: item.user_id,
+                    userName: item.user_name
+                })));
+            });
+
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel('service-requests')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'service_requests'
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('service_requests')
+                        .select('*')
+                        .order('created_at', { ascending: false })
+                        .limit(50);
+                    
+                    if (data) {
+                        setRequests(data.map(item => ({
+                            id: item.id,
+                            ...item,
+                            timestamp: item.created_at,
+                            userId: item.user_id,
+                            userName: item.user_name
+                        })));
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
 
     return (
@@ -35,7 +86,7 @@ export default function ServiceJobBoard({ user }) {
                         <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2 mb-4">{req.description}</p>
                         <div className="flex items-center justify-between text-xs text-gray-500 border-t dark:border-gray-700 pt-3">
                             <div className="flex items-center gap-2"><User size={12}/> {req.userName}</div>
-                            {req.userId !== user.uid && <button className="bg-gray-900 dark:bg-white dark:text-black text-white px-3 py-1.5 rounded font-bold hover:opacity-80 flex items-center gap-1"><MessageCircle size={12}/> Message</button>}
+                            {req.userId !== (user?.id || user?.uid) && <button className="bg-gray-900 dark:bg-white dark:text-black text-white px-3 py-1.5 rounded font-bold hover:opacity-80 flex items-center gap-1"><MessageCircle size={12}/> Message</button>}
                         </div>
                     </div>
                 ))}

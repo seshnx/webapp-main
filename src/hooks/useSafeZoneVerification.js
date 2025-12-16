@@ -1,7 +1,6 @@
 // src/hooks/useSafeZoneVerification.js
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db, appId, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { 
     SAFE_ZONE_RADIUS_METERS, 
     PROXIMITY_THRESHOLD_METERS,
@@ -47,16 +46,26 @@ export function useSafeZoneVerification(transactionId, userId) {
     // Load safe zones from database
     useEffect(() => {
         const loadSafeZones = async () => {
+            if (!supabase) return;
+            
             try {
-                const safeZonesRef = collection(db, `artifacts/${appId}/public/data/safe_zones`);
-                const snapshot = await getDocs(safeZonesRef);
+                const { data, error } = await supabase
+                    .from('safe_zones')
+                    .select('*');
+
+                if (error) throw error;
                 
-                if (snapshot.empty) {
-                    // Use default zones if none configured
-                    setSafeZones([]);
-                } else {
-                    setSafeZones(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-                }
+                setSafeZones((data || []).map(zone => ({
+                    id: zone.id,
+                    name: zone.name,
+                    address: zone.address,
+                    lat: zone.lat,
+                    lng: zone.lng,
+                    type: zone.type,
+                    typeLabel: zone.type_label,
+                    priority: zone.priority,
+                    verified: zone.verified
+                })));
             } catch (error) {
                 console.error('Failed to load safe zones:', error);
             }
@@ -260,14 +269,28 @@ export function useSafeZoneVerification(transactionId, userId) {
 
     // Create a new safe zone (admin function)
     const createSafeZone = useCallback(async (zoneData) => {
+        if (!supabase) {
+            throw new Error('Supabase not configured');
+        }
+
         try {
-            const safeZonesRef = collection(db, `artifacts/${appId}/public/data/safe_zones`);
-            const docRef = await addDoc(safeZonesRef, {
-                ...zoneData,
-                createdAt: serverTimestamp(),
-                verified: false
-            });
-            return docRef.id;
+            const { data, error } = await supabase
+                .from('safe_zones')
+                .insert({
+                    name: zoneData.name,
+                    address: zoneData.address,
+                    lat: zoneData.lat,
+                    lng: zoneData.lng,
+                    type: zoneData.type,
+                    type_label: zoneData.typeLabel,
+                    priority: zoneData.priority || 10,
+                    verified: false
+                })
+                .select('id')
+                .single();
+
+            if (error) throw error;
+            return data.id;
         } catch (error) {
             console.error('Failed to create safe zone:', error);
             throw error;

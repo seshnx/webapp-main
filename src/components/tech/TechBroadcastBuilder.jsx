@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { Zap, ChevronDown, Loader2, Video, Image as ImageIcon, X } from 'lucide-react';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { SERVICE_CATALOGUE } from '../../config/constants';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 
@@ -23,23 +22,37 @@ export default function TechBroadcastBuilder({ user, userData, onSuccess, onCanc
     };
  
     const handleSubmit = async () => {
-        if (!equipment || !details) return alert("Please complete the request.");
+        if (!equipment || !details || !supabase) {
+            if (!equipment || !details) alert("Please complete the request.");
+            return;
+        }
         setSubmitting(true);
         try {
-            await addDoc(collection(db, `artifacts/${appId}/public/data/service_requests`), {
-                topic: `${category} for ${equipment}`,
-                category, equipment, urgency,
-                budget: budget ? parseInt(budget) : null,
-                description: details,
-                userId: user.uid,
-                userName: `${userData.firstName} ${userData.lastName}`,
-                status: 'Open',
-                timestamp: serverTimestamp(),
-                attachment: media || null 
-            });
+            const userId = user?.id || user?.uid;
+            
+            const { error } = await supabase
+                .from('service_requests')
+                .insert({
+                    user_id: userId,
+                    user_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
+                    topic: `${category} for ${equipment}`,
+                    category,
+                    equipment,
+                    urgency,
+                    budget: budget ? parseInt(budget) : null,
+                    description: details,
+                    status: 'Open',
+                    attachment_url: media?.url || null
+                });
+
+            if (error) throw error;
+
             alert("Tech Request Broadcasted!");
             onSuccess();
-        } catch (e) { console.error(e); alert("Failed."); }
+        } catch (e) { 
+            console.error(e); 
+            alert("Failed: " + (e.message || "Unknown error"));
+        }
         setSubmitting(false);
     };
 

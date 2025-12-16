@@ -1,6 +1,5 @@
-import { useState, useEffect, useMemo } from 'react'; // Import useMemo
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../config/supabase';
 
 // NOTE: This fallback data structure is now defined inside the hook 
 // and memoized to ensure stable references across renders.
@@ -52,43 +51,79 @@ export const useDynamicConfig = () => {
 
 
     useEffect(() => {
-        // --- CRITICAL FIX: Explicitly define 6 segments for valid Firestore Document References ---
-        
-        // Segment 1: Collection 'artifacts'
-        // Segment 2: Document appId
-        // Segment 3: Collection 'public'
-        // Segment 4: Document 'config'
-        // Segment 5: Collection 'subscriptions'
-        // Segment 6: Document 'tier_config' (or 'token_packages')
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
 
-        const tierRef = doc(db, 'artifacts', appId, 'public', 'config', 'subscriptions', 'tier_config');
-        
-        const unsubTier = onSnapshot(tierRef, (docSnap) => {
-            let fetchedData = docSnap.exists() ? docSnap.data() : {};
+        // Fetch tier config
+        const fetchTierConfig = async () => {
+            const { data, error } = await supabase
+                .from('app_config')
+                .select('config_value')
+                .eq('config_key', 'tier_config')
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                console.error('Error fetching tier config:', error);
+                setConfig(prev => ({ ...prev, tierData: DEFAULT_TIER_DATA }));
+                return;
+            }
+
+            const fetchedData = data?.config_value || {};
             const mergedData = Object.keys(DEFAULT_TIER_DATA).reduce((acc, key) => {
-                acc[key] = { ...DEFAULT_TIER_DATA[key], ...fetchedData[key] };
+                acc[key] = { ...DEFAULT_TIER_DATA[key], ...(fetchedData[key] || {}) };
                 return acc;
             }, {});
             setConfig(prev => ({ ...prev, tierData: mergedData }));
-        });
+        };
 
-        const tokensRef = doc(db, 'artifacts', appId, 'public', 'config', 'subscriptions', 'token_packages');
-        
-        const unsubTokens = onSnapshot(tokensRef, (docSnap) => {
-            let fetchedTokens = docSnap.exists() ? Object.values(docSnap.data()) : FALLBACK_TOKEN_PACKAGES;
-            // Ensure the data structure is an array of objects
+        // Fetch token packages
+        const fetchTokenPackages = async () => {
+            const { data, error } = await supabase
+                .from('app_config')
+                .select('config_value')
+                .eq('config_key', 'token_packages')
+                .single();
+
+            if (error && error.code !== 'PGRST116') {
+                console.error('Error fetching token packages:', error);
+                setConfig(prev => ({ ...prev, tokenPackages: FALLBACK_TOKEN_PACKAGES }));
+                return;
+            }
+
+            let fetchedTokens = data?.config_value || FALLBACK_TOKEN_PACKAGES;
             if (!Array.isArray(fetchedTokens) || fetchedTokens.length === 0) {
-                 fetchedTokens = FALLBACK_TOKEN_PACKAGES;
+                fetchedTokens = FALLBACK_TOKEN_PACKAGES;
             }
             setConfig(prev => ({ ...prev, tokenPackages: fetchedTokens }));
-        });
-        
-        // Initial setup check
-        setLoading(false);
+        };
 
-        return () => { 
-            unsubTier(); 
-            unsubTokens();
+        // Initial fetch
+        Promise.all([fetchTierConfig(), fetchTokenPackages()]).finally(() => {
+            setLoading(false);
+        });
+
+        // Subscribe to real-time updates
+        const tierChannel = supabase
+            .channel('app_config_tier')
+            .on('postgres_changes', 
+                { event: '*', schema: 'public', table: 'app_config', filter: 'config_key=eq.tier_config' },
+                () => fetchTierConfig()
+            )
+            .subscribe();
+
+        const tokensChannel = supabase
+            .channel('app_config_tokens')
+            .on('postgres_changes',
+                { event: '*', schema: 'public', table: 'app_config', filter: 'config_key=eq.token_packages' },
+                () => fetchTokenPackages()
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(tierChannel);
+            supabase.removeChannel(tokensChannel);
         };
     }, [DEFAULT_TIER_DATA, FALLBACK_TOKEN_PACKAGES]); 
 
