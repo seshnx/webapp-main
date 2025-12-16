@@ -262,15 +262,17 @@ export default function App() {
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
   
-  // Only show AuthWizard if there's no user OR if user exists but has no profile (needs onboarding)
-  // But check that user actually has an ID to avoid showing onboarding for invalid sessions
+  // Only show AuthWizard if there's no user
+  // Don't show onboarding automatically - let user complete signup flow first
   if (!user || !user.id) {
     return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} isNewUser={false} />;
   }
   
-  // If user exists with valid ID but no profile data, show onboarding
-  if (user && user.id && !userData) {
-    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.reload()} />;
+  // If user exists but no profile data AND we're coming from signup (check URL or session)
+  // Only show onboarding if explicitly needed (e.g., from OAuth callback)
+  const isFromSignup = new URLSearchParams(window.location.search).get('intent') === 'signup';
+  if (user && user.id && !userData && isFromSignup) {
+    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.href = '/'} />;
   }
 
   const isEduMode = activeTab.startsWith('edu-');

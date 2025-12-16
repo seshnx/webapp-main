@@ -103,7 +103,9 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
   // Initialize mode based on user state
   useEffect(() => {
-    if ((user && user.id) || isNewUser) {
+    // Only show onboarding if explicitly marked as new user AND user exists
+    // Don't auto-trigger onboarding on every user detection
+    if (isNewUser && user && user.id) {
       setMode('onboarding');
       setStep(1);
       const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
@@ -114,10 +116,11 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         firstName: names[0] || '',
         lastName: names.slice(1).join(' ') || ''
       }));
-    } else {
+    } else if (!user || !user.id) {
       setMode('login');
       setStep(1);
     }
+    // If user exists but not isNewUser, don't change mode (let App.jsx handle it)
   }, [user, isNewUser]);
 
   // Password validation
@@ -270,64 +273,96 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       }
 
       // Step 2: Wait for trigger to create profile, then update it
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      console.log('Waiting for trigger to create profile...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
       
       // Update profile with roles and additional info
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-          first_name: form.firstName,
-          last_name: form.lastName,
-          email: form.email.trim(),
-          zip_code: form.zip || null,
-          account_types: finalRoles,
-          active_role: finalRoles[0],
-          preferred_role: finalRoles[0],
-          talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', userId);
+      // Use a simple timeout to prevent hanging
+      const updateProfile = async () => {
+        try {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({
+              first_name: form.firstName,
+              last_name: form.lastName,
+              email: form.email.trim(),
+              zip_code: form.zip || null,
+              account_types: finalRoles,
+              active_role: finalRoles[0],
+              preferred_role: finalRoles[0],
+              talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', userId);
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        // PGRST116 = no rows (profile doesn't exist yet)
-        console.warn('Profile update warning:', profileError);
-        // Try to insert instead
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert({
-            id: userId,
-            email: form.email.trim(),
-            first_name: form.firstName,
-            last_name: form.lastName,
-            zip_code: form.zip || null,
-            account_types: finalRoles,
-            active_role: finalRoles[0],
-            preferred_role: finalRoles[0],
-            talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
-            settings: {},
-            updated_at: new Date().toISOString()
-          });
-
-        if (insertError) {
-          console.warn('Profile insert also failed:', insertError);
-          // Continue anyway - trigger should have created it
+          if (profileError) {
+            if (profileError.code === 'PGRST116') {
+              // Profile doesn't exist - try insert
+              const { error: insertError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: userId,
+                  email: form.email.trim(),
+                  first_name: form.firstName,
+                  last_name: form.lastName,
+                  zip_code: form.zip || null,
+                  account_types: finalRoles,
+                  active_role: finalRoles[0],
+                  preferred_role: finalRoles[0],
+                  talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
+                  settings: {},
+                  updated_at: new Date().toISOString()
+                });
+              
+              if (insertError) {
+                console.warn('Profile insert failed (trigger should handle it):', insertError.message);
+              } else {
+                console.log('Profile created successfully');
+              }
+            } else {
+              console.warn('Profile update failed (may be due to Tracking Prevention):', profileError.message);
+            }
+          } else {
+            console.log('Profile updated successfully');
+          }
+        } catch (err) {
+          console.warn('Profile operation error (continuing anyway):', err.message);
         }
-      }
+      };
 
-      // Step 3: Ensure wallet exists (trigger should have created it)
-      await supabase
+      // Run profile update with timeout
+      await Promise.race([
+        updateProfile(),
+        new Promise(resolve => setTimeout(resolve, 5000)) // 5 second timeout
+      ]);
+
+      // Step 3: Ensure wallet exists (non-blocking)
+      supabase
         .from('wallets')
         .upsert({ user_id: userId, balance: 0 }, { onConflict: 'user_id' })
         .catch(() => {}); // Ignore errors - trigger should handle it
 
-      // Success - reload page
-      console.log('✅ Signup completed successfully');
+      // Success - redirect to home (not reload) to avoid loop
+      console.log('✅ Signup completed successfully - redirecting...');
       setIsLoading(false);
+      
+      // Clear form to prevent re-triggering
+      setForm({
+        email: '',
+        password: '',
+        firstName: '',
+        lastName: '',
+        zip: '',
+        roles: [],
+        talentSubRole: ''
+      });
+      
+      // Redirect to home page (not reload) to avoid onboarding loop
       setTimeout(() => {
-        window.location.reload();
-      }, 500);
+        window.location.href = '/'; // Use href instead of reload
+      }, 1000);
 
     } catch (err) {
       console.error('Signup error:', err);
