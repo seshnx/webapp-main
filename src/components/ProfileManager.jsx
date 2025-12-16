@@ -98,7 +98,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
             }
 
             // Update main profile
-            await supabase
+            const { error: updateError } = await supabase
                 .from('profiles')
                 .update({
                     first_name: data.firstName,
@@ -111,9 +111,14 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                     use_legal_name_only: useLegalNameOnly,
                     use_user_name_only: useUserNameOnly,
                     effective_display_name: effectiveName,
-                    search_terms: searchTerms
+                    search_terms: searchTerms,
+                    updated_at: new Date().toISOString()
                 })
                 .eq('id', userId);
+
+            if (updateError) {
+                throw updateError;
+            }
 
             // Sync to public profile (if separate table exists, otherwise handled by triggers)
             // Note: In Supabase, you might use database triggers or views for this
@@ -122,7 +127,8 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
             toast.success('Profile Updated & Synced!', { id: toastId });
         } catch (error) {
             console.error("Update failed", error);
-            toast.error("Failed to update profile.", { id: toastId });
+            const errorMessage = error?.message || "Failed to update profile.";
+            toast.error(errorMessage, { id: toastId });
         } finally {
             setSaving(false);
         }
@@ -136,15 +142,20 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
         try {
             const url = await uploadImage(file, `users/${userId}/avatars`);
             
-            await supabase
+            const { error: updateError } = await supabase
                 .from('profiles')
-                .update({ avatar_url: url })
+                .update({ avatar_url: url, updated_at: new Date().toISOString() })
                 .eq('id', userId);
+            
+            if (updateError) {
+                throw updateError;
+            }
             
             toast.success('Photo updated!', { id: toastId });
         } catch (err) {
             console.error(err);
-            toast.error('Photo upload failed', { id: toastId });
+            const errorMessage = err?.message || 'Photo upload failed';
+            toast.error(errorMessage, { id: toastId });
         }
     };
 
@@ -159,15 +170,20 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
             // Use same path structure as PublicProfileModal
             const url = await uploadImage(file, `users/${userId}/images/banners`);
             
-            await supabase
+            const { error: updateError } = await supabase
                 .from('profiles')
-                .update({ banner_url: url })
+                .update({ banner_url: url, updated_at: new Date().toISOString() })
                 .eq('id', userId);
+
+            if (updateError) {
+                throw updateError;
+            }
 
             toast.success('Cover banner updated!', { id: toastId });
         } catch (err) {
             console.error(err);
-            toast.error('Banner upload failed', { id: toastId });
+            const errorMessage = err?.message || 'Banner upload failed';
+            toast.error(errorMessage, { id: toastId });
         } finally {
             setBannerUploading(false);
         }
@@ -177,14 +193,20 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
         if (!supabase) return;
         const userId = user?.id || user?.uid;
         try {
-            await supabase
+            const { error: updateError } = await supabase
                 .from('profiles')
-                .update({ settings: newSettings })
+                .update({ settings: newSettings, updated_at: new Date().toISOString() })
                 .eq('id', userId);
+            
+            if (updateError) {
+                throw updateError;
+            }
+            
             toast.success("Settings saved.");
         } catch (error) {
             console.error("Settings save failed", error);
-            toast.error("Failed to save settings.");
+            const errorMessage = error?.message || "Failed to save settings.";
+            toast.error(errorMessage);
         }
     };
 
@@ -353,7 +375,7 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
             const dataToSave = { ...formData, followMainProfile, useLegalNameOnly, useUserNameOnly, syncStudioOps, displayName: effectiveName };
             
             // Update sub-profiles (assuming a sub_profiles table or profiles.sub_profiles JSONB)
-            await supabase
+            const { error: upsertError } = await supabase
                 .from('sub_profiles')
                 .upsert({
                     user_id: userId,
@@ -363,24 +385,44 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
                     onConflict: 'user_id,role'
                 });
             
+            if (upsertError) {
+                throw upsertError;
+            }
+            
             if (userData.activeProfileRole === role) {
-                await supabase
+                const { error: profileError } = await supabase
                     .from('profiles')
                     .update({ 
                         display_name: effectiveName,
                         effective_display_name: effectiveName,
-                        search_terms: [effectiveName.toLowerCase()] 
+                        search_terms: [effectiveName.toLowerCase()],
+                        updated_at: new Date().toISOString()
                     })
                     .eq('id', userId);
+                
+                if (profileError) {
+                    throw profileError;
+                }
             }
             if (role === 'Studio' && syncStudioOps) {
-                await supabase
+                const { error: studioError } = await supabase
                     .from('profiles')
-                    .update({ studio_name: effectiveName })
+                    .update({ 
+                        studio_name: effectiveName,
+                        updated_at: new Date().toISOString()
+                    })
                     .eq('id', userId);
+                
+                if (studioError) {
+                    throw studioError;
+                }
             }
             toast.success(`${role} Profile Saved!`, { id: toastId });
-        } catch (err) { console.error(err); toast.error("Failed to save.", { id: toastId }); } 
+        } catch (err) { 
+            console.error(err); 
+            const errorMessage = err?.message || "Failed to save.";
+            toast.error(errorMessage, { id: toastId }); 
+        } 
         finally { setIsSaving(false); }
     };
 
