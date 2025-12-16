@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Users, UserCheck, Search, Loader2 } from 'lucide-react';
-import { collection, query, orderBy, onSnapshot, limit } from 'firebase/firestore';
-import { db, getPaths } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { motion, AnimatePresence } from 'framer-motion';
 import UserAvatar from '../shared/UserAvatar';
 import FollowButton from './FollowButton';
@@ -42,47 +41,136 @@ export default function FollowersListModal({
 
     // Fetch followers
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !supabase) return;
 
         setLoading(true);
-        const followersRef = collection(db, getPaths(userId).followers);
-        const q = query(followersRef, orderBy('timestamp', 'desc'), limit(100));
+        
+        // Initial fetch
+        supabase
+            .from('follows')
+            .select('follower_id, created_at, profiles!follows_follower_id_fkey(id, first_name, last_name, avatar_url, active_role)')
+            .eq('following_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(100)
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error('Followers fetch error:', error);
+                    setLoading(false);
+                    return;
+                }
+                
+                const followers = (data || []).map(f => ({
+                    userId: f.follower_id,
+                    displayName: f.profiles ? `${f.profiles.first_name} ${f.profiles.last_name}` : 'User',
+                    photoURL: f.profiles?.avatar_url,
+                    role: f.profiles?.active_role,
+                    timestamp: f.created_at
+                }));
+                setFollowers(followers);
+                setLoading(false);
+            });
 
-        const unsub = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({
-                odId: doc.id,
-                userId: doc.id,
-                ...doc.data()
-            }));
-            setFollowers(data);
-            setLoading(false);
-        }, (error) => {
-            console.error('Followers fetch error:', error);
-            setLoading(false);
-        });
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`followers-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'follows',
+                    filter: `following_id=eq.${userId}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('follows')
+                        .select('follower_id, created_at, profiles!follows_follower_id_fkey(id, first_name, last_name, avatar_url, active_role)')
+                        .eq('following_id', userId)
+                        .order('created_at', { ascending: false })
+                        .limit(100);
+                    
+                    if (data) {
+                        const followers = data.map(f => ({
+                            userId: f.follower_id,
+                            displayName: f.profiles ? `${f.profiles.first_name} ${f.profiles.last_name}` : 'User',
+                            photoURL: f.profiles?.avatar_url,
+                            role: f.profiles?.active_role,
+                            timestamp: f.created_at
+                        }));
+                        setFollowers(followers);
+                    }
+                }
+            )
+            .subscribe();
 
-        return () => unsub();
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [userId]);
 
     // Fetch following
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !supabase) return;
 
-        const followingRef = collection(db, getPaths(userId).following);
-        const q = query(followingRef, orderBy('timestamp', 'desc'), limit(100));
+        // Initial fetch
+        supabase
+            .from('follows')
+            .select('following_id, created_at, profiles!follows_following_id_fkey(id, first_name, last_name, avatar_url, active_role)')
+            .eq('follower_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(100)
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error('Following fetch error:', error);
+                    return;
+                }
+                
+                const following = (data || []).map(f => ({
+                    userId: f.following_id,
+                    displayName: f.profiles ? `${f.profiles.first_name} ${f.profiles.last_name}` : 'User',
+                    photoURL: f.profiles?.avatar_url,
+                    role: f.profiles?.active_role,
+                    timestamp: f.created_at
+                }));
+                setFollowing(following);
+            });
 
-        const unsub = onSnapshot(q, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({
-                odId: doc.id,
-                userId: doc.id,
-                ...doc.data()
-            }));
-            setFollowing(data);
-        }, (error) => {
-            console.error('Following fetch error:', error);
-        });
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`following-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'follows',
+                    filter: `follower_id=eq.${userId}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('follows')
+                        .select('following_id, created_at, profiles!follows_following_id_fkey(id, first_name, last_name, avatar_url, active_role)')
+                        .eq('follower_id', userId)
+                        .order('created_at', { ascending: false })
+                        .limit(100);
+                    
+                    if (data) {
+                        const following = data.map(f => ({
+                            userId: f.following_id,
+                            displayName: f.profiles ? `${f.profiles.first_name} ${f.profiles.last_name}` : 'User',
+                            photoURL: f.profiles?.avatar_url,
+                            role: f.profiles?.active_role,
+                            timestamp: f.created_at
+                        }));
+                        setFollowing(following);
+                    }
+                }
+            )
+            .subscribe();
 
-        return () => unsub();
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [userId]);
 
     const activeList = activeTab === TABS.FOLLOWERS ? followers : following;
@@ -94,7 +182,8 @@ export default function FollowersListModal({
           )
         : activeList;
 
-    const isOwnProfile = userId === currentUser?.uid;
+    const currentUserId = currentUser?.id || currentUser?.uid;
+    const isOwnProfile = userId === currentUserId;
 
     const handleUserClick = (targetUserId) => {
         if (openPublicProfile) {
@@ -229,7 +318,7 @@ export default function FollowersListModal({
                                     key={user.userId}
                                     user={user}
                                     index={index}
-                                    currentUserId={currentUser?.uid}
+                                    currentUserId={currentUserId}
                                     isFollowingUser={isFollowing?.(user.userId)}
                                     onToggleFollow={() => handleToggleFollow(user)}
                                     onUserClick={() => handleUserClick(user.userId)}

@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    collection, getDocs, doc, addDoc, deleteDoc, updateDoc 
-} from 'firebase/firestore';
 import { Plus, Trash2, Key, Save, Check } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 import { SCHOOL_PERMISSIONS } from '../../../config/constants';
 
 export default function EduRoles({ schoolId, logAction }) {
@@ -17,28 +14,48 @@ export default function EduRoles({ schoolId, logAction }) {
 
     // --- DATA FETCHING ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const fetchRoles = async () => {
             setLoading(true);
             try {
-                const snap = await getDocs(collection(db, `schools/${schoolId}/roles`));
-                setRoles(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: rolesData, error } = await supabase
+                    .from('school_roles')
+                    .select('*')
+                    .eq('school_id', schoolId);
+                
+                if (error) throw error;
+                
+                setRoles((rolesData || []).map(r => ({ id: r.id, ...r })));
             } catch (e) {
                 console.error("Error loading roles:", e);
             }
             setLoading(false);
         };
-        if (schoolId) fetchRoles();
+        fetchRoles();
     }, [schoolId]);
 
     // --- ACTIONS ---
 
     const handleCreateRole = async () => {
-        if (!roleForm.name) return;
+        if (!roleForm.name || !supabase || !schoolId) return;
         setSaving(true);
         try {
-            const docRef = await addDoc(collection(db, `schools/${schoolId}/roles`), roleForm);
-            setRoles(prev => [...prev, { id: docRef.id, ...roleForm }]);
-            await logAction('Create Role', `Created role: ${roleForm.name}`);
+            const { data: newRole, error } = await supabase
+                .from('school_roles')
+                .insert({
+                    school_id: schoolId,
+                    name: roleForm.name,
+                    color: roleForm.color || '#3b82f6',
+                    permissions: roleForm.permissions || []
+                })
+                .select()
+                .single();
+            
+            if (error) throw error;
+            
+            setRoles(prev => [...prev, { id: newRole.id, ...newRole }]);
+            if (logAction) await logAction('Create Role', `Created role: ${roleForm.name}`);
             
             // Reset
             setRoleForm({ name: '', color: '#3b82f6', permissions: [] });
@@ -51,21 +68,32 @@ export default function EduRoles({ schoolId, logAction }) {
     };
 
     const handleDeleteRole = async (roleId, roleName) => {
-        if (!confirm(`Delete role "${roleName}"? Staff assigned to this role will lose their permissions.`)) return;
+        if (!confirm(`Delete role "${roleName}"? Staff assigned to this role will lose their permissions.`) || !supabase) return;
         try {
-            await deleteDoc(doc(db, `schools/${schoolId}/roles/${roleId}`));
+            await supabase
+                .from('school_roles')
+                .delete()
+                .eq('id', roleId)
+                .eq('school_id', schoolId);
+            
             setRoles(prev => prev.filter(r => r.id !== roleId));
-            await logAction('Delete Role', `Deleted role: ${roleName}`);
+            if (logAction) await logAction('Delete Role', `Deleted role: ${roleName}`);
         } catch (e) {
             console.error("Delete role failed:", e);
         }
     };
 
     const handleUpdatePermissions = async (roleId, newPermissions) => {
+        if (!supabase || !schoolId) return;
+        
         // Optimistic update
         setRoles(prev => prev.map(r => r.id === roleId ? { ...r, permissions: newPermissions } : r));
         try {
-            await updateDoc(doc(db, `schools/${schoolId}/roles/${roleId}`), { permissions: newPermissions });
+            await supabase
+                .from('school_roles')
+                .update({ permissions: newPermissions })
+                .eq('id', roleId)
+                .eq('school_id', schoolId);
         } catch (e) {
             console.error("Update perms failed:", e);
             // Revert would go here in a full production app

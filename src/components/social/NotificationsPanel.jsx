@@ -17,8 +17,7 @@ import {
     Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import UserAvatar from '../shared/UserAvatar';
 import toast from 'react-hot-toast';
 

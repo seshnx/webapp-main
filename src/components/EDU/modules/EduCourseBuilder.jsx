@@ -2,15 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-    doc, collection, addDoc, updateDoc, getDocs, 
-    deleteDoc, query, orderBy, serverTimestamp 
-} from 'firebase/firestore';
-import { 
     X, Save, Plus, Trash2, GripVertical, Upload, 
     Play, FileText, Clock, BookOpen 
 } from 'lucide-react';
-import { db, storage } from '../../../config/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../../../config/supabase';
 
 export default function EduCourseBuilder({ schoolId, course, onSave, onCancel, logAction }) {
     const [formData, setFormData] = useState({
@@ -39,16 +34,20 @@ export default function EduCourseBuilder({ schoolId, course, onSave, onCancel, l
     }, [course]);
 
     const loadLessons = async () => {
-        if (!course?.id) return;
+        if (!course?.id || !supabase) return;
         try {
-            const q = query(
-                collection(db, `schools/${schoolId}/courses/${course.id}/lessons`),
-                orderBy('order', 'asc')
-            );
-            const snapshot = await getDocs(q);
-            const lessonsList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
+            const { data: lessonsData, error } = await supabase
+                .from('lessons')
+                .select('*')
+                .eq('course_id', course.id)
+                .order('order', { ascending: true });
+            
+            if (error) throw error;
+            
+            const lessonsList = (lessonsData || []).map(l => ({
+                id: l.id,
+                ...l,
+                courseId: l.course_id
             }));
             setLessons(lessonsList);
         } catch (error) {
@@ -62,29 +61,49 @@ export default function EduCourseBuilder({ schoolId, course, onSave, onCancel, l
             return;
         }
 
+        if (!supabase || !schoolId) return;
+        
         setLoading(true);
         try {
             const courseData = {
-                ...formData,
-                updatedAt: serverTimestamp(),
-                lessonCount: lessons.length
+                school_id: schoolId,
+                title: formData.title,
+                description: formData.description || null,
+                duration: formData.duration || null,
+                prerequisites: formData.prerequisites || [],
+                category: formData.category || null,
+                lesson_count: lessons.length,
+                updated_at: new Date().toISOString()
             };
 
             if (course) {
                 // Update existing course
-                await updateDoc(doc(db, `schools/${schoolId}/courses/${course.id}`), courseData);
+                const { error } = await supabase
+                    .from('courses')
+                    .update(courseData)
+                    .eq('id', course.id)
+                    .eq('school_id', schoolId);
+                
+                if (error) throw error;
+                
                 if (logAction) {
                     logAction('update_course', { courseId: course.id, title: formData.title });
                 }
             } else {
                 // Create new course
-                courseData.createdAt = serverTimestamp();
-                const docRef = await addDoc(
-                    collection(db, `schools/${schoolId}/courses`),
-                    courseData
-                );
+                courseData.created_at = new Date().toISOString();
+                courseData.status = 'draft'; // Default status
+                
+                const { data: newCourse, error } = await supabase
+                    .from('courses')
+                    .insert(courseData)
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                
                 if (logAction) {
-                    logAction('create_course', { courseId: docRef.id, title: formData.title });
+                    logAction('create_course', { courseId: newCourse.id, title: formData.title });
                 }
             }
 
@@ -128,28 +147,38 @@ export default function EduCourseBuilder({ schoolId, course, onSave, onCancel, l
     };
 
     const handleSaveLesson = async (lessonData) => {
-        if (!course?.id) {
-            alert('Please save the course first before adding lessons.');
+        if (!course?.id || !supabase) {
+            if (!course?.id) alert('Please save the course first before adding lessons.');
             return;
         }
 
         try {
-            const lessonRef = lessonData.id.startsWith('temp-')
-                ? collection(db, `schools/${schoolId}/courses/${course.id}/lessons`)
-                : doc(db, `schools/${schoolId}/courses/${course.id}/lessons/${lessonData.id}`);
-
             const lessonPayload = {
-                ...lessonData,
+                course_id: course.id,
+                title: lessonData.title,
+                description: lessonData.description || null,
+                type: lessonData.type || 'video',
+                content: lessonData.content || null,
                 order: lessonData.order || lessons.length,
-                updatedAt: serverTimestamp()
+                duration: lessonData.duration || 0,
+                updated_at: new Date().toISOString()
             };
 
             if (lessonData.id.startsWith('temp-')) {
-                delete lessonPayload.id;
-                lessonPayload.createdAt = serverTimestamp();
-                await addDoc(lessonRef, lessonPayload);
+                lessonPayload.created_at = new Date().toISOString();
+                const { error } = await supabase
+                    .from('lessons')
+                    .insert(lessonPayload);
+                
+                if (error) throw error;
             } else {
-                await updateDoc(lessonRef, lessonPayload);
+                const { error } = await supabase
+                    .from('lessons')
+                    .update(lessonPayload)
+                    .eq('id', lessonData.id)
+                    .eq('course_id', course.id);
+                
+                if (error) throw error;
             }
 
             loadLessons();
@@ -161,7 +190,7 @@ export default function EduCourseBuilder({ schoolId, course, onSave, onCancel, l
     };
 
     const handleDeleteLesson = async (lessonId) => {
-        if (!confirm('Delete this lesson?')) return;
+        if (!confirm('Delete this lesson?') || !supabase || !course?.id) return;
         
         if (lessonId.startsWith('temp-')) {
             setLessons(lessons.filter(l => l.id !== lessonId));
@@ -169,7 +198,12 @@ export default function EduCourseBuilder({ schoolId, course, onSave, onCancel, l
         }
 
         try {
-            await deleteDoc(doc(db, `schools/${schoolId}/courses/${course.id}/lessons/${lessonId}`));
+            await supabase
+                .from('lessons')
+                .delete()
+                .eq('id', lessonId)
+                .eq('course_id', course.id);
+            
             loadLessons();
         } catch (error) {
             console.error('Error deleting lesson:', error);

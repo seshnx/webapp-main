@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, increment } from 'firebase/firestore';
 import { Search, Disc, Sliders, Download, CheckCircle, Zap, Plus, X, Upload, Loader2, Music, Flag } from 'lucide-react';
-import { db, getPaths } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import ReportModal from '../ReportModal'; 
@@ -19,23 +18,104 @@ export default function SeshFxStore({ user, userData, tokenBalance, refreshWalle
   
   // 1. Fetch Market Items
   useEffect(() => {
-      if (!user?.uid) return;
-      const q = query(collection(db, getPaths(user.uid).marketplaceItems), orderBy('timestamp', 'desc'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          setItems(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      });
-      return () => unsubscribe();
-  }, [user.uid]);
+      if (!user?.id && !user?.uid || !supabase) return;
+      const userId = user.id || user.uid;
+      
+      // Initial fetch
+      supabase
+          .from('market_items')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .then(({ data, error }) => {
+              if (error) {
+                  console.error('Error fetching market items:', error);
+                  return;
+              }
+              setItems((data || []).map(item => ({
+                  id: item.id,
+                  ...item,
+                  timestamp: item.created_at
+              })));
+          });
+
+      // Subscribe to realtime changes
+      const channel = supabase
+          .channel('market-items')
+          .on(
+              'postgres_changes',
+              {
+                  event: '*',
+                  schema: 'public',
+                  table: 'market_items'
+              },
+              async () => {
+                  const { data } = await supabase
+                      .from('market_items')
+                      .select('*')
+                      .order('created_at', { ascending: false });
+                  
+                  if (data) {
+                      setItems(data.map(item => ({
+                          id: item.id,
+                          ...item,
+                          timestamp: item.created_at
+                      })));
+                  }
+              }
+          )
+          .subscribe();
+
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [user?.id, user?.uid]);
 
   // 2. Fetch Owned Items
   useEffect(() => {
-      if (!user?.uid) return;
-      const q = collection(db, getPaths(user.uid).userLibrary);
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-          setOwnedItemIds(new Set(snapshot.docs.map(doc => doc.data().itemId)));
-      });
-      return () => unsubscribe();
-  }, [user?.uid]);
+      if (!user?.id && !user?.uid || !supabase) return;
+      const userId = user.id || user.uid;
+      
+      // Initial fetch
+      supabase
+          .from('user_library')
+          .select('item_id')
+          .eq('user_id', userId)
+          .then(({ data, error }) => {
+              if (error) {
+                  console.error('Error fetching owned items:', error);
+                  return;
+              }
+              setOwnedItemIds(new Set((data || []).map(item => item.item_id)));
+          });
+
+      // Subscribe to realtime changes
+      const channel = supabase
+          .channel(`user-library-${userId}`)
+          .on(
+              'postgres_changes',
+              {
+                  event: '*',
+                  schema: 'public',
+                  table: 'user_library',
+                  filter: `user_id=eq.${userId}`
+              },
+              async () => {
+                  const { data } = await supabase
+                      .from('user_library')
+                      .select('item_id')
+                      .eq('user_id', userId);
+                  
+                  if (data) {
+                      setOwnedItemIds(new Set(data.map(item => item.item_id)));
+                  }
+              }
+          )
+          .subscribe();
+
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [user?.id, user?.uid]);
 
   const handlePurchase = async (item) => {
       if (tokenBalance < item.price) {
@@ -45,18 +125,40 @@ export default function SeshFxStore({ user, userData, tokenBalance, refreshWalle
       
       if(!window.confirm(`Purchase ${item.title} for ${item.price} Tokens?`)) return;
       
+      if (!supabase) {
+          alert("Transaction failed. Database unavailable.");
+          return;
+      }
+
+      const userId = user?.id || user?.uid;
+      
       try {
-          const walletRef = doc(db, getPaths(user.uid).userWallet); 
-          await updateDoc(walletRef, { balance: increment(-item.price) });
+          // Update wallet balance
+          const { data: wallet, error: walletError } = await supabase
+              .from('wallets')
+              .select('balance')
+              .eq('user_id', userId)
+              .single();
           
-          await addDoc(collection(db, getPaths(user.uid).userLibrary), {
-              itemId: item.id,
-              title: item.title,
-              type: item.type,
-              pricePaid: item.price,
-              purchaseDate: serverTimestamp(),
-              downloadUrl: item.downloadUrl 
-          });
+          if (walletError) throw walletError;
+          
+          await supabase
+              .from('wallets')
+              .update({ balance: (wallet.balance || 0) - item.price })
+              .eq('user_id', userId);
+          
+          // Add to user library
+          await supabase
+              .from('user_library')
+              .insert({
+                  user_id: userId,
+                  item_id: item.id,
+                  title: item.title,
+                  type: item.type,
+                  price_paid: item.price,
+                  purchase_date: new Date().toISOString(),
+                  download_url: item.download_url || item.downloadUrl
+              });
           
           if(refreshWallet) refreshWallet();
           alert("Purchased successfully!");
@@ -167,23 +269,30 @@ function SellItemModal({ user, userData, onClose }) {
     const { uploadMedia, uploading } = useMediaUpload(); // Destructure uploading
 
     const handleSubmit = async () => {
-        if(!form.title || !form.price || !audioFile) return alert("Title, Price, and Audio File are required.");
+        if(!form.title || !form.price || !audioFile || !supabase) return alert("Title, Price, and Audio File are required.");
+        
+        const userId = user?.id || user?.uid;
         
         try {
             setStatus('Uploading Audio Asset...');
             // Single file upload serves as both preview and product for now
-            const downloadUrl = await uploadMedia(audioFile, getPaths(user.uid).marketAssets);
+            // Note: uploadMedia may need to be updated to work with Supabase Storage
+            const downloadUrl = await uploadMedia(audioFile, `market-assets/${userId}`);
 
             setStatus('Listing Item...');
-            await addDoc(collection(db, getPaths(user.uid).marketplaceItems), {
-                ...form,
-                price: parseInt(form.price),
-                tags: form.tags.split(',').map(t => t.trim()).filter(t => t),
-                author: `${userData.firstName} ${userData.lastName}`,
-                authorId: user.uid,
-                downloadUrl, // This URL acts as both source and download
-                timestamp: serverTimestamp()
-            });
+            await supabase
+                .from('market_items')
+                .insert({
+                    title: form.title,
+                    price: parseInt(form.price),
+                    type: form.type,
+                    tags: form.tags.split(',').map(t => t.trim()).filter(t => t),
+                    description: form.description || null,
+                    author: `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim(),
+                    author_id: userId,
+                    download_url: downloadUrl, // This URL acts as both source and download
+                    created_at: new Date().toISOString()
+                });
             
             setStatus('Success!');
             setTimeout(onClose, 1000);

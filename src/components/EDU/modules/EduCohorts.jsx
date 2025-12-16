@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Users, Upload, Archive, AlertTriangle, FileText } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 
 export default function EduCohorts({ schoolId, logAction }) {
     const [csvInput, setCsvInput] = useState('');
     const [processing, setProcessing] = useState(false);
 
     const handleBatchImport = async () => {
-        if (!csvInput.trim()) return alert("Please paste CSV data first.");
+        if (!csvInput.trim() || !supabase || !schoolId) {
+            if (!csvInput.trim()) alert("Please paste CSV data first.");
+            return;
+        }
         
         setProcessing(true);
         const lines = csvInput.trim().split('\n');
@@ -16,6 +18,8 @@ export default function EduCohorts({ schoolId, logAction }) {
         let errors = 0;
 
         try {
+            const studentsToInsert = [];
+            
             for (let line of lines) {
                 // Expected format: email, firstName, lastName, cohort
                 const parts = line.split(',');
@@ -27,16 +31,17 @@ export default function EduCohorts({ schoolId, logAction }) {
                     const displayName = `${firstName} ${lastName}`;
 
                     if (email && firstName) {
-                        await addDoc(collection(db, `schools/${schoolId}/students`), {
+                        studentsToInsert.push({
+                            school_id: schoolId,
                             email,
-                            displayName,
-                            firstName,
-                            lastName,
+                            display_name: displayName,
+                            first_name: firstName,
+                            last_name: lastName,
                             cohort,
-                            studentId: '', // Can be updated later
+                            student_id: null, // Can be updated later
                             status: 'Enrolled',
-                            hoursLogged: 0,
-                            createdAt: serverTimestamp()
+                            hours_logged: 0,
+                            created_at: new Date().toISOString()
                         });
                         count++;
                     } else {
@@ -47,7 +52,15 @@ export default function EduCohorts({ schoolId, logAction }) {
                 }
             }
             
-            await logAction('Batch Import', `Imported ${count} students. (${errors} skipped)`);
+            if (studentsToInsert.length > 0) {
+                const { error } = await supabase
+                    .from('students')
+                    .insert(studentsToInsert);
+                
+                if (error) throw error;
+            }
+            
+            if (logAction) await logAction('Batch Import', `Imported ${count} students. (${errors} skipped)`);
             alert(`Import complete! Added ${count} students.`);
             setCsvInput('');
         } catch (e) {

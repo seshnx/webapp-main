@@ -1,9 +1,7 @@
 // src/contexts/EduAuthContext.jsx
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { hasEduAccess, getEduRole, canAccessSchool } from '../utils/eduPermissions';
 
 const EduAuthContext = createContext();
@@ -23,7 +21,7 @@ export function EduAuthProvider({ children, user: mainUser, userData: mainUserDa
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!mainUser) {
+        if (!mainUser || !supabase) {
             setEduUser(null);
             setEduUserData(null);
             setEduSessionValid(false);
@@ -48,28 +46,56 @@ export function EduAuthProvider({ children, user: mainUser, userData: mainUserDa
 
         // User has EDU access - set up EDU session
         setEduUser(mainUser);
-        
-        // Listen to user data changes
-        const userRef = doc(db, `artifacts/${appId}/users/${mainUser.uid}/profiles/main`);
-        const unsubscribe = onSnapshot(userRef, (docSnap) => {
-            if (docSnap.exists()) {
-                const data = docSnap.data();
-                setEduUserData(data);
-                // Validate EDU access on each update
-                setEduSessionValid(hasEduAccess(data));
-            } else {
-                setEduUserData(null);
-                setEduSessionValid(false);
-            }
-            setLoading(false);
-        }, (error) => {
-            console.error('Error listening to EDU user data:', error);
-            setEduUserData(null);
-            setEduSessionValid(false);
-            setLoading(false);
-        });
+        setEduUserData(mainUserData);
+        setEduSessionValid(hasEduAccess(mainUserData));
+        setLoading(false);
 
-        return () => unsubscribe();
+        // Subscribe to profile changes via Supabase realtime
+        const userId = mainUser.id || mainUser.uid;
+        const profileChannel = supabase
+            .channel(`edu-profile-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'profiles',
+                    filter: `id=eq.${userId}`
+                },
+                async (payload) => {
+                    try {
+                        const { data: profile } = await supabase
+                            .from('profiles')
+                            .select('*')
+                            .eq('id', userId)
+                            .single();
+                        
+                        if (profile) {
+                            // Normalize data structure
+                            const normalizedData = {
+                                ...profile,
+                                firstName: profile.first_name,
+                                lastName: profile.last_name,
+                                accountTypes: profile.account_types || ['Fan'],
+                                activeProfileRole: profile.active_role || 'Fan',
+                                photoURL: profile.avatar_url
+                            };
+                            setEduUserData(normalizedData);
+                            setEduSessionValid(hasEduAccess(normalizedData));
+                        } else {
+                            setEduUserData(null);
+                            setEduSessionValid(false);
+                        }
+                    } catch (error) {
+                        console.error('Error updating EDU user data:', error);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(profileChannel);
+        };
     }, [mainUser, mainUserData]);
 
     const value = {

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { 
     X, MapPin, MessageCircle, Shield, User, 
     Briefcase, Music, Award, AlertTriangle, CheckCircle, 
     DollarSign, Camera, Loader2 
 } from 'lucide-react';
-import { db, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import StarRating from './shared/StarRating';
 import { useImageUpload } from '../hooks/useImageUpload';
 import { useFollowSystem, useUserSocialStats } from '../hooks/useFollowSystem';
@@ -21,12 +20,13 @@ export default function PublicProfileModal({ userId, currentUser, currentUserDat
   const [followersModalTab, setFollowersModalTab] = useState('followers');
 
   // Determine if the viewer is the owner
-  const isOwner = currentUser?.uid === userId;
+  const currentUserId = currentUser?.id || currentUser?.uid;
+  const isOwner = currentUserId === userId;
 
   const { uploadImage } = useImageUpload();
 
   // Follow system hooks
-  const { isFollowing, toggleFollow } = useFollowSystem(currentUser?.uid, currentUserData);
+  const { isFollowing, toggleFollow } = useFollowSystem(currentUserId, currentUserData);
   const { stats: socialStats } = useUserSocialStats(userId);
 
   const handleOpenFollowers = (tab = 'followers') => {
@@ -35,21 +35,39 @@ export default function PublicProfileModal({ userId, currentUser, currentUserDat
   };
 
   const refreshProfile = async () => {
+      if (!supabase) {
+          setError("Database unavailable.");
+          setLoading(false);
+          return;
+      }
+
       try {
-        const publicRef = doc(db, getPaths(userId).userPublicProfile);
-        const publicSnap = await getDoc(publicRef);
+        const { data: profileData, error } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', userId)
+            .single();
         
-        if (publicSnap.exists()) {
-          setProfile(publicSnap.data());
+        if (error) {
+            setError("Profile not found or is private.");
+            setLoading(false);
+            return;
+        }
+        
+        if (profileData) {
+            // Normalize data structure
+            setProfile({
+                ...profileData,
+                firstName: profileData.first_name,
+                lastName: profileData.last_name,
+                displayName: profileData.display_name || profileData.effective_display_name,
+                photoURL: profileData.avatar_url,
+                bannerURL: profileData.banner_url,
+                hourlyRate: profileData.hourly_rate,
+                zip: profileData.zip
+            });
         } else {
-            // Fallback for migration
-            const mainRef = doc(db, getPaths(userId).userProfile);
-            const mainSnap = await getDoc(mainRef);
-            if (mainSnap.exists()) {
-                setProfile(mainSnap.data());
-            } else {
-                setError("Profile not found or is private.");
-            }
+            setError("Profile not found or is private.");
         }
       } catch (e) {
         console.error("Failed to load profile:", e);
@@ -69,15 +87,19 @@ export default function PublicProfileModal({ userId, currentUser, currentUserDat
 
       setBannerUploading(true);
       try {
+          if (!supabase) throw new Error('Database unavailable');
+          
           // Upload to a dedicated banners path
-          const url = await uploadImage(file, `artifacts/${userId}/images/banners`);
+          const url = await uploadImage(file, `users/${userId}/images/banners`);
           if (url) {
-              // Update Public Profile Document
-              await updateDoc(doc(db, getPaths(userId).userPublicProfile), {
-                  bannerURL: url
-              });
+              // Update Profile
+              await supabase
+                  .from('profiles')
+                  .update({ banner_url: url })
+                  .eq('id', userId);
+              
               // Optimistic update
-              setProfile(prev => ({ ...prev, bannerURL: url }));
+              setProfile(prev => ({ ...prev, bannerURL: url, banner_url: url }));
           }
       } catch (err) {
           console.error("Banner upload failed:", err);

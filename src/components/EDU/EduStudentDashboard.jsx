@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useSchool } from '../../contexts/SchoolContext';
-import { doc, updateDoc, arrayUnion, arrayRemove, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { MapPin, Search, CheckCircle, Clock, School, BookOpen, Award, Users, Calendar, Play } from 'lucide-react';
 import { useEduAuth } from '../../contexts/EduAuthContext';
 
@@ -34,21 +33,28 @@ export default function EduStudentDashboard({ user: propUser, userData: propUser
     
     const handleAddInterest = async () => {
         const trimmed = newInterest.trim();
-        if (trimmed && interests.length < 3) {
+        const userId = user?.id || user?.uid;
+        if (trimmed && interests.length < 3 && supabase) {
             try {
-                await updateDoc(doc(db, 'users', user.uid), {
-                    internshipCities: arrayUnion(trimmed)
-                });
+                const updatedInterests = [...interests, trimmed];
+                await supabase
+                    .from('profiles')
+                    .update({ internship_cities: updatedInterests })
+                    .eq('id', userId);
                 setNewInterest('');
             } catch (e) { console.error("Error adding interest:", e); }
         }
     };
 
     const handleRemoveInterest = async (interest) => {
+        const userId = user?.id || user?.uid;
+        if (!supabase) return;
         try {
-            await updateDoc(doc(db, 'users', user.uid), {
-                internshipCities: arrayRemove(interest)
-            });
+            const updatedInterests = interests.filter(i => i !== interest);
+            await supabase
+                .from('profiles')
+                .update({ internship_cities: updatedInterests })
+                .eq('id', userId);
         } catch (e) { console.error("Error removing interest:", e); }
     };
 
@@ -68,11 +74,22 @@ export default function EduStudentDashboard({ user: propUser, userData: propUser
     }, [schoolId, user?.uid]);
 
     const fetchAvailableStudios = async () => {
+        if (!supabase) return;
         setLoadingStudios(true);
         try {
-            const q = query(collection(db, 'studios'), where('allowInternship', '==', true));
-            const snap = await getDocs(q);
-            let results = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            const { data: studiosData, error } = await supabase
+                .from('studios')
+                .select('*')
+                .eq('allow_internship', true);
+            
+            if (error) throw error;
+            
+            let results = (studiosData || []).map(d => ({
+                id: d.id,
+                ...d,
+                allowInternship: d.allow_internship,
+                zipCode: d.zip_code
+            }));
 
             if (interests.length > 0) {
                 results = results.filter(studio => 
@@ -88,11 +105,18 @@ export default function EduStudentDashboard({ user: propUser, userData: propUser
     };
 
     const loadCourses = async () => {
+        if (!supabase || !schoolId) return;
         setLoadingCourses(true);
         try {
-            const q = query(collection(db, `schools/${schoolId}/courses`), where('status', '==', 'published'));
-            const snapshot = await getDocs(q);
-            setCourses(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const { data: coursesData, error } = await supabase
+                .from('courses')
+                .select('*')
+                .eq('school_id', schoolId)
+                .eq('status', 'published');
+            
+            if (error) throw error;
+            
+            setCourses((coursesData || []).map(c => ({ id: c.id, ...c })));
         } catch (error) {
             console.error('Error loading courses:', error);
         }
@@ -100,50 +124,81 @@ export default function EduStudentDashboard({ user: propUser, userData: propUser
     };
 
     const loadEnrollments = async () => {
+        if (!supabase || !schoolId) return;
+        const userId = user?.id || user?.uid;
         try {
-            const q = query(
-                collection(db, `schools/${schoolId}/enrollments`),
-                where('studentId', '==', user.uid)
-            );
-            const snapshot = await getDocs(q);
-            setEnrollments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const { data: enrollmentsData, error } = await supabase
+                .from('enrollments')
+                .select('*')
+                .eq('school_id', schoolId)
+                .eq('student_id', userId);
+            
+            if (error) throw error;
+            
+            setEnrollments((enrollmentsData || []).map(e => ({
+                id: e.id,
+                ...e,
+                studentId: e.student_id,
+                courseId: e.course_id,
+                enrolledAt: e.enrolled_at
+            })));
         } catch (error) {
             console.error('Error loading enrollments:', error);
         }
     };
 
     const loadLearningPaths = async () => {
+        if (!supabase || !schoolId) return;
         try {
-            const q = query(collection(db, `schools/${schoolId}/learning_paths`));
-            const snapshot = await getDocs(q);
-            setLearningPaths(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const { data: pathsData, error } = await supabase
+                .from('learning_paths')
+                .select('*')
+                .eq('school_id', schoolId);
+            
+            if (error) throw error;
+            
+            setLearningPaths((pathsData || []).map(p => ({ id: p.id, ...p })));
         } catch (error) {
             console.error('Error loading learning paths:', error);
         }
     };
 
     const loadBadges = async () => {
+        if (!supabase || !schoolId) return;
+        const userId = user?.id || user?.uid;
         try {
-            const q = query(
-                collection(db, `schools/${schoolId}/badges`),
-                where('studentId', '==', user.uid)
-            );
-            const snapshot = await getDocs(q);
-            setBadges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const { data: badgesData, error } = await supabase
+                .from('badges')
+                .select('*')
+                .eq('school_id', schoolId)
+                .eq('student_id', userId);
+            
+            if (error) throw error;
+            
+            setBadges((badgesData || []).map(b => ({
+                id: b.id,
+                ...b,
+                studentId: b.student_id
+            })));
         } catch (error) {
             console.error('Error loading badges:', error);
         }
     };
 
     const handleEnroll = async (courseId) => {
+        if (!supabase || !schoolId) return;
+        const userId = user?.id || user?.uid;
         try {
-            await addDoc(collection(db, `schools/${schoolId}/enrollments`), {
-                studentId: user.uid,
-                courseId,
-                enrolledAt: serverTimestamp(),
-                progress: 0,
-                status: 'active'
-            });
+            await supabase
+                .from('enrollments')
+                .insert({
+                    school_id: schoolId,
+                    student_id: userId,
+                    course_id: courseId,
+                    enrolled_at: new Date().toISOString(),
+                    progress: 0,
+                    status: 'active'
+                });
             loadEnrollments();
         } catch (error) {
             console.error('Error enrolling:', error);

@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    collection, query, getDocs, addDoc, orderBy, serverTimestamp, where 
-} from 'firebase/firestore';
-import { 
     GraduationCap, Search, ChevronRight, Star, User, Plus, History, Save 
 } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 import { formatHours } from '../../../utils/eduTime';
 
 export default function EduEvaluations({ schoolId, logAction, graderName }) {
@@ -28,34 +25,57 @@ export default function EduEvaluations({ schoolId, logAction, graderName }) {
 
     // --- INITIAL DATA ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const fetchStudents = async () => {
             setLoading(true);
             try {
-                // Fetch basic student list for the sidebar
-                const q = query(collection(db, `schools/${schoolId}/students`), orderBy('displayName'));
-                const snap = await getDocs(q);
-                setStudents(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: studentsData, error } = await supabase
+                    .from('students')
+                    .select('id, display_name, first_name, last_name, email, status')
+                    .eq('school_id', schoolId)
+                    .order('display_name', { ascending: true });
+                
+                if (error) throw error;
+                
+                setStudents((studentsData || []).map(s => ({
+                    id: s.id,
+                    displayName: s.display_name,
+                    firstName: s.first_name,
+                    lastName: s.last_name,
+                    email: s.email,
+                    status: s.status
+                })));
             } catch (e) {
                 console.error("Error loading students:", e);
             }
             setLoading(false);
         };
-        if (schoolId) fetchStudents();
+        fetchStudents();
     }, [schoolId]);
 
     // --- FETCH HISTORY ON SELECTION ---
     useEffect(() => {
-        if (!selectedStudent) return;
+        if (!selectedStudent || !supabase || !schoolId) return;
         
         const fetchHistory = async () => {
             setLoadingHistory(true);
             try {
-                const q = query(
-                    collection(db, `schools/${schoolId}/students/${selectedStudent.id}/evaluations`), 
-                    orderBy('date', 'desc')
-                );
-                const snap = await getDocs(q);
-                setStudentHistory(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: evaluationsData, error } = await supabase
+                    .from('evaluations')
+                    .select('*')
+                    .eq('school_id', schoolId)
+                    .eq('student_id', selectedStudent.id)
+                    .order('date', { ascending: false });
+                
+                if (error) throw error;
+                
+                setStudentHistory((evaluationsData || []).map(e => ({
+                    id: e.id,
+                    ...e,
+                    softSkills: e.soft_skills,
+                    date: e.date
+                })));
             } catch (e) {
                 console.error("Error loading history:", e);
             }
@@ -70,25 +90,34 @@ export default function EduEvaluations({ schoolId, logAction, graderName }) {
     // --- ACTIONS ---
 
     const handleSubmitGrade = async () => {
-        if (!selectedStudent) return;
+        if (!selectedStudent || !supabase || !schoolId) return;
         
         try {
-            const evaluationData = {
-                ...gradeForm,
-                evaluator: graderName || 'EDUStaff',
-                date: serverTimestamp()
-            };
-
-            // Save to subcollection
-            const docRef = await addDoc(
-                collection(db, `schools/${schoolId}/students/${selectedStudent.id}/evaluations`), 
-                evaluationData
-            );
+            const { data: newEvaluation, error } = await supabase
+                .from('evaluations')
+                .insert({
+                    school_id: schoolId,
+                    student_id: selectedStudent.id,
+                    technical: gradeForm.technical,
+                    soft_skills: gradeForm.softSkills,
+                    notes: gradeForm.notes || null,
+                    evaluator: graderName || 'EDUStaff',
+                    date: new Date().toISOString()
+                })
+                .select()
+                .single();
+            
+            if (error) throw error;
 
             // Update local history
-            setStudentHistory(prev => [{ id: docRef.id, ...evaluationData, date: new Date() }, ...prev]);
+            setStudentHistory(prev => [{
+                id: newEvaluation.id,
+                ...newEvaluation,
+                softSkills: newEvaluation.soft_skills,
+                date: newEvaluation.date
+            }, ...prev]);
             
-            await logAction('Grade Student', `Graded ${selectedStudent.displayName}: Tech(${gradeForm.technical}) Soft(${gradeForm.softSkills})`);
+            if (logAction) await logAction('Grade Student', `Graded ${selectedStudent.displayName}: Tech(${gradeForm.technical}) Soft(${gradeForm.softSkills})`);
             
             setShowForm(false);
             alert("Evaluation submitted successfully.");

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, MapPin, Briefcase, Music, Save, Loader2, DollarSign, Settings, Users, ChevronRight, Check, ToggleLeft, ToggleRight, Camera, Eye, ExternalLink, Image as ImageIcon } from 'lucide-react';
-import { doc, updateDoc, setDoc } from 'firebase/firestore';
-import { db, appId, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { useForm, Controller } from 'react-hook-form'; 
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -92,27 +91,33 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                 effectiveName.toLowerCase()
             ].filter(Boolean);
 
-            const userRef = doc(db, getPaths(user.uid).userProfile);
-            await updateDoc(userRef, {
-                ...data,
-                useLegalNameOnly,
-                useUserNameOnly,
-                effectiveDisplayName: effectiveName,
-                searchTerms
-            });
+            const userId = user?.id || user?.uid;
+            
+            if (!supabase) {
+                throw new Error('Database unavailable');
+            }
 
-            // Sync to Public Profile
-            const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
-            await setDoc(publicRef, {
-                firstName: data.firstName,
-                lastName: data.lastName,
-                displayName: effectiveName,
-                bio: data.bio,
-                zip: data.zip,
-                rate: data.hourlyRate,
-                website: data.website,
-                searchTerms
-            }, { merge: true });
+            // Update main profile
+            await supabase
+                .from('profiles')
+                .update({
+                    first_name: data.firstName,
+                    last_name: data.lastName,
+                    display_name: data.displayName || null,
+                    bio: data.bio || null,
+                    zip: data.zip || null,
+                    hourly_rate: data.hourlyRate || null,
+                    website: data.website || null,
+                    use_legal_name_only: useLegalNameOnly,
+                    use_user_name_only: useUserNameOnly,
+                    effective_display_name: effectiveName,
+                    search_terms: searchTerms
+                })
+                .eq('id', userId);
+
+            // Sync to public profile (if separate table exists, otherwise handled by triggers)
+            // Note: In Supabase, you might use database triggers or views for this
+            // For now, we'll update the profiles table which serves both purposes
 
             toast.success('Profile Updated & Synced!', { id: toastId });
         } catch (error) {
@@ -125,14 +130,17 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
 
     const handlePhotoUpload = async (e) => {
         const file = e.target.files[0];
-        if (!file) return;
+        if (!file || !supabase) return;
+        const userId = user?.id || user?.uid;
         const toastId = toast.loading('Uploading photo...');
         try {
-            const url = await uploadImage(file, `users/${user.uid}/avatars`);
-            const userRef = doc(db, getPaths(user.uid).userProfile);
-            await updateDoc(userRef, { photoURL: url });
-            const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
-            await updateDoc(publicRef, { photoURL: url });
+            const url = await uploadImage(file, `users/${userId}/avatars`);
+            
+            await supabase
+                .from('profiles')
+                .update({ avatar_url: url })
+                .eq('id', userId);
+            
             toast.success('Photo updated!', { id: toastId });
         } catch (err) {
             console.error(err);
@@ -143,20 +151,18 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
     // --- NEW: Handle Banner Upload ---
     const handleBannerUpload = async (e) => {
         const file = e.target.files[0];
-        if (!file) return;
+        if (!file || !supabase) return;
+        const userId = user?.id || user?.uid;
         setBannerUploading(true);
         const toastId = toast.loading('Uploading cover banner...');
         try {
             // Use same path structure as PublicProfileModal
-            const url = await uploadImage(file, `artifacts/${user.uid}/images/banners`);
+            const url = await uploadImage(file, `users/${userId}/images/banners`);
             
-            // 1. Update Main Profile (Private)
-            const userRef = doc(db, getPaths(user.uid).userProfile);
-            await updateDoc(userRef, { bannerURL: url });
-
-            // 2. Sync to Public Profile
-            const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
-            await updateDoc(publicRef, { bannerURL: url });
+            await supabase
+                .from('profiles')
+                .update({ banner_url: url })
+                .eq('id', userId);
 
             toast.success('Cover banner updated!', { id: toastId });
         } catch (err) {
@@ -168,9 +174,13 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
     };
 
     const handleSettingsUpdate = async (newSettings) => {
+        if (!supabase) return;
+        const userId = user?.id || user?.uid;
         try {
-            const userRef = doc(db, getPaths(user.uid).userProfile);
-            await updateDoc(userRef, { settings: newSettings });
+            await supabase
+                .from('profiles')
+                .update({ settings: newSettings })
+                .eq('id', userId);
             toast.success("Settings saved.");
         } catch (error) {
             console.error("Settings save failed", error);
@@ -194,7 +204,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                 <div className="flex gap-3 self-end">
                     {/* NEW: View Public Profile Button */}
                     <button 
-                        onClick={() => openPublicProfile(user.uid)} 
+                        onClick={() => openPublicProfile(user?.id || user?.uid)} 
                         className="bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition shadow-lg"
                     >
                         <Eye size={16}/> View Public Profile
@@ -332,17 +342,42 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
                 else effectiveName = formData.profileName || `${userData.firstName} ${userData.lastName}`;
             }
 
+            const userId = user?.id || user?.uid;
+            
+            if (!supabase) {
+                throw new Error('Database unavailable');
+            }
+
+            // Save sub-profile data (assuming sub_profiles table or JSONB column)
+            // Note: This depends on your Supabase schema - you may need to adjust
             const dataToSave = { ...formData, followMainProfile, useLegalNameOnly, useUserNameOnly, syncStudioOps, displayName: effectiveName };
-            const subRef = doc(db, getPaths(user.uid).userSubProfile(role));
-            await setDoc(subRef, dataToSave, { merge: true });
+            
+            // Update sub-profiles (assuming a sub_profiles table or profiles.sub_profiles JSONB)
+            await supabase
+                .from('sub_profiles')
+                .upsert({
+                    user_id: userId,
+                    role: role,
+                    ...dataToSave
+                }, {
+                    onConflict: 'user_id,role'
+                });
             
             if (userData.activeProfileRole === role) {
-                const publicRef = doc(db, getPaths(user.uid).userPublicProfile);
-                await updateDoc(publicRef, { displayName: effectiveName, searchTerms: [effectiveName.toLowerCase()] });
+                await supabase
+                    .from('profiles')
+                    .update({ 
+                        display_name: effectiveName,
+                        effective_display_name: effectiveName,
+                        search_terms: [effectiveName.toLowerCase()] 
+                    })
+                    .eq('id', userId);
             }
             if (role === 'Studio' && syncStudioOps) {
-                const mainRef = doc(db, getPaths(user.uid).userProfile);
-                await updateDoc(mainRef, { studioName: effectiveName });
+                await supabase
+                    .from('profiles')
+                    .update({ studio_name: effectiveName })
+                    .eq('id', userId);
             }
             toast.success(`${role} Profile Saved!`, { id: toastId });
         } catch (err) { console.error(err); toast.error("Failed to save.", { id: toastId }); } 

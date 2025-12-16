@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
 import { 
     School, Camera, Save, Globe, Mail, GraduationCap, 
     Settings, ToggleLeft, ToggleRight, MapPin 
 } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 import { useImageUpload } from '../../../hooks/useImageUpload';
 
 export default function EduSettings({ schoolId, initialData, logAction, refreshMeta }) {
@@ -19,11 +18,30 @@ export default function EduSettings({ schoolId, initialData, logAction, refreshM
     // --- ACTIONS ---
 
     const handleUpdate = async () => {
+        if (!supabase || !schoolId) return;
+        
         try {
-            await updateDoc(doc(db, 'schools', schoolId), formData);
+            const updateData = {
+                name: formData.name,
+                primary_color: formData.primaryColor,
+                website: formData.website || null,
+                contact_email: formData.contactEmail || null,
+                address: formData.address || null,
+                description: formData.description || null,
+                enabled_features: formData.enabledFeatures || {},
+                updated_at: new Date().toISOString()
+            };
+            
+            const { error } = await supabase
+                .from('schools')
+                .update(updateData)
+                .eq('id', schoolId);
+            
+            if (error) throw error;
+            
             alert("School settings updated successfully.");
             if (refreshMeta) refreshMeta(formData); // Update parent state immediately
-            await logAction('Update Settings', 'Updated school configuration');
+            if (logAction) await logAction('Update Settings', 'Updated school configuration');
         } catch (e) {
             console.error("Update failed:", e);
             alert("Failed to update school settings.");
@@ -32,15 +50,19 @@ export default function EduSettings({ schoolId, initialData, logAction, refreshM
 
     const handleLogoUpload = async (e) => {
         const file = e.target.files[0];
-        if (!file || !schoolId) return;
+        if (!file || !schoolId || !supabase) return;
 
         try {
             const url = await uploadImage(file, `schools/${schoolId}/images/logo`);
             if (url) {
-                await updateDoc(doc(db, 'schools', schoolId), { logoURL: url });
-                setFormData(prev => ({ ...prev, logoURL: url }));
+                await supabase
+                    .from('schools')
+                    .update({ logo_url: url, updated_at: new Date().toISOString() })
+                    .eq('id', schoolId);
+                
+                setFormData(prev => ({ ...prev, logoURL: url, logo_url: url }));
                 if (refreshMeta) refreshMeta({ ...formData, logoURL: url });
-                await logAction('Update Logo', 'Uploaded new school logo');
+                if (logAction) await logAction('Update Logo', 'Uploaded new school logo');
             }
         } catch (err) {
             console.error("Logo upload failed", err);

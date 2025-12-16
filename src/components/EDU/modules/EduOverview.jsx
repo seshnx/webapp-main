@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, orderBy, limit, getCountFromServer } from 'firebase/firestore';
 import { Users, Briefcase, Clock, Activity, School, Globe } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 import StatCard from '../../shared/StatCard';
 
 export default function EduOverview({ schoolId, schoolData }) {
@@ -10,30 +9,63 @@ export default function EduOverview({ schoolId, schoolData }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const loadStats = async () => {
             setLoading(true);
             try {
                 // 1. Get Student Count
-                const studentSnap = await getCountFromServer(collection(db, `schools/${schoolId}/students`));
+                const { count: studentCount, error: studentError } = await supabase
+                    .from('students')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('school_id', schoolId);
                 
-                // 2. Get Active Interns (Scan method)
-                const sSnap = await getDocs(collection(db, `schools/${schoolId}/students`));
-                const activeInterns = sSnap.docs.filter(d => d.data().internshipStudioId).length;
+                if (studentError) throw studentError;
+                
+                // 2. Get Active Interns (students with internship_studio_id)
+                const { data: studentsData, error: studentsError } = await supabase
+                    .from('students')
+                    .select('id, internship_studio_id')
+                    .eq('school_id', schoolId)
+                    .not('internship_studio_id', 'is', null);
+                
+                if (studentsError) throw studentsError;
+                
+                const activeInterns = (studentsData || []).length;
 
                 // 3. Get Pending Logs
-                const lSnap = await getDocs(collection(db, `schools/${schoolId}/internship_logs`));
-                const pendingLogs = lSnap.docs.filter(d => d.data().status === 'pending_approval').length;
+                const { data: logsData, error: logsError } = await supabase
+                    .from('internship_logs')
+                    .select('id')
+                    .eq('school_id', schoolId)
+                    .eq('status', 'pending_approval');
+                
+                if (logsError) throw logsError;
+                
+                const pendingLogs = (logsData || []).length;
 
                 setStats({
-                    // CRITICAL FIX: .count is a property, not a function in the JS SDK
-                    students: studentSnap.data().count, 
+                    students: studentCount || 0, 
                     interns: activeInterns,
                     pending: pendingLogs
                 });
 
                 // 4. Recent Audit Logs
-                const aSnap = await getDocs(query(collection(db, `schools/${schoolId}/audit_logs`), orderBy('timestamp', 'desc'), limit(5)));
-                setRecentActivity(aSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: auditData, error: auditError } = await supabase
+                    .from('audit_logs')
+                    .select('*')
+                    .eq('school_id', schoolId)
+                    .order('timestamp', { ascending: false })
+                    .limit(5);
+                
+                if (auditError) throw auditError;
+                
+                setRecentActivity((auditData || []).map(a => ({
+                    id: a.id,
+                    ...a,
+                    adminName: a.admin_name,
+                    timestamp: a.timestamp ? new Date(a.timestamp) : null
+                })));
 
             } catch (e) {
                 console.error("Overview load failed:", e);
@@ -41,7 +73,7 @@ export default function EduOverview({ schoolId, schoolData }) {
             setLoading(false);
         };
         
-        if (schoolId) loadStats();
+        loadStats();
     }, [schoolId]);
 
     if (loading) return <div className="p-10 text-center text-gray-500">Loading Overview...</div>;

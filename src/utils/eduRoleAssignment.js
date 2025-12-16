@@ -1,8 +1,7 @@
 // src/utils/eduRoleAssignment.js
 // Dynamic role assignment based on school enrollment/roster data
 
-import { collection, query, where, getDocs, doc, getDoc } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 /**
  * Get user's assigned schools based on their role
@@ -34,15 +33,18 @@ export async function getUserAssignedSchools(userId, accountTypes = []) {
         
         // Check if user is EDUAdmin - listed in school admins array
         if (accountTypes.includes('EDUAdmin')) {
+            if (!supabase) return assignedSchools;
             // Query schools where admins array contains userId
-            const schoolsQuery = query(
-                collection(db, 'schools'),
-                where('admins', 'array-contains', userId)
-            );
-            const schoolsSnap = await getDocs(schoolsQuery);
-            schoolsSnap.docs.forEach(doc => {
-                assignedSchools.push(doc.id);
-            });
+            const { data: schools, error } = await supabase
+                .from('schools')
+                .select('id')
+                .contains('admins', [userId]);
+            
+            if (!error && schools) {
+                schools.forEach(school => {
+                    assignedSchools.push(school.id);
+                });
+            }
         }
         
         // GAdmin can access all schools (handled separately in canAccessSchool)
@@ -62,22 +64,31 @@ export async function getUserAssignedSchools(userId, accountTypes = []) {
  */
 export async function isStudentInSchool(userId, schoolId) {
     try {
-        // Check if user is enrolled in the school
-        // Option 1: Check enrollments collection
-        const enrollmentsQuery = query(
-            collection(db, `schools/${schoolId}/enrollments`),
-            where('studentId', '==', userId),
-            where('status', '==', 'active')
-        );
-        const enrollmentsSnap = await getDocs(enrollmentsQuery);
-        if (!enrollmentsSnap.empty) return true;
+        if (!supabase) return false;
         
-        // Option 2: Check students collection (fallback)
-        const studentDoc = await getDoc(doc(db, `schools/${schoolId}/students/${userId}`));
-        if (studentDoc.exists()) {
-            const data = studentDoc.data();
+        // Check if user is enrolled in the school
+        // Option 1: Check enrollments table
+        const { data: enrollments } = await supabase
+            .from('enrollments')
+            .select('id')
+            .eq('school_id', schoolId)
+            .eq('student_id', userId)
+            .eq('status', 'active')
+            .limit(1);
+        
+        if (enrollments && enrollments.length > 0) return true;
+        
+        // Option 2: Check students table (fallback)
+        const { data: student } = await supabase
+            .from('students')
+            .select('status')
+            .eq('school_id', schoolId)
+            .eq('user_id', userId)
+            .single();
+        
+        if (student) {
             // Check if status is enrolled (not graduated, dropped, etc.)
-            return data.status === 'Enrolled' || data.status === 'Active';
+            return student.status === 'Enrolled' || student.status === 'Active';
         }
         
         return false;
@@ -95,11 +106,18 @@ export async function isStudentInSchool(userId, schoolId) {
  */
 export async function isInternInSchool(userId, schoolId) {
     try {
+        if (!supabase) return false;
+        
         // Check if user is listed in school roster with "Active Internship" status
-        const studentDoc = await getDoc(doc(db, `schools/${schoolId}/students/${userId}`));
-        if (studentDoc.exists()) {
-            const data = studentDoc.data();
-            return data.status === 'Active Internship';
+        const { data: student } = await supabase
+            .from('students')
+            .select('status')
+            .eq('school_id', schoolId)
+            .eq('user_id', userId)
+            .single();
+        
+        if (student) {
+            return student.status === 'Active Internship';
         }
         return false;
     } catch (error) {
@@ -116,13 +134,22 @@ export async function isInternInSchool(userId, schoolId) {
  */
 export async function isStaffInSchool(userId, schoolId) {
     try {
+        if (!supabase) return false;
+        
         // Check if user is listed in school staff collection
-        const staffQuery = query(
-            collection(db, `schools/${schoolId}/staff`),
-            where('uid', '==', userId)
-        );
-        const staffSnap = await getDocs(staffQuery);
-        return !staffSnap.empty;
+        const { data: staff, error } = await supabase
+            .from('school_staff')
+            .select('id')
+            .eq('school_id', schoolId)
+            .eq('user_id', userId)
+            .limit(1);
+        
+        if (error) {
+            console.error('Error checking staff status:', error);
+            return false;
+        }
+        
+        return staff && staff.length > 0;
     } catch (error) {
         console.error('Error checking staff status:', error);
         return false;
@@ -137,13 +164,20 @@ export async function isStaffInSchool(userId, schoolId) {
  */
 export async function isAdminInSchool(userId, schoolId) {
     try {
+        if (!supabase) return false;
+        
         // Check if user is listed in school admins array
-        const schoolDoc = await getDoc(doc(db, `schools/${schoolId}`));
-        if (schoolDoc.exists()) {
-            const data = schoolDoc.data();
-            return data.admins?.includes(userId) || false;
+        const { data: school, error } = await supabase
+            .from('schools')
+            .select('admins')
+            .eq('id', schoolId)
+            .single();
+        
+        if (error || !school) {
+            return false;
         }
-        return false;
+        
+        return school.admins?.includes(userId) || false;
     } catch (error) {
         console.error('Error checking admin status:', error);
         return false;
@@ -160,45 +194,75 @@ export async function getSchoolsForRole(userId, role) {
     const schoolIds = [];
     
     try {
+        if (!supabase) return schoolIds;
+        
         if (role === 'Student') {
-            // Iterate through all schools and check enrollments/students collections
-            // Note: This is less efficient but works without collection group indexes
-            // Better long-term solution: maintain a user-schools mapping document
-            const schoolsSnap = await getDocs(collection(db, 'schools'));
-            for (const schoolDoc of schoolsSnap.docs) {
-                const schoolId = schoolDoc.id;
-                if (await isStudentInSchool(userId, schoolId)) {
-                    schoolIds.push(schoolId);
-                }
+            // Query enrollments table for active enrollments
+            const { data: enrollments } = await supabase
+                .from('enrollments')
+                .select('school_id')
+                .eq('student_id', userId)
+                .eq('status', 'active');
+            
+            if (enrollments) {
+                enrollments.forEach(enrollment => {
+                    if (!schoolIds.includes(enrollment.school_id)) {
+                        schoolIds.push(enrollment.school_id);
+                    }
+                });
+            }
+            
+            // Also check students table for enrolled/active status
+            const { data: students } = await supabase
+                .from('students')
+                .select('school_id')
+                .eq('user_id', userId)
+                .in('status', ['Enrolled', 'Active']);
+            
+            if (students) {
+                students.forEach(student => {
+                    if (!schoolIds.includes(student.school_id)) {
+                        schoolIds.push(student.school_id);
+                    }
+                });
             }
         } else if (role === 'Intern') {
-            // Iterate through all schools and check students collection for "Active Internship" status
-            const schoolsSnap = await getDocs(collection(db, 'schools'));
-            for (const schoolDoc of schoolsSnap.docs) {
-                const schoolId = schoolDoc.id;
-                if (await isInternInSchool(userId, schoolId)) {
-                    schoolIds.push(schoolId);
-                }
+            // Query students table for "Active Internship" status
+            const { data: students } = await supabase
+                .from('students')
+                .select('school_id')
+                .eq('user_id', userId)
+                .eq('status', 'Active Internship');
+            
+            if (students) {
+                students.forEach(student => {
+                    schoolIds.push(student.school_id);
+                });
             }
         } else if (role === 'EDUStaff') {
-            // Iterate through all schools and check staff collection
-            const schoolsSnap = await getDocs(collection(db, 'schools'));
-            for (const schoolDoc of schoolsSnap.docs) {
-                const schoolId = schoolDoc.id;
-                if (await isStaffInSchool(userId, schoolId)) {
-                    schoolIds.push(schoolId);
-                }
+            // Query school_staff table
+            const { data: staff } = await supabase
+                .from('school_staff')
+                .select('school_id')
+                .eq('user_id', userId);
+            
+            if (staff) {
+                staff.forEach(s => {
+                    schoolIds.push(s.school_id);
+                });
             }
         } else if (role === 'EDUAdmin') {
             // Query schools where admins array contains userId
-            const schoolsQuery = query(
-                collection(db, 'schools'),
-                where('admins', 'array-contains', userId)
-            );
-            const schoolsSnap = await getDocs(schoolsQuery);
-            schoolsSnap.docs.forEach(doc => {
-                schoolIds.push(doc.id);
-            });
+            const { data: schools, error } = await supabase
+                .from('schools')
+                .select('id')
+                .contains('admins', [userId]);
+            
+            if (!error && schools) {
+                schools.forEach(school => {
+                    schoolIds.push(school.id);
+                });
+            }
         }
     } catch (error) {
         console.error('Error getting schools for role:', error);

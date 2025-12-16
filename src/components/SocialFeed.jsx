@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp, where, getDocs } from 'firebase/firestore';
-import { db, appId, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { Loader2, RefreshCw, Users, Compass, UserPlus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -28,6 +27,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
 
     // Use the follow system hook
+    const userId = user?.id || user?.uid;
     const { 
         following, 
         stats, 
@@ -35,39 +35,45 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
         isFollowing, 
         toggleFollow,
         getFollowingIds 
-    } = useFollowSystem(user?.uid, userData);
+    } = useFollowSystem(userId, userData);
 
     // Memoize following IDs for feed filtering
     const followingIds = useMemo(() => getFollowingIds(), [following]);
 
     // Load suggested users when on Following tab with no follows
     useEffect(() => {
-        if (feedMode === FEED_MODES.FOLLOWING && followingIds.length === 0 && user?.uid) {
+        const userId = user?.id || user?.uid;
+        if (feedMode === FEED_MODES.FOLLOWING && followingIds.length === 0 && userId) {
             loadSuggestedUsers();
         }
-    }, [feedMode, followingIds.length, user?.uid]);
+    }, [feedMode, followingIds.length, user?.id, user?.uid]);
 
     const loadSuggestedUsers = async () => {
         setLoadingSuggestions(true);
         try {
+            if (!supabase || !user?.id && !user?.uid) return;
+            
+            const userId = user.id || user.uid;
+            
             // Get recent posters as suggestions (excluding current user)
-            const postsQuery = query(
-                collection(db, `artifacts/${appId}/public/data/posts`),
-                orderBy('timestamp', 'desc'),
-                limit(20)
-            );
-            const snapshot = await getDocs(postsQuery);
+            const { data: posts, error } = await supabase
+                .from('posts')
+                .select('user_id, display_name, author_photo, role')
+                .neq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(20);
+            
+            if (error) throw error;
             
             // Extract unique users from posts
             const usersMap = new Map();
-            snapshot.docs.forEach(doc => {
-                const data = doc.data();
-                if (data.userId !== user?.uid && !usersMap.has(data.userId)) {
-                    usersMap.set(data.userId, {
-                        userId: data.userId,
-                        displayName: data.displayName,
-                        photoURL: data.authorPhoto,
-                        role: data.role
+            (posts || []).forEach(post => {
+                if (!usersMap.has(post.user_id)) {
+                    usersMap.set(post.user_id, {
+                        userId: post.user_id,
+                        displayName: post.display_name,
+                        photoURL: post.author_photo,
+                        role: post.role
                     });
                 }
             });
@@ -81,63 +87,126 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
 
     // Main feed listener
     useEffect(() => {
-        setLoading(true);
-        const feedPath = `artifacts/${appId}/public/data/posts`;
-        
-        let q;
-        if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
-            // For Following feed, we need to filter by followed users
-            // Firestore 'in' query is limited to 30 items, so we'll do client-side filtering for now
-            q = query(
-                collection(db, feedPath), 
-                orderBy('timestamp', 'desc'), 
-                limit(50) // Fetch more to filter
-            );
-        } else {
-            // For You feed - show all posts
-            q = query(
-                collection(db, feedPath), 
-                orderBy('timestamp', 'desc'), 
-                limit(20)
-            );
+        if (!supabase) {
+            setLoading(false);
+            return;
         }
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            let newPosts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setLoading(true);
+        
+        let query = supabase
+            .from('posts')
+            .select('*')
+            .order('created_at', { ascending: false });
+        
+        // Set limit based on feed mode
+        const limitCount = (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) ? 50 : 20;
+        query = query.limit(limitCount);
+
+        // Initial fetch
+        query.then(({ data: posts, error }) => {
+            if (error) {
+                console.error("Feed error:", error);
+                setLoading(false);
+                return;
+            }
+
+            let newPosts = (posts || []).map(post => ({
+                id: post.id,
+                ...post,
+                userId: post.user_id,
+                displayName: post.display_name,
+                authorPhoto: post.author_photo,
+                timestamp: post.created_at,
+                commentCount: post.comment_count || 0,
+                reactionCount: post.reaction_count || 0,
+                saveCount: post.save_count || 0
+            }));
             
             // Client-side filtering for Following feed
             if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
+                const userId = user?.id || user?.uid;
                 newPosts = newPosts.filter(post => 
-                    followingIds.includes(post.userId) || post.userId === user?.uid
+                    followingIds.includes(post.userId) || post.userId === userId
                 );
             }
             
             setPosts(newPosts);
             setLoading(false);
-        }, (err) => {
-            console.error("Feed error:", err);
-            setLoading(false);
         });
 
-        return () => unsubscribe();
-    }, [feedMode, followingIds, user?.uid]);
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel('posts-feed')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'posts'
+                },
+                async () => {
+                    // Refetch on changes
+                    const { data: posts, error } = await supabase
+                        .from('posts')
+                        .select('*')
+                        .order('created_at', { ascending: false })
+                        .limit(limitCount);
+                    
+                    if (!error && posts) {
+                        let newPosts = posts.map(post => ({
+                            id: post.id,
+                            ...post,
+                            userId: post.user_id,
+                            displayName: post.display_name,
+                            authorPhoto: post.author_photo,
+                            timestamp: post.created_at,
+                            commentCount: post.comment_count || 0,
+                            reactionCount: post.reaction_count || 0,
+                            saveCount: post.save_count || 0
+                        }));
+                        
+                        if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
+                            const userId = user?.id || user?.uid;
+                            newPosts = newPosts.filter(post => 
+                                followingIds.includes(post.userId) || post.userId === userId
+                            );
+                        }
+                        
+                        setPosts(newPosts);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [feedMode, followingIds, user?.id, user?.uid]);
 
     const handlePost = async (postPayload) => {
-        if (!user) return;
+        if (!user || !supabase) return;
         try {
-            await addDoc(collection(db, `artifacts/${appId}/public/data/posts`), {
-                ...postPayload,
-                userId: user.uid,
-                displayName: userData?.effectiveDisplayName || `${userData?.firstName || 'User'} ${userData?.lastName || ''}`.trim(),
-                authorPhoto: userData?.photoURL || null,
-                role: userData?.activeProfileRole || 'User',
-                timestamp: serverTimestamp(),
-                reactions: {},
-                reactionCount: 0,
-                commentCount: 0,
-                saveCount: 0,
-                visibility: 'Public'
-            });
+            const userId = user.id || user.uid;
+            const { error } = await supabase
+                .from('posts')
+                .insert({
+                    user_id: userId,
+                    display_name: userData?.effectiveDisplayName || `${userData?.firstName || 'User'} ${userData?.lastName || ''}`.trim(),
+                    author_photo: userData?.photoURL || null,
+                    role: userData?.activeProfileRole || 'User',
+                    text: postPayload.text || null,
+                    media_urls: postPayload.mediaUrls || [],
+                    media_type: postPayload.mediaType || null,
+                    created_at: new Date().toISOString(),
+                    reactions: {},
+                    reaction_count: 0,
+                    comment_count: 0,
+                    save_count: 0,
+                    visibility: 'Public'
+                });
+            
+            if (error) throw error;
         } catch (e) {
             console.error("Failed to post:", e);
             alert("Could not post update. Please try again.");

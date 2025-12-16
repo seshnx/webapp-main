@@ -1,7 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    collection, query, getDocs, doc, updateDoc, orderBy, limit, where 
-} from 'firebase/firestore';
 import { CheckCircle, XCircle, Clock, Filter, Download } from 'lucide-react';
 import { db } from '../../../config/firebase';
 import { formatHours, calculateDurationMinutes } from '../../../utils/eduTime';
@@ -14,24 +11,31 @@ export default function EduHours({ schoolId }) {
 
     // --- DATA FETCHING ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const fetchLogs = async () => {
             setLoading(true);
             try {
-                // Base query: Get logs for this school, sorted by newest
-                let q = query(
-                    collection(db, `schools/${schoolId}/internship_logs`), 
-                    orderBy('checkIn', 'desc'), 
-                    limit(100) // Limit to 100 recent logs for performance
-                );
-
-                // Apply Client-side filtering or refine query if needed
-                // (Firestore requires composite indexes for where() + orderBy(), so we filter client-side for flexibility here)
+                const { data: logsData, error } = await supabase
+                    .from('internship_logs')
+                    .select('*')
+                    .eq('school_id', schoolId)
+                    .order('check_in', { ascending: false })
+                    .limit(100);
                 
-                const snap = await getDocs(q);
-                const fetchedLogs = snap.docs.map(doc => {
-                    const data = doc.data();
-                    const duration = calculateDurationMinutes(data.checkIn, data.checkOut);
-                    return { id: doc.id, ...data, duration };
+                if (error) throw error;
+                
+                const fetchedLogs = (logsData || []).map(log => {
+                    const duration = calculateDurationMinutes(log.check_in, log.check_out);
+                    return {
+                        id: log.id,
+                        ...log,
+                        checkIn: log.check_in,
+                        checkOut: log.check_out,
+                        studentId: log.student_id,
+                        studentName: log.student_name,
+                        duration
+                    };
                 });
 
                 setLogs(fetchedLogs);
@@ -41,15 +45,23 @@ export default function EduHours({ schoolId }) {
             setLoading(false);
         };
 
-        if (schoolId) fetchLogs();
+        fetchLogs();
     }, [schoolId]);
 
     // --- ACTIONS ---
 
     const handleLogAction = async (logId, status) => {
+        if (!supabase || !schoolId) return;
+        
         try {
             // 1. Update the log status
-            await updateDoc(doc(db, `schools/${schoolId}/internship_logs/${logId}`), { status });
+            const { error } = await supabase
+                .from('internship_logs')
+                .update({ status })
+                .eq('id', logId)
+                .eq('school_id', schoolId);
+            
+            if (error) throw error;
             
             // 2. Optimistic Update UI
             setLogs(prev => prev.map(log => log.id === logId ? { ...log, status } : log));

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Zap, Search, Calendar, ArrowLeft, CheckCircle, Clock, DollarSign, User, MapPin } from 'lucide-react';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import toast from 'react-hot-toast';
 
 // Components
@@ -44,24 +43,101 @@ export default function BookingSystem({ user, userData, openPublicProfile }) {
   // ... (Effects and Handlers remain same) ...
   
   useEffect(() => {
-      if (!user?.uid) return;
+      if (!user?.id && !user?.uid || !supabase) return;
+      const userId = user.id || user.uid;
       setLoadingBookings(true);
       
-      const qOutgoing = query(collection(db, `artifacts/${appId}/public/data/bookings`), where("senderId", "==", user.uid));
-      const qIncoming = query(collection(db, `artifacts/${appId}/public/data/bookings`), where("targetId", "==", user.uid));
+      // Fetch outgoing bookings
+      supabase
+          .from('bookings')
+          .select('*')
+          .eq('sender_id', userId)
+          .then(({ data, error }) => {
+              if (!error && data) {
+                  setOutgoing(data.map(d => ({
+                      id: d.id,
+                      ...d,
+                      senderId: d.sender_id,
+                      targetId: d.target_id
+                  })));
+              }
+              setLoadingBookings(false);
+          });
 
-      const unsubOut = onSnapshot(qOutgoing, (snap) => {
-          setOutgoing(snap.docs.map(d => ({id: d.id, ...d.data()})));
-          setLoadingBookings(false);
-      });
-      
-      const unsubIn = onSnapshot(qIncoming, (snap) => {
-          setIncoming(snap.docs.map(d => ({id: d.id, ...d.data()})));
-          setLoadingBookings(false);
-      });
+      // Fetch incoming bookings
+      supabase
+          .from('bookings')
+          .select('*')
+          .eq('target_id', userId)
+          .then(({ data, error }) => {
+              if (!error && data) {
+                  setIncoming(data.map(d => ({
+                      id: d.id,
+                      ...d,
+                      senderId: d.sender_id,
+                      targetId: d.target_id
+                  })));
+              }
+              setLoadingBookings(false);
+          });
 
-      return () => { unsubOut(); unsubIn(); };
-  }, [user?.uid]);
+      // Subscribe to realtime changes
+      const channel = supabase
+          .channel(`bookings-${userId}`)
+          .on(
+              'postgres_changes',
+              {
+                  event: '*',
+                  schema: 'public',
+                  table: 'bookings',
+                  filter: `sender_id=eq.${userId}`
+              },
+              async () => {
+                  const { data } = await supabase
+                      .from('bookings')
+                      .select('*')
+                      .eq('sender_id', userId);
+                  
+                  if (data) {
+                      setOutgoing(data.map(d => ({
+                          id: d.id,
+                          ...d,
+                          senderId: d.sender_id,
+                          targetId: d.target_id
+                      })));
+                  }
+              }
+          )
+          .on(
+              'postgres_changes',
+              {
+                  event: '*',
+                  schema: 'public',
+                  table: 'bookings',
+                  filter: `target_id=eq.${userId}`
+              },
+              async () => {
+                  const { data } = await supabase
+                      .from('bookings')
+                      .select('*')
+                      .eq('target_id', userId);
+                  
+                  if (data) {
+                      setIncoming(data.map(d => ({
+                          id: d.id,
+                          ...d,
+                          senderId: d.sender_id,
+                          targetId: d.target_id
+                      })));
+                  }
+              }
+          )
+          .subscribe();
+
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [user?.id, user?.uid]);
 
   const handleDirectBook = (target) => { setSelectedTarget(target); setShowBookingModal(true); };
   const handlePlannerNext = () => setPlannerView('talent');

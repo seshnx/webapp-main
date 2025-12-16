@@ -6,11 +6,10 @@ import {
     Headphones, Radio, Mic2, Play, Heart, Star, ArrowUpRight,
     Wallet, Users, Eye, Activity, BarChart3, Crown, Flame, Target
 } from 'lucide-react';
-import { collection, query, where, onSnapshot, orderBy, limit, getDocs } from 'firebase/firestore';
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
-import { db, getPaths, appId } from '../config/firebase'; 
+import { supabase } from '../config/supabase'; 
 import { PROFILE_SCHEMAS, BOOKING_THRESHOLD } from '../config/constants';
 import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -219,22 +218,66 @@ export default function Dashboard({
                 name: conv.chatName || 'Unknown',
                 lastMessage: conv.lastMessage || '',
                 timestamp: conv.lastMessageTime || 0,
-                isMe: conv.lastSenderId === user.uid,
+                isMe: conv.lastSenderId === (user?.id || user?.uid),
                 photo: conv.chatPhoto
             }))
             .sort((a, b) => b.timestamp - a.timestamp)
             .slice(0, 4);
         setRecentConvos(convos);
-    }, [conversationsData, user?.uid]);
+    }, [conversationsData, user?.id, user?.uid]);
 
     useEffect(() => {
-        const q = query(collection(db, `artifacts/${appId}/public/data/market_items`), orderBy('timestamp', 'desc'), limit(1));
-        const unsub = onSnapshot(q, (snap) => {
-            if (!snap.empty) {
-                setTrendingItem({ id: snap.docs[0].id, ...snap.docs[0].data() });
-            }
-        });
-        return () => unsub();
+        if (!supabase) return;
+        
+        // Initial fetch
+        supabase
+            .from('market_items')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+            .then(({ data, error }) => {
+                if (!error && data) {
+                    setTrendingItem({ 
+                        id: data.id, 
+                        ...data,
+                        timestamp: data.created_at
+                    });
+                }
+            });
+        
+        // Subscribe to changes
+        const channel = supabase
+            .channel('trending-item')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'market_items'
+                },
+                async () => {
+                    const { data, error } = await supabase
+                        .from('market_items')
+                        .select('*')
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .single();
+                    
+                    if (!error && data) {
+                        setTrendingItem({ 
+                            id: data.id, 
+                            ...data,
+                            timestamp: data.created_at
+                        });
+                    }
+                }
+            )
+            .subscribe();
+        
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, []);
 
     const formatNotificationTime = (ts) => {

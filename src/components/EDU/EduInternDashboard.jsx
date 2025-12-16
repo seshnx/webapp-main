@@ -3,8 +3,7 @@ import { useSchool } from '../../contexts/SchoolContext';
 import { MapPin, Clock, Briefcase, CheckCircle, AlertCircle, School, BookOpen, Award, Target } from 'lucide-react';
 import { formatHours } from '../../utils/eduTime';
 import { useEduAuth } from '../../contexts/EduAuthContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 export default function EduInternDashboard({ user: propUser, userData: propUserData }) {
     // Use EduAuth hook if available, otherwise fall back to props (backward compatibility)
@@ -33,34 +32,54 @@ export default function EduInternDashboard({ user: propUser, userData: propUserD
     const schoolId = userData?.schoolId;
 
     useEffect(() => {
-        if (schoolId && user?.uid) {
+        if (schoolId && (user?.id || user?.uid) && supabase) {
             loadEnrollments();
             loadBadges();
             loadMilestones();
         }
-    }, [schoolId, user?.uid]);
+    }, [schoolId, user?.id, user?.uid]);
 
     const loadEnrollments = async () => {
+        if (!supabase || !schoolId) return;
+        const userId = user?.id || user?.uid;
         try {
-            const q = query(
-                collection(db, `schools/${schoolId}/enrollments`),
-                where('studentId', '==', user.uid)
-            );
-            const snapshot = await getDocs(q);
-            setEnrollments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const { data: enrollmentsData, error } = await supabase
+                .from('enrollments')
+                .select('*')
+                .eq('school_id', schoolId)
+                .eq('student_id', userId);
+            
+            if (error) throw error;
+            
+            setEnrollments((enrollmentsData || []).map(e => ({
+                id: e.id,
+                ...e,
+                studentId: e.student_id,
+                courseId: e.course_id,
+                enrolledAt: e.enrolled_at
+            })));
         } catch (error) {
             console.error('Error loading enrollments:', error);
         }
     };
 
     const loadBadges = async () => {
+        if (!supabase || !schoolId) return;
+        const userId = user?.id || user?.uid;
         try {
-            const q = query(
-                collection(db, `schools/${schoolId}/badges`),
-                where('studentId', '==', user.uid)
-            );
-            const snapshot = await getDocs(q);
-            setBadges(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            const { data: badgesData, error } = await supabase
+                .from('badges')
+                .select('*')
+                .eq('school_id', schoolId)
+                .eq('student_id', userId);
+            
+            if (error) throw error;
+            
+            setBadges((badgesData || []).map(b => ({
+                id: b.id,
+                ...b,
+                studentId: b.student_id
+            })));
         } catch (error) {
             console.error('Error loading badges:', error);
         }

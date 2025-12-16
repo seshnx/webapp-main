@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    collection, query, getDocs, doc, updateDoc, 
-    addDoc, where, arrayUnion, serverTimestamp, collectionGroup 
-} from 'firebase/firestore';
 import { UserPlus, Shield, X, Mail } from 'lucide-react';
-import { db, getPaths } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 
 export default function EduStaff({ schoolId, logAction }) {
     const [staff, setStaff] = useState([]);
@@ -17,16 +13,37 @@ export default function EduStaff({ schoolId, logAction }) {
 
     // --- DATA FETCHING ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const loadData = async () => {
             setLoading(true);
             try {
                 // 1. Fetch Staff List
-                const staffSnap = await getDocs(collection(db, `schools/${schoolId}/staff`));
-                setStaff(staffSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: staffData, error: staffError } = await supabase
+                    .from('school_staff')
+                    .select('*')
+                    .eq('school_id', schoolId);
+                
+                if (staffError) throw staffError;
+                
+                setStaff((staffData || []).map(d => ({
+                    id: d.id,
+                    ...d,
+                    uid: d.user_id,
+                    roleId: d.role_id,
+                    roleName: d.role_name,
+                    addedAt: d.added_at
+                })));
 
                 // 2. Fetch Available Roles (for the dropdown)
-                const rolesSnap = await getDocs(collection(db, `schools/${schoolId}/roles`));
-                setRoles(rolesSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: rolesData, error: rolesError } = await supabase
+                    .from('school_roles')
+                    .select('*')
+                    .eq('school_id', schoolId);
+                
+                if (rolesError) throw rolesError;
+                
+                setRoles((rolesData || []).map(d => ({ id: d.id, ...d })));
             } catch (e) {
                 console.error("Staff load failed:", e);
             }
@@ -38,53 +55,70 @@ export default function EduStaff({ schoolId, logAction }) {
     // --- ACTIONS ---
 
     const handleAddStaff = async () => {
-        if (!newStaffEmail || !selectedStaffRole) return alert("Email and Role are required.");
+        if (!newStaffEmail || !selectedStaffRole || !supabase || !schoolId) {
+            return alert("Email and Role are required.");
+        }
         
         try {
-            // 1. Find User by Email (using Collection Group on 'public_profile')
-            // This finds the user regardless of where their profile is stored in the tree
-            const userQ = query(
-                collectionGroup(db, 'public_profile'), 
-                where('email', '==', newStaffEmail)
-            );
-            const userSnap = await getDocs(userQ);
+            // 1. Find User by Email
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('id, email, first_name, last_name, account_types, school_id')
+                .eq('email', newStaffEmail)
+                .single();
             
-            if (userSnap.empty) return alert("User not found. They must sign up for SeshNx first.");
+            if (profileError || !profileData) {
+                return alert("User not found. They must sign up for SeshNx first.");
+            }
 
-            // 2. Extract User Data
-            const targetUserDoc = userSnap.docs[0];
-            const targetData = targetUserDoc.data();
-            // In 'public_profile/main', the parent.parent.id is the User UID
-            const targetUid = targetUserDoc.ref.parent.parent.id;
-
+            const targetUserId = profileData.id;
             const roleData = roles.find(r => r.id === selectedStaffRole);
 
-            // 3. Create Staff Entry in School
-            const staffEntry = {
-                uid: targetUid,
-                email: targetData.email,
-                name: `${targetData.firstName} ${targetData.lastName}`,
-                roleId: selectedStaffRole,
-                roleName: roleData?.name || 'Unknown',
-                addedAt: serverTimestamp()
-            };
+            // 2. Create Staff Entry in School
+            const { data: newStaff, error: staffError } = await supabase
+                .from('school_staff')
+                .insert({
+                    school_id: schoolId,
+                    user_id: targetUserId,
+                    email: profileData.email,
+                    name: `${profileData.first_name} ${profileData.last_name}`,
+                    role_id: selectedStaffRole,
+                    role_name: roleData?.name || 'Unknown',
+                    added_at: new Date().toISOString()
+                })
+                .select()
+                .single();
             
-            await addDoc(collection(db, `schools/${schoolId}/staff`), staffEntry);
+            if (staffError) throw staffError;
 
-            // 4. Update User's Global Profile (Grant 'EDUStaff' Access)
+            // 3. Update User's Global Profile (Grant 'EDUStaff' Access)
             // This allows them to see the EDU dashboards
             // Note: Role is determined by being listed in school staff collection
-            const userProfilePath = getPaths(targetUid).userProfile;
-            await updateDoc(doc(db, userProfilePath), {
-                schoolId: schoolId, // Link them to this school
-                accountTypes: arrayUnion('EDUStaff') // Grant EDUStaff access
-            });
+            const currentAccountTypes = profileData.account_types || [];
+            const updatedAccountTypes = currentAccountTypes.includes('EDUStaff') 
+                ? currentAccountTypes 
+                : [...currentAccountTypes, 'EDUStaff'];
+            
+            await supabase
+                .from('profiles')
+                .update({
+                    school_id: schoolId, // Link them to this school
+                    account_types: updatedAccountTypes // Grant EDUStaff access
+                })
+                .eq('id', targetUserId);
 
-            // 5. Update Local State
-            setStaff(prev => [...prev, staffEntry]);
+            // 4. Update Local State
+            setStaff(prev => [...prev, {
+                id: newStaff.id,
+                ...newStaff,
+                uid: newStaff.user_id,
+                roleId: newStaff.role_id,
+                roleName: newStaff.role_name,
+                addedAt: newStaff.added_at
+            }]);
             setNewStaffEmail('');
-            alert(`${targetData.firstName} added as ${roleData?.name}.`);
-            await logAction('Add Staff', `Added ${targetData.email} as ${roleData?.name}`);
+            alert(`${profileData.first_name} added as ${roleData?.name}.`);
+            if (logAction) await logAction('Add Staff', `Added ${profileData.email} as ${roleData?.name}`);
 
         } catch (e) {
             console.error("Add staff error:", e);
@@ -96,13 +130,30 @@ export default function EduStaff({ schoolId, logAction }) {
         // Note: This removes them from the school list, but doesn't strip the 'EDUStaff' role 
         // from their main profile automatically (safer to leave manual, or add strict logic).
         // For MVP, we just remove the school record.
-        if(!confirm(`Remove ${name} from staff?`)) return;
+        if(!confirm(`Remove ${name} from staff?`) || !supabase) return;
         
-        // In a full implementation, you might want to remove 'schoolId' from their profile too.
-        
-        // For now, remove the doc:
-        // await deleteDoc(doc(db, `schools/${schoolId}/staff/${staffId}`));
-        alert("Feature pending: Deletion logic should be careful not to orphan users.");
+        try {
+            // Get staff member info before deletion
+            const staffMember = staff.find(s => s.id === staffId);
+            
+            // Remove from school_staff table
+            const { error } = await supabase
+                .from('school_staff')
+                .delete()
+                .eq('id', staffId)
+                .eq('school_id', schoolId);
+            
+            if (error) throw error;
+            
+            // In a full implementation, you might want to remove 'schoolId' from their profile too.
+            // For now, we just remove the school record.
+            
+            setStaff(prev => prev.filter(s => s.id !== staffId));
+            if (logAction) await logAction('Remove Staff', `Removed ${name}`);
+        } catch (e) {
+            console.error("Remove staff error:", e);
+            alert("Failed to remove staff member.");
+        }
     };
 
     if (loading) return <div className="p-10 text-center text-gray-500">Loading Staff...</div>;

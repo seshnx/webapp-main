@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, orderBy, limit, getDocs, doc, getDoc, getCountFromServer, updateDoc, arrayUnion } from 'firebase/firestore';
 import { X, User, Bell, Flag, Lock, Users, Briefcase, FileText, Clock, Video, Image as ImageIcon, Loader2, Images } from 'lucide-react';
 import StatCard from '../shared/StatCard';
 import MediaGallery from './media/MediaGallery';
-import { db, appId, getPaths } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 export default function ChatDetailsPane({ activeChat, onClose, currentUser }) {
     const [media, setMedia] = useState([]);
@@ -29,24 +28,28 @@ export default function ChatDetailsPane({ activeChat, onClose, currentUser }) {
                 setMedia([]); 
 
                 // 2. FETCH USER STATS (Only for Direct Chats)
-                if (!isGroup && targetUid) {
-                    const profileRef = doc(db, `artifacts/${appId}/users/${targetUid}/public_profile/main`);
-                    const profileSnap = await getDoc(profileRef);
-                    const profileData = profileSnap.exists() ? profileSnap.data() : {};
+                if (!isGroup && targetUid && supabase) {
+                    const currentUserId = currentUser?.id || currentUser?.uid;
+                    
+                    // Fetch profile
+                    const { data: profileData } = await supabase
+                        .from('profiles')
+                        .select('rating, response_time')
+                        .eq('id', targetUid)
+                        .single();
 
-                    const bookingsRef = collection(db, `artifacts/${appId}/public/data/bookings`);
-                    const qBookings = query(
-                        bookingsRef, 
-                        where('senderId', '==', currentUser.uid || ''), 
-                        where('targetId', '==', targetUid),
-                        where('status', '==', 'Completed')
-                    );
-                    const bookingSnap = await getCountFromServer(qBookings);
+                    // Count completed bookings
+                    const { count } = await supabase
+                        .from('bookings')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('sender_id', currentUserId)
+                        .eq('target_id', targetUid)
+                        .eq('status', 'Completed');
 
                     setStats({
-                        sessions: bookingSnap.data().count,
-                        rating: profileData.rating || 'New',
-                        responseTime: profileData.responseTime || '~1hr' 
+                        sessions: count || 0,
+                        rating: profileData?.rating || 'New',
+                        responseTime: profileData?.response_time || '~1hr' 
                     });
                 }
             } catch (e) {
@@ -61,15 +64,38 @@ export default function ChatDetailsPane({ activeChat, onClose, currentUser }) {
     }, [activeChat.id, targetUid, isGroup, currentUser?.uid]);
 
     const handleBlockUser = async () => {
-        if (isGroup || !targetUid || !currentUser) return;
+        if (isGroup || !targetUid || !currentUser || !supabase) return;
         if (!confirm(`Are you sure you want to block ${chatName}?`)) return;
 
         setBlocking(true);
         try {
-            const settingsRef = doc(db, getPaths(currentUser.uid).userProfile);
-            await updateDoc(settingsRef, {
-                "settings.social.blockedUsers": arrayUnion(targetUid)
-            });
+            const userId = currentUser?.id || currentUser?.uid;
+            
+            // Get current settings
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('settings')
+                .eq('id', userId)
+                .single();
+            
+            const currentSettings = profile?.settings || {};
+            const blockedUsers = currentSettings.social?.blockedUsers || [];
+            
+            if (!blockedUsers.includes(targetUid)) {
+                await supabase
+                    .from('profiles')
+                    .update({
+                        settings: {
+                            ...currentSettings,
+                            social: {
+                                ...currentSettings.social,
+                                blockedUsers: [...blockedUsers, targetUid]
+                            }
+                        }
+                    })
+                    .eq('id', userId);
+            }
+            
             alert("User blocked.");
             onClose(); 
         } catch (e) {

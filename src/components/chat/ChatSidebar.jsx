@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Users, Plus, X, Search, Trash2, ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { collectionGroup, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { isConvexAvailable } from '../../config/convex';
@@ -28,23 +27,28 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
     const handleUserSearch = async (term) => {
         setSearchQuery(term);
         const searchTerm = term.trim();
-        if(searchTerm.length > 1) {
-            const lower = searchTerm.toLowerCase();
-            const cap = lower.charAt(0).toUpperCase() + lower.slice(1);
-
-            const q1 = query(collectionGroup(db, 'public_profile'), where('firstName', '>=', cap), where('firstName', '<=', cap + '\uf8ff'));
-            const q2 = query(collectionGroup(db, 'public_profile'), where('lastName', '>=', cap), where('lastName', '<=', cap + '\uf8ff'));
-
+        if(searchTerm.length > 1 && supabase) {
+            const userId = user?.id || user?.uid;
             try {
-                const [snap1, snap2] = await Promise.all([getDocs(q1), getDocs(q2)]);
-                const results = new Map();
-                const addDoc = (d) => {
-                    const uid = d.ref.parent.parent.id;
-                    if (uid !== user.uid) results.set(uid, { id: uid, ...d.data() });
-                };
-                snap1.forEach(addDoc);
-                snap2.forEach(addDoc);
-                setSearchResults(Array.from(results.values()));
+                // Search by first name or last name
+                const { data: profiles, error } = await supabase
+                    .from('profiles')
+                    .select('id, first_name, last_name, avatar_url, active_role')
+                    .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%`)
+                    .neq('id', userId)
+                    .limit(20);
+                
+                if (error) throw error;
+                
+                const results = (profiles || []).map(profile => ({
+                    id: profile.id,
+                    firstName: profile.first_name,
+                    lastName: profile.last_name,
+                    photoURL: profile.avatar_url,
+                    role: profile.active_role
+                }));
+                
+                setSearchResults(results);
             } catch (e) {
                 console.error("Search error:", e);
                 setSearchResults([]);
@@ -55,8 +59,9 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
     };
 
     const handleSelectSearchResult = (result) => {
+        const userId = user?.id || user?.uid;
         if (searchMode === 'direct') {
-            const chatId = [user.uid, result.id].sort().join('_');
+            const chatId = [userId, result.id].sort().join('_');
             onSelectChat({ id: chatId, uid: result.id, name: `${result.firstName} ${result.lastName}`, type: 'direct' });
             closeSearch();
         } else if (searchMode === 'add_member') {
@@ -93,9 +98,10 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
         setIsCreating(true);
 
         try {
+            const userId = user?.id || user?.uid;
             const memberIds = groupMembers.map(m => m.id);
             const { chatId: newGroupId } = await createGroupChatMutation({
-                creatorId: user.uid,
+                creatorId: userId,
                 chatName: groupName,
                 memberIds,
             });
@@ -119,7 +125,8 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
             return;
         }
         try {
-            await deleteConversationMutation({ userId: user.uid, chatId });
+            const userId = user?.id || user?.uid;
+            await deleteConversationMutation({ userId, chatId });
             if (activeChat?.id === chatId) onSelectChat(null);
         } catch (err) { console.error(err); }
     };
@@ -140,7 +147,7 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
                         key={c.id}
                         conversation={c}
                         activeChat={activeChat}
-                        currentUserId={user.uid}
+                        currentUserId={user?.id || user?.uid}
                         onSelect={onSelectChat}
                         onDelete={(chatId) => {
                             if (window.confirm("Delete this conversation?")) {

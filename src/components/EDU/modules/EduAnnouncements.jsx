@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    collection, query, getDocs, addDoc, serverTimestamp, orderBy, deleteDoc, doc 
-} from 'firebase/firestore';
 import { Megaphone, Send, Trash2, Users, User, Shield } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 
 export default function EduAnnouncements({ schoolId, logAction, user, userData }) {
     const [announcements, setAnnouncements] = useState([]);
@@ -18,45 +15,77 @@ export default function EduAnnouncements({ schoolId, logAction, user, userData }
 
     // --- DATA FETCHING ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const fetchNews = async () => {
             setLoading(true);
             try {
-                const q = query(
-                    collection(db, `schools/${schoolId}/announcements`), 
-                    orderBy('createdAt', 'desc')
-                );
-                const snap = await getDocs(q);
-                setAnnouncements(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: announcementsData, error } = await supabase
+                    .from('announcements')
+                    .select('*')
+                    .eq('school_id', schoolId)
+                    .order('created_at', { ascending: false });
+                
+                if (error) throw error;
+                
+                setAnnouncements((announcementsData || []).map(a => ({
+                    id: a.id,
+                    ...a,
+                    schoolId: a.school_id,
+                    authorId: a.author_id,
+                    authorName: a.author_name,
+                    authorRole: a.author_role,
+                    createdAt: a.created_at
+                })));
             } catch (e) {
                 console.error("Error loading announcements:", e);
             }
             setLoading(false);
         };
-        if (schoolId) fetchNews();
+        fetchNews();
     }, [schoolId]);
 
     // --- ACTIONS ---
 
     const handlePost = async () => {
-        if (!form.title.trim() || !form.message.trim()) return alert("Title and Message required.");
+        if (!form.title.trim() || !form.message.trim() || !supabase) {
+            if (!form.title.trim() || !form.message.trim()) alert("Title and Message required.");
+            return;
+        }
+        
+        const userId = user?.id || user?.uid;
         setSending(true);
         
         try {
-            const newPost = {
-                ...form,
-                schoolId,
-                authorId: user.uid,
-                authorName: userData.displayName || 'School Admin',
-                authorRole: userData.activeProfileRole || 'Admin',
-                createdAt: serverTimestamp()
-            };
-
-            const docRef = await addDoc(collection(db, `schools/${schoolId}/announcements`), newPost);
+            const { data: newPost, error } = await supabase
+                .from('announcements')
+                .insert({
+                    school_id: schoolId,
+                    title: form.title,
+                    message: form.message,
+                    target: form.target,
+                    author_id: userId,
+                    author_name: userData?.displayName || userData?.effectiveDisplayName || 'School Admin',
+                    author_role: userData?.activeProfileRole || 'Admin',
+                    created_at: new Date().toISOString()
+                })
+                .select()
+                .single();
             
-            // Optimistic Update (using current date for display)
-            setAnnouncements(prev => [{ id: docRef.id, ...newPost, createdAt: new Date() }, ...prev]);
+            if (error) throw error;
             
-            await logAction('Post Announcement', `Posted: ${form.title}`);
+            // Optimistic Update
+            setAnnouncements(prev => [{
+                id: newPost.id,
+                ...newPost,
+                schoolId: newPost.school_id,
+                authorId: newPost.author_id,
+                authorName: newPost.author_name,
+                authorRole: newPost.author_role,
+                createdAt: newPost.created_at
+            }, ...prev]);
+            
+            if (logAction) await logAction('Post Announcement', `Posted: ${form.title}`);
             setForm({ title: '', message: '', target: 'All' });
             
         } catch (e) {
@@ -67,11 +96,16 @@ export default function EduAnnouncements({ schoolId, logAction, user, userData }
     };
 
     const handleDelete = async (id) => {
-        if(!confirm("Delete this announcement?")) return;
+        if(!confirm("Delete this announcement?") || !supabase) return;
         try {
-            await deleteDoc(doc(db, `schools/${schoolId}/announcements/${id}`));
+            await supabase
+                .from('announcements')
+                .delete()
+                .eq('id', id)
+                .eq('school_id', schoolId);
+            
             setAnnouncements(prev => prev.filter(a => a.id !== id));
-            await logAction('Delete Announcement', 'Removed a post');
+            if (logAction) await logAction('Delete Announcement', 'Removed a post');
         } catch (e) {
             console.error("Delete failed:", e);
         }

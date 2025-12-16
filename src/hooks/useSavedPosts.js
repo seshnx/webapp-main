@@ -1,14 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { 
-    collection, 
-    query, 
-    orderBy, 
-    onSnapshot,
-    doc,
-    getDoc,
-    limit
-} from 'firebase/firestore';
-import { db, appId, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 /**
  * Hook for managing and fetching saved/bookmarked posts
@@ -21,31 +12,76 @@ export function useSavedPosts(userId, fetchLimit = 50) {
 
     // Subscribe to saved posts
     useEffect(() => {
-        if (!userId) {
+        if (!userId || !supabase) {
             setLoading(false);
             return;
         }
 
-        const savedRef = collection(db, getPaths(userId).savedPosts);
-        const q = query(
-            savedRef,
-            orderBy('savedAt', 'desc'),
-            limit(fetchLimit)
-        );
+        // Initial fetch
+        supabase
+            .from('saved_posts')
+            .select('*')
+            .eq('user_id', userId)
+            .order('saved_at', { ascending: false })
+            .limit(fetchLimit)
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error('Saved posts fetch error:', error);
+                    setLoading(false);
+                    return;
+                }
+                
+                const saved = (data || []).map(item => ({
+                    id: item.id,
+                    postId: item.post_id,
+                    authorId: item.author_id,
+                    authorName: item.author_name,
+                    preview: item.preview,
+                    savedAt: item.saved_at,
+                    hasMedia: item.has_media
+                }));
+                setSavedPosts(saved);
+                setLoading(false);
+            });
 
-        const unsubscribe = onSnapshot(q, async (snapshot) => {
-            const saved = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            }));
-            setSavedPosts(saved);
-            setLoading(false);
-        }, (error) => {
-            console.error('Saved posts listener error:', error);
-            setLoading(false);
-        });
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`saved-posts-${userId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'saved_posts',
+                    filter: `user_id=eq.${userId}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('saved_posts')
+                        .select('*')
+                        .eq('user_id', userId)
+                        .order('saved_at', { ascending: false })
+                        .limit(fetchLimit);
+                    
+                    if (data) {
+                        const saved = data.map(item => ({
+                            id: item.id,
+                            postId: item.post_id,
+                            authorId: item.author_id,
+                            authorName: item.author_name,
+                            preview: item.preview,
+                            savedAt: item.saved_at,
+                            hasMedia: item.has_media
+                        }));
+                        setSavedPosts(saved);
+                    }
+                }
+            )
+            .subscribe();
 
-        return () => unsubscribe();
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [userId, fetchLimit]);
 
     /**
@@ -60,31 +96,45 @@ export function useSavedPosts(userId, fetchLimit = 50) {
      * This fetches the actual post documents
      */
     const fetchSavedPostsWithData = useCallback(async () => {
-        if (!savedPosts.length) return [];
+        if (!savedPosts.length || !supabase) return [];
 
         try {
-            const postsWithData = await Promise.all(
-                savedPosts.map(async (saved) => {
-                    const postRef = doc(db, `artifacts/${appId}/public/data/posts`, saved.postId || saved.id);
-                    const postDoc = await getDoc(postRef);
-                    
-                    if (postDoc.exists()) {
-                        return {
-                            ...postDoc.data(),
-                            id: postDoc.id,
-                            savedAt: saved.savedAt
-                        };
-                    }
-                    // Return minimal data if post was deleted
+            const postIds = savedPosts.map(s => s.postId || s.id).filter(Boolean);
+            
+            if (postIds.length === 0) return [];
+
+            const { data: posts, error } = await supabase
+                .from('posts')
+                .select('*')
+                .in('id', postIds);
+            
+            if (error) throw error;
+
+            const postsMap = new Map((posts || []).map(p => [p.id, p]));
+            
+            const postsWithData = savedPosts.map((saved) => {
+                const post = postsMap.get(saved.postId || saved.id);
+                
+                if (post) {
                     return {
-                        id: saved.postId || saved.id,
-                        deleted: true,
-                        authorName: saved.authorName,
-                        preview: saved.preview,
+                        ...post,
+                        id: post.id,
+                        userId: post.user_id,
+                        displayName: post.display_name,
+                        authorPhoto: post.author_photo,
+                        timestamp: post.created_at,
                         savedAt: saved.savedAt
                     };
-                })
-            );
+                }
+                // Return minimal data if post was deleted
+                return {
+                    id: saved.postId || saved.id,
+                    deleted: true,
+                    authorName: saved.authorName,
+                    preview: saved.preview,
+                    savedAt: saved.savedAt
+                };
+            });
 
             return postsWithData.filter(p => !p.deleted);
         } catch (error) {

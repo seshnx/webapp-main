@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    collection, getDocs, addDoc, deleteDoc, doc, query, orderBy 
-} from 'firebase/firestore';
 import { Briefcase, MapPin, Phone, Plus, Trash2, ExternalLink } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 import AddressAutocomplete from '../../shared/AddressAutocomplete';
 
 export default function EduPartners({ schoolId, logAction }) {
@@ -19,31 +16,54 @@ export default function EduPartners({ schoolId, logAction }) {
 
     // --- DATA FETCHING ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const fetchPartners = async () => {
             setLoading(true);
             try {
-                const q = query(collection(db, `schools/${schoolId}/partners`), orderBy('name'));
-                const snap = await getDocs(q);
-                setPartners(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: partnersData, error } = await supabase
+                    .from('school_partners')
+                    .select('*')
+                    .eq('school_id', schoolId)
+                    .order('name', { ascending: true });
+                
+                if (error) throw error;
+                
+                setPartners((partnersData || []).map(p => ({ id: p.id, ...p })));
             } catch (e) {
                 console.error("Error loading partners:", e);
             }
             setLoading(false);
         };
-        if (schoolId) fetchPartners();
+        fetchPartners();
     }, [schoolId]);
 
     // --- ACTIONS ---
 
     const handleAdd = async () => {
-        if (!form.name) return alert("Partner Name is required.");
+        if (!form.name || !supabase || !schoolId) {
+            if (!form.name) alert("Partner Name is required.");
+            return;
+        }
         
         try {
-            const newPartner = { ...form, status: 'Approved' };
-            const docRef = await addDoc(collection(db, `schools/${schoolId}/partners`), newPartner);
+            const { data: newPartner, error } = await supabase
+                .from('school_partners')
+                .insert({
+                    school_id: schoolId,
+                    name: form.name,
+                    address: form.address || null,
+                    website: form.website || null,
+                    contact_email: form.contactEmail || null,
+                    status: 'Approved'
+                })
+                .select()
+                .single();
             
-            setPartners(prev => [...prev, { id: docRef.id, ...newPartner }]);
-            await logAction('Add Partner', `Added studio: ${form.name}`);
+            if (error) throw error;
+            
+            setPartners(prev => [...prev, { id: newPartner.id, ...newPartner }]);
+            if (logAction) await logAction('Add Partner', `Added studio: ${form.name}`);
             
             // Reset
             setForm({ name: '', address: '', website: '', contactEmail: '' });
@@ -54,11 +74,16 @@ export default function EduPartners({ schoolId, logAction }) {
     };
 
     const handleDelete = async (id, name) => {
-        if(!confirm(`Remove ${name} from approved partners?`)) return;
+        if(!confirm(`Remove ${name} from approved partners?`) || !supabase || !schoolId) return;
         try {
-            await deleteDoc(doc(db, `schools/${schoolId}/partners/${id}`));
+            await supabase
+                .from('school_partners')
+                .delete()
+                .eq('id', id)
+                .eq('school_id', schoolId);
+            
             setPartners(prev => prev.filter(p => p.id !== id));
-            await logAction('Remove Partner', `Removed: ${name}`);
+            if (logAction) await logAction('Remove Partner', `Removed: ${name}`);
         } catch (e) {
             console.error("Delete failed:", e);
         }

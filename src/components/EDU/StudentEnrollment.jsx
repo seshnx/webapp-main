@@ -1,8 +1,6 @@
 import React, { useState } from 'react';
-import { collection, query, where, getDocs, doc, updateDoc } from 'firebase/firestore';
-// import { httpsCallable, getFunctions } from 'firebase/functions';
 import { Search } from 'lucide-react';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 
 export default function StudentEnrollment({ user, onComplete, onSkip }) {
     const [schoolSearchTerm, setSchoolSearchTerm] = useState('');
@@ -13,39 +11,54 @@ export default function StudentEnrollment({ user, onComplete, onSkip }) {
     const [isLoading, setIsLoading] = useState(false);
 
     const searchSchools = async (term) => {
-        if (term.length < 3) {
+        if (term.length < 3 || !supabase) {
             setSearchResults([]);
             return;
         }
-        const q = query(collection(db, 'schools'), where('name', '>=', term), where('name', '<=', term + '\uf8ff'));
-        const snap = await getDocs(q);
-        setSearchResults(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        try {
+            const { data: schoolsData, error } = await supabase
+                .from('schools')
+                .select('id, name, city, state')
+                .ilike('name', `%${term}%`)
+                .limit(10);
+            
+            if (error) throw error;
+            
+            setSearchResults(schoolsData || []);
+        } catch (error) {
+            console.error('Error searching schools:', error);
+            setSearchResults([]);
+        }
     };
 
     const handleEnrollment = async () => {
-        if (!selectedSchool || !studentEnrollmentId) {
-            setEnrollmentError("Please select a school and enter your ID.");
+        if (!selectedSchool || !studentEnrollmentId || !supabase) {
+            if (!selectedSchool || !studentEnrollmentId) {
+                setEnrollmentError("Please select a school and enter your ID.");
+            }
             return;
         }
         setEnrollmentError('');
         setIsLoading(true);
 
         try {
-            // TEMPORARILY DISABLED: Firebase Functions not available
-            // Using direct Firestore update as fallback
-            /* const functions = getFunctions();
-            // Note: Ensure you have deployed the 'enrollStudent' cloud function
-            const enrollStudent = httpsCallable(functions, 'enrollStudent');
+            const userId = user?.id || user?.uid;
+            const currentAccountTypes = user?.accountTypes || user?.account_types || ['user'];
+            const updatedAccountTypes = currentAccountTypes.includes('student') 
+                ? currentAccountTypes 
+                : [...currentAccountTypes, 'student'];
             
-            // If using Cloud Function:
-            // await enrollStudent({ schoolId: selectedSchool.id, enrollmentId: studentEnrollmentId }); */
+            // Update user profile
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    school_id: selectedSchool.id,
+                    student_id: studentEnrollmentId,
+                    account_types: updatedAccountTypes
+                })
+                .eq('id', userId);
             
-            // Direct update (Secure only if rules allow, otherwise use Cloud Function)
-            await updateDoc(doc(db, 'users', user.uid), {
-                schoolId: selectedSchool.id,
-                studentId: studentEnrollmentId,
-                accountTypes: ['user', 'student'] 
-            });
+            if (error) throw error;
             
             onComplete(); 
         } catch (e) {

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc } from 'firebase/firestore';
 import { Send, Trash2, CornerDownRight } from 'lucide-react';
-import { db, getPaths, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { createNotification } from '../../hooks/useNotifications';
 import UserAvatar from '../shared/UserAvatar';
 
@@ -11,23 +10,80 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        const q = query(
-            collection(db, `artifacts/${appId}/public/data/posts/${post.id}/replies`), 
-            orderBy('timestamp', 'asc')
-        );
-        const unsub = onSnapshot(q, (snap) => {
-            const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            // Client-side block filtering
-            const filtered = data.filter(c => !blockedUsers?.includes(c.userId));
-            setComments(filtered);
-            onCountChange(filtered.length);
-        });
-        return () => unsub();
-    }, [post.id]);
+        if (!supabase || !post.id) return;
+
+        // Initial fetch
+        supabase
+            .from('comments')
+            .select('*')
+            .eq('post_id', post.id)
+            .order('created_at', { ascending: true })
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error('Comments fetch error:', error);
+                    return;
+                }
+                
+                const comments = (data || []).map(c => ({
+                    id: c.id,
+                    ...c,
+                    userId: c.user_id,
+                    displayName: c.display_name,
+                    userPhoto: c.user_photo,
+                    timestamp: c.created_at
+                }));
+                
+                // Client-side block filtering
+                const filtered = comments.filter(c => !blockedUsers?.includes(c.userId));
+                setComments(filtered);
+                onCountChange(filtered.length);
+            });
+
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`comments-${post.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'comments',
+                    filter: `post_id=eq.${post.id}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('comments')
+                        .select('*')
+                        .eq('post_id', post.id)
+                        .order('created_at', { ascending: true });
+                    
+                    if (data) {
+                        const comments = data.map(c => ({
+                            id: c.id,
+                            ...c,
+                            userId: c.user_id,
+                            displayName: c.display_name,
+                            userPhoto: c.user_photo,
+                            timestamp: c.created_at
+                        }));
+                        
+                        const filtered = comments.filter(c => !blockedUsers?.includes(c.userId));
+                        setComments(filtered);
+                        onCountChange(filtered.length);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [post.id, blockedUsers]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!text.trim() || !currentUser?.uid) return;
+        const userId = currentUser?.id || currentUser?.uid;
+        if (!text.trim() || !userId || !supabase) return;
         setLoading(true);
         
         const displayName = currentUserData?.effectiveDisplayName || 
@@ -36,20 +92,39 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
             'User';
         
         try {
-            await addDoc(collection(db, `artifacts/${appId}/public/data/posts/${post.id}/replies`), {
-                text,
-                userId: currentUser.uid,
-                displayName,
-                userPhoto: currentUserData?.photoURL || null,
-                timestamp: serverTimestamp()
+            const { error } = await supabase
+                .from('comments')
+                .insert({
+                    post_id: post.id,
+                    user_id: userId,
+                    text,
+                    display_name: displayName,
+                    user_photo: currentUserData?.photoURL || null,
+                    created_at: new Date().toISOString()
+                });
+            
+            if (error) throw error;
+            
+            // Update post comment count
+            await supabase.rpc('increment', {
+                table_name: 'posts',
+                id_column: 'id',
+                id_value: post.id,
+                count_column: 'comment_count'
+            }).catch(() => {
+                // Fallback if RPC doesn't exist
+                supabase
+                    .from('posts')
+                    .update({ comment_count: (post.commentCount || 0) + 1 })
+                    .eq('id', post.id);
             });
             
             // Send notification to post author (if not commenting on own post)
-            if (post.userId !== currentUser.uid) {
+            if (post.userId !== userId) {
                 createNotification({
                     targetUserId: post.userId,
                     type: 'comment',
-                    fromUserId: currentUser.uid,
+                    fromUserId: userId,
                     fromUserName: displayName,
                     fromUserPhoto: currentUserData?.photoURL,
                     postId: post.id,
@@ -59,14 +134,25 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
             }
             
             setText('');
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error(e); 
+        }
         setLoading(false);
     };
 
     const handleDelete = async (commentId) => {
-        if (!window.confirm("Delete comment?")) return;
+        if (!window.confirm("Delete comment?") || !supabase) return;
         try {
-            await deleteDoc(doc(db, `artifacts/${appId}/public/data/posts/${post.id}/replies`, commentId));
+            await supabase
+                .from('comments')
+                .delete()
+                .eq('id', commentId);
+            
+            // Decrement comment count
+            await supabase
+                .from('posts')
+                .update({ comment_count: Math.max((post.commentCount || 0) - 1, 0) })
+                .eq('id', post.id);
         } catch (e) {
             console.error('Delete comment error:', e);
         }
@@ -97,9 +183,8 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
                                     </span>
                                     <span className="text-[10px] text-gray-400 shrink-0">
                                         {comment.timestamp 
-                                            ? new Date(comment.timestamp.toMillis()).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) 
-                                            : '...'
-                                        }
+                                            ? new Date(comment.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) 
+                                            : 'Just now'}
                                     </span>
                                 </div>
                                 <p className="text-gray-700 dark:text-gray-300 break-words">{comment.text}</p>

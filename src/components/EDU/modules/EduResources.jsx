@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    collection, getDocs, addDoc, deleteDoc, doc 
-} from 'firebase/firestore';
 import { Lock, Plus, Trash2 } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 
 export default function EduResources({ schoolId, logAction }) {
     const [rules, setRules] = useState([]);
@@ -19,30 +16,52 @@ export default function EduResources({ schoolId, logAction }) {
 
     // --- DATA FETCHING ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const fetchRules = async () => {
             setLoading(true);
             try {
-                const snap = await getDocs(collection(db, `schools/${schoolId}/rules`));
-                setRules(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: rulesData, error } = await supabase
+                    .from('resource_rules')
+                    .select('*')
+                    .eq('school_id', schoolId);
+                
+                if (error) throw error;
+                
+                setRules((rulesData || []).map(r => ({ id: r.id, ...r })));
             } catch (e) {
                 console.error("Error loading rules:", e);
             }
             setLoading(false);
         };
-        if (schoolId) fetchRules();
+        fetchRules();
     }, [schoolId]);
 
     // --- ACTIONS ---
 
     const handleAddRule = async () => {
-        if (!ruleForm.resource) return alert("Resource name required.");
+        if (!ruleForm.resource || !supabase || !schoolId) {
+            if (!ruleForm.resource) alert("Resource name required.");
+            return;
+        }
         
         try {
-            const docRef = await addDoc(collection(db, `schools/${schoolId}/rules`), ruleForm);
-            const newRule = { id: docRef.id, ...ruleForm };
+            const { data: newRule, error } = await supabase
+                .from('resource_rules')
+                .insert({
+                    school_id: schoolId,
+                    resource: ruleForm.resource,
+                    limit: ruleForm.limit,
+                    unit: ruleForm.unit,
+                    role: ruleForm.role
+                })
+                .select()
+                .single();
             
-            setRules(prev => [...prev, newRule]);
-            await logAction('Add Resource Rule', `Set ${ruleForm.limit} ${ruleForm.unit} limit for ${ruleForm.resource}`);
+            if (error) throw error;
+            
+            setRules(prev => [...prev, { id: newRule.id, ...newRule }]);
+            if (logAction) await logAction('Add Resource Rule', `Set ${ruleForm.limit} ${ruleForm.unit} limit for ${ruleForm.resource}`);
             
             // Reset default
             setRuleForm({ resource: '', limit: 4, unit: 'hours/week', role: 'Student' });
@@ -52,11 +71,16 @@ export default function EduResources({ schoolId, logAction }) {
     };
 
     const handleDeleteRule = async (id, resourceName) => {
-        if(!confirm("Delete this rule?")) return;
+        if(!confirm("Delete this rule?") || !supabase || !schoolId) return;
         try {
-            await deleteDoc(doc(db, `schools/${schoolId}/rules/${id}`));
+            await supabase
+                .from('resource_rules')
+                .delete()
+                .eq('id', id)
+                .eq('school_id', schoolId);
+            
             setRules(prev => prev.filter(r => r.id !== id));
-            await logAction('Delete Rule', `Removed rule for ${resourceName}`);
+            if (logAction) await logAction('Delete Rule', `Removed rule for ${resourceName}`);
         } catch (e) {
             console.error("Delete failed:", e);
         }

@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, getDoc, onSnapshot, addDoc, collection, updateDoc, serverTimestamp, query, where, getDocs } from 'firebase/firestore';
-import { db, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 
 const SchoolContext = createContext();
 
@@ -17,61 +16,140 @@ export function SchoolProvider({ children, user, userData }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user || !userData?.schoolId) {
+        if (!user || !userData?.schoolId || !supabase) {
             setLoading(false);
             return;
         }
 
+        const schoolId = userData.schoolId;
+        const userId = user.id || user.uid;
+
         // 1. Fetch Public School Data
-        getDoc(doc(db, 'schools', userData.schoolId)).then(snap => {
-            if(snap.exists()) setSchoolData(snap.data());
-        }).catch(e => console.error("Error fetching school data:", e));
+        supabase
+            .from('schools')
+            .select('*')
+            .eq('id', schoolId)
+            .single()
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error("Error fetching school data:", error);
+                } else if (data) {
+                    setSchoolData(data);
+                }
+            });
 
         // 2. Determine Role & Load Context (Student vs Staff)
         const loadContext = async () => {
             try {
                 // A. Check if STUDENT/INTERN
                 if (userData.accountTypes?.includes('Student') || userData.accountTypes?.includes('Intern')) {
-                    const recordPath = getPaths(user.uid).studentRecord(userData.schoolId, user.uid);
-                    
-                    onSnapshot(doc(db, recordPath), async (snap) => {
-                        if(snap.exists()) {
-                            const sData = snap.data();
-                            setStudentProfile(sData);
-                            
-                            // Load Assigned Studio if exists
-                            if (sData.internshipStudioId) {
-                                // First check 'partners' subcollection
-                                const partnerSnap = await getDoc(doc(db, `schools/${userData.schoolId}/partners/${sData.internshipStudioId}`));
-                                if (partnerSnap.exists()) {
-                                    setInternshipStudio(partnerSnap.data());
+                    // Subscribe to student record changes
+                    const studentChannel = supabase
+                        .channel(`student-${userId}-${schoolId}`)
+                        .on(
+                            'postgres_changes',
+                            {
+                                event: '*',
+                                schema: 'public',
+                                table: 'students',
+                                filter: `school_id=eq.${schoolId} AND user_id=eq.${userId}`
+                            },
+                            async (payload) => {
+                                if (payload.eventType === 'DELETE') {
+                                    setStudentProfile(null);
                                 } else {
-                                    // Fallback to global studios
-                                    const studioSnap = await getDoc(doc(db, 'studios', sData.internshipStudioId)); 
-                                    if (studioSnap.exists()) setInternshipStudio(studioSnap.data());
+                                    const sData = payload.new || payload.old;
+                                    setStudentProfile(sData);
+                                    
+                                    // Load Assigned Studio if exists
+                                    if (sData?.internship_studio_id) {
+                                        // First check 'partners' table
+                                        const { data: partnerData } = await supabase
+                                            .from('school_partners')
+                                            .select('*')
+                                            .eq('school_id', schoolId)
+                                            .eq('id', sData.internship_studio_id)
+                                            .single();
+                                        
+                                        if (partnerData) {
+                                            setInternshipStudio(partnerData);
+                                        } else {
+                                            // Fallback to global studios
+                                            const { data: studioData } = await supabase
+                                                .from('studios')
+                                                .select('*')
+                                                .eq('id', sData.internship_studio_id)
+                                                .single();
+                                            
+                                            if (studioData) setInternshipStudio(studioData);
+                                        }
+                                    }
                                 }
                             }
+                        )
+                        .subscribe();
+
+                    // Initial fetch
+                    const { data: studentData } = await supabase
+                        .from('students')
+                        .select('*')
+                        .eq('school_id', schoolId)
+                        .eq('user_id', userId)
+                        .single();
+
+                    if (studentData) {
+                        setStudentProfile(studentData);
+                        if (studentData.internship_studio_id) {
+                            const { data: partnerData } = await supabase
+                                .from('school_partners')
+                                .select('*')
+                                .eq('school_id', schoolId)
+                                .eq('id', studentData.internship_studio_id)
+                                .single();
+                            
+                            if (partnerData) {
+                                setInternshipStudio(partnerData);
+                            } else {
+                                const { data: studioData } = await supabase
+                                    .from('studios')
+                                    .select('*')
+                                    .eq('id', studentData.internship_studio_id)
+                                    .single();
+                                
+                                if (studioData) setInternshipStudio(studioData);
+                            }
                         }
-                    });
+                    }
+
+                    return () => {
+                        supabase.removeChannel(studentChannel);
+                    };
                 }
 
                 // B. Check if STAFF (EDUStaff/EDUAdmin)
-                // Staff and EDUAdmins are determined by being listed in school staff collection
-                // Role assignment: Only listed in staff collection = EDUStaff or EDUAdmin
                 if (userData.accountTypes?.includes('EDUStaff') || userData.accountTypes?.includes('EDUAdmin')) {
                     // Find my staff entry to get Role ID
-                    const q = query(collection(db, `schools/${userData.schoolId}/staff`), where('uid', '==', user.uid));
-                    const staffSnap = await getDocs(q);
+                    const { data: staffData, error: staffError } = await supabase
+                        .from('school_staff')
+                        .select('*')
+                        .eq('school_id', schoolId)
+                        .eq('user_id', userId)
+                        .single();
                     
-                    if (!staffSnap.empty) {
-                        const sData = staffSnap.docs[0].data();
-                        setStaffProfile(sData);
+                    if (!staffError && staffData) {
+                        setStaffProfile(staffData);
 
                         // Fetch Permissions for this Role
-                        if (sData.roleId) {
-                            const roleSnap = await getDoc(doc(db, `schools/${userData.schoolId}/roles/${sData.roleId}`));
-                            if (roleSnap.exists()) {
-                                setMyPermissions(roleSnap.data().permissions || []);
+                        if (staffData.role_id) {
+                            const { data: roleData } = await supabase
+                                .from('school_roles')
+                                .select('*')
+                                .eq('school_id', schoolId)
+                                .eq('id', staffData.role_id)
+                                .single();
+                            
+                            if (roleData) {
+                                setMyPermissions(roleData.permissions || []);
                             }
                         } else if (userData.accountTypes.includes('EDUAdmin')) {
                             setMyPermissions(['ALL']); 
@@ -92,32 +170,70 @@ export function SchoolProvider({ children, user, userData }) {
 
     // --- Time Tracking Actions ---
     const checkIn = async (location, type = 'remote') => {
-        if (!studentProfile || !userData.schoolId) return;
+        if (!studentProfile || !userData.schoolId || !supabase) return;
         try {
-            const logsRef = collection(db, `schools/${userData.schoolId}/internship_logs`);
-            const docRef = await addDoc(logsRef, {
-                studentId: user.uid,
-                studentName: userData.displayName || 'Unknown',
-                checkIn: serverTimestamp(),
-                checkOut: null,
-                location: location || 'Unknown',
-                type: type,
-                status: 'active',
-                description: ''
-            });
-            const recordPath = getPaths(user.uid).studentRecord(userData.schoolId, user.uid);
-            await updateDoc(doc(db, recordPath), { activeSessionId: docRef.id, isClockedIn: true });
-        } catch (error) { console.error("Check-in failed:", error); throw error; }
+            const userId = user.id || user.uid;
+            const { data: logData, error: logError } = await supabase
+                .from('internship_logs')
+                .insert({
+                    school_id: userData.schoolId,
+                    student_id: userId,
+                    student_name: userData.displayName || userData.firstName || 'Unknown',
+                    check_in: new Date().toISOString(),
+                    check_out: null,
+                    location: location || 'Unknown',
+                    type: type,
+                    status: 'active',
+                    description: ''
+                })
+                .select()
+                .single();
+
+            if (logError) throw logError;
+
+            // Update student record
+            await supabase
+                .from('students')
+                .update({ 
+                    active_session_id: logData.id, 
+                    is_clocked_in: true 
+                })
+                .eq('school_id', userData.schoolId)
+                .eq('user_id', userId);
+        } catch (error) { 
+            console.error("Check-in failed:", error); 
+            throw error; 
+        }
     };
 
     const checkOut = async (description) => {
-        if (!studentProfile?.activeSessionId || !userData.schoolId) return;
+        if (!studentProfile?.active_session_id || !userData.schoolId || !supabase) return;
         try {
-            const logPath = `schools/${userData.schoolId}/internship_logs/${studentProfile.activeSessionId}`;
-            await updateDoc(doc(db, logPath), { checkOut: serverTimestamp(), status: 'pending_approval', description: description || 'No description' });
-            const recordPath = getPaths(user.uid).studentRecord(userData.schoolId, user.uid);
-            await updateDoc(doc(db, recordPath), { activeSessionId: null, isClockedIn: false });
-        } catch (error) { console.error("Check-out failed:", error); throw error; }
+            const userId = user.id || user.uid;
+            
+            // Update log
+            await supabase
+                .from('internship_logs')
+                .update({ 
+                    check_out: new Date().toISOString(), 
+                    status: 'pending_approval', 
+                    description: description || 'No description' 
+                })
+                .eq('id', studentProfile.active_session_id);
+
+            // Update student record
+            await supabase
+                .from('students')
+                .update({ 
+                    active_session_id: null, 
+                    is_clocked_in: false 
+                })
+                .eq('school_id', userData.schoolId)
+                .eq('user_id', userId);
+        } catch (error) { 
+            console.error("Check-out failed:", error); 
+            throw error; 
+        }
     };
 
     const value = {

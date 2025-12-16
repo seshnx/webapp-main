@@ -2,14 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-    collection, query, getDocs, doc, updateDoc, addDoc, 
-    deleteDoc, orderBy, serverTimestamp 
-} from 'firebase/firestore';
-import { 
     GraduationCap, Plus, Search, Edit2, Trash2, Users, 
     Award, Target, BookOpen, X, Save 
 } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 
 export default function EduLearningPaths({ schoolId, logAction }) {
     const [paths, setPaths] = useState([]);
@@ -34,16 +30,22 @@ export default function EduLearningPaths({ schoolId, logAction }) {
     }, [schoolId]);
 
     const loadPaths = async () => {
+        if (!schoolId || !supabase) return;
         setLoading(true);
         try {
-            const q = query(
-                collection(db, `schools/${schoolId}/learning_paths`),
-                orderBy('createdAt', 'desc')
-            );
-            const snapshot = await getDocs(q);
-            const pathsList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
+            const { data: pathsData, error } = await supabase
+                .from('learning_paths')
+                .select('*')
+                .eq('school_id', schoolId)
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            
+            const pathsList = (pathsData || []).map(p => ({
+                id: p.id,
+                ...p,
+                createdAt: p.created_at,
+                mentorshipEnabled: p.mentorship_enabled || false
             }));
             setPaths(pathsList);
         } catch (error) {
@@ -53,15 +55,19 @@ export default function EduLearningPaths({ schoolId, logAction }) {
     };
 
     const loadCourses = async () => {
+        if (!schoolId || !supabase) return;
         try {
-            const q = query(
-                collection(db, `schools/${schoolId}/courses`),
-                orderBy('title', 'asc')
-            );
-            const snapshot = await getDocs(q);
-            const coursesList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                title: doc.data().title
+            const { data: coursesData, error } = await supabase
+                .from('courses')
+                .select('id, title')
+                .eq('school_id', schoolId)
+                .order('title', { ascending: true });
+            
+            if (error) throw error;
+            
+            const coursesList = (coursesData || []).map(c => ({
+                id: c.id,
+                title: c.title
             }));
             setAvailableCourses(coursesList);
         } catch (error) {
@@ -96,31 +102,48 @@ export default function EduLearningPaths({ schoolId, logAction }) {
     };
 
     const handleSavePath = async () => {
-        if (!formData.title.trim()) {
-            alert('Path title is required.');
+        if (!formData.title.trim() || !supabase || !schoolId) {
+            if (!formData.title.trim()) alert('Path title is required.');
             return;
         }
 
         setLoading(true);
         try {
             const pathData = {
-                ...formData,
-                updatedAt: serverTimestamp()
+                school_id: schoolId,
+                title: formData.title,
+                description: formData.description || null,
+                courses: formData.courses || [],
+                badges: formData.badges || [],
+                skills: formData.skills || [],
+                mentorship_enabled: formData.mentorshipEnabled || false,
+                updated_at: new Date().toISOString()
             };
 
             if (editingPath) {
-                await updateDoc(doc(db, `schools/${schoolId}/learning_paths/${editingPath.id}`), pathData);
+                const { error } = await supabase
+                    .from('learning_paths')
+                    .update(pathData)
+                    .eq('id', editingPath.id)
+                    .eq('school_id', schoolId);
+                
+                if (error) throw error;
+                
                 if (logAction) {
                     logAction('update_learning_path', { pathId: editingPath.id, title: formData.title });
                 }
             } else {
-                pathData.createdAt = serverTimestamp();
-                const docRef = await addDoc(
-                    collection(db, `schools/${schoolId}/learning_paths`),
-                    pathData
-                );
+                pathData.created_at = new Date().toISOString();
+                const { data: newPath, error } = await supabase
+                    .from('learning_paths')
+                    .insert(pathData)
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                
                 if (logAction) {
-                    logAction('create_learning_path', { pathId: docRef.id, title: formData.title });
+                    logAction('create_learning_path', { pathId: newPath.id, title: formData.title });
                 }
             }
 
@@ -135,12 +158,19 @@ export default function EduLearningPaths({ schoolId, logAction }) {
     };
 
     const handleDeletePath = async (pathId) => {
-        if (!confirm('Are you sure you want to delete this learning path?')) {
+        if (!confirm('Are you sure you want to delete this learning path?') || !supabase) {
             return;
         }
 
         try {
-            await deleteDoc(doc(db, `schools/${schoolId}/learning_paths/${pathId}`));
+            const { error } = await supabase
+                .from('learning_paths')
+                .delete()
+                .eq('id', pathId)
+                .eq('school_id', schoolId);
+            
+            if (error) throw error;
+            
             if (logAction) {
                 logAction('delete_learning_path', { pathId });
             }

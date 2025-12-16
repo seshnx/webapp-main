@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check } from 'lucide-react';
-import { doc, updateDoc, deleteField, increment, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
-import { db, getPaths, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import CommentSection from './CommentSection';
 import { motion, AnimatePresence } from 'framer-motion'; 
@@ -45,8 +44,9 @@ export default function PostCard({
     const menuRef = useRef(null);
     const moreMenuRef = useRef(null);
 
-    const isOwnPost = post.userId === currentUser?.uid;
-    const myReaction = post.reactions?.[currentUser?.uid];
+    const userId = currentUser?.id || currentUser?.uid;
+    const isOwnPost = post.userId === userId;
+    const myReaction = post.reactions?.[userId];
     const reactionCounts = post.reactions ? Object.values(post.reactions).reduce((acc, emoji) => {
         acc[emoji] = (acc[emoji] || 0) + 1;
         return acc;
@@ -55,19 +55,24 @@ export default function PostCard({
 
     // Check if post is saved on mount
     useEffect(() => {
-        if (!currentUser?.uid) return;
+        if (!userId || !supabase) return;
         
         const checkSaved = async () => {
             try {
-                const savedRef = doc(db, getPaths(currentUser.uid).savedPosts, post.id);
-                const savedDoc = await getDoc(savedRef);
-                setIsSaved(savedDoc.exists());
+                const { data, error } = await supabase
+                    .from('saved_posts')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .eq('post_id', post.id)
+                    .single();
+                
+                setIsSaved(!!data && !error);
             } catch (e) {
                 console.error('Error checking saved status:', e);
             }
         };
         checkSaved();
-    }, [currentUser?.uid, post.id]);
+    }, [userId, post.id]);
 
     // Close menus on outside click
     useEffect(() => {
@@ -85,28 +90,47 @@ export default function PostCard({
 
     const handleReaction = async (emoji) => {
         setShowReactionMenu(false);
-        if (!currentUser?.uid) return;
+        if (!userId || !supabase) return;
 
-        const ref = doc(db, `artifacts/${appId}/public/data/posts/${post.id}`);
         try {
-            const updatePayload = {};
             const wasReacted = !!myReaction;
+            const currentReactions = post.reactions || {};
             
             if (myReaction === emoji) {
                 // Remove reaction
-                updatePayload[`reactions.${currentUser.uid}`] = deleteField();
-                updatePayload['reactionCount'] = increment(-1);
+                const newReactions = { ...currentReactions };
+                delete newReactions[userId];
+                
+                const { error } = await supabase
+                    .from('posts')
+                    .update({
+                        reactions: newReactions,
+                        reaction_count: (post.reactionCount || 0) - 1
+                    })
+                    .eq('id', post.id);
+                
+                if (error) throw error;
             } else {
                 // Add/change reaction
-                updatePayload[`reactions.${currentUser.uid}`] = emoji;
-                if (!myReaction) updatePayload['reactionCount'] = increment(1);
+                const newReactions = { ...currentReactions, [userId]: emoji };
+                const increment = !myReaction ? 1 : 0;
+                
+                const { error } = await supabase
+                    .from('posts')
+                    .update({
+                        reactions: newReactions,
+                        reaction_count: (post.reactionCount || 0) + increment
+                    })
+                    .eq('id', post.id);
+                
+                if (error) throw error;
                 
                 // Send notification (only for new reactions, not changes)
                 if (!wasReacted && !isOwnPost) {
                     createNotification({
                         targetUserId: post.userId,
                         type: 'like',
-                        fromUserId: currentUser.uid,
+                        fromUserId: userId,
                         fromUserName: currentUserData?.effectiveDisplayName || currentUserData?.firstName || 'Someone',
                         fromUserPhoto: currentUserData?.photoURL,
                         postId: post.id,
@@ -115,7 +139,6 @@ export default function PostCard({
                     });
                 }
             }
-            await updateDoc(ref, updatePayload);
         } catch (e) {
             console.error("Reaction failed", e);
             toast.error("Couldn't add reaction");
@@ -123,30 +146,52 @@ export default function PostCard({
     };
 
     const handleSavePost = async () => {
-        if (!currentUser?.uid || savingPost) return;
+        if (!userId || savingPost || !supabase) return;
         setSavingPost(true);
 
         try {
-            const savedRef = doc(db, getPaths(currentUser.uid).savedPosts, post.id);
-            const postRef = doc(db, `artifacts/${appId}/public/data/posts/${post.id}`);
-
             if (isSaved) {
                 // Unsave
-                await deleteDoc(savedRef);
-                await updateDoc(postRef, { saveCount: increment(-1) });
+                const { error: deleteError } = await supabase
+                    .from('saved_posts')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('post_id', post.id);
+                
+                if (deleteError) throw deleteError;
+                
+                const { error: updateError } = await supabase
+                    .from('posts')
+                    .update({ save_count: (post.saveCount || 0) - 1 })
+                    .eq('id', post.id);
+                
+                if (updateError) throw updateError;
+                
                 setIsSaved(false);
                 toast.success('Removed from saved');
             } else {
                 // Save
-                await setDoc(savedRef, {
-                    postId: post.id,
-                    authorId: post.userId,
-                    authorName: post.displayName,
-                    preview: post.text?.substring(0, 100) || 'Media post',
-                    savedAt: new Date(),
-                    hasMedia: !!(post.attachments?.length || post.imageUrl || post.audioUrl)
-                });
-                await updateDoc(postRef, { saveCount: increment(1) });
+                const { error: insertError } = await supabase
+                    .from('saved_posts')
+                    .insert({
+                        user_id: userId,
+                        post_id: post.id,
+                        author_id: post.userId,
+                        author_name: post.displayName,
+                        preview: post.text?.substring(0, 100) || 'Media post',
+                        saved_at: new Date().toISOString(),
+                        has_media: !!(post.attachments?.length || post.imageUrl || post.audioUrl)
+                    });
+                
+                if (insertError) throw insertError;
+                
+                const { error: updateError } = await supabase
+                    .from('posts')
+                    .update({ save_count: (post.saveCount || 0) + 1 })
+                    .eq('id', post.id);
+                
+                if (updateError) throw updateError;
+                
                 setIsSaved(true);
                 toast.success('Post saved!');
 
@@ -156,7 +201,7 @@ export default function PostCard({
                 //     createNotification({
                 //         targetUserId: post.userId,
                 //         type: 'save',
-                //         fromUserId: currentUser.uid,
+                //         fromUserId: userId,
                 //         fromUserName: currentUserData?.effectiveDisplayName || 'Someone',
                 //         fromUserPhoto: currentUserData?.photoURL,
                 //         postId: post.id,
@@ -199,12 +244,17 @@ export default function PostCard({
     };
 
     const handleDeletePost = async () => {
-        if (!isOwnPost) return;
+        if (!isOwnPost || !supabase) return;
         if (!window.confirm('Are you sure you want to delete this post?')) return;
         
         try {
-            const postRef = doc(db, `artifacts/${appId}/public/data/posts/${post.id}`);
-            await deleteDoc(postRef);
+            const { error } = await supabase
+                .from('posts')
+                .delete()
+                .eq('id', post.id);
+            
+            if (error) throw error;
+            
             toast.success('Post deleted');
         } catch (e) {
             console.error('Delete failed:', e);
@@ -266,8 +316,8 @@ export default function PostCard({
                             <span className="truncate">{post.role}</span>
                             <span>•</span>
                             <span className="shrink-0">
-                                {post.timestamp 
-                                    ? new Date(post.timestamp.toMillis ? post.timestamp.toMillis() : post.timestamp).toLocaleDateString() 
+                                {post.timestamp || post.created_at
+                                    ? new Date(post.timestamp || post.created_at).toLocaleDateString() 
                                     : 'Just now'
                                 }
                             </span>

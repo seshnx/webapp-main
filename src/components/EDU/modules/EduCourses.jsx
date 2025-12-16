@@ -2,15 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-    collection, query, getDocs, doc, updateDoc, addDoc, 
-    deleteDoc, orderBy, where, serverTimestamp 
-} from 'firebase/firestore';
-import { 
     BookOpen, Plus, Search, Edit2, Trash2, Users, Clock, 
     Play, FileText, Award, X, Save, Upload 
 } from 'lucide-react';
-import { db, storage } from '../../../config/firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../../../config/supabase';
 import EduCourseBuilder from './EduCourseBuilder';
 
 export default function EduCourses({ schoolId, logAction }) {
@@ -26,16 +21,21 @@ export default function EduCourses({ schoolId, logAction }) {
     }, [schoolId]);
 
     const loadCourses = async () => {
+        if (!schoolId || !supabase) return;
         setLoading(true);
         try {
-            const q = query(
-                collection(db, `schools/${schoolId}/courses`),
-                orderBy('createdAt', 'desc')
-            );
-            const snapshot = await getDocs(q);
-            const coursesList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
+            const { data: coursesData, error } = await supabase
+                .from('courses')
+                .select('*')
+                .eq('school_id', schoolId)
+                .order('created_at', { ascending: false });
+            
+            if (error) throw error;
+            
+            const coursesList = (coursesData || []).map(c => ({
+                id: c.id,
+                ...c,
+                createdAt: c.created_at
             }));
             setCourses(coursesList);
         } catch (error) {
@@ -55,23 +55,29 @@ export default function EduCourses({ schoolId, logAction }) {
     };
 
     const handleDeleteCourse = async (courseId) => {
-        if (!confirm('Are you sure you want to delete this course? This action cannot be undone.')) {
+        if (!confirm('Are you sure you want to delete this course? This action cannot be undone.') || !supabase) {
             return;
         }
 
         try {
-            // Delete course and all lessons
-            const lessonsRef = collection(db, `schools/${schoolId}/courses/${courseId}/lessons`);
-            const lessonsSnap = await getDocs(lessonsRef);
+            // Delete all lessons first (if foreign key constraints allow, otherwise handled by CASCADE)
+            const { error: lessonsError } = await supabase
+                .from('lessons')
+                .delete()
+                .eq('course_id', courseId);
             
-            // Delete all lessons
-            const deletePromises = lessonsSnap.docs.map(lessonDoc => 
-                deleteDoc(lessonDoc.ref)
-            );
-            await Promise.all(deletePromises);
+            if (lessonsError) {
+                console.warn('Error deleting lessons (may be handled by CASCADE):', lessonsError);
+            }
             
             // Delete course
-            await deleteDoc(doc(db, `schools/${schoolId}/courses/${courseId}`));
+            const { error: courseError } = await supabase
+                .from('courses')
+                .delete()
+                .eq('id', courseId)
+                .eq('school_id', schoolId);
+            
+            if (courseError) throw courseError;
             
             if (logAction) {
                 logAction('delete_course', { courseId });

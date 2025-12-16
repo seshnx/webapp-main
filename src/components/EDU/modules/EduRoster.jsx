@@ -1,10 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    collection, query, getDocs, doc, updateDoc, orderBy, 
-    addDoc, where, serverTimestamp, deleteDoc 
-} from 'firebase/firestore';
 import { Search, UserPlus, Briefcase, Link, Edit2, Trash2, X, Save } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 import { exportToCSV } from '../../../utils/dataExport';
 
 export default function EduRoster({ schoolId, logAction }) {
@@ -27,16 +23,36 @@ export default function EduRoster({ schoolId, logAction }) {
 
     // --- DATA FETCHING ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const loadData = async () => {
             setLoading(true);
             try {
                 // Fetch Students
-                const sSnap = await getDocs(collection(db, `schools/${schoolId}/students`));
-                setStudents(sSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: studentsData, error: studentsError } = await supabase
+                    .from('students')
+                    .select('*')
+                    .eq('school_id', schoolId);
+                
+                if (studentsError) throw studentsError;
+                
+                setStudents((studentsData || []).map(d => ({
+                    id: d.id,
+                    ...d,
+                    displayName: d.display_name,
+                    studentId: d.student_id,
+                    hoursLogged: d.hours_logged || 0
+                })));
 
                 // Fetch Partners (for assignment dropdown)
-                const pSnap = await getDocs(collection(db, `schools/${schoolId}/partners`));
-                setPartners(pSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: partnersData, error: partnersError } = await supabase
+                    .from('school_partners')
+                    .select('*')
+                    .eq('school_id', schoolId);
+                
+                if (partnersError) throw partnersError;
+                
+                setPartners((partnersData || []).map(d => ({ id: d.id, ...d })));
             } catch (e) {
                 console.error("Roster load failed:", e);
             }
@@ -69,26 +85,58 @@ export default function EduRoster({ schoolId, logAction }) {
     };
 
     const handleSaveStudent = async () => {
+        if (!supabase || !schoolId) return;
+        
         const displayName = `${studentForm.firstName} ${studentForm.lastName}`.trim();
         if (!displayName || !studentForm.email) return alert("Name and Email required.");
 
         try {
             if (isEditing && selectedStudent) {
-                await updateDoc(doc(db, `schools/${schoolId}/students/${selectedStudent.id}`), {
-                    ...studentForm,
-                    displayName
-                });
+                const { error } = await supabase
+                    .from('students')
+                    .update({
+                        first_name: studentForm.firstName,
+                        last_name: studentForm.lastName,
+                        display_name: displayName,
+                        email: studentForm.email,
+                        student_id: studentForm.studentId || null,
+                        cohort: studentForm.cohort || null,
+                        status: studentForm.status
+                    })
+                    .eq('id', selectedStudent.id)
+                    .eq('school_id', schoolId);
+                
+                if (error) throw error;
+                
                 setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, ...studentForm, displayName } : s));
-                await logAction('Edit Student', `Updated ${displayName}`);
+                if (logAction) await logAction('Edit Student', `Updated ${displayName}`);
             } else {
-                const docRef = await addDoc(collection(db, `schools/${schoolId}/students`), {
-                    ...studentForm,
-                    displayName,
-                    hoursLogged: 0,
-                    createdAt: serverTimestamp()
-                });
-                setStudents(prev => [...prev, { id: docRef.id, ...studentForm, displayName, hoursLogged: 0 }]);
-                await logAction('Add Student', `Added ${displayName}`);
+                const { data: newStudent, error } = await supabase
+                    .from('students')
+                    .insert({
+                        school_id: schoolId,
+                        first_name: studentForm.firstName,
+                        last_name: studentForm.lastName,
+                        display_name: displayName,
+                        email: studentForm.email,
+                        student_id: studentForm.studentId || null,
+                        cohort: studentForm.cohort || null,
+                        status: studentForm.status,
+                        hours_logged: 0,
+                        created_at: new Date().toISOString()
+                    })
+                    .select()
+                    .single();
+                
+                if (error) throw error;
+                
+                setStudents(prev => [...prev, { 
+                    id: newStudent.id, 
+                    ...studentForm, 
+                    displayName, 
+                    hoursLogged: 0 
+                }]);
+                if (logAction) await logAction('Add Student', `Added ${displayName}`);
             }
             setShowStudentModal(false);
         } catch (e) {
@@ -98,27 +146,35 @@ export default function EduRoster({ schoolId, logAction }) {
     };
 
     const handleDeleteStudent = async (id, name) => {
-        if (!confirm(`Remove ${name} from the roster? This does not delete their user account.`)) return;
+        if (!confirm(`Remove ${name} from the roster? This does not delete their user account.`) || !supabase) return;
         try {
-            await deleteDoc(doc(db, `schools/${schoolId}/students/${id}`));
+            await supabase
+                .from('students')
+                .delete()
+                .eq('id', id)
+                .eq('school_id', schoolId);
+            
             setStudents(prev => prev.filter(s => s.id !== id));
-            await logAction('Remove Student', `Removed ${name}`);
+            if (logAction) await logAction('Remove Student', `Removed ${name}`);
         } catch (e) {
             console.error("Delete failed:", e);
         }
     };
 
     const handleAssignStudio = async () => {
-        if (!selectedStudent || !assignStudioId) return;
+        if (!selectedStudent || !assignStudioId || !supabase) return;
         try {
-            await updateDoc(doc(db, `schools/${schoolId}/students/${selectedStudent.id}`), {
-                internshipStudioId: assignStudioId
-            });
-            setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, internshipStudioId: assignStudioId } : s));
+            await supabase
+                .from('students')
+                .update({ internship_studio_id: assignStudioId })
+                .eq('id', selectedStudent.id)
+                .eq('school_id', schoolId);
+            
+            setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, internshipStudioId: assignStudioId, internship_studio_id: assignStudioId } : s));
             setShowAssignModal(false);
             setAssignStudioId('');
             alert(`Assigned ${selectedStudent.displayName} to studio.`);
-            await logAction('Assign Internship', `Assigned ${selectedStudent.displayName}`);
+            if (logAction) await logAction('Assign Internship', `Assigned ${selectedStudent.displayName}`);
         } catch (e) {
             console.error("Assignment failed:", e);
         }

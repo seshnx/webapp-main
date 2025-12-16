@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore';
 import { Activity, Shield, FileText, Clock } from 'lucide-react';
-import { db } from '../../../config/firebase';
+import { supabase } from '../../../config/supabase';
 import { exportToCSV } from '../../../utils/dataExport';
 
 export default function EduAudit({ schoolId }) {
@@ -11,22 +10,32 @@ export default function EduAudit({ schoolId }) {
 
     // --- DATA FETCHING ---
     useEffect(() => {
+        if (!schoolId || !supabase) return;
+        
         const fetchLogs = async () => {
             setLoading(true);
             try {
-                const q = query(
-                    collection(db, `schools/${schoolId}/audit_logs`), 
-                    orderBy('timestamp', 'desc'), 
-                    limit(logLimit)
-                );
-                const snap = await getDocs(q);
-                setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+                const { data: logsData, error } = await supabase
+                    .from('audit_logs')
+                    .select('*')
+                    .eq('school_id', schoolId)
+                    .order('timestamp', { ascending: false })
+                    .limit(logLimit);
+                
+                if (error) throw error;
+                
+                setLogs((logsData || []).map(log => ({
+                    id: log.id,
+                    ...log,
+                    adminName: log.admin_name,
+                    timestamp: log.timestamp ? new Date(log.timestamp) : null
+                })));
             } catch (e) {
                 console.error("Error loading audit logs:", e);
             }
             setLoading(false);
         };
-        if (schoolId) fetchLogs();
+        fetchLogs();
     }, [schoolId, logLimit]);
 
     // --- RENDER HELPERS ---

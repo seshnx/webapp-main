@@ -31,7 +31,7 @@ service cloud.firestore {
     match /artifacts/{appId}/public/data/service_requests/{document=**} {
       allow read, write: if isAuthenticated();
     }
-
+    
     // 6. EDU Collections
     match /schools/{schoolId} {
       // School document

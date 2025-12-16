@@ -1,11 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-    collection, query, getDocs, addDoc, where, serverTimestamp, orderBy, limit 
-} from 'firebase/firestore';
-import { 
     Shield, Plus, MapPin, School, Activity, Users, Briefcase, Clock 
 } from 'lucide-react';
-import { db } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { useSchool } from '../../contexts/SchoolContext';
 import { exportToCSV } from '../../utils/dataExport';
 import { SCHOOL_PERMISSIONS } from '../../config/constants';
@@ -58,11 +55,17 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
 
     // --- 1. FETCH SCHOOLS (Global Admin) ---
     useEffect(() => {
-        if (isGlobalAdminUser) {
+        if (isGlobalAdminUser && supabase) {
             const fetchSchools = async () => {
                 try {
-                    const snap = await getDocs(collection(db, 'schools'));
-                    const schoolsList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                    const { data: schools, error } = await supabase
+                        .from('schools')
+                        .select('*')
+                        .order('name');
+                    
+                    if (error) throw error;
+                    
+                    const schoolsList = schools || [];
                     setAllSchools(schoolsList);
                     
                     // Default to first school if none selected
@@ -75,24 +78,24 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
             };
             fetchSchools();
         }
-    }, [isGlobalAdminUser, activeSchoolId]);
+    }, [isGlobalAdminUser, activeSchoolId, contextSchoolId]);
 
     // --- 2. FETCH ACTIVE SCHOOL DATA ---
     useEffect(() => {
-        if (!activeSchoolId) return;
+        if (!activeSchoolId || !supabase) return;
 
         const loadSchoolMeta = async () => {
             try {
-                // Fetch single doc via query to avoid ID errors, or use getDoc if ID is certain
-                // Using specific document reference is better for singular fetches
-                // const docRef = doc(db, 'schools', activeSchoolId);
-                // const snap = await getDoc(docRef);
-                // For now, maintaining query pattern from previous turns for consistency:
-                const q = query(collection(db, 'schools'), where('__name__', '==', activeSchoolId));
-                const sDoc = await getDocs(q);
+                const { data: school, error } = await supabase
+                    .from('schools')
+                    .select('*')
+                    .eq('id', activeSchoolId)
+                    .single();
                 
-                if (!sDoc.empty) {
-                    setActiveSchoolData(sDoc.docs[0].data());
+                if (error) throw error;
+                
+                if (school) {
+                    setActiveSchoolData(school);
                 }
             } catch (e) { 
                 console.error("Error loading school meta:", e); 
@@ -103,15 +106,19 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
 
     // --- HELPER: CENTRALIZED AUDIT LOGGER ---
     const logAction = async (action, details) => {
-        if (!activeSchoolId) return;
+        if (!activeSchoolId || !supabase) return;
         try {
-            await addDoc(collection(db, `schools/${activeSchoolId}/audit_logs`), {
-                action,
-                details,
-                adminId: user.uid,
-                adminName: `${userData.firstName} ${userData.lastName}`,
-                timestamp: serverTimestamp()
-            });
+            const userId = user?.id || user?.uid;
+            await supabase
+                .from('audit_logs')
+                .insert({
+                    school_id: activeSchoolId,
+                    action,
+                    details,
+                    admin_id: userId,
+                    admin_name: `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim(),
+                    created_at: new Date().toISOString()
+                });
         } catch (e) {
             console.error("Failed to log action:", e);
         }
@@ -119,7 +126,7 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
 
     // --- ACTION: CREATE NEW SCHOOL ---
     const handleCreateSchool = async () => {
-        if (!newSchoolForm.name) return;
+        if (!newSchoolForm.name || !supabase) return;
         
         // Double-check permissions before attempting to create
         if (!isGlobalAdminUser) {
@@ -129,28 +136,48 @@ export default function EduAdminDashboard({ user: propUser, userData: propUserDa
         }
         
         try {
-            const docRef = await addDoc(collection(db, 'schools'), { 
-                ...newSchoolForm, 
-                createdAt: serverTimestamp(), 
-                requiredHours: 100 
-            });
+            const { data: newSchool, error: schoolError } = await supabase
+                .from('schools')
+                .insert({ 
+                    name: newSchoolForm.name,
+                    address: newSchoolForm.address || null,
+                    primary_color: newSchoolForm.primaryColor || '#4f46e5',
+                    required_hours: 100,
+                    created_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+            
+            if (schoolError) throw schoolError;
+            
+            if (!newSchool) {
+                throw new Error('School creation failed - no data returned');
+            }
             
             // Create Default Admin Role for new school
-            await addDoc(collection(db, `schools/${docRef.id}/roles`), { 
-                name: 'Admin', 
-                color: '#dc2626', 
-                permissions: SCHOOL_PERMISSIONS.map(p => p.id) 
-            });
+            const { error: roleError } = await supabase
+                .from('school_roles')
+                .insert({ 
+                    school_id: newSchool.id,
+                    name: 'Admin', 
+                    color: '#dc2626', 
+                    permissions: SCHOOL_PERMISSIONS.map(p => p.id) 
+                });
 
-            setAllSchools(prev => [...prev, { id: docRef.id, ...newSchoolForm }]);
-            setActiveSchoolId(docRef.id);
+            if (roleError) {
+                console.error("Error creating default admin role:", roleError);
+                // Continue anyway - role can be created later
+            }
+
+            setAllSchools(prev => [...prev, newSchool]);
+            setActiveSchoolId(newSchool.id);
             setShowCreateModal(false);
             setNewSchoolForm({ name: '', address: '', primaryColor: '#4f46e5' });
             
             // Log is implied since we switch to the new school immediately
         } catch (e) {
             console.error("Error creating school:", e);
-            if (e.code === 'permission-denied') {
+            if (e.message?.includes('permission') || e.code === 'PGRST301') {
                 alert("Permission denied. Only SeshNx Platform Administrators can create new schools.");
             } else {
                 alert("Failed to create school. Please try again.");

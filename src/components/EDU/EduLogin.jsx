@@ -2,9 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { signInWithEmailAndPassword, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { auth, db, appId } from '../../config/firebase';
+import { supabase } from '../../config/supabase';
 import { hasEduAccess } from '../../utils/eduPermissions';
 import { Loader2, GraduationCap, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -22,13 +20,27 @@ export default function EduLogin() {
 
     useEffect(() => {
         // Check if user is already authenticated
-        const unsubscribe = auth.onAuthStateChanged(async (user) => {
-            if (user) {
+        if (!supabase) return;
+
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
+            if (session?.user) {
                 // Check if user has EDU access
                 try {
-                    const userDoc = await getDoc(doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`));
-                    if (userDoc.exists()) {
-                        const userData = userDoc.data();
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
+                    
+                    if (profile) {
+                        const userData = {
+                            ...profile,
+                            firstName: profile.first_name,
+                            lastName: profile.last_name,
+                            accountTypes: profile.account_types || ['Fan'],
+                            activeProfileRole: profile.active_role || 'Fan',
+                            photoURL: profile.avatar_url
+                        };
                         if (hasEduAccess(userData)) {
                             // User has EDU access, redirect to EDU dashboard
                             navigate('/edu');
@@ -41,7 +53,36 @@ export default function EduLogin() {
             }
         });
 
-        return () => unsubscribe();
+        // Listen for auth changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+            if (session?.user) {
+                try {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
+                    
+                    if (profile) {
+                        const userData = {
+                            ...profile,
+                            firstName: profile.first_name,
+                            lastName: profile.last_name,
+                            accountTypes: profile.account_types || ['Fan'],
+                            activeProfileRole: profile.active_role || 'Fan',
+                            photoURL: profile.avatar_url
+                        };
+                        if (hasEduAccess(userData)) {
+                            navigate('/edu');
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error checking EDU access:', err);
+                }
+            }
+        });
+
+        return () => subscription.unsubscribe();
     }, [navigate]);
 
     const handleEmailLogin = async (e) => {
@@ -51,26 +92,54 @@ export default function EduLogin() {
             return;
         }
 
+        if (!supabase) {
+            setError('Authentication service unavailable.');
+            return;
+        }
+
         setLoading(true);
         setError('');
 
         try {
-            const userCredential = await signInWithEmailAndPassword(auth, email, password);
-            const user = userCredential.user;
+            const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+
+            if (authError) throw authError;
+            if (!authData.user) {
+                setError('Login failed. Please try again.');
+                setLoading(false);
+                return;
+            }
 
             // Check if user has EDU access
-            const userDoc = await getDoc(doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`));
-            if (!userDoc.exists()) {
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', authData.user.id)
+                .single();
+
+            if (profileError || !profile) {
                 setError('User profile not found. Please complete your profile setup first.');
                 setLoading(false);
                 return;
             }
 
-            const userData = userDoc.data();
+            const userData = {
+                ...profile,
+                firstName: profile.first_name,
+                lastName: profile.last_name,
+                accountTypes: profile.account_types || ['Fan'],
+                activeProfileRole: profile.active_role || 'Fan',
+                photoURL: profile.avatar_url
+            };
+
             // Check for EDU access (EDUAdmin, EDUStaff, Student, Intern)
             // GAdmin (Global Admin) should use the separate Global Admin App, not EDU login
             if (!hasEduAccess(userData)) {
                 setError('You do not have EDU access. Please contact your administrator.');
+                await supabase.auth.signOut();
                 setLoading(false);
                 return;
             }
@@ -79,9 +148,9 @@ export default function EduLogin() {
             navigate('/edu');
         } catch (err) {
             console.error('Login error:', err);
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+            if (err.message?.includes('Invalid login credentials') || err.message?.includes('Email not confirmed')) {
                 setError('Invalid email or password.');
-            } else if (err.code === 'auth/invalid-email') {
+            } else if (err.message?.includes('email')) {
                 setError('Invalid email address.');
             } else {
                 setError('Login failed. Please try again.');
@@ -91,37 +160,33 @@ export default function EduLogin() {
     };
 
     const handleGoogleLogin = async () => {
+        if (!supabase) {
+            setError('Authentication service unavailable.');
+            return;
+        }
+
         setError('');
         setLoading(true);
 
         try {
-            const provider = new GoogleAuthProvider();
-            provider.setCustomParameters({ prompt: 'select_account' });
-            const userCredential = await signInWithPopup(auth, provider);
-            const user = userCredential.user;
+            const { data: authData, error: authError } = await supabase.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: `${window.location.origin}/edu/login`,
+                    queryParams: {
+                        access_type: 'offline',
+                        prompt: 'consent',
+                    }
+                }
+            });
 
-            // Check if user has EDU access
-            const userDoc = await getDoc(doc(db, `artifacts/${appId}/users/${user.uid}/profiles/main`));
-            if (!userDoc.exists()) {
-                setError('User profile not found. Please complete your profile setup first.');
-                setLoading(false);
-                return;
-            }
+            if (authError) throw authError;
 
-            const userData = userDoc.data();
-            // Check for EDU access (EDUAdmin, EDUStaff, Student, Intern)
-            // GAdmin (Global Admin) should use the separate Global Admin App, not EDU login
-            if (!hasEduAccess(userData)) {
-                setError('You do not have EDU access. Please contact your administrator.');
-                setLoading(false);
-                return;
-            }
-
-            // Success - redirect to EDU dashboard
-            navigate('/edu');
+            // OAuth redirect will happen, so we'll handle the callback in useEffect
+            // For now, just show loading state
         } catch (err) {
             console.error('Google login error:', err);
-            if (err.code === 'auth/popup-closed-by-user') {
+            if (err.message?.includes('popup')) {
                 setError('Login cancelled.');
             } else {
                 setError('Google login failed. Please try again.');
