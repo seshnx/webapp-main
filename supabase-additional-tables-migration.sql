@@ -512,3 +512,78 @@ create policy "Users can insert reviews they wrote"
   on public.reviews for insert
   with check (auth.uid() = reviewer_id);
 
+-- =========================================================
+-- BLOG TABLES RLS POLICIES
+-- =========================================================
+-- Enable RLS on blog tables if they exist
+do $$
+begin
+  -- blog_users table
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'blog_users') then
+    alter table public.blog_users enable row level security;
+    
+    drop policy if exists "Blog users are publicly readable" on public.blog_users;
+    create policy "Blog users are publicly readable"
+      on public.blog_users for select
+      using (true);
+    
+    drop policy if exists "Users can update their own blog profile" on public.blog_users;
+    create policy "Users can update their own blog profile"
+      on public.blog_users for update
+      using (auth.uid()::text = user_id or auth.uid()::text = id::text)
+      with check (auth.uid()::text = user_id or auth.uid()::text = id::text);
+  end if;
+
+  -- blog_posts table
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'blog_posts') then
+    alter table public.blog_posts enable row level security;
+    
+    drop policy if exists "Blog posts are publicly readable" on public.blog_posts;
+    create policy "Blog posts are publicly readable"
+      on public.blog_posts for select
+      using (true);
+    
+    drop policy if exists "Users can insert their own blog posts" on public.blog_posts;
+    create policy "Users can insert their own blog posts"
+      on public.blog_posts for insert
+      with check (auth.uid()::text = author_id);
+    
+    drop policy if exists "Users can update their own blog posts" on public.blog_posts;
+    create policy "Users can update their own blog posts"
+      on public.blog_posts for update
+      using (auth.uid()::text = author_id)
+      with check (auth.uid()::text = author_id);
+    
+    drop policy if exists "Users can delete their own blog posts" on public.blog_posts;
+    create policy "Users can delete their own blog posts"
+      on public.blog_posts for delete
+      using (auth.uid()::text = author_id);
+  end if;
+
+  -- blog_comments table
+  if exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'blog_comments') then
+    alter table public.blog_comments enable row level security;
+    
+    drop policy if exists "Blog comments are publicly readable" on public.blog_comments;
+    create policy "Blog comments are publicly readable"
+      on public.blog_comments for select
+      using (true);
+    
+    drop policy if exists "Users can insert their own blog comments" on public.blog_comments;
+    create policy "Users can insert their own blog comments"
+      on public.blog_comments for insert
+      with check (auth.uid()::text = author_id);
+    
+    drop policy if exists "Users can update their own blog comments" on public.blog_comments;
+    create policy "Users can update their own blog comments"
+      on public.blog_comments for update
+      using (auth.uid()::text = author_id)
+      with check (auth.uid()::text = author_id);
+    
+    drop policy if exists "Users can delete their own blog comments" on public.blog_comments;
+    create policy "Users can delete their own blog comments"
+      on public.blog_comments for delete
+      using (auth.uid()::text = author_id);
+  end if;
+end $$;
+
