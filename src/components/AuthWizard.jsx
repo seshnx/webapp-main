@@ -271,17 +271,32 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
               first_name: form.firstName,
               last_name: form.lastName
             },
-            emailRedirectTo: window.location.origin
+            emailRedirectTo: `${window.location.origin}/?intent=signup`
           }
         });
 
         if (signupError) {
-          if (signupError.message?.includes('already registered') || signupError.message?.includes('already exists')) {
+          console.error('Signup error:', signupError);
+          if (signupError.message?.includes('already registered') || signupError.message?.includes('already exists') || signupError.message?.includes('User already registered')) {
             setError("An account with this email already exists. Please sign in instead.");
+          } else if (signupError.message?.includes('Password')) {
+            setError("Password does not meet requirements. Please check password rules.");
+          } else if (signupError.message?.includes('email')) {
+            setError("Invalid email address. Please check your email.");
           } else {
-            setError(signupError.message || "Failed to create account.");
+            setError(signupError.message || "Failed to create account. Please try again.");
           }
           setIsLoading(false);
+          return;
+        }
+
+        // Check if email confirmation is required
+        if (signupData?.user && !signupData.session) {
+          // Email confirmation required
+          setError('');
+          setIsLoading(false);
+          alert('Account created! Please check your email to confirm your account, then sign in.');
+          setMode('login');
           return;
         }
 
@@ -401,12 +416,18 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       ]);
 
       // Step 3: Ensure wallet exists (non-blocking)
-      supabase
-        .from('wallets')
-        .upsert({ user_id: userId, balance: 0 }, { onConflict: 'user_id' })
-        .catch((err) => {
-          console.warn('Wallet upsert failed (trigger should handle it):', err.message);
-        });
+      (async () => {
+        try {
+          const { error } = await supabase
+            .from('wallets')
+            .upsert({ user_id: userId, balance: 0 }, { onConflict: 'user_id' });
+          if (error) {
+            console.warn('Wallet upsert failed (trigger should handle it):', error.message);
+          }
+        } catch (err) {
+          console.warn('Wallet upsert error (non-blocking):', err.message);
+        }
+      })();
       
       // Step 4: Create sub-profiles for selected roles (if needed)
       // Only create sub-profiles for roles that require them (Talent, Studio, Producer, etc.)
@@ -417,7 +438,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       if (rolesNeedingSubProfiles.length > 0) {
         for (const role of rolesNeedingSubProfiles) {
           try {
-            await supabase
+            const { error } = await supabase
               .from('sub_profiles')
               .upsert({
                 user_id: userId,
@@ -425,8 +446,11 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                 data: {},
                 updated_at: new Date().toISOString()
               }, { onConflict: 'user_id,role' });
+            if (error) {
+              console.warn(`Sub-profile creation for ${role} failed:`, error.message);
+            }
           } catch (err) {
-            console.warn(`Sub-profile creation for ${role} failed:`, err.message);
+            console.warn(`Sub-profile creation for ${role} error:`, err.message);
           }
         }
       }
