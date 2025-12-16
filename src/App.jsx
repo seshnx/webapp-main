@@ -157,66 +157,59 @@ export default function App() {
     };
 
     // 1. Get initial session and load data immediately
-    // Use Promise.race to timeout after 3 seconds (reduced from 5)
-    const sessionPromise = supabase.auth.getSession();
-    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 3000));
-    
-    Promise.race([sessionPromise, timeoutPromise]).then(async (result) => {
-        if (result.timeout) {
-            console.warn("Session check timed out - this may be due to Tracking Prevention blocking storage");
-            // Don't try to signOut if storage is blocked - it will fail
-            setUser(null);
-            setUserData(null);
-            setSubProfiles({});
-            setTokenBalance(0);
+    // Increased timeout to 10 seconds to allow for slower storage access
+    const loadInitialSession = async () => {
+        try {
+            const { data: { session }, error } = await supabase.auth.getSession();
+            
+            if (error) {
+                console.error("Error getting session:", error);
+                // If error is related to storage, it's likely Tracking Prevention
+                if (error.message?.includes('storage') || error.message?.includes('localStorage')) {
+                    console.warn("Storage access blocked - session cannot be persisted");
+                }
+                setUser(null);
+                setUserData(null);
+                setSubProfiles({});
+                setTokenBalance(0);
+                setLoading(false);
+                return;
+            }
+            
+            // Validate session exists and has a valid user
+            const currentUser = session?.user ?? null;
+            
+            if (currentUser && currentUser.id) {
+                console.log('Session found, user ID:', currentUser.id);
+                setUser(currentUser);
+                // Load user data without additional timeout - if it fails, user just won't have profile yet
+                await loadUserData(currentUser.id);
+            } else {
+                // No valid session
+                console.log('No active session found');
+                setUser(null);
+                setUserData(null);
+                setSubProfiles({});
+                setTokenBalance(0);
+            }
+            
             setLoading(false);
-            return;
-        }
-        
-        const { data: { session }, error } = result;
-        
-        if (error) {
-            console.error("Error getting session:", error);
-            // If error is related to storage, it's likely Tracking Prevention
-            if (error.message?.includes('storage') || error.message?.includes('localStorage')) {
-                console.warn("Storage access blocked - session cannot be persisted");
+        } catch (err) {
+            console.error("Session check failed:", err);
+            // Check if it's a storage-related error
+            if (err.message?.includes('storage') || err.message?.includes('localStorage') || err.name === 'QuotaExceededError') {
+                console.warn("Storage access blocked - continuing without session persistence");
             }
             setUser(null);
             setUserData(null);
             setSubProfiles({});
             setTokenBalance(0);
             setLoading(false);
-            return;
         }
-        
-        // Validate session exists and has a valid user
-        const currentUser = session?.user ?? null;
-        
-        if (currentUser && currentUser.id) {
-            setUser(currentUser);
-            // Load user data without additional timeout - if it fails, user just won't have profile yet
-            await loadUserData(currentUser.id);
-        } else {
-            // No valid session
-            setUser(null);
-            setUserData(null);
-            setSubProfiles({});
-            setTokenBalance(0);
-        }
-        
-        setLoading(false);
-    }).catch((err) => {
-        console.error("Session check failed:", err);
-        // Check if it's a storage-related error
-        if (err.message?.includes('storage') || err.message?.includes('localStorage') || err.name === 'QuotaExceededError') {
-            console.warn("Storage access blocked - continuing without session persistence");
-        }
-        setUser(null);
-        setUserData(null);
-        setSubProfiles({});
-        setTokenBalance(0);
-        setLoading(false);
-    });
+    };
+    
+    // Load initial session immediately
+    loadInitialSession();
 
     // 2. Listen for auth changes (for subsequent logins/logouts, including OAuth callbacks)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -274,13 +267,14 @@ export default function App() {
         setLoading(false);
     });
 
-    // 3. Safety timeout - ensure loading always resolves (reduced to 3s to match session timeout)
+    // 3. Safety timeout - ensure loading always resolves (increased to 10s to allow for session check)
     const timeoutId = setTimeout(() => {
-        console.warn("Loading timeout - forcing loading to false");
-        setUser(null);
-        setUserData(null);
-        setLoading(false);
-    }, 3000); // 3 second timeout
+        if (loading) {
+            console.warn("Loading timeout - forcing loading to false");
+            // Don't clear user if we're still loading - session might still be valid
+            setLoading(false);
+        }
+    }, 10000); // 10 second timeout
 
     return () => {
         subscription.unsubscribe();

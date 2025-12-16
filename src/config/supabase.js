@@ -39,10 +39,12 @@ const isStorageAvailable = () => {
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        persistSession: isStorageAvailable(), // Only persist if storage is available
-        autoRefreshToken: isStorageAvailable(),
-        detectSessionInUrl: true,
-        flowType: 'pkce' // Use PKCE flow for better security
+        persistSession: true, // Always try to persist - Supabase handles storage errors gracefully
+        autoRefreshToken: true, // Auto-refresh tokens to keep session alive
+        detectSessionInUrl: true, // Detect session in URL (for OAuth callbacks)
+        flowType: 'pkce', // Use PKCE flow for better security
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined, // Explicitly use localStorage
+        storageKey: 'sb-auth-token' // Custom storage key
       }
     })
   : null;
