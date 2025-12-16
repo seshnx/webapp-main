@@ -20,9 +20,9 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         preferences: { seeAllProfiles: false }
     });
     
-    const [roles, setRoles] = useState(userData.accountTypes || []);
-    const [preferredRole, setPreferredRole] = useState(userData.preferredRole || roles[0]);
-    const [activeRole, setActiveRole] = useState(userData.activeProfileRole || roles[0]);
+    const [roles, setRoles] = useState(userData?.accountTypes || []);
+    const [preferredRole, setPreferredRole] = useState(userData?.preferredRole || roles[0]);
+    const [activeRole, setActiveRole] = useState(userData?.activeProfileRole || roles[0]);
     const [savingRoles, setSavingRoles] = useState(false);
     const [exporting, setExporting] = useState(false);
     
@@ -39,10 +39,10 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
 
 
     useEffect(() => {
-        if (userData.activeProfileRole) {
+        if (userData?.activeProfileRole) {
             setActiveRole(userData.activeProfileRole);
         }
-    }, [userData.activeProfileRole]);
+    }, [userData?.activeProfileRole]);
 
     // Generic Toggle Handler for nested settings
     const handleToggle = (category, key) => {
@@ -81,7 +81,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 })
                 .eq('id', user.id);
             
-            if (activeRole !== userData.activeProfileRole && onRoleSwitch) {
+            if (userData && activeRole !== userData.activeProfileRole && onRoleSwitch) {
                 onRoleSwitch(activeRole);
             }
 

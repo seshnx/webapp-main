@@ -61,7 +61,7 @@ export default function ChatDetailsPane({ activeChat, onClose, currentUser }) {
         if (activeChat?.id) {
             loadData();
         }
-    }, [activeChat.id, targetUid, isGroup, currentUser?.uid]);
+    }, [activeChat.id, targetUid, isGroup, currentUser?.id || currentUser?.uid]);
 
     const handleBlockUser = async () => {
         if (isGroup || !targetUid || !currentUser || !supabase) return;

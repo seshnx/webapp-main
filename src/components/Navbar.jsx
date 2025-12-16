@@ -36,7 +36,7 @@ export default function Navbar({
     markAllAsRead,
     deleteNotification,
     clearAll
-  } = useNotifications(user?.uid);
+  } = useNotifications(user?.id || user?.uid);
 
   const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'User';
   const displayRole = getDisplayRole(userData); // Shows subRole if set for Talent

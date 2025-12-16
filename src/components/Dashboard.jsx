@@ -156,8 +156,8 @@ export default function Dashboard({
     const [trendingItem, setTrendingItem] = useState(null);
     const greeting = getGreeting();
 
-    // Real-time notifications from Firestore
-    const { notifications, unreadCount } = useNotifications(user?.uid);
+    // Real-time notifications from Supabase
+    const { notifications, unreadCount } = useNotifications(user?.id || user?.uid);
     
     const isStudio = userData?.accountTypes?.includes('Studio');
     const studioRooms = subProfiles?.['Studio']?.rooms || [];
