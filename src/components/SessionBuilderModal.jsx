@@ -27,7 +27,7 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
     } = useForm({
         resolver: zodResolver(sessionSchema),
         defaultValues: {
-            sessionName: `${userData.lastName} Session`,
+            sessionName: userData?.lastName ? `${userData.lastName} Session` : 'Session',
             duration: 4,
             date: '',
             time: ''
@@ -96,7 +96,7 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
                         group_id: groupId,
                         session_name: data.sessionName,
                         sender_id: userId,
-                        sender_name: `${userData.firstName} ${userData.lastName}`,
+                        sender_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
                         target_id: item.id,
                         target_name: `${item.firstName} ${item.lastName}`,
                         service_type: item.accountTypes?.[0] || 'Session',

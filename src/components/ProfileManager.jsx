@@ -280,7 +280,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                                             <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Display Name Preferences</label>
                                             <div className="flex items-center justify-between"><span className="text-sm dark:text-gray-200">Use Legal Name Only</span><button type="button" onClick={toggleLegalOnly} className="text-brand-blue">{useLegalNameOnly ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button></div>
                                             <div className="flex items-center justify-between"><span className="text-sm dark:text-gray-200">Use User Name Only</span><button type="button" onClick={toggleUserOnly} className="text-brand-blue">{useUserNameOnly ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button></div>
-                                            <div className="text-xs text-gray-500 italic mt-2 border-t dark:border-gray-700 pt-2">Preview: <strong className="text-brand-blue">{useLegalNameOnly ? `${userData.firstName} ${userData.lastName}` : useUserNameOnly ? (userData.displayName || 'Not Set') : `${userData.firstName} "${userData.displayName || 'User'}" ${userData.lastName}`}</strong></div>
+                                            <div className="text-xs text-gray-500 italic mt-2 border-t dark:border-gray-700 pt-2">Preview: <strong className="text-brand-blue">{useLegalNameOnly ? `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || 'Not Set' : useUserNameOnly ? (userData?.displayName || 'Not Set') : `${userData?.firstName || ''} "${userData?.displayName || 'User'}" ${userData?.lastName || ''}`.trim() || 'Not Set'}</strong></div>
                                         </div>
 
                                         <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Bio / About</label><textarea {...register("bio")} rows="4" className={inputClass(errors.bio)} placeholder="Tell us about your musical journey..." /></div>
@@ -335,10 +335,10 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
         const toastId = toast.loading(`Saving ${role} profile...`);
         try {
             let effectiveName = '';
-            if (followMainProfile) effectiveName = userData.effectiveDisplayName || `${userData.firstName} ${userData.lastName}`;
+            if (followMainProfile) effectiveName = userData?.effectiveDisplayName || (userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : '');
             else {
-                if (useLegalNameOnly) effectiveName = `${userData.firstName} ${userData.lastName}`;
-                else if (useUserNameOnly) effectiveName = userData.displayName || `${userData.firstName} ${userData.lastName}`; 
+                if (useLegalNameOnly) effectiveName = userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : '';
+                else if (useUserNameOnly) effectiveName = userData?.displayName || (userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : ''); 
                 else effectiveName = formData.profileName || `${userData.firstName} ${userData.lastName}`;
             }
 

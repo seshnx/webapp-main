@@ -115,8 +115,9 @@ export default function Navbar({
           });
           
           // Mark notification as actioned
-          if (notificationId && user?.uid) {
-              const notifRef = doc(db, getPaths(user.uid).notifications, notificationId);
+          if (notificationId && (user?.id || user?.uid)) {
+              const userId = user?.id || user?.uid;
+              const notifRef = doc(db, getPaths(userId).notifications, notificationId);
               await updateDoc(notifRef, { 
                   actionTaken: action,
                   read: true 

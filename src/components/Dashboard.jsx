@@ -199,7 +199,7 @@ export default function Dashboard({
     // Memoize Convex availability
     const convexAvailable = useMemo(() => isConvexAvailable(), []);
     const conversationsQuery = useMemo(() => {
-        return user?.uid && convexAvailable ? { userId: user.uid } : "skip";
+        return (user?.id || user?.uid) && convexAvailable ? { userId: user?.id || user?.uid } : "skip";
     }, [user?.uid, convexAvailable]);
 
     const conversationsData = useQuery(

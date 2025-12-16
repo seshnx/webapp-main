@@ -209,7 +209,7 @@ function GearSubmissionForm({ user, userData, onSuccess }) {
             await addDoc(collection(db, getPaths(user.uid).equipmentSubmissions), {
                 ...form,
                 submittedBy: user.uid,
-                submitterName: `${userData.firstName} ${userData.lastName}`,
+                submitterName: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
                 status: 'pending',
                 timestamp: serverTimestamp(),
                 votes: { yes: [], fake: [], duplicate: [] }

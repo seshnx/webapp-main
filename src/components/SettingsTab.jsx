@@ -11,7 +11,7 @@ import { ACCOUNT_TYPES } from '../config/constants';
 const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
 
 export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) {
-    const [localSettings, setLocalSettings] = useState(userData.settings || {
+    const [localSettings, setLocalSettings] = useState(userData?.settings || {
         notifications: { email: true, push: true, marketing: false },
         privacy: { publicProfile: true, showLocation: true, hideProfile: false },
         theme: 'system',

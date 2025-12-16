@@ -122,14 +122,14 @@ export default function BookingModal({ user, userData, target, onClose }) {
             // Determine Sender Info (Direct vs Proxy)
             let senderInfo = {
                 senderId: user.uid,
-                senderName: `${userData.firstName} ${userData.lastName}`,
+                senderName: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
                 onBehalfOf: null
             };
 
             if (bookOnBehalf !== 'me') {
                 const artist = roster.find(r => r.artistId === bookOnBehalf);
                 if (artist) {
-                    senderInfo.senderName = `${userData.firstName} (for ${artist.name})`;
+                    senderInfo.senderName = userData ? `${userData.firstName || 'User'} (for ${artist.name})` : `User (for ${artist.name})`;
                     senderInfo.onBehalfOf = {
                         id: artist.artistId,
                         name: artist.name,
@@ -201,7 +201,7 @@ export default function BookingModal({ user, userData, target, onClose }) {
                                 value={bookOnBehalf}
                                 onChange={e => setBookOnBehalf(e.target.value)}
                             >
-                                <option value="me">Myself ({userData.firstName})</option>
+                                <option value="me">Myself ({userData?.firstName || 'User'})</option>
                                 {roster.map(r => (
                                     <option key={r.artistId} value={r.artistId}>
                                         Artist: {r.name}

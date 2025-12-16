@@ -24,7 +24,7 @@ export default function ReportModal({ user, target, onClose }) {
                 contentId: target.id,
                 contentType: target.type,
                 contentSummary: target.summary,
-                reporterId: user.uid,
+                reporterId: user?.id || user?.uid,
                 reporterName: user.displayName || 'Anonymous User',
                 reason: reason,
                 description: description
