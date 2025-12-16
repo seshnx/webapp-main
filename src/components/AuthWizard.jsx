@@ -221,6 +221,13 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     setIsLoading(true);
     setError('');
     
+    // Set a timeout to prevent infinite loading
+    const signupTimeout = setTimeout(() => {
+      console.error('Signup process timed out');
+      setError('The signup process is taking too long. This may be due to browser privacy settings blocking storage. Please try again or disable Tracking Prevention.');
+      setIsLoading(false);
+    }, 10000); // 10 second timeout
+    
     try {
       let uid = user?.id;
       let currentUser = user;
@@ -228,7 +235,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       // 1. Register if not already
       if (!uid) {
           console.log('Creating new user account...');
-          const { data, error: signUpError } = await supabase.auth.signUp({
+          const signUpPromise = supabase.auth.signUp({
               email: form.email.trim(), 
               password: form.password,
               options: { 
@@ -237,7 +244,15 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
               }
           });
           
+          // Add timeout to signup
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Signup request timed out')), 8000)
+          );
+          
+          const { data, error: signUpError } = await Promise.race([signUpPromise, timeoutPromise]);
+          
           if (signUpError) {
+            clearTimeout(signupTimeout);
             console.error('Signup error:', signUpError);
             // Provide more helpful error messages
             if (signUpError.message?.includes('already registered') || signUpError.message?.includes('already exists')) {
@@ -251,10 +266,11 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             return;
           }
           
-          uid = data.user?.id;
-          currentUser = data.user;
+          uid = data?.user?.id;
+          currentUser = data?.user;
           
           if (!uid) {
+            clearTimeout(signupTimeout);
             setError("Account created but unable to retrieve user ID. Please try signing in.");
             setIsLoading(false);
             return;
@@ -266,8 +282,8 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
       console.log('Creating profile with roles:', finalRoles);
       
-      // 2. Insert Profile
-      const profileData = {
+      // 2. Insert Profile with timeout
+      const profilePromise = supabase.from('profiles').upsert({
           id: uid,
           first_name: form.firstName,
           last_name: form.lastName,
@@ -278,43 +294,61 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
           avatar_url: currentUser?.user_metadata?.avatar_url || null,
           updated_at: new Date().toISOString(),
-      };
-      
-      // Only add created_at if the field exists (some tables auto-generate it)
-      const { error: profileError } = await supabase.from('profiles').upsert(profileData, {
+      }, {
         onConflict: 'id'
       });
       
+      const profileTimeout = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Profile creation timed out')), 5000)
+      );
+      
+      const { error: profileError } = await Promise.race([profilePromise, profileTimeout]);
+      
       if (profileError) {
+        clearTimeout(signupTimeout);
         console.error('Profile creation error:', profileError);
         throw profileError;
       }
       
       console.log('Profile created successfully');
 
-      // 3. Init Wallet (don't fail if it already exists)
-      const { error: walletError } = await supabase.from('wallets').upsert({
-        user_id: uid, 
-        balance: 0
-      }, {
-        onConflict: 'user_id'
-      });
-      
-      if (walletError) {
-        console.warn('Wallet creation warning:', walletError);
-        // Don't fail the whole signup if wallet creation fails
-      } else {
-        console.log('Wallet created successfully');
+      // 3. Init Wallet (don't fail if it already exists or times out)
+      try {
+        const walletPromise = supabase.from('wallets').upsert({
+          user_id: uid, 
+          balance: 0
+        }, {
+          onConflict: 'user_id'
+        });
+        
+        const walletTimeout = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Wallet creation timed out')), 3000)
+        );
+        
+        const { error: walletError } = await Promise.race([walletPromise, walletTimeout]);
+        
+        if (walletError) {
+          console.warn('Wallet creation warning:', walletError);
+          // Don't fail the whole signup if wallet creation fails
+        } else {
+          console.log('Wallet created successfully');
+        }
+      } catch (walletErr) {
+        console.warn('Wallet creation skipped due to timeout/error:', walletErr);
+        // Continue anyway - wallet is optional
       }
 
+      clearTimeout(signupTimeout);
+      
       // Success - reload the page to trigger auth state change
       console.log('Signup successful, reloading page...');
-      // Don't set loading to false - let the reload happen
+      setIsLoading(false); // Reset loading before reload
       setTimeout(() => {
         window.location.reload();
-      }, 500); // Small delay to ensure all data is saved
+      }, 300);
       
     } catch (e) { 
+      clearTimeout(signupTimeout);
       console.error('Signup error:', e);
       const errorMessage = e.message || e.error?.message || e.toString() || 'Failed to complete setup. Please try again.';
       setError(errorMessage); 
@@ -322,18 +356,18 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     }
   };
   
-  // Safety timeout - if loading takes too long, reset it
+  // Safety timeout - if loading takes too long, reset it (only for signup/onboarding)
   useEffect(() => {
-    if (isLoading) {
+    if (isLoading && (mode === 'signup' || mode === 'onboarding')) {
       const timeout = setTimeout(() => {
         console.warn('Signup process timed out - resetting loading state');
         setIsLoading(false);
-        setError('The signup process is taking longer than expected. Please check your connection and try again.');
-      }, 15000); // 15 second timeout
+        setError('The signup process is taking longer than expected. This may be due to browser privacy settings blocking storage. Please try disabling Tracking Prevention or use a different browser.');
+      }, 12000); // 12 second timeout (longer than individual operation timeouts)
       
       return () => clearTimeout(timeout);
     }
-  }, [isLoading]);
+  }, [isLoading, mode]);
 
   const handleForgotPassword = async () => {
       if (!form.email) return setError("Enter email address.");
@@ -443,6 +477,16 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                             </div>
                             {form.roles.length === 0 && (
                                 <p className="text-xs text-red-500 dark:text-red-400 text-center">Please select at least one role to continue</p>
+                            )}
+                            {error && error.includes('Tracking Prevention') && (
+                                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-3 text-xs text-yellow-800 dark:text-yellow-200">
+                                    <p className="font-bold mb-1">⚠️ Browser Privacy Settings Detected</p>
+                                    <p>Your browser is blocking storage access. To complete signup:</p>
+                                    <ul className="list-disc list-inside mt-1 space-y-0.5">
+                                        <li>Disable Tracking Prevention in Safari settings, or</li>
+                                        <li>Use a different browser (Chrome, Firefox, Edge)</li>
+                                    </ul>
+                                </div>
                             )}
                             <button 
                                 className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition" 
