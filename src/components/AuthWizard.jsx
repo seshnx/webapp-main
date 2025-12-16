@@ -100,7 +100,9 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
   const getHeaderText = () => mode === 'signup' ? "Create Account" : mode === 'forgot' ? "Recovery" : mode === 'onboarding' ? "Finalize Setup" : null;
 
   useEffect(() => {
-    if (user || isNewUser) {
+    // Only show onboarding if we have a valid user with an ID
+    // Check both user and isNewUser, but ensure user actually exists
+    if ((user && user.id) || isNewUser) {
         setMode('onboarding');
         setStep(1); 
         const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';

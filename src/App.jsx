@@ -132,19 +132,63 @@ export default function App() {
     };
 
     // 1. Get initial session and load data immediately
-    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-        if (error) {
-            console.error("Error getting session:", error);
+    // Use Promise.race to timeout after 5 seconds
+    const sessionPromise = supabase.auth.getSession();
+    const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ timeout: true }), 5000));
+    
+    Promise.race([sessionPromise, timeoutPromise]).then(async (result) => {
+        if (result.timeout) {
+            console.warn("Session check timed out - clearing any invalid session");
+            // Clear any potentially invalid session
+            if (supabase) {
+                await supabase.auth.signOut().catch(() => {});
+            }
+            setUser(null);
+            setUserData(null);
+            setSubProfiles({});
+            setTokenBalance(0);
             setLoading(false);
             return;
         }
         
-        const currentUser = session?.user ?? null;
-        setUser(currentUser);
+        const { data: { session }, error } = result;
         
-        if (currentUser) {
-            await loadUserData(currentUser.id);
+        if (error) {
+            console.error("Error getting session:", error);
+            setUser(null);
+            setUserData(null);
+            setSubProfiles({});
+            setTokenBalance(0);
+            setLoading(false);
+            return;
+        }
+        
+        // Validate session exists and has a valid user
+        const currentUser = session?.user ?? null;
+        
+        if (currentUser && currentUser.id) {
+            // Verify the user actually exists by checking if we can access their profile
+            try {
+                const { data: profileCheck } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('id', currentUser.id)
+                    .single()
+                    .timeout(3000); // 3 second timeout
+                
+                // If profile check fails or times out, the user might not be valid
+                // But we'll still try to load data - profile might just not exist yet
+                setUser(currentUser);
+                await loadUserData(currentUser.id);
+            } catch (profileError) {
+                // Profile doesn't exist or check failed - still set user but mark as needing onboarding
+                console.log("Profile check:", profileError);
+                setUser(currentUser);
+                setUserData(null);
+            }
         } else {
+            // No valid session
+            setUser(null);
             setUserData(null);
             setSubProfiles({});
             setTokenBalance(0);
@@ -153,6 +197,10 @@ export default function App() {
         setLoading(false);
     }).catch((err) => {
         console.error("Session check failed:", err);
+        setUser(null);
+        setUserData(null);
+        setSubProfiles({});
+        setTokenBalance(0);
         setLoading(false);
     });
 
@@ -171,11 +219,13 @@ export default function App() {
         setLoading(false);
     });
 
-    // 3. Safety timeout - ensure loading always resolves
+    // 3. Safety timeout - ensure loading always resolves (reduced from 10s to 5s)
     const timeoutId = setTimeout(() => {
         console.warn("Loading timeout - forcing loading to false");
+        setUser(null);
+        setUserData(null);
         setLoading(false);
-    }, 10000); // 10 second timeout
+    }, 5000); // 5 second timeout
 
     return () => {
         subscription.unsubscribe();
@@ -223,10 +273,16 @@ export default function App() {
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
   
-  if (!user) return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} />;
+  // Only show AuthWizard if there's no user OR if user exists but has no profile (needs onboarding)
+  // But check that user actually has an ID to avoid showing onboarding for invalid sessions
+  if (!user || !user.id) {
+    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} isNewUser={false} />;
+  }
   
-  // If user exists but no profile yet (e.g. midway through signup), show wizard
-  if (user && !userData) return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.reload()} />;
+  // If user exists with valid ID but no profile data, show onboarding
+  if (user && user.id && !userData) {
+    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.reload()} />;
+  }
 
   const isEduMode = activeTab.startsWith('edu-');
   const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('EDUAdmin') || userData?.accountTypes?.includes('EDUStaff'));
