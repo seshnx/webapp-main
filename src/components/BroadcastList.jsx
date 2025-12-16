@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { collection, query, where, onSnapshot, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { MapPin, Clock, DollarSign, User, ChevronRight, Zap, Filter, Trash2 } from 'lucide-react';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import BidModal from './BidModal';
 import { fetchZipLocation } from '../utils/geocode';
 
@@ -37,16 +36,48 @@ export default function BroadcastList({ user, userData, onBid }) {
   }, [userData]);
 
   useEffect(() => {
-    const q = query(
-        collection(db, `artifacts/${appId}/public/data/bookings`), 
-        where("type", "==", "Broadcast"),
-        where("status", "==", "Broadcasting"),
-        orderBy("timestamp", "desc")
-    );
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      setBroadcasts(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    });
-    return () => unsubscribe();
+    if (!supabase) return;
+
+    const loadBroadcasts = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('type', 'Broadcast')
+          .eq('status', 'Broadcasting')
+          .order('created_at', { ascending: false });
+        
+        if (error) throw error;
+        setBroadcasts((data || []).map(b => ({
+          id: b.id,
+          ...b,
+          senderId: b.sender_id,
+          targetId: b.target_id,
+          timestamp: b.created_at
+        })));
+      } catch (err) {
+        console.error('Error loading broadcasts:', err);
+      }
+    };
+
+    loadBroadcasts();
+
+    // Subscribe to changes
+    const channel = supabase
+      .channel('broadcasts')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'bookings',
+        filter: 'type=eq.Broadcast'
+      }, () => {
+        loadBroadcasts();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -67,10 +98,14 @@ export default function BroadcastList({ user, userData, onBid }) {
 
   const cancelBroadcast = async (broadcastId) => {
       if(!window.confirm("Cancel this broadcast? This will remove it from the board.")) return;
+      if (!supabase) return;
       try {
-          await updateDoc(doc(db, `artifacts/${appId}/public/data/bookings`, broadcastId), {
-              status: 'Cancelled'
-          });
+          const { error } = await supabase
+              .from('bookings')
+              .update({ status: 'Cancelled', updated_at: new Date().toISOString() })
+              .eq('id', broadcastId);
+          
+          if (error) throw error;
       } catch(e) {
           console.error(e);
           alert("Failed to cancel.");
@@ -114,7 +149,7 @@ export default function BroadcastList({ user, userData, onBid }) {
                     </div>
                     {/* Footer Actions */}
                     <div className="flex gap-2">
-                        {b.senderId === user.uid ? (
+                        {b.sender_id === (user?.id || user?.uid) ? (
                             <button onClick={() => cancelBroadcast(b.id)} className="w-full bg-red-100 text-red-600 py-2.5 rounded-lg font-bold text-sm hover:bg-red-200 transition flex items-center justify-center gap-2"><Trash2 size={16}/> Cancel</button>
                         ) : (
                             <button onClick={() => setSelectedBroadcast(b)} className="w-full bg-gray-900 dark:bg-white dark:text-black text-white py-2.5 rounded-lg font-bold text-sm hover:opacity-90 transition flex justify-center items-center gap-2">View & Bid <ChevronRight size={16}/></button>

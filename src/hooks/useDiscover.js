@@ -1,11 +1,7 @@
 // src/hooks/useDiscover.js
 
 import { useState, useEffect, useMemo } from 'react';
-import { 
-    collection, query, getDocs, orderBy, limit, where,
-    collectionGroup 
-} from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { 
     getTrendingContent, 
     getPersonalizedRecommendations, 
@@ -24,24 +20,29 @@ export function useDiscover(user, userData) {
 
     // Load following list for recommendations
     useEffect(() => {
-        if (!user?.uid) return;
+        if (!user?.id && !user?.uid || !supabase) return;
+        const userId = user?.id || user?.uid;
 
         const loadFollowing = async () => {
             try {
-                const followingRef = collection(db, `artifacts/${appId}/users/${user.uid}/following`);
-                const snapshot = await getDocs(followingRef);
-                setFollowing(snapshot.docs.map(doc => doc.id));
+                const { data, error } = await supabase
+                    .from('follows')
+                    .select('following_id')
+                    .eq('follower_id', userId);
+                
+                if (error) throw error;
+                setFollowing((data || []).map(f => f.following_id));
             } catch (error) {
                 console.error('Error loading following:', error);
             }
         };
 
         loadFollowing();
-    }, [user?.uid]);
+    }, [user?.id, user?.uid]);
 
     // Load all discover data
     useEffect(() => {
-        if (!user?.uid) {
+        if (!user?.id && !user?.uid || !supabase) {
             setLoading(false);
             return;
         }
@@ -49,18 +50,23 @@ export function useDiscover(user, userData) {
         const loadDiscoverData = async () => {
             setLoading(true);
             try {
-                // Load sounds (posts with audio)
-                const postsQuery = query(
-                    collection(db, `artifacts/${appId}/public/data/posts`),
-                    orderBy('timestamp', 'desc'),
-                    limit(50)
-                );
-                const postsSnap = await getDocs(postsQuery);
-                const postsList = postsSnap.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                })).filter(post => post.audioUrl || post.media?.some(m => m.type === 'audio'));
-                setSounds(postsList);
+                // Load sounds (posts with audio) - using documents table for now
+                const { data: postsData, error: postsError } = await supabase
+                    .from('documents')
+                    .select('*')
+                    .eq('collection_path', `artifacts/${import.meta.env.VITE_APP_ID || 'seshnx-70c04'}/public/data/posts`)
+                    .order('created_at', { ascending: false })
+                    .limit(50);
+                
+                if (!postsError && postsData) {
+                    const postsList = postsData
+                        .map(doc => ({
+                            id: doc.id,
+                            ...doc.data
+                        }))
+                        .filter(post => post.audioUrl || post.media?.some(m => m.type === 'audio'));
+                    setSounds(postsList);
+                }
 
                 // Load artists (users with Talent role)
                 const artistsList = await loadUsersByRole(['Talent']);
@@ -74,14 +80,20 @@ export function useDiscover(user, userData) {
                 const studiosList = await loadStudios();
                 setStudios(studiosList);
 
-                // Load schools
-                const schoolsQuery = query(collection(db, 'schools'), limit(20));
-                const schoolsSnap = await getDocs(schoolsQuery);
-                const schoolsList = schoolsSnap.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data()
-                }));
-                setSchools(schoolsList);
+                // Load schools - using documents table for now
+                const { data: schoolsData, error: schoolsError } = await supabase
+                    .from('documents')
+                    .select('*')
+                    .eq('collection_path', 'schools')
+                    .limit(20);
+                
+                if (!schoolsError && schoolsData) {
+                    const schoolsList = schoolsData.map(doc => ({
+                        id: doc.id,
+                        ...doc.data
+                    }));
+                    setSchools(schoolsList);
+                }
 
             } catch (error) {
                 console.error('Error loading discover data:', error);
@@ -90,28 +102,30 @@ export function useDiscover(user, userData) {
         };
 
         loadDiscoverData();
-    }, [user?.uid]);
+    }, [user?.id, user?.uid]);
 
     // Helper to load users by role
     const loadUsersByRole = async (roles) => {
+        if (!supabase) return [];
         try {
-            // Query public profiles collection group
-            const profilesQuery = query(
-                collectionGroup(db, 'public_profile'),
-                limit(100)
-            );
-            const snapshot = await getDocs(profilesQuery);
+            // Query public_profiles table
+            const { data, error } = await supabase
+                .from('public_profiles')
+                .select('*')
+                .limit(100);
             
-            return snapshot.docs
-                .map(doc => ({
-                    id: doc.id,
-                    userId: doc.ref.parent.parent.id,
-                    ...doc.data()
-                }))
+            if (error) throw error;
+            
+            return (data || [])
                 .filter(profile => {
-                    const userRoles = profile.accountTypes || [];
+                    const userRoles = profile.account_types || [];
                     return roles.some(role => userRoles.includes(role));
-                });
+                })
+                .map(profile => ({
+                    id: profile.id,
+                    userId: profile.id,
+                    ...profile
+                }));
         } catch (error) {
             console.error('Error loading users by role:', error);
             return [];
@@ -120,13 +134,18 @@ export function useDiscover(user, userData) {
 
     // Helper to load studios
     const loadStudios = async () => {
+        if (!supabase) return [];
         try {
-            // Try to load from studios collection first
-            const studiosQuery = query(collection(db, 'studios'), limit(50));
-            const studiosSnap = await getDocs(studiosQuery);
-            const studiosList = studiosSnap.docs.map(doc => ({
+            // Load from documents table (legacy) and public_profiles
+            const { data: studiosData } = await supabase
+                .from('documents')
+                .select('*')
+                .eq('collection_path', 'studios')
+                .limit(50);
+            
+            const studiosList = (studiosData || []).map(doc => ({
                 id: doc.id,
-                ...doc.data(),
+                ...doc.data,
                 isStudio: true
             }));
 

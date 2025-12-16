@@ -4,8 +4,7 @@ import {
     MapPin, Clock, DollarSign, Award, Zap, X, SlidersHorizontal, BadgeCheck,
     Music, Mic, Headphones, Radio, Guitar, Piano, Sparkles, TrendingUp, Disc
 } from 'lucide-react';
-import { collectionGroup, query, getDocs, where, limit, orderBy } from 'firebase/firestore';
-import { db, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { 
     VOCAL_RANGES, VOCAL_STYLES, TALENT_SUBROLES, 
     DJ_STYLES, PRODUCTION_STYLES, ENGINEERING_SPECIALTIES,
@@ -168,21 +167,34 @@ export default function TalentSearch({
     const handleSearch = async () => {
         setLoadingSearch(true);
         try {
-            const publicProfilesGroup = collectionGroup(db, getPaths().publicProfileCollectionGroup); 
-            const constraints = [];
-            
-            if (filters.role !== 'All') {
-                constraints.push(where('accountTypes', 'array-contains', filters.role));
+            if (!supabase) {
+                setLoadingSearch(false);
+                return;
             }
-            constraints.push(limit(100));
+
+            let query = supabase
+                .from('public_profiles')
+                .select('*')
+                .limit(100);
             
-            const q = query(publicProfilesGroup, ...constraints);
-            const snap = await getDocs(q);
+            // Filter by role if specified
+            if (filters.role !== 'All') {
+                query = query.contains('account_types', [filters.role]);
+            }
             
-            let results = snap.docs.map(d => {
-                const data = d.data();
-                return { id: data.uid || d.ref.parent.parent.id, ...data };
-            }).filter(p => p.id !== user.uid);
+            const { data, error } = await query;
+            
+            if (error) throw error;
+            
+            const userId = user?.id || user?.uid;
+            let results = (data || []).map(profile => ({
+                id: profile.id,
+                ...profile,
+                accountTypes: profile.account_types || [],
+                firstName: profile.first_name,
+                lastName: profile.last_name,
+                displayName: profile.display_name
+            })).filter(p => p.id !== userId);
             
             // Apply text search
             if (searchQuery) {

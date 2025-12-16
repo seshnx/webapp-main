@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Settings, Zap, Music, PenTool, Clock, ChevronDown, Loader2, MapPin, Link as LinkIcon, DollarSign, Calendar } from 'lucide-react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
-import { db, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import { GENRE_DATA, INSTRUMENT_DATA, ACCOUNT_TYPES } from '../config/constants';
 import StudioMap from './shared/StudioMap';
 import LocationPicker from './shared/LocationPicker'; 
@@ -137,31 +136,44 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
       let serviceString = `${role} - ${action}`;
       if (instrument) serviceString += ` ${instrument}`;
 
-      try {
-          await addDoc(collection(db, `artifacts/${appId}/public/data/bookings`), {
-              senderId: user.uid, 
-              senderName: "Broadcast Request", 
-              targetId: "BROADCAST",
-              targetName: title,
-              role, action, instrument: instrument || null, genre,
-              serviceType: serviceString,
-              
-              // New Fields
-              date: date || 'Flexible', 
-              time: time || 'Flexible',
-              offerAmount: budget ? parseInt(budget) : null,
-              references,
-              experienceLevel,
-              paymentType,
+      if (!supabase) {
+          alert("Database unavailable.");
+          return;
+      }
 
-              requirements: validNeeds,
-              message: validNeeds.map(n => `[${n.type}] ${n.value}`).join('\n'),
-              range: currentRange,
-              status: 'Broadcasting', 
-              type: 'Broadcast', 
-              location: { lat: location.lat, lng: location.lng },
-              timestamp: serverTimestamp()
-          });
+      try {
+          const userId = user?.id || user?.uid;
+          const { error } = await supabase
+              .from('bookings')
+              .insert({
+                  sender_id: userId,
+                  sender_name: "Broadcast Request",
+                  target_id: "BROADCAST",
+                  target_name: title,
+                  role,
+                  action,
+                  instrument: instrument || null,
+                  genre,
+                  service_type: serviceString,
+                  
+                  // New Fields
+                  date: date || 'Flexible',
+                  time: time || 'Flexible',
+                  offer_amount: budget ? parseInt(budget) : null,
+                  references,
+                  experience_level: experienceLevel,
+                  payment_type: paymentType,
+
+                  requirements: validNeeds,
+                  message: validNeeds.map(n => `[${n.type}] ${n.value}`).join('\n'),
+                  range: currentRange,
+                  status: 'Broadcasting',
+                  type: 'Broadcast',
+                  location: { lat: location.lat, lng: location.lng },
+                  created_at: new Date().toISOString()
+              });
+          
+          if (error) throw error;
           
           alert(`Broadcast sent to ${role}s within ${currentRange} miles!`);
           onSuccess();

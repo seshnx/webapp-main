@@ -1,7 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
-import { db, appId, getPaths } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
 import UserAvatar from './shared/UserAvatar';
@@ -107,21 +106,33 @@ export default function Navbar({
   // Handler for quick booking accept/decline from notifications
   const handleBookingAction = async (bookingId, action, notificationId) => {
       try {
+          if (!supabase) throw new Error('Supabase not initialized');
+          
           // Update booking status
-          const bookingRef = doc(db, `artifacts/${appId}/public/data/bookings`, bookingId);
-          await updateDoc(bookingRef, {
-              status: action === 'accept' ? 'Confirmed' : 'Declined',
-              respondedAt: new Date()
-          });
+          const { error: bookingError } = await supabase
+              .from('bookings')
+              .update({
+                  status: action === 'accept' ? 'Confirmed' : 'Declined',
+                  responded_at: new Date().toISOString()
+              })
+              .eq('id', bookingId);
+          
+          if (bookingError) throw bookingError;
           
           // Mark notification as actioned
           if (notificationId && (user?.id || user?.uid)) {
               const userId = user?.id || user?.uid;
-              const notifRef = doc(db, getPaths(userId).notifications, notificationId);
-              await updateDoc(notifRef, { 
-                  actionTaken: action,
-                  read: true 
-              });
+              const { error: notifError } = await supabase
+                  .from('notifications')
+                  .update({ 
+                      action_taken: action,
+                      read: true,
+                      updated_at: new Date().toISOString()
+                  })
+                  .eq('id', notificationId)
+                  .eq('user_id', userId);
+              
+              if (notifError) throw notifError;
           }
       } catch (error) {
           console.error('Booking action failed:', error);

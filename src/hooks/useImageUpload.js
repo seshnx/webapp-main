@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { storage } from '../config/firebase';
+import { supabase } from '../config/supabase';
+
+const DEFAULT_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'public';
 
 export const useImageUpload = () => {
   const [uploading, setUploading] = useState(false);
@@ -9,9 +10,9 @@ export const useImageUpload = () => {
   const uploadImage = async (file, path) => {
     if (!file) return null;
     
-    if (!storage) {
-      setError('Firebase Storage is not configured. Please set VITE_FIREBASE_STORAGE_BUCKET in your environment variables.');
-      console.error('Firebase Storage is not available. storageBucket is missing from Firebase config.');
+    if (!supabase) {
+      setError('Supabase is not configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment variables.');
+      console.error('Supabase Storage is not available.');
       return null;
     }
     
@@ -23,15 +24,26 @@ export const useImageUpload = () => {
       const timestamp = Date.now();
       const uniqueName = `${timestamp}_${file.name}`;
       const fullPath = `${path}/${uniqueName}`;
-      const storageRef = ref(storage, fullPath);
-
-      // Upload
-      const snapshot = await uploadBytes(storageRef, file);
       
-      // Get URL
-      const url = await getDownloadURL(snapshot.ref);
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(DEFAULT_BUCKET)
+        .upload(fullPath, file, {
+          upsert: true,
+          cacheControl: '3600',
+        });
+      
+      if (uploadError) {
+        throw uploadError;
+      }
+      
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from(DEFAULT_BUCKET)
+        .getPublicUrl(fullPath);
+      
       setUploading(false);
-      return url;
+      return urlData.publicUrl;
     } catch (err) {
       console.error("Upload failed:", err);
       setError(err);

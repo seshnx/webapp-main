@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { X, Loader2 } from 'lucide-react';
-import { db, getPaths, appId } from '../config/firebase';
+import { supabase } from '../config/supabase';
 import StarRating from './shared/StarRating';
 
 export default function ReviewModal({ user, targetId, targetName, onClose, bookingId }) {
@@ -11,19 +10,28 @@ export default function ReviewModal({ user, targetId, targetName, onClose, booki
 
   const handleSubmit = async () => {
     if (!comment.trim()) return alert("Please write a comment.");
+    if (!supabase) {
+      alert("Database unavailable.");
+      return;
+    }
     setSubmitting(true);
     
     try {
-      await addDoc(collection(db, `artifacts/${appId}/public/data/reviews`), {
-        reviewerId: user.uid,
-        // Use a fallback if displayName isn't available in user object context
-        reviewerName: user.displayName || "Verified User", 
-        targetId: targetId, // The User ID being reviewed
-        bookingId: bookingId || null, // Optional link to specific booking
-        rating: rating,
-        comment: comment,
-        timestamp: serverTimestamp()
-      });
+      const userId = user?.id || user?.uid;
+      const { error } = await supabase
+        .from('reviews')
+        .insert({
+          reviewer_id: userId,
+          reviewer_name: user.displayName || "Verified User",
+          target_id: targetId,
+          booking_id: bookingId || null,
+          rating: rating,
+          comment: comment,
+          created_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+      
       onClose();
       alert("Review submitted!");
     } catch (e) {
