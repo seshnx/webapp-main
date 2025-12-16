@@ -204,19 +204,41 @@ function GearSubmissionForm({ user, userData, onSuccess }) {
 
     const handleSubmit = async () => {
         if (!form.brand || !form.model || !form.specs) return alert("All fields required.");
+        if (!supabase) {
+            alert("Database unavailable.");
+            return;
+        }
+        
         setSubmitting(true);
         try {
-            await addDoc(collection(db, getPaths(user.uid).equipmentSubmissions), {
-                ...form,
-                submittedBy: user.uid,
-                submitterName: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
-                status: 'pending',
-                timestamp: serverTimestamp(),
-                votes: { yes: [], fake: [], duplicate: [] }
-            });
+            const userId = user?.id || user?.uid;
+            const submitterName = userData 
+                ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' 
+                : 'User';
+            
+            const { error } = await supabase
+                .from('equipment_submissions')
+                .insert({
+                    brand: form.brand,
+                    model: form.model,
+                    category: form.category,
+                    sub_category: form.subCategory,
+                    specs: form.specs,
+                    submitted_by: userId,
+                    submitter_name: submitterName,
+                    status: 'pending',
+                    timestamp: new Date().toISOString(),
+                    votes: { yes: [], fake: [], duplicate: [] }
+                });
+            
+            if (error) throw error;
+            
             alert("Submission Received! You'll earn 50 TK once verified.");
             onSuccess();
-        } catch (e) { console.error(e); alert("Submission failed."); }
+        } catch (e) { 
+            console.error(e); 
+            alert("Submission failed: " + (e.message || "Unknown error")); 
+        }
         setSubmitting(false);
     };
 

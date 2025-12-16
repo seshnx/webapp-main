@@ -587,3 +587,42 @@ begin
   end if;
 end $$;
 
+-- =========================================================
+-- EQUIPMENT SUBMISSIONS (Gear submission queue for verification)
+-- =========================================================
+create table if not exists public.equipment_submissions (
+  id uuid primary key default gen_random_uuid(),
+  submitted_by uuid references auth.users(id) on delete cascade not null,
+  submitter_name text,
+  brand text not null,
+  model text not null,
+  category text not null,
+  sub_category text,
+  specs text not null,
+  status text not null default 'pending', -- 'pending', 'approved', 'rejected'
+  votes jsonb default '{"yes": [], "fake": [], "duplicate": []}'::jsonb,
+  timestamp timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists equipment_submissions_status_idx on public.equipment_submissions (status);
+create index if not exists equipment_submissions_submitted_by_idx on public.equipment_submissions (submitted_by);
+create index if not exists equipment_submissions_timestamp_idx on public.equipment_submissions (timestamp desc);
+
+drop trigger if exists equipment_submissions_set_updated_at on public.equipment_submissions;
+create trigger equipment_submissions_set_updated_at
+before update on public.equipment_submissions
+for each row execute function public.set_updated_at();
+
+alter table public.equipment_submissions enable row level security;
+create policy "Users can view equipment submissions"
+  on public.equipment_submissions for select
+  using (true); -- Public read for voting
+create policy "Users can insert their own submissions"
+  on public.equipment_submissions for insert
+  with check (auth.uid() = submitted_by);
+create policy "Users can update their own submissions"
+  on public.equipment_submissions for update
+  using (auth.uid() = submitted_by);
+
