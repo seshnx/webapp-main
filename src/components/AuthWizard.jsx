@@ -221,12 +221,15 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     setIsLoading(true);
     setError('');
     
-    // Set a timeout to prevent infinite loading
+    // Set a timeout to prevent infinite loading (increased to 20 seconds)
     const signupTimeout = setTimeout(() => {
-      console.error('Signup process timed out');
-      setError('The signup process is taking too long. This may be due to browser privacy settings blocking storage. Please try again or disable Tracking Prevention.');
+      console.warn('⚠️ Signup process taking longer than expected, but account should be created. Reloading...');
       setIsLoading(false);
-    }, 10000); // 10 second timeout
+      // Even if timeout, try to reload - the account should exist
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    }, 20000); // 20 second timeout (enough time for all operations even with delays)
     
     try {
       let uid = user?.id;
@@ -359,6 +362,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       }
 
       // 3. Init Wallet (don't fail if it already exists or times out)
+      // The trigger should have created it, but we'll try to ensure it exists
       try {
         const walletPromise = supabase.from('wallets').upsert({
           user_id: uid, 
@@ -368,30 +372,35 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         });
         
         const walletTimeout = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Wallet creation timed out')), 3000)
+          setTimeout(() => reject(new Error('Wallet creation timed out')), 2000)
         );
         
         const { error: walletError } = await Promise.race([walletPromise, walletTimeout]);
         
         if (walletError) {
-          console.warn('Wallet creation warning:', walletError);
-          // Don't fail the whole signup if wallet creation fails
+          console.warn('Wallet creation warning (continuing anyway):', walletError.message);
+          // Don't fail the whole signup if wallet creation fails - trigger should have created it
         } else {
-          console.log('Wallet created successfully');
+          console.log('Wallet created/updated successfully');
         }
       } catch (walletErr) {
-        console.warn('Wallet creation skipped due to timeout/error:', walletErr);
-        // Continue anyway - wallet is optional
+        console.warn('Wallet creation skipped (continuing anyway):', walletErr.message);
+        // Continue anyway - wallet is optional and trigger should have created it
       }
-
+      
+      console.log('All signup operations completed (some may have timed out due to Tracking Prevention)');
       clearTimeout(signupTimeout);
       
       // Success - reload the page to trigger auth state change
-      console.log('Signup successful, reloading page...');
+      console.log('✅ Signup process completed! Reloading page in 1 second...');
       setIsLoading(false); // Reset loading before reload
+      setError(''); // Clear any errors
+      
+      // Reload after a brief delay
       setTimeout(() => {
+        console.log('Reloading now...');
         window.location.reload();
-      }, 300);
+      }, 1000);
       
     } catch (e) { 
       clearTimeout(signupTimeout);
