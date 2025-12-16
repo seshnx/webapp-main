@@ -88,7 +88,17 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
                         <p className="text-[10px] text-gray-500 truncate">School Management</p>
                     </div>
                     <button onClick={async () => {
-                        if (supabase) await supabase.auth.signOut();
+                        try {
+                            if (supabase) {
+                                const { error } = await supabase.auth.signOut();
+                                if (error) console.error("Logout error:", error);
+                            }
+                            // Navigate to home after logout
+                            window.location.href = '/';
+                        } catch (err) {
+                            console.error("Logout failed:", err);
+                            window.location.href = '/';
+                        }
                     }} className="text-gray-400 hover:text-red-500">
                         <LogOut size={16}/>
                     </button>

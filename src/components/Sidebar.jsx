@@ -60,7 +60,17 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
   );
 
   const onLogout = handleLogout || (async () => {
-    if (supabase) await supabase.auth.signOut();
+    try {
+      if (supabase) {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.error("Logout error:", error);
+      }
+      // Navigate to home after logout
+      window.location.href = '/';
+    } catch (err) {
+      console.error("Logout failed:", err);
+      window.location.href = '/';
+    }
   });
 
   const handleNavigation = (id) => {

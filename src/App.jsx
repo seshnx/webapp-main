@@ -87,11 +87,20 @@ export default function App() {
     }
 
     // 1. Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    // 1. Check initial session
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+        if (error) {
+            console.error("Error getting session:", error);
+            setLoading(false);
+            return;
+        }
         if (!session) {
             setLoading(false);
         }
         // The onAuthStateChange will fire and handle the rest
+    }).catch((err) => {
+        console.error("Session check failed:", err);
+        setLoading(false);
     });
 
     // 2. Listen for auth changes
@@ -102,13 +111,13 @@ export default function App() {
         if (currentUser) {
             try {
                 // Fetch Profile from 'profiles' table
-                const { data: profile, error } = await supabase
+                const { data: profile, error: profileError } = await supabase
                     .from('profiles')
                     .select('*')
                     .eq('id', currentUser.id)
                     .single();
                 
-                if (profile) {
+                if (profile && !profileError) {
                     // Normalize data structure for the app
                     setUserData({
                         ...profile,
@@ -118,9 +127,12 @@ export default function App() {
                         activeProfileRole: profile.active_role || 'Fan',
                         photoURL: profile.avatar_url
                     });
+                } else if (profileError && profileError.code !== 'PGRST116') {
+                    // PGRST116 = no rows returned (user doesn't have profile yet)
+                    console.error("Error fetching profile:", profileError);
                 }
 
-                // Fetch Wallet
+                // Fetch Wallet (optional, don't fail if missing)
                 const { data: wallet } = await supabase
                     .from('wallets')
                     .select('balance')
@@ -134,6 +146,7 @@ export default function App() {
         } else {
             setUserData(null);
             setSubProfiles({});
+            setTokenBalance(0);
         }
         setLoading(false);
     });
@@ -142,10 +155,23 @@ export default function App() {
   }, []);
 
   const handleLogout = useCallback(async () => {
-      if (supabase) await supabase.auth.signOut();
-      setUser(null);
-      setUserData(null);
-      navigate('/');
+      try {
+          if (supabase) {
+              const { error } = await supabase.auth.signOut();
+              if (error) {
+                  console.error("Logout error:", error);
+              }
+          }
+      } catch (err) {
+          console.error("Logout failed:", err);
+      } finally {
+          // Always clear state and navigate, even if signOut fails
+          setUser(null);
+          setUserData(null);
+          setSubProfiles({});
+          setTokenBalance(0);
+          navigate('/');
+      }
   }, [navigate]);
 
   const openPublicProfile = (uid, name) => setViewingProfile({ uid, name });
