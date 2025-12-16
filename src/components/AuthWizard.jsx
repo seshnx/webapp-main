@@ -205,17 +205,29 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
   };
 
   const handleSignup = async () => {
-    if (mode === 'signup' && !isPasswordValid) return setError("Password requirements not met.");
+    if (mode === 'signup' && !isPasswordValid) {
+      setError("Password requirements not met.");
+      return;
+    }
     if (!supabase) {
       setError("Authentication service unavailable. Please check your configuration.");
       return;
     }
+    if (form.roles.length === 0) {
+      setError("Please select at least one role.");
+      return;
+    }
+    
     setIsLoading(true);
     setError('');
+    
     try {
       let uid = user?.id;
+      let currentUser = user;
+      
       // 1. Register if not already
       if (!uid) {
+          console.log('Creating new user account...');
           const { data, error: signUpError } = await supabase.auth.signUp({
               email: form.email.trim(), 
               password: form.password,
@@ -224,6 +236,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                 emailRedirectTo: window.location.origin
               }
           });
+          
           if (signUpError) {
             console.error('Signup error:', signUpError);
             // Provide more helpful error messages
@@ -237,43 +250,88 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             setIsLoading(false);
             return;
           }
+          
           uid = data.user?.id;
+          currentUser = data.user;
+          
           if (!uid) {
             setError("Account created but unable to retrieve user ID. Please try signing in.");
             setIsLoading(false);
             return;
           }
+          
+          console.log('User account created:', uid);
       }
 
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
+      console.log('Creating profile with roles:', finalRoles);
       
       // 2. Insert Profile
       const { error: profileError } = await supabase.from('profiles').upsert({
           id: uid,
           first_name: form.firstName,
           last_name: form.lastName,
-          email: form.email,
-          zip_code: form.zip,
+          email: form.email.trim(),
+          zip_code: form.zip || null,
           account_types: finalRoles,
           active_role: finalRoles[0],
           talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
-          avatar_url: user?.user_metadata?.avatar_url || null,
+          avatar_url: currentUser?.user_metadata?.avatar_url || null,
+          created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'id'
       });
-      if (profileError) throw profileError;
+      
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        throw profileError;
+      }
+      
+      console.log('Profile created successfully');
 
-      // 3. Init Wallet
-      await supabase.from('wallets').insert([{ user_id: uid, balance: 0 }]).catch(()=>{});
+      // 3. Init Wallet (don't fail if it already exists)
+      const { error: walletError } = await supabase.from('wallets').upsert({
+        user_id: uid, 
+        balance: 0
+      }, {
+        onConflict: 'user_id'
+      });
+      
+      if (walletError) {
+        console.warn('Wallet creation warning:', walletError);
+        // Don't fail the whole signup if wallet creation fails
+      } else {
+        console.log('Wallet created successfully');
+      }
 
       // Success - reload the page to trigger auth state change
-      console.log('Signup successful, reloading...');
-      window.location.reload();
+      console.log('Signup successful, reloading page...');
+      // Don't set loading to false - let the reload happen
+      setTimeout(() => {
+        window.location.reload();
+      }, 500); // Small delay to ensure all data is saved
+      
     } catch (e) { 
       console.error('Signup error:', e);
-      setError(e.message || 'Failed to complete setup. Please try again.'); 
-      setIsLoading(false); 
+      const errorMessage = e.message || e.error?.message || e.toString() || 'Failed to complete setup. Please try again.';
+      setError(errorMessage); 
+      setIsLoading(false);
     }
   };
+  
+  // Safety timeout - if loading takes too long, reset it
+  useEffect(() => {
+    if (isLoading) {
+      const timeout = setTimeout(() => {
+        console.warn('Signup process timed out - resetting loading state');
+        setIsLoading(false);
+        setError('The signup process is taking longer than expected. Please check your connection and try again.');
+      }, 15000); // 15 second timeout
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [isLoading]);
 
   const handleForgotPassword = async () => {
       if (!form.email) return setError("Enter email address.");
