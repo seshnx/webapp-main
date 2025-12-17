@@ -464,13 +464,13 @@ export default function App() {
 
   if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
   
-  // Only show AuthWizard if there's no user AND we're not already on the login route
-  // Don't show onboarding automatically - let user complete signup flow first
-  if ((!user || !user.id) && location.pathname !== '/login') {
-    // Redirect to login instead of showing AuthWizard directly
-    // This allows routes to handle the login page properly
-    navigate('/login', { replace: true });
-    return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
+  // Check if coming from OAuth signup flow
+  const isFromSignup = new URLSearchParams(window.location.search).get('intent') === 'signup';
+  
+  // If user exists but no profile data AND we're coming from signup (OAuth callback)
+  // Show onboarding to complete profile setup
+  if (user && user.id && !userData && isFromSignup) {
+    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.href = '/'} />;
   }
   
   // If on login page and user is authenticated, redirect to dashboard
@@ -479,16 +479,16 @@ export default function App() {
     return null;
   }
   
-  // If user exists but no profile data AND we're coming from signup (check URL or session)
-  // Only show onboarding if explicitly needed (e.g., from OAuth callback)
-  const isFromSignup = new URLSearchParams(window.location.search).get('intent') === 'signup';
-  if (user && user.id && !userData && isFromSignup) {
-    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.href = '/'} />;
-  }
-  
-  // If no user and on login page, show AuthWizard
+  // If no user and on login page, show AuthWizard directly (handles login UI)
   if ((!user || !user.id) && location.pathname === '/login') {
     return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} isNewUser={false} />;
+  }
+  
+  // If no user and NOT on login page, redirect to login
+  // Return null to prevent flash of content during redirect
+  if ((!user || !user.id) && location.pathname !== '/login') {
+    navigate('/login', { replace: true });
+    return null;
   }
 
   const isEduMode = activeTab.startsWith('edu-');
@@ -549,6 +549,8 @@ export default function App() {
                       pendingChatTarget={pendingChatTarget}
                       clearPendingChatTarget={() => setPendingChatTarget(null)}
                       loading={loading}
+                      darkMode={darkMode}
+                      toggleTheme={toggleTheme}
                     />
                 </PageTransition>
             </main>

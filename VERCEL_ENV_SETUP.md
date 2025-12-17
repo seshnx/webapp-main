@@ -8,7 +8,22 @@
 
 ## Required Environment Variables
 
-Copy and paste these into Vercel:
+### Supabase (REQUIRED - Authentication & Database)
+
+⚠️ **CRITICAL**: Without these, sign-in will NOT work!
+
+```
+VITE_SUPABASE_URL=https://your-project-id.supabase.co
+VITE_SUPABASE_ANON_KEY=your_anon_key_here
+```
+
+**To find these values:**
+1. Go to your Supabase project dashboard: https://app.supabase.com
+2. Click **Settings** → **API**
+3. Copy the **Project URL** → `VITE_SUPABASE_URL`
+4. Copy the **anon/public key** → `VITE_SUPABASE_ANON_KEY`
+
+### Firebase (Legacy - for some features)
 
 ```
 VITE_FIREBASE_API_KEY=AIzaSyCmGxvXX2D11Jo3NZlD0jO1vQpskaG0sCU

@@ -113,20 +113,26 @@ function EduDashboardWrapper({ user, userData }) {
  * Handles all application routes with proper component lifecycle management.
  * React Router ensures components are properly mounted/unmounted on route changes.
  */
-export default function AppRoutes({ user, userData, subProfiles, tokenBalance, setActiveTab, handleLogout, openPublicProfile, pendingChatTarget, clearPendingChatTarget, loading }) {
+export default function AppRoutes({ user, userData, subProfiles, tokenBalance, setActiveTab, handleLogout, openPublicProfile, pendingChatTarget, clearPendingChatTarget, loading, darkMode, toggleTheme }) {
 
   return (
     <Routes>
         {/* Public Routes */}
+        {/* Note: /login is primarily handled by App.jsx before routes render.
+            This route is a fallback that redirects authenticated users. */}
         <Route 
           path="/login" 
           element={
-            <AuthWizard 
-              darkMode={false} 
-              toggleTheme={() => {}} 
-              onSuccess={() => {}} 
-              isNewUser={false} 
-            />
+            user ? (
+              <Navigate to="/" replace />
+            ) : (
+              <AuthWizard 
+                darkMode={darkMode ?? false} 
+                toggleTheme={toggleTheme ?? (() => {})} 
+                onSuccess={() => {}} 
+                isNewUser={false} 
+              />
+            )
           } 
         />
         <Route 
