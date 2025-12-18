@@ -121,18 +121,43 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
             }
             
             // Update post comment count
-            await supabase.rpc('increment', {
-                table_name: 'posts',
-                id_column: 'id',
-                id_value: post.id,
-                count_column: 'comment_count'
-            }).catch(() => {
-                // Fallback if RPC doesn't exist
-                supabase
-                    .from('posts')
-                    .update({ comment_count: (post.commentCount || 0) + 1 })
-                    .eq('id', post.id);
-            });
+            // Try RPC first, fallback to direct update if RPC doesn't exist
+            try {
+                const rpcResult = supabase.rpc('increment', {
+                    table_name: 'posts',
+                    id_column: 'id',
+                    id_value: post.id,
+                    count_column: 'comment_count'
+                });
+                
+                // Check if rpc returns a promise-like object
+                if (rpcResult && typeof rpcResult.then === 'function') {
+                    const { error: rpcError } = await rpcResult;
+                    if (rpcError) {
+                        // RPC exists but failed, use fallback
+                        throw rpcError;
+                    }
+                } else {
+                    // RPC doesn't exist or doesn't return a promise, use fallback
+                    throw new Error('RPC not available');
+                }
+            } catch (rpcErr) {
+                // Fallback: Direct update if RPC doesn't exist or fails
+                // This is non-critical, so we don't throw - just log
+                try {
+                    const { error: updateError } = await supabase
+                        .from('posts')
+                        .update({ comment_count: (post.commentCount || 0) + 1 })
+                        .eq('id', post.id);
+                    
+                    if (updateError) {
+                        console.warn('Failed to update comment count:', updateError);
+                    }
+                } catch (updateErr) {
+                    console.warn('Comment count update failed:', updateErr);
+                    // Don't fail the comment submission if count update fails
+                }
+            }
             
             // Send notification to post author (if not commenting on own post)
             if (post.userId !== userId) {
