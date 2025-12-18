@@ -31,23 +31,29 @@ function ProtectedRoute({ children, user, loading }) {
 }
 
 /**
- * AppRoutes - Simplified routing with only Login and Dashboard
+ * AppRoutes - Full routing with all modules
+ * MainLayout handles most routes, but Settings and Debug Report use direct routes
  */
 export default function AppRoutes({ user, userData, loading, darkMode, toggleTheme, handleLogout }) {
   return (
     <Routes>
-      {/* Dashboard Route */}
-      <Route 
-        path="/" 
-        element={
-          <ProtectedRoute user={user} loading={loading}>
-            <Dashboard 
-              user={user} 
-              userData={userData}
-            />
-          </ProtectedRoute>
-        } 
-      />
+      {/* MainLayout handles these routes internally via activeTab */}
+      {/* Dashboard and all main modules are handled by MainLayout */}
+      <Route path="/" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/feed" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/messages" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/bookings" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/marketplace" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/tech" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/payments" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/business-center" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/legal" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-student" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-intern" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-overview" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-admin" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/studio-ops" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
       
       {/* Debug Report Route - Test login destination */}
       <Route 
@@ -62,21 +68,7 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
         } 
       />
       
-      {/* Profile Manager Route */}
-      <Route 
-        path="/profile" 
-        element={
-          <ProtectedRoute user={user} loading={loading}>
-            <ProfileManager 
-              user={user} 
-              userData={userData}
-              handleLogout={handleLogout}
-            />
-          </ProtectedRoute>
-        } 
-      />
-      
-      {/* Settings Route */}
+      {/* Settings Route - Uses direct route */}
       <Route 
         path="/settings" 
         element={
@@ -129,8 +121,10 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
       {/* Redirect dashboard aliases */}
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route path="/home" element={<Navigate to="/" replace />} />
+      <Route path="/social" element={<Navigate to="/feed" replace />} />
+      <Route path="/chat" element={<Navigate to="/messages" replace />} />
+      <Route path="/billing" element={<Navigate to="/payments" replace />} />
       
-      {/* Test login route - handled in App.jsx, but included here for clarity */}
       {/* Fallback - redirect to dashboard */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

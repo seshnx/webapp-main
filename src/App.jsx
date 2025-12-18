@@ -7,6 +7,7 @@ import { Toaster } from 'react-hot-toast';
 // Core components
 import AuthWizard from './components/AuthWizard';
 import AppRoutes from './routes/AppRoutes';
+import MainLayout from './components/MainLayout';
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -382,59 +383,27 @@ export default function App() {
     return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
   }
 
-  // Render app with just dashboard
+  // Render app with full layout (Sidebar + Navbar + Content)
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
       <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
       
-      {/* Simple header with navigation and logout */}
-      <div className="bg-white dark:bg-[#1f2128] border-b dark:border-gray-700 px-6 py-4 flex justify-between items-center">
-        <div className="flex items-center gap-6">
-          <h1 className="text-xl font-bold dark:text-white">SeshNx</h1>
-          <nav className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition ${
-                location.pathname === '/' 
-                  ? 'bg-brand-blue text-white' 
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={() => navigate('/profile')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition ${
-                location.pathname === '/profile' 
-                  ? 'bg-brand-blue text-white' 
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              Profile
-            </button>
-            <button
-              onClick={() => navigate('/settings')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition ${
-                location.pathname === '/settings' 
-                  ? 'bg-brand-blue text-white' 
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              Settings
-            </button>
-          </nav>
-        </div>
-        <button
-          onClick={handleLogout}
-          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
-        >
-          Logout
-        </button>
-      </div>
-
-      {/* Main content */}
-      <main className="p-6">
-        <AppRoutes
+      {/* Check if we're on a special route that needs different layout */}
+      {location.pathname === '/settings' || location.pathname === '/debug-report' ? (
+        // Settings and Debug Report use simple layout
+        <main className="p-6">
+          <AppRoutes
+            user={user}
+            userData={userData}
+            loading={loading}
+            darkMode={darkMode}
+            toggleTheme={toggleTheme}
+            handleLogout={handleLogout}
+          />
+        </main>
+      ) : (
+        // All other routes use MainLayout with Sidebar + Navbar
+        <MainLayout
           user={user}
           userData={userData}
           loading={loading}
@@ -442,7 +411,7 @@ export default function App() {
           toggleTheme={toggleTheme}
           handleLogout={handleLogout}
         />
-      </main>
+      )}
     </div>
   );
 }
