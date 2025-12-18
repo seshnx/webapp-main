@@ -611,6 +611,16 @@ DROP POLICY IF EXISTS "Users can insert their own comments" ON comments;
 CREATE POLICY "Users can insert their own comments" ON comments
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 
+-- Comments: Users can update their own comments
+DROP POLICY IF EXISTS "Users can update their own comments" ON comments;
+CREATE POLICY "Users can update their own comments" ON comments
+    FOR UPDATE USING (auth.uid() = user_id);
+
+-- Comments: Users can delete their own comments
+DROP POLICY IF EXISTS "Users can delete their own comments" ON comments;
+CREATE POLICY "Users can delete their own comments" ON comments
+    FOR DELETE USING (auth.uid() = user_id);
+
 -- Reactions: Users can read all reactions
 DROP POLICY IF EXISTS "Reactions are viewable by everyone" ON reactions;
 CREATE POLICY "Reactions are viewable by everyone" ON reactions

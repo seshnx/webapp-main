@@ -92,20 +92,33 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
             'User';
         
         try {
+            // Ensure content is not empty (required by schema)
+            const commentContent = text.trim();
+            if (!commentContent) {
+                alert('Please enter a comment');
+                setLoading(false);
+                return;
+            }
+            
             const { error } = await supabase
                 .from('comments')
                 .insert({
                     post_id: post.id,
                     user_id: userId,
-                    text,
-                    content: text, // Also set content for compatibility with schema
+                    text: commentContent,
+                    content: commentContent, // Required by schema - NOT NULL
                     display_name: displayName,
-                    author_photo: currentUserData?.photoURL || null, // Also set author_photo
+                    author_photo: currentUserData?.photoURL || null,
                     user_photo: currentUserData?.photoURL || null,
                     created_at: new Date().toISOString()
                 });
             
-            if (error) throw error;
+            if (error) {
+                console.error('Comment insert error:', error);
+                alert(`Failed to post comment: ${error.message || 'Unknown error'}`);
+                setLoading(false);
+                return;
+            }
             
             // Update post comment count
             await supabase.rpc('increment', {
@@ -136,10 +149,12 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
             }
             
             setText('');
+            setLoading(false);
         } catch (e) { 
-            console.error(e); 
+            console.error('Comment submission error:', e);
+            alert(`Failed to post comment: ${e.message || 'Unknown error'}`);
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     const handleDelete = async (commentId) => {
