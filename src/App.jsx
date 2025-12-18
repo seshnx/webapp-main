@@ -120,9 +120,9 @@ export default function App() {
                 // Profile doesn't exist - create it from auth data
                 console.log('Profile not found, creating from auth data');
                 
-                const firstName = user?.user_metadata?.first_name || user?.user_metadata?.given_name || '';
-                const lastName = user?.user_metadata?.last_name || user?.user_metadata?.family_name || '';
-                const email = user?.email || '';
+                const firstName = authUser?.user_metadata?.first_name || authUser?.user_metadata?.given_name || '';
+                const lastName = authUser?.user_metadata?.last_name || authUser?.user_metadata?.family_name || '';
+                const email = authUser?.email || '';
                 
                 // Calculate effective display name
                 const effectiveName = firstName && lastName 
@@ -137,7 +137,7 @@ export default function App() {
                         email: email,
                         first_name: firstName,
                         last_name: lastName,
-                        avatar_url: user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null,
+                        avatar_url: authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || null,
                         account_types: ['Fan'],
                         active_role: 'Fan',
                         preferred_role: 'Fan',
@@ -155,7 +155,24 @@ export default function App() {
                     console.error("Error creating profile:", createError);
                 }
                 
-                // Set userData even if creation failed (will retry on next load)
+                // Update finalUserData with the created profile data
+                finalUserData = {
+                    ...finalUserData,
+                    firstName: firstName || 'User',
+                    lastName: lastName || '',
+                    email: email,
+                    effectiveDisplayName: effectiveName
+                };
+            }
+
+            // 6. Set State (The most important part)
+            setUserData(finalUserData);
+
+            // Wallet fetching removed for minimal setup
+        } catch (err) {
+            console.error("CRITICAL: Error loading user data:", err);
+            // FAILSAFE: Ensure we still have a user object so the app doesn't white-screen
+            if (!userData) {
                 setUserData({
                     id: userId,
                     firstName: 'User',
@@ -165,17 +182,6 @@ export default function App() {
                     effectiveDisplayName: 'User'
                 });
             }
-        }
-    };
-                
-                if (profileError && profileError.code !== 'PGRST116') {
-                    console.error("Error fetching profile:", profileError);
-                }
-            }
-
-            // Wallet fetching removed for minimal setup
-        } catch (err) {
-            console.error("Error fetching user data:", err);
         }
     };
 
