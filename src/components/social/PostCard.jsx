@@ -64,11 +64,12 @@ export default function PostCard({
                     .select('id')
                     .eq('user_id', userId)
                     .eq('post_id', post.id)
-                    .single();
+                    .maybeSingle(); // Use maybeSingle() to handle case when no record exists
                 
                 setIsSaved(!!data && !error);
             } catch (e) {
                 console.error('Error checking saved status:', e);
+                setIsSaved(false); // Default to false on error
             }
         };
         checkSaved();

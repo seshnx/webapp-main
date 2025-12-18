@@ -39,6 +39,8 @@ CREATE TABLE IF NOT EXISTS posts (
 
 -- Add missing columns if table exists (migration-safe)
 DO $$ 
+DECLARE
+    constraint_rec RECORD;
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name = 'posts' AND column_name = 'display_name') THEN
@@ -99,6 +101,30 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name = 'posts' AND column_name = 'visibility') THEN
         ALTER TABLE posts ADD COLUMN visibility TEXT DEFAULT 'public';
+    END IF;
+    
+    -- Drop and recreate visibility constraint to ensure it matches expected values
+    -- Find and drop any existing visibility check constraint
+    FOR constraint_rec IN 
+        SELECT constraint_name 
+        FROM information_schema.table_constraints 
+        WHERE table_schema = 'public'
+        AND table_name = 'posts' 
+        AND constraint_type = 'CHECK'
+        AND constraint_name LIKE '%visibility%'
+    LOOP
+        EXECUTE format('ALTER TABLE posts DROP CONSTRAINT IF EXISTS %I', constraint_rec.constraint_name);
+    END LOOP;
+    
+    -- Also try common constraint names
+    ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_visibility_check;
+    ALTER TABLE posts DROP CONSTRAINT IF EXISTS posts_check;
+    
+    -- Recreate constraint with correct values (only if column exists)
+    IF EXISTS (SELECT 1 FROM information_schema.columns 
+               WHERE table_name = 'posts' AND column_name = 'visibility') THEN
+        ALTER TABLE posts ADD CONSTRAINT posts_visibility_check 
+            CHECK (visibility IN ('public', 'followers', 'private'));
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
@@ -193,6 +219,18 @@ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
                    WHERE table_name = 'comments' AND column_name = 'author_photo') THEN
         ALTER TABLE comments ADD COLUMN author_photo TEXT;
+    END IF;
+    
+    -- Add text column (code uses 'text' but table has 'content')
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'comments' AND column_name = 'text') THEN
+        ALTER TABLE comments ADD COLUMN text TEXT;
+    END IF;
+    
+    -- Add user_photo column (code uses 'user_photo' but table has 'author_photo')
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns 
+                   WHERE table_name = 'comments' AND column_name = 'user_photo') THEN
+        ALTER TABLE comments ADD COLUMN user_photo TEXT;
     END IF;
     
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns 

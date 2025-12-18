@@ -98,7 +98,9 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
                     post_id: post.id,
                     user_id: userId,
                     text,
+                    content: text, // Also set content for compatibility with schema
                     display_name: displayName,
+                    author_photo: currentUserData?.photoURL || null, // Also set author_photo
                     user_photo: currentUserData?.photoURL || null,
                     created_at: new Date().toISOString()
                 });

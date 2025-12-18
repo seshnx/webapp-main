@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './config/supabase'; 
 import { Loader2 } from 'lucide-react';
@@ -47,6 +47,8 @@ export default function App() {
 
     // Track loading state to prevent duplicate calls
     const loadingUsers = new Set();
+    // Track if initial session has been handled to prevent duplicate loading clears
+    const initialSessionHandledRef = useRef(false);
 
     /**
      * ROBUST USER DATA LOADER
@@ -207,12 +209,8 @@ export default function App() {
         }
     };
 
-    // 1. Get initial session - non-blocking, show UI immediately
+    // 1. Get initial session
     const loadInitialSession = async () => {
-        // Clear loading very quickly - don't wait for session check
-        // This allows UI to render immediately
-        setTimeout(() => setLoading(false), 100);
-        
         try {
             const { data: { session }, error } = await supabase.auth.getSession();
             
@@ -224,6 +222,11 @@ export default function App() {
                 }
                 setUser(null);
                 setUserData(null);
+                // Only clear loading if we haven't already
+                if (!initialSessionHandledRef.current) {
+                    setLoading(false);
+                    initialSessionHandledRef.current = true;
+                }
                 return;
             }
             
@@ -233,22 +236,32 @@ export default function App() {
             if (currentUser && currentUser.id) {
                 console.log('Session restored:', currentUser.id);
                 setUser(currentUser);
-                // Load user data in background - don't block UI
-                loadUserData(currentUser.id).catch(err => {
-                    console.error("Background user data load failed:", err);
+                // Load user data - wait for it to complete
+                await loadUserData(currentUser.id).catch(err => {
+                    console.error("User data load failed:", err);
                 });
             } else {
                 setUser(null);
                 setUserData(null);
             }
+            
+            // Clear loading after initial session is handled
+            if (!initialSessionHandledRef.current) {
+                setLoading(false);
+                initialSessionHandledRef.current = true;
+            }
         } catch (err) {
             console.error("Session check failed:", err);
             setUser(null);
             setUserData(null);
+            if (!initialSessionHandledRef.current) {
+                setLoading(false);
+                initialSessionHandledRef.current = true;
+            }
         }
     };
     
-    // Start loading session in background - UI shows immediately
+    // Start loading session
     loadInitialSession();
 
     // 2. Listen for auth changes
@@ -256,9 +269,29 @@ export default function App() {
         console.log('Auth event:', event);
         const currentUser = session?.user ?? null;
         
+        // Handle INITIAL_SESSION event - this fires on page load
+        // We've already handled it in loadInitialSession, so just sync state
+        if (event === 'INITIAL_SESSION') {
+            if (currentUser && currentUser.id) {
+                setUser(currentUser);
+                // Only load userData if we don't have it yet
+                if (!userData) {
+                    loadUserData(currentUser.id).catch(err => {
+                        console.error("Background user data load failed:", err);
+                    });
+                }
+            }
+            // Clear loading if not already cleared
+            if (!initialSessionHandledRef.current) {
+                setLoading(false);
+                initialSessionHandledRef.current = true;
+            }
+            return;
+        }
+        
         if (currentUser) {
             setUser(currentUser);
-            // Refresh data on sign-in or token refresh - non-blocking
+            // Refresh data on sign-in or token refresh
             if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
                 loadUserData(currentUser.id).catch(err => {
                     console.error("Background user data load failed:", err);
@@ -271,17 +304,20 @@ export default function App() {
             navigate('/login', { replace: true });
         }
         
-        // Clear loading immediately
-        setLoading(false);
+        // Clear loading for other events (but INITIAL_SESSION is handled above)
+        if (event !== 'INITIAL_SESSION') {
+            setLoading(false);
+        }
     });
 
-    // 3. Safety timeout - reduced to 2 seconds (just in case)
+    // 3. Safety timeout - reduced to 1.5 seconds (just in case)
     const timeoutId = setTimeout(() => {
         if (loading) {
             console.warn("Force clearing loading state after timeout");
             setLoading(false);
+            initialSessionHandledRef.current = true;
         }
-    }, 2000);
+    }, 1500);
 
     return () => {
         subscription.unsubscribe();
@@ -314,12 +350,12 @@ export default function App() {
       }
   };
 
-  // Show loading spinner only very briefly during initial session check
-  // After that, show UI immediately - userData loads in background
-  // Only block if we're truly waiting for the first session check
-  if (loading && !user && !userData) {
-    // Very brief loading - session check should be fast
-    // The timeout will clear this after 2 seconds max anyway
+  // Show loading spinner only during initial session check
+  // Don't show loading if we have a user but are just waiting for userData
+  // This prevents flashing when userData loads in background
+  if (loading && !user) {
+    // Only show loading if we don't have a user yet
+    // Once we have a user, show UI even if userData is still loading
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
         <Loader2 className="animate-spin text-brand-blue" size={48} />
