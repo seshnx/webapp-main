@@ -190,8 +190,12 @@ export default function App() {
         }
     };
 
-    // 1. Get initial session
+    // 1. Get initial session - non-blocking, show UI immediately
     const loadInitialSession = async () => {
+        // Clear loading very quickly - don't wait for session check
+        // This allows UI to render immediately
+        setTimeout(() => setLoading(false), 100);
+        
         try {
             const { data: { session }, error } = await supabase.auth.getSession();
             
@@ -203,7 +207,6 @@ export default function App() {
                 }
                 setUser(null);
                 setUserData(null);
-                setLoading(false);
                 return;
             }
             
@@ -213,7 +216,10 @@ export default function App() {
             if (currentUser && currentUser.id) {
                 console.log('Session restored:', currentUser.id);
                 setUser(currentUser);
-                await loadUserData(currentUser.id);
+                // Load user data in background - don't block UI
+                loadUserData(currentUser.id).catch(err => {
+                    console.error("Background user data load failed:", err);
+                });
             } else {
                 setUser(null);
                 setUserData(null);
@@ -222,11 +228,10 @@ export default function App() {
             console.error("Session check failed:", err);
             setUser(null);
             setUserData(null);
-        } finally {
-            setLoading(false);
         }
     };
     
+    // Start loading session in background - UI shows immediately
     loadInitialSession();
 
     // 2. Listen for auth changes
@@ -236,9 +241,11 @@ export default function App() {
         
         if (currentUser) {
             setUser(currentUser);
-            // Refresh data on sign-in or token refresh
+            // Refresh data on sign-in or token refresh - non-blocking
             if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                await loadUserData(currentUser.id);
+                loadUserData(currentUser.id).catch(err => {
+                    console.error("Background user data load failed:", err);
+                });
             }
         } else if (event === 'SIGNED_OUT') {
             setUser(null);
@@ -247,16 +254,17 @@ export default function App() {
             navigate('/login', { replace: true });
         }
         
+        // Clear loading immediately
         setLoading(false);
     });
 
-    // 3. Safety timeout to prevent infinite loading screens
+    // 3. Safety timeout - reduced to 2 seconds (just in case)
     const timeoutId = setTimeout(() => {
         if (loading) {
             console.warn("Force clearing loading state after timeout");
             setLoading(false);
         }
-    }, 8000);
+    }, 2000);
 
     return () => {
         subscription.unsubscribe();
@@ -289,8 +297,12 @@ export default function App() {
       }
   };
 
-  // Show loading spinner while checking auth state
-  if (loading) {
+  // Show loading spinner only very briefly during initial session check
+  // After that, show UI immediately - userData loads in background
+  // Only block if we're truly waiting for the first session check
+  if (loading && !user && !userData) {
+    // Very brief loading - session check should be fast
+    // The timeout will clear this after 2 seconds max anyway
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
         <Loader2 className="animate-spin text-brand-blue" size={48} />
@@ -313,18 +325,11 @@ export default function App() {
     return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
   }
   
-  // CRITICAL: If user exists but no userData, show AuthWizard (shouldn't happen, but safety check)
+  // CRITICAL: If user exists but no userData, show minimal UI while loading
   // This ensures the app never renders with null userData when user exists
   if (isAuthenticated && !hasUserData && !isOnLoginPage && !isTestLoginPage) {
-    // Still loading userData, show loading
-    if (loading) {
-      return (
-        <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
-          <Loader2 className="animate-spin text-brand-blue" size={48} />
-        </div>
-      );
-    }
-    // If loading is done but no userData, show AuthWizard
+    // UserData is loading in background - show AuthWizard as fallback
+    // The userData will populate once the async load completes
     return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
   }
   
