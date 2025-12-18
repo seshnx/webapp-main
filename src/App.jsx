@@ -240,19 +240,23 @@ export default function App() {
             if (currentUser && currentUser.id) {
                 console.log('Session restored:', currentUser.id);
                 setUser(currentUser);
-                // Load user data - wait for it to complete
+                // Load user data - wait for it to complete before clearing loading
                 await loadUserData(currentUser.id).catch(err => {
                     console.error("User data load failed:", err);
                 });
+                // Only clear loading after userData is loaded
+                if (!initialSessionHandledRef.current) {
+                    setLoading(false);
+                    initialSessionHandledRef.current = true;
+                }
             } else {
                 setUser(null);
                 setUserData(null);
-            }
-            
-            // Clear loading after initial session is handled
-            if (!initialSessionHandledRef.current) {
-                setLoading(false);
-                initialSessionHandledRef.current = true;
+                // No user - clear loading immediately
+                if (!initialSessionHandledRef.current) {
+                    setLoading(false);
+                    initialSessionHandledRef.current = true;
+                }
             }
         } catch (err) {
             console.error("Session check failed:", err);
@@ -275,20 +279,39 @@ export default function App() {
         
         // Handle INITIAL_SESSION event - this fires on page load
         // We've already handled it in loadInitialSession, so just sync state
+        // Don't clear loading here - let loadInitialSession handle it after userData loads
         if (event === 'INITIAL_SESSION') {
             if (currentUser && currentUser.id) {
                 setUser(currentUser);
                 // Only load userData if we don't have it yet
                 if (!userData) {
-                    loadUserData(currentUser.id).catch(err => {
+                    loadUserData(currentUser.id).then(() => {
+                        // Clear loading after userData is loaded
+                        if (!initialSessionHandledRef.current) {
+                            setLoading(false);
+                            initialSessionHandledRef.current = true;
+                        }
+                    }).catch(err => {
                         console.error("Background user data load failed:", err);
+                        // Clear loading even on error
+                        if (!initialSessionHandledRef.current) {
+                            setLoading(false);
+                            initialSessionHandledRef.current = true;
+                        }
                     });
+                } else {
+                    // We already have userData, clear loading
+                    if (!initialSessionHandledRef.current) {
+                        setLoading(false);
+                        initialSessionHandledRef.current = true;
+                    }
                 }
-            }
-            // Clear loading if not already cleared
-            if (!initialSessionHandledRef.current) {
-                setLoading(false);
-                initialSessionHandledRef.current = true;
+            } else {
+                // No user - clear loading
+                if (!initialSessionHandledRef.current) {
+                    setLoading(false);
+                    initialSessionHandledRef.current = true;
+                }
             }
             return;
         }
@@ -354,12 +377,9 @@ export default function App() {
       }
   };
 
-  // Show loading spinner only during initial session check
-  // Don't show loading if we have a user but are just waiting for userData
-  // This prevents flashing when userData loads in background
-  if (loading && !user) {
-    // Only show loading if we don't have a user yet
-    // Once we have a user, show UI even if userData is still loading
+  // Show loading spinner while we're checking session or loading userData
+  // This prevents flashing between AuthWizard and MainLayout
+  if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
         <Loader2 className="animate-spin text-brand-blue" size={48} />
@@ -382,12 +402,16 @@ export default function App() {
     return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
   }
   
-  // CRITICAL: If user exists but no userData, show minimal UI while loading
-  // This ensures the app never renders with null userData when user exists
+  // CRITICAL: If user exists but no userData, show loading (not AuthWizard)
+  // This prevents flashing - we wait for userData before showing UI
   if (isAuthenticated && !hasUserData && !isOnLoginPage && !isTestLoginPage) {
-    // UserData is loading in background - show AuthWizard as fallback
-    // The userData will populate once the async load completes
-    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
+    // UserData is still loading - show loading spinner instead of AuthWizard
+    // This prevents the flash between AuthWizard and MainLayout
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
+        <Loader2 className="animate-spin text-brand-blue" size={48} />
+      </div>
+    );
   }
   
   // Handle test login page (always show login, route to debug report)
