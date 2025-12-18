@@ -1,7 +1,22 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../config/supabase';
 
-const SchoolContext = createContext();
+// Provide default value to prevent errors when context is not available
+const defaultContextValue = {
+    schoolId: null,
+    schoolData: null,
+    studentProfile: null,
+    staffProfile: null,
+    myPermissions: [],
+    internshipStudio: null,
+    isStudent: false,
+    isStaff: false,
+    checkIn: async () => {},
+    checkOut: async () => {},
+    loading: false
+};
+
+const SchoolContext = createContext(defaultContextValue);
 
 export function useSchool() {
     return useContext(SchoolContext);

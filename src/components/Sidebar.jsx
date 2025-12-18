@@ -4,8 +4,13 @@ import { supabase } from '../config/supabase';
 import { useSchool } from '../contexts/SchoolContext';
 
 export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) {
-  const { isStudent, isStaff } = useSchool(); // Use Context Flags
+  // Always call hook (React rules), but handle case where context might not be ready
+  const schoolContext = useSchool();
   const [isMobile, setIsMobile] = useState(false);
+  
+  // Safely extract values with fallbacks
+  const isStudent = schoolContext?.isStudent ?? (userData?.accountTypes?.includes('Student') || false);
+  const isStaff = schoolContext?.isStaff ?? (userData?.accountTypes?.includes('EDUStaff') || userData?.accountTypes?.includes('EDUAdmin') || false);
 
   // Track mobile viewport
   useEffect(() => {
