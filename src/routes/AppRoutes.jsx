@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import Dashboard from '../components/Dashboard';
-import DebugReport from '../components/DebugReport';
-import ProfileManager from '../components/ProfileManager';
-import SettingsTab from '../components/SettingsTab';
 import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
+
+// Lazy load components to avoid circular dependencies
+// Note: Dashboard is handled by MainLayout, not needed here
+const DebugReport = lazy(() => import('../components/DebugReport'));
+const ProfileManager = lazy(() => import('../components/ProfileManager'));
+const SettingsTab = lazy(() => import('../components/SettingsTab'));
 
 /**
  * Protected Route Wrapper
@@ -60,10 +62,12 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
         path="/debug-report" 
         element={
           <ProtectedRoute user={user} loading={loading}>
-            <DebugReport 
-              user={user} 
-              userData={userData}
-            />
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+              <DebugReport 
+                user={user} 
+                userData={userData}
+              />
+            </Suspense>
           </ProtectedRoute>
         } 
       />
@@ -73,7 +77,8 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
         path="/settings" 
         element={
           <ProtectedRoute user={user} loading={loading}>
-            <SettingsTab 
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+              <SettingsTab 
               user={user} 
               userData={userData}
               onUpdate={async (newSettings) => {
@@ -114,6 +119,7 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
                 }
               }}
             />
+            </Suspense>
           </ProtectedRoute>
         } 
       />
