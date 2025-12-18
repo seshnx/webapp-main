@@ -1,16 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, GraduationCap, ShieldCheck, Wrench, Briefcase } from 'lucide-react';
+import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase } from 'lucide-react';
 import { supabase } from '../config/supabase';
-import { useSchool } from '../contexts/SchoolContext';
 
 export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) {
-  // Always call hook (React rules), but handle case where context might not be ready
-  const schoolContext = useSchool();
   const [isMobile, setIsMobile] = useState(false);
-  
-  // Safely extract values with fallbacks
-  const isStudent = schoolContext?.isStudent ?? (userData?.accountTypes?.includes('Student') || false);
-  const isStaff = schoolContext?.isStaff ?? (userData?.accountTypes?.includes('EDUStaff') || userData?.accountTypes?.includes('EDUAdmin') || false);
 
   // Track mobile viewport
   useEffect(() => {
@@ -33,31 +26,6 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
     { id: 'payments', icon: <CreditCard size={18} />, label: 'Billing' },
     { id: 'profile', icon: <Settings size={18} />, label: 'Profile' },
   ];
-
-  // --- UPDATED: EDU Panel Logic ---
-  // Now checks for Students OR Staff (EDUStaff/EDUAdmins)
-  const isIntern = userData?.accountTypes?.includes('Intern');
-  
-  if (isStudent || isIntern || isStaff || userData?.accountTypes?.includes('student')) {
-      const insertIdx = links.findIndex(l => l.id === 'payments');
-      
-      // Determine label based on role
-      let label = 'EDU Panel';
-      if (isIntern) label = 'Internship';
-      else if (isStaff) label = 'School Admin';
-
-      // Determine routing ID
-      let routeId = 'edu-overview'; // Default for staff/students
-      if (isIntern) routeId = 'edu-intern';
-      else if (isStudent) routeId = 'edu-student';
-
-      links.splice(insertIdx, 0, { 
-          id: routeId,
-          icon: <GraduationCap size={18} />, 
-          label: label, 
-          highlight: true 
-      });
-  }
 
   // Check if user has business features (Studio, Label, Agent, Talent, Producer, etc.)
   const hasBusinessFeatures = userData?.accountTypes?.some(t => 

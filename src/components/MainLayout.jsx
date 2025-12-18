@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { SchoolProvider } from '../contexts/SchoolContext';
 import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
 import ErrorBoundary from './shared/ErrorBoundary';
@@ -62,10 +61,6 @@ const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
 const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
 const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
 const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
-const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
-const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
-const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
-const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
 
 // Shared loading fallback component
 const LoadingFallback = () => (
@@ -95,7 +90,6 @@ export default function MainLayout({
     if (path === '/business-center') return 'business-center';
     if (path === '/legal') return 'legal';
     if (path === '/studio-ops') return 'studio-ops';
-    if (path.startsWith('/edu-')) return path.substring(1);
     return 'dashboard'; // default
   };
 
@@ -180,10 +174,6 @@ export default function MainLayout({
       'profile': '/profile',
       'business-center': '/business-center',
       'legal': '/legal',
-      'edu-student': '/edu-student',
-      'edu-intern': '/edu-intern',
-      'edu-overview': '/edu-overview',
-      'edu-admin': '/edu-admin',
       'studio-ops': '/studio-ops',
     };
 
@@ -415,46 +405,6 @@ export default function MainLayout({
           </Suspense>
         );
 
-      case 'edu-student':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <EduStudentDashboard
-              user={user}
-              userData={userData}
-            />
-          </Suspense>
-        );
-
-      case 'edu-intern':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <EduInternDashboard
-              user={user}
-              userData={userData}
-            />
-          </Suspense>
-        );
-
-      case 'edu-overview':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <EduStaffDashboard
-              user={user}
-              userData={userData}
-            />
-          </Suspense>
-        );
-
-      case 'edu-admin':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <EduAdminDashboard
-              user={user}
-              userData={userData}
-            />
-          </Suspense>
-        );
-
       case 'studio-ops':
         // Studio operations are handled within BusinessCenter
         return (
@@ -483,8 +433,7 @@ export default function MainLayout({
   };
 
   return (
-    <SchoolProvider user={user} userData={userData}>
-      <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-[#1a1d21]">
+    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-[#1a1d21]">
         {/* Sidebar */}
         <Suspense fallback={<LoadingFallback />}>
           <Sidebar
@@ -538,7 +487,7 @@ export default function MainLayout({
           </Suspense>
         )}
       </div>
-    </SchoolProvider>
+    </div>
   );
 }
 

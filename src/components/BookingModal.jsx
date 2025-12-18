@@ -26,6 +26,8 @@ export default function BookingModal({ user, userData, target, onClose }) {
     });
     
     // Get relevant service types based on target's role and sub-role
+    // NOTE: Main app handles all user bookings (talent, engineer, studio, tech, etc.)
+    //       BCM Studio Management is a control center for studio owners, not a booking interface
     const getServiceTypes = () => {
         const types = [...SERVICE_TYPES.general];
         const targetRoles = target.accountTypes || [];
@@ -61,7 +63,7 @@ export default function BookingModal({ user, userData, target, onClose }) {
             types.push(...(SERVICE_TYPES.engineering || []));
         }
         
-        // Studio-specific types
+        // Studio-specific types (handled in main app)
         if (targetRoles.includes('Studio')) {
             types.push(...(SERVICE_TYPES.studio || []));
         }
@@ -69,6 +71,11 @@ export default function BookingModal({ user, userData, target, onClose }) {
         // Composer-specific types
         if (targetRoles.includes('Composer')) {
             types.push(...(SERVICE_TYPES.composer || []));
+        }
+        
+        // Tech/Technician-specific types
+        if (targetRoles.includes('Technician')) {
+            types.push(...(SERVICE_TYPES.tech || []));
         }
         
         return [...new Set(types)]; // Remove duplicates
