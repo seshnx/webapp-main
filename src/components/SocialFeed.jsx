@@ -196,6 +196,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     author_photo: userData?.photoURL || null,
                     role: userData?.activeProfileRole || 'User',
                     text: postPayload.text || null,
+                    content: postPayload.text || null, // Also set content for compatibility
                     media_urls: postPayload.mediaUrls || [],
                     media_type: postPayload.mediaType || null,
                     created_at: new Date().toISOString(),
@@ -203,7 +204,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     reaction_count: 0,
                     comment_count: 0,
                     save_count: 0,
-                    visibility: 'Public'
+                    visibility: 'public' // Must be lowercase to match CHECK constraint
                 });
             
             if (error) throw error;

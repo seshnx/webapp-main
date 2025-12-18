@@ -229,15 +229,23 @@ export default function Dashboard({
     useEffect(() => {
         if (!supabase) return;
         
-        // Initial fetch
+        // Initial fetch - use maybeSingle() to handle empty results gracefully
         supabase
             .from('market_items')
             .select('*')
+            .eq('status', 'active') // Filter by active status to match RLS policy
             .order('created_at', { ascending: false })
             .limit(1)
-            .single()
+            .maybeSingle()
             .then(({ data, error }) => {
-                if (!error && data) {
+                if (error) {
+                    // Only log non-404/406 errors (404 means table doesn't exist, 406 might be RLS/format issue)
+                    if (error.code !== 'PGRST116' && error.code !== 'PGRST301' && !error.message?.includes('does not exist')) {
+                        console.warn('Error fetching trending item:', error.message, error.code);
+                    }
+                    return;
+                }
+                if (data) {
                     setTrendingItem({ 
                         id: data.id, 
                         ...data,
@@ -246,7 +254,7 @@ export default function Dashboard({
                 }
             });
         
-        // Subscribe to changes
+        // Subscribe to changes (only if table exists)
         const channel = supabase
             .channel('trending-item')
             .on(
@@ -260,11 +268,16 @@ export default function Dashboard({
                     const { data, error } = await supabase
                         .from('market_items')
                         .select('*')
+                        .eq('status', 'active') // Filter by active status to match RLS policy
                         .order('created_at', { ascending: false })
                         .limit(1)
-                        .single();
+                        .maybeSingle();
                     
-                    if (!error && data) {
+                    if (error) {
+                        // Silently handle errors (table might not exist or RLS issue)
+                        return;
+                    }
+                    if (data) {
                         setTrendingItem({ 
                             id: data.id, 
                             ...data,
