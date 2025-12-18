@@ -188,7 +188,7 @@ const CookiePolicy = () => (
 
         <DocSection title="Types of Cookies We Use">
             <DocList items={[
-                "<strong>Essential Cookies:</strong> Required for login authentication (e.g., Firebase Auth tokens). The site cannot function without these.",
+                "<strong>Essential Cookies:</strong> Required for login authentication (e.g., Supabase Auth tokens). The site cannot function without these.",
                 "<strong>Functional Cookies:</strong> Remember your preferences, such as Dark Mode settings and Sidebar state.",
                 "<strong>Analytics Cookies:</strong> Help us understand how you use the site to improve features. These are aggregated and anonymous."
             ]} />
