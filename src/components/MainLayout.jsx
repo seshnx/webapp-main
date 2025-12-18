@@ -5,24 +5,46 @@ import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
 import ErrorBoundary from './shared/ErrorBoundary';
 
-// Lazy load ALL components to prevent initialization errors
-const Sidebar = lazy(() => import('./Sidebar'));
-const Navbar = lazy(() => import('./Navbar'));
-const PublicProfileModal = lazy(() => import('./PublicProfileModal'));
-const Dashboard = lazy(() => import('./Dashboard'));
-const SocialFeed = lazy(() => import('./SocialFeed'));
-const ChatInterface = lazy(() => import('./ChatInterface'));
-const BookingSystem = lazy(() => import('./BookingSystem'));
-const Marketplace = lazy(() => import('./Marketplace'));
-const TechServices = lazy(() => import('./TechServices'));
-const PaymentsManager = lazy(() => import('./PaymentsManager'));
-const ProfileManager = lazy(() => import('./ProfileManager'));
-const BusinessCenter = lazy(() => import('./BusinessCenter'));
-const LegalDocs = lazy(() => import('./LegalDocs'));
-const EduStudentDashboard = lazy(() => import('./EDU/EduStudentDashboard'));
-const EduInternDashboard = lazy(() => import('./EDU/EduInternDashboard'));
-const EduStaffDashboard = lazy(() => import('./EDU/EduStaffDashboard'));
-const EduAdminDashboard = lazy(() => import('./EDU/EduAdminDashboard'));
+// Retry wrapper for lazy loading to handle initialization errors
+const retryLazyLoad = (importFn, retries = 3, delay = 100) => {
+  return lazy(() => {
+    return new Promise((resolve, reject) => {
+      const attempt = (attemptNumber) => {
+        importFn()
+          .then(resolve)
+          .catch((error) => {
+            if (attemptNumber < retries) {
+              console.warn(`Lazy load failed, retrying... (${attemptNumber + 1}/${retries})`, error);
+              setTimeout(() => attempt(attemptNumber + 1), delay * attemptNumber);
+            } else {
+              console.error('Lazy load failed after retries:', error);
+              reject(error);
+            }
+          });
+      };
+      attempt(0);
+    });
+  });
+};
+
+// Lazy load ALL components to prevent initialization errors with retry mechanism
+const Sidebar = retryLazyLoad(() => import('./Sidebar'));
+const Navbar = retryLazyLoad(() => import('./Navbar'));
+const PublicProfileModal = retryLazyLoad(() => import('./PublicProfileModal'));
+const Dashboard = retryLazyLoad(() => import('./Dashboard'));
+const SocialFeed = retryLazyLoad(() => import('./SocialFeed'));
+const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
+const BookingSystem = retryLazyLoad(() => import('./BookingSystem'));
+const Marketplace = retryLazyLoad(() => import('./Marketplace'));
+const TechServices = retryLazyLoad(() => import('./TechServices'));
+const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
+const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
+const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
+const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
+const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
+const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
+const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
+const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
 
 // Shared loading fallback component
 const LoadingFallback = () => (
