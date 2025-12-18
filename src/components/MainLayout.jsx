@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SchoolProvider } from '../contexts/SchoolContext';
 import Sidebar from './Sidebar';
@@ -211,13 +211,13 @@ export default function MainLayout({
     }
   };
 
-  const openPublicProfile = (uid, name) => {
+  const openPublicProfile = useCallback((uid, name) => {
     setViewingProfile({ uid, name });
-  };
+  }, []);
 
-  const clearPendingChatTarget = () => {
+  const clearPendingChatTarget = useCallback(() => {
     setPendingChatTarget(null);
-  };
+  }, []);
 
   // Determine which content to render based on activeTab (memoized to prevent remounts)
   const renderContent = useMemo(() => {
@@ -368,7 +368,7 @@ export default function MainLayout({
           />
         );
     }
-  }, [activeTab, user, userData, subProfiles, tokenBalance, pendingChatTarget, viewingProfile, handleLogout, setActiveTab, openPublicProfile, clearPendingChatTarget]);
+  }, [activeTab, user, userData, subProfiles, tokenBalance, pendingChatTarget, handleLogout, openPublicProfile, clearPendingChatTarget]);
 
   return (
     <SchoolProvider user={user} userData={userData}>

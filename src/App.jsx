@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './config/supabase'; 
 import { Loader2 } from 'lucide-react';
@@ -59,7 +59,7 @@ export default function App() {
      * This function is designed to never throw an uncaught error.
      * It will always set userData to *something*, preventing the "null account" crash.
      */
-    const loadUserData = async (userId) => {
+    const loadUserData = async (userId, sessionUser = null) => {
         // 1. Sanity Check
         if (!userId) {
             // Don't set to null - if we have a user, we should always have userData
@@ -74,13 +74,15 @@ export default function App() {
         }
         loadingUsers.add(userId);
 
-        let authUser = null; // Declare outside try for use in catch block
+        let authUser = sessionUser || user; // Use provided sessionUser or current user state
         
         try {
-            // 2. Safe Auth Retrieval
-            // We fetch the latest auth object to get metadata (names/avatar) even if the profile table is empty
-            const { data: authData } = await supabase.auth.getUser();
-            authUser = authData?.user || null;
+            // 2. Safe Auth Retrieval (only if we don't have user data)
+            // Use session user if provided, otherwise fetch (but prefer current user state)
+            if (!authUser) {
+                const { data: authData } = await supabase.auth.getUser();
+                authUser = authData?.user || null;
+            }
             
             // 3. Fetch Profile (Safely)
             // .maybeSingle() returns null instead of throwing an error if 0 rows are found
@@ -240,15 +242,32 @@ export default function App() {
             if (currentUser && currentUser.id) {
                 console.log('Session restored:', currentUser.id);
                 setUser(currentUser);
-                // Load user data - wait for it to complete before clearing loading
-                await loadUserData(currentUser.id).catch(err => {
-                    console.error("User data load failed:", err);
-                });
-                // Only clear loading after userData is loaded
+                
+                // Create minimal userData immediately from session user (prevents blocking)
+                const metadata = currentUser.user_metadata || {};
+                const minimalUserData = {
+                    id: currentUser.id,
+                    firstName: metadata.first_name || metadata.given_name || 'User',
+                    lastName: metadata.last_name || metadata.family_name || '',
+                    email: currentUser.email || '',
+                    accountTypes: ['Fan'],
+                    activeProfileRole: 'Fan',
+                    photoURL: metadata.avatar_url || metadata.picture || null,
+                    settings: {},
+                    effectiveDisplayName: metadata.first_name || metadata.given_name || 'User'
+                };
+                setUserData(minimalUserData);
+                
+                // Clear loading immediately to show UI
                 if (!initialSessionHandledRef.current) {
                     setLoading(false);
                     initialSessionHandledRef.current = true;
                 }
+                
+                // Load full user data in background (will update userData when complete)
+                loadUserData(currentUser.id, currentUser).catch(err => {
+                    console.error("User data load failed:", err);
+                });
             } else {
                 setUser(null);
                 setUserData(null);
@@ -278,39 +297,15 @@ export default function App() {
         const currentUser = session?.user ?? null;
         
         // Handle INITIAL_SESSION event - this fires on page load
-        // We've already handled it in loadInitialSession, so just sync state
-        // Don't clear loading here - let loadInitialSession handle it after userData loads
+        // loadInitialSession already handled this, so just sync state if needed
         if (event === 'INITIAL_SESSION') {
             if (currentUser && currentUser.id) {
                 setUser(currentUser);
-                // Only load userData if we don't have it yet
+                // Load userData in background if we don't have it yet
                 if (!userData) {
-                    loadUserData(currentUser.id).then(() => {
-                        // Clear loading after userData is loaded
-                        if (!initialSessionHandledRef.current) {
-                            setLoading(false);
-                            initialSessionHandledRef.current = true;
-                        }
-                    }).catch(err => {
+                    loadUserData(currentUser.id).catch(err => {
                         console.error("Background user data load failed:", err);
-                        // Clear loading even on error
-                        if (!initialSessionHandledRef.current) {
-                            setLoading(false);
-                            initialSessionHandledRef.current = true;
-                        }
                     });
-                } else {
-                    // We already have userData, clear loading
-                    if (!initialSessionHandledRef.current) {
-                        setLoading(false);
-                        initialSessionHandledRef.current = true;
-                    }
-                }
-            } else {
-                // No user - clear loading
-                if (!initialSessionHandledRef.current) {
-                    setLoading(false);
-                    initialSessionHandledRef.current = true;
                 }
             }
             return;
@@ -352,7 +347,7 @@ export default function App() {
     };
   }, []); // Empty dependency array = runs once on mount
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
       try {
           // Clear state immediately for responsive UI
           setUser(null);
@@ -375,7 +370,7 @@ export default function App() {
           setUserData(null);
           navigate('/login', { replace: true });
       }
-  };
+  }, [navigate]);
 
   // Show loading spinner while we're checking session or loading userData
   // This prevents flashing between AuthWizard and MainLayout
