@@ -219,8 +219,21 @@ export default function MainLayout({
     setPendingChatTarget(null);
   }, []);
 
-  // Determine which content to render based on activeTab (memoized to prevent remounts)
-  const renderContent = useMemo(() => {
+  // Determine which content to render based on activeTab
+  // Using a function instead of useMemo to avoid hook initialization issues
+  const renderContent = () => {
+    // Guard: Return loading if userData is not ready
+    if (!userData || !userData.id) {
+      return (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+          </div>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -368,7 +381,7 @@ export default function MainLayout({
           />
         );
     }
-  }, [activeTab, user, userData, subProfiles, tokenBalance, pendingChatTarget, handleLogout, openPublicProfile, clearPendingChatTarget]);
+  };
 
   return (
     <SchoolProvider user={user} userData={userData}>
@@ -401,7 +414,7 @@ export default function MainLayout({
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
-          {renderContent}
+          {renderContent()}
         </main>
       </div>
 
