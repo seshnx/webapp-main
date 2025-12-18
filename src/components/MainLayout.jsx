@@ -1,26 +1,27 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SchoolProvider } from '../contexts/SchoolContext';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
-import Dashboard from './Dashboard';
-import SocialFeed from './SocialFeed';
-import ChatInterface from './ChatInterface';
-import BookingSystem from './BookingSystem';
-import Marketplace from './Marketplace';
-import TechServices from './TechServices';
-import PaymentsManager from './PaymentsManager';
-import ProfileManager from './ProfileManager';
-import BusinessCenter from './BusinessCenter';
-import LegalDocs from './LegalDocs';
 import PublicProfileModal from './PublicProfileModal';
 import { supabase } from '../config/supabase';
+import { Loader2 } from 'lucide-react';
 
-// EDU Components
-import EduStudentDashboard from './EDU/EduStudentDashboard';
-import EduInternDashboard from './EDU/EduInternDashboard';
-import EduStaffDashboard from './EDU/EduStaffDashboard';
-import EduAdminDashboard from './EDU/EduAdminDashboard';
+// Lazy load components to prevent initialization errors
+const Dashboard = lazy(() => import('./Dashboard'));
+const SocialFeed = lazy(() => import('./SocialFeed'));
+const ChatInterface = lazy(() => import('./ChatInterface'));
+const BookingSystem = lazy(() => import('./BookingSystem'));
+const Marketplace = lazy(() => import('./Marketplace'));
+const TechServices = lazy(() => import('./TechServices'));
+const PaymentsManager = lazy(() => import('./PaymentsManager'));
+const ProfileManager = lazy(() => import('./ProfileManager'));
+const BusinessCenter = lazy(() => import('./BusinessCenter'));
+const LegalDocs = lazy(() => import('./LegalDocs'));
+const EduStudentDashboard = lazy(() => import('./EDU/EduStudentDashboard'));
+const EduInternDashboard = lazy(() => import('./EDU/EduInternDashboard'));
+const EduStaffDashboard = lazy(() => import('./EDU/EduStaffDashboard'));
+const EduAdminDashboard = lazy(() => import('./EDU/EduAdminDashboard'));
 
 export default function MainLayout({ 
   user, 
@@ -234,151 +235,191 @@ export default function MainLayout({
       );
     }
 
+    const LoadingFallback = () => (
+      <div className="flex-1 flex items-center justify-center">
+        <Loader2 className="animate-spin text-brand-blue" size={32} />
+      </div>
+    );
+
     switch (activeTab) {
       case 'dashboard':
         return (
-          <Dashboard
-            user={user}
-            userData={userData}
-            setActiveTab={setActiveTab}
-            bookingCount={0}
-            subProfiles={subProfiles}
-            tokenBalance={tokenBalance}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <Dashboard
+              user={user}
+              userData={userData}
+              setActiveTab={setActiveTab}
+              bookingCount={0}
+              subProfiles={subProfiles}
+              tokenBalance={tokenBalance}
+            />
+          </Suspense>
         );
 
       case 'feed':
       case 'social':
         return (
-          <SocialFeed
-            user={user}
-            userData={userData}
-            openPublicProfile={openPublicProfile}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <SocialFeed
+              user={user}
+              userData={userData}
+              openPublicProfile={openPublicProfile}
+            />
+          </Suspense>
         );
 
       case 'messages':
       case 'chat':
         return (
-          <ChatInterface
-            user={user}
-            userData={userData}
-            openPublicProfile={openPublicProfile}
-            pendingChatTarget={pendingChatTarget}
-            clearPendingChatTarget={clearPendingChatTarget}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <ChatInterface
+              user={user}
+              userData={userData}
+              openPublicProfile={openPublicProfile}
+              pendingChatTarget={pendingChatTarget}
+              clearPendingChatTarget={clearPendingChatTarget}
+            />
+          </Suspense>
         );
 
       case 'bookings':
         return (
-          <BookingSystem
-            user={user}
-            userData={userData}
-            subProfiles={subProfiles}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <BookingSystem
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
         );
 
       case 'marketplace':
         return (
-          <Marketplace
-            user={user}
-            userData={userData}
-            tokenBalance={tokenBalance}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <Marketplace
+              user={user}
+              userData={userData}
+              tokenBalance={tokenBalance}
+            />
+          </Suspense>
         );
 
       case 'tech':
         return (
-          <TechServices
-            user={user}
-            userData={userData}
-            openPublicProfile={openPublicProfile}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <TechServices
+              user={user}
+              userData={userData}
+              openPublicProfile={openPublicProfile}
+            />
+          </Suspense>
         );
 
       case 'payments':
       case 'billing':
         return (
-          <PaymentsManager
-            user={user}
-            userData={userData}
-            tokenBalance={tokenBalance}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <PaymentsManager
+              user={user}
+              userData={userData}
+              tokenBalance={tokenBalance}
+            />
+          </Suspense>
         );
 
       case 'profile':
         return (
-          <ProfileManager
-            user={user}
-            userData={userData}
-            subProfiles={subProfiles}
-            handleLogout={handleLogout}
-            openPublicProfile={openPublicProfile}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <ProfileManager
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+              handleLogout={handleLogout}
+              openPublicProfile={openPublicProfile}
+            />
+          </Suspense>
         );
 
       case 'business-center':
         return (
-          <BusinessCenter
-            user={user}
-            userData={userData}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <BusinessCenter
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
         );
 
       case 'legal':
-        return <LegalDocs />;
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <LegalDocs />
+          </Suspense>
+        );
 
       case 'edu-student':
         return (
-          <EduStudentDashboard
-            user={user}
-            userData={userData}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <EduStudentDashboard
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
         );
 
       case 'edu-intern':
         return (
-          <EduInternDashboard
-            user={user}
-            userData={userData}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <EduInternDashboard
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
         );
 
       case 'edu-overview':
         return (
-          <EduStaffDashboard
-            user={user}
-            userData={userData}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <EduStaffDashboard
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
         );
 
       case 'edu-admin':
         return (
-          <EduAdminDashboard
-            user={user}
-            userData={userData}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <EduAdminDashboard
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
         );
 
       case 'studio-ops':
         // Studio operations are handled within BusinessCenter
         return (
-          <BusinessCenter
-            user={user}
-            userData={userData}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <BusinessCenter
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
         );
 
       default:
         return (
-          <Dashboard
-            user={user}
-            userData={userData}
-            setActiveTab={setActiveTab}
-            bookingCount={0}
-            subProfiles={subProfiles}
-            tokenBalance={tokenBalance}
-          />
+          <Suspense fallback={<LoadingFallback />}>
+            <Dashboard
+              user={user}
+              userData={userData}
+              setActiveTab={setActiveTab}
+              bookingCount={0}
+              subProfiles={subProfiles}
+              tokenBalance={tokenBalance}
+            />
+          </Suspense>
         );
     }
   };
