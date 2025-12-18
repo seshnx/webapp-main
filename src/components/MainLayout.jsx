@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SchoolProvider } from '../contexts/SchoolContext';
 import Sidebar from './Sidebar';
@@ -30,7 +30,25 @@ export default function MainLayout({
   toggleTheme, 
   handleLogout 
 }) {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Helper function to get tab from pathname
+  const getTabFromPath = (path) => {
+    if (path === '/') return 'dashboard';
+    if (path === '/feed' || path === '/social') return 'feed';
+    if (path === '/messages' || path === '/chat') return 'messages';
+    if (path === '/bookings') return 'bookings';
+    if (path === '/marketplace') return 'marketplace';
+    if (path === '/tech') return 'tech';
+    if (path === '/payments' || path === '/billing') return 'payments';
+    if (path === '/profile') return 'profile';
+    if (path === '/business-center') return 'business-center';
+    if (path === '/legal') return 'legal';
+    if (path === '/studio-ops') return 'studio-ops';
+    if (path.startsWith('/edu-')) return path.substring(1);
+    return 'dashboard'; // default
+  };
+
+  // Initialize activeTab from current pathname
+  const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subProfiles, setSubProfiles] = useState({});
   const [tokenBalance, setTokenBalance] = useState(0);
@@ -38,39 +56,67 @@ export default function MainLayout({
   const [pendingChatTarget, setPendingChatTarget] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Track if we're initializing to prevent navigation loops
+  const isInitializingRef = useRef(true);
+  // Track if activeTab change came from pathname (to prevent navigation loop)
+  const fromPathnameRef = useRef(false);
+  // Track previous pathname to detect actual changes
+  const prevPathnameRef = useRef(location.pathname);
+  // Track if user is currently navigating (to prevent pathname sync from overriding)
+  const isNavigatingRef = useRef(false);
 
-  // Sync activeTab with route
+  // Sync activeTab with route (pathname is source of truth)
   useEffect(() => {
     const path = location.pathname;
-    if (path === '/') {
-      setActiveTab('dashboard');
-    } else if (path === '/feed' || path === '/social') {
-      setActiveTab('feed');
-    } else if (path === '/messages' || path === '/chat') {
-      setActiveTab('messages');
-    } else if (path === '/bookings') {
-      setActiveTab('bookings');
-    } else if (path === '/marketplace') {
-      setActiveTab('marketplace');
-    } else if (path === '/tech') {
-      setActiveTab('tech');
-    } else if (path === '/payments' || path === '/billing') {
-      setActiveTab('payments');
-    } else if (path === '/profile') {
-      setActiveTab('profile');
-    } else if (path === '/business-center') {
-      setActiveTab('business-center');
-    } else if (path === '/legal') {
-      setActiveTab('legal');
-    } else if (path === '/studio-ops') {
-      setActiveTab('studio-ops');
-    } else if (path.startsWith('/edu-')) {
-      setActiveTab(path.substring(1)); // Remove leading /, e.g., /edu-student -> edu-student
+    
+    // Only sync if pathname actually changed (not just a re-render)
+    if (prevPathnameRef.current === path) {
+      // Still mark initialization as complete even if pathname didn't change
+      if (isInitializingRef.current) {
+        isInitializingRef.current = false;
+      }
+      return;
     }
-  }, [location.pathname]);
+    
+    prevPathnameRef.current = path;
+    const newTab = getTabFromPath(path);
+    
+    // If we were navigating, this is the completion of that navigation
+    // Reset the flag and update activeTab
+    if (isNavigatingRef.current) {
+      isNavigatingRef.current = false;
+    }
+    
+    // Always update from pathname (pathname is source of truth)
+    // Use functional update to compare against latest state
+    setActiveTab(prevTab => {
+      if (prevTab !== newTab) {
+        fromPathnameRef.current = true; // Mark that this change came from pathname
+        return newTab;
+      }
+      return prevTab; // No change needed
+    });
+    
+    // Mark initialization as complete after first sync
+    if (isInitializingRef.current) {
+      isInitializingRef.current = false;
+    }
+  }, [location.pathname]); // Only depend on pathname
 
-  // Update URL when tab changes
+  // Update URL when tab changes (only if user-initiated, not from pathname sync)
   useEffect(() => {
+    // Skip navigation during initialization
+    if (isInitializingRef.current) {
+      return;
+    }
+    
+    // Skip navigation if the change came from pathname sync
+    if (fromPathnameRef.current) {
+      fromPathnameRef.current = false; // Reset flag
+      return;
+    }
+    
     const tabRoutes = {
       'dashboard': '/',
       'feed': '/feed',
@@ -90,7 +136,9 @@ export default function MainLayout({
     };
 
     const route = tabRoutes[activeTab];
+    // Only navigate if route exists and pathname doesn't match
     if (route && location.pathname !== route) {
+      isNavigatingRef.current = true; // Mark that we're navigating
       navigate(route, { replace: true });
     }
   }, [activeTab, navigate, location.pathname]);
@@ -171,8 +219,8 @@ export default function MainLayout({
     setPendingChatTarget(null);
   };
 
-  // Determine which content to render based on activeTab
-  const renderContent = () => {
+  // Determine which content to render based on activeTab (memoized to prevent remounts)
+  const renderContent = useMemo(() => {
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -320,7 +368,7 @@ export default function MainLayout({
           />
         );
     }
-  };
+  }, [activeTab, user, userData, subProfiles, tokenBalance, pendingChatTarget, viewingProfile, handleLogout, setActiveTab, openPublicProfile, clearPendingChatTarget]);
 
   return (
     <SchoolProvider user={user} userData={userData}>
@@ -353,7 +401,7 @@ export default function MainLayout({
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
-          {renderContent()}
+          {renderContent}
         </main>
       </div>
 
