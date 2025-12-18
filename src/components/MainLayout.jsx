@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SchoolProvider } from '../contexts/SchoolContext';
-import Sidebar from './Sidebar';
-import Navbar from './Navbar';
-import PublicProfileModal from './PublicProfileModal';
 import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
+import ErrorBoundary from './shared/ErrorBoundary';
 
-// Lazy load components to prevent initialization errors
+// Lazy load ALL components to prevent initialization errors
+const Sidebar = lazy(() => import('./Sidebar'));
+const Navbar = lazy(() => import('./Navbar'));
+const PublicProfileModal = lazy(() => import('./PublicProfileModal'));
 const Dashboard = lazy(() => import('./Dashboard'));
 const SocialFeed = lazy(() => import('./SocialFeed'));
 const ChatInterface = lazy(() => import('./ChatInterface'));
@@ -22,6 +23,13 @@ const EduStudentDashboard = lazy(() => import('./EDU/EduStudentDashboard'));
 const EduInternDashboard = lazy(() => import('./EDU/EduInternDashboard'));
 const EduStaffDashboard = lazy(() => import('./EDU/EduStaffDashboard'));
 const EduAdminDashboard = lazy(() => import('./EDU/EduAdminDashboard'));
+
+// Shared loading fallback component
+const LoadingFallback = () => (
+  <div className="flex items-center justify-center p-4">
+    <Loader2 className="animate-spin text-brand-blue" size={24} />
+  </div>
+);
 
 export default function MainLayout({ 
   user, 
@@ -244,16 +252,18 @@ export default function MainLayout({
     switch (activeTab) {
       case 'dashboard':
         return (
-          <Suspense fallback={<LoadingFallback />}>
-            <Dashboard
-              user={user}
-              userData={userData}
-              setActiveTab={setActiveTab}
-              bookingCount={0}
-              subProfiles={subProfiles}
-              tokenBalance={tokenBalance}
-            />
-          </Suspense>
+          <ErrorBoundary name="Dashboard">
+            <Suspense fallback={<LoadingFallback />}>
+              <Dashboard
+                user={user}
+                userData={userData}
+                setActiveTab={setActiveTab}
+                bookingCount={0}
+                subProfiles={subProfiles}
+                tokenBalance={tokenBalance}
+              />
+            </Suspense>
+          </ErrorBoundary>
         );
 
       case 'feed':
@@ -428,30 +438,34 @@ export default function MainLayout({
     <SchoolProvider user={user} userData={userData}>
       <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-[#1a1d21]">
         {/* Sidebar */}
-        <Sidebar
-          userData={userData}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          sidebarOpen={sidebarOpen}
-          setSidebarOpen={setSidebarOpen}
-          handleLogout={handleLogout}
-        />
+        <Suspense fallback={<LoadingFallback />}>
+          <Sidebar
+            userData={userData}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+            handleLogout={handleLogout}
+          />
+        </Suspense>
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Navbar */}
-        <Navbar
-          user={user}
-          userData={userData}
-          subProfiles={subProfiles}
-          darkMode={darkMode}
-          toggleTheme={toggleTheme}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-          onRoleSwitch={handleRoleSwitch}
-          openPublicProfile={openPublicProfile}
-        />
+        <Suspense fallback={<LoadingFallback />}>
+          <Navbar
+            user={user}
+            userData={userData}
+            subProfiles={subProfiles}
+            darkMode={darkMode}
+            toggleTheme={toggleTheme}
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+            onRoleSwitch={handleRoleSwitch}
+            openPublicProfile={openPublicProfile}
+          />
+        </Suspense>
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto">
@@ -461,7 +475,8 @@ export default function MainLayout({
 
         {/* Public Profile Modal */}
         {viewingProfile && (
-          <PublicProfileModal
+          <Suspense fallback={null}>
+            <PublicProfileModal
             userId={viewingProfile.uid}
             currentUser={user}
             currentUserData={userData}
@@ -472,6 +487,7 @@ export default function MainLayout({
               setViewingProfile(null);
             }}
           />
+          </Suspense>
         )}
       </div>
     </SchoolProvider>
