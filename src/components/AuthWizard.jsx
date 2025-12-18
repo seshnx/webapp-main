@@ -73,7 +73,7 @@ function ZipUserMap({ zip }) {
 }
 
 export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isNewUser }) {
-  const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'forgot' | 'onboarding'
+  const [mode, setMode] = useState('login'); 
   const [step, setStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -101,50 +101,25 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     isLength: false
   });
 
-  // Initialize mode based on user state
+  // Initialization Logic
   useEffect(() => {
-    // Only show onboarding if explicitly marked as new user AND user exists
-    // Don't auto-trigger onboarding on every user detection
     if (isNewUser && user && user.id) {
-      // Check if profile already has account_types (from OAuth or previous setup)
-      const checkProfile = async () => {
-        if (!supabase) return;
-        
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('account_types')
-          .eq('id', user.id)
-          .single();
-        
-        // If profile exists and has account_types, skip onboarding
-        if (profile && profile.account_types && profile.account_types.length > 0) {
-          console.log('Profile already has account_types, skipping onboarding');
-          setMode('login'); // Will redirect to app
-          return;
-        }
-        
-        // Otherwise, show onboarding
-        setMode('onboarding');
-        setStep(1);
-        const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
-        const names = fullName.split(' ');
-        setForm(prev => ({
-          ...prev,
-          email: user?.email || '',
-          firstName: names[0] || '',
-          lastName: names.slice(1).join(' ') || ''
-        }));
-      };
-      
-      checkProfile();
+      setMode('onboarding');
+      setStep(1);
+      const fullName = user?.user_metadata?.full_name || user?.user_metadata?.name || '';
+      const names = fullName.split(' ');
+      setForm(prev => ({
+        ...prev,
+        email: user?.email || '',
+        firstName: names[0] || '',
+        lastName: names.slice(1).join(' ') || ''
+      }));
     } else if (!user || !user.id) {
       setMode('login');
       setStep(1);
     }
-    // If user exists but not isNewUser, don't change mode (let App.jsx handle it)
   }, [user, isNewUser]);
 
-  // Password validation
   useEffect(() => {
     const p = form.password;
     setPasswordValidations({
@@ -157,7 +132,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
   const isPasswordValid = Object.values(passwordValidations).every(Boolean);
 
-  // Resize observer for card height
   useEffect(() => {
     if (!contentRef.current) return;
     const resizeObserver = new ResizeObserver(() => {
@@ -172,18 +146,14 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
   useEffect(() => { setError(''); }, [step]);
 
-  // === AUTHENTICATION HANDLERS ===
+  // === HANDLERS ===
 
   const handleLogin = async () => {
     if (!form.email || !form.password) {
       setError("Please fill in all fields.");
       return;
     }
-    if (!supabase) {
-      setError("Authentication service unavailable.");
-      return;
-    }
-
+    
     setIsLoading(true);
     setError('');
 
@@ -194,66 +164,51 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       });
 
       if (loginError) {
-        if (loginError.message?.includes('Invalid login credentials') || loginError.message?.includes('Email not confirmed')) {
+        if (loginError.message?.includes('Invalid login credentials')) {
           setError("Invalid email or password.");
         } else {
-          setError(loginError.message || "Failed to sign in.");
+          setError(loginError.message);
         }
-        setIsLoading(false);
+        setIsLoading(false); // Stop spinning on error
+      } else {
+        // Success! Keep spinning briefly while redirect happens
+        console.log("Login success, redirecting...");
+        // Safety timeout in case App.jsx doesn't catch it immediately
+        setTimeout(() => {
+            if (window.location.pathname === '/login') {
+                 window.location.href = '/'; 
+            }
+        }, 1500);
       }
-      // Success - App.jsx handles redirect
     } catch (err) {
-      console.error('Login error:', err);
-      setError("An unexpected error occurred.");
+      console.error('Login exception:', err);
+      setError("Connection error. Please try again.");
       setIsLoading(false);
     }
   };
 
   const handleGoogleLogin = async () => {
-    if (!supabase) {
-      setError("Authentication service unavailable.");
-      return;
-    }
-
-    setError('');
     setIsLoading(true);
-
+    setError('');
     try {
-      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           queryParams: { access_type: 'offline', prompt: 'consent' },
-          redirectTo: `${window.location.origin}?intent=signup` // Add intent parameter for OAuth callback
+          redirectTo: `${window.location.origin}?intent=signup`
         }
       });
-
-      if (oauthError) {
-        setError(oauthError.message || "Failed to sign in with Google.");
-        setIsLoading(false);
-      }
-      // OAuth redirects - no need to handle success
+      if (error) throw error;
     } catch (err) {
-      console.error('Google login error:', err);
-      setError("An unexpected error occurred.");
+      console.error(err);
+      setError("Failed to initialize Google login.");
       setIsLoading(false);
     }
   };
 
   const handleSignup = async () => {
-    if (!supabase) {
-      setError("Authentication service unavailable.");
-      return;
-    }
-
-    if (mode === 'signup' && !isPasswordValid) {
-      setError("Password requirements not met.");
-      return;
-    }
-
-    if (form.roles.length === 0) {
-      setError("Please select at least one role.");
-      return;
-    }
+    if (mode === 'signup' && !isPasswordValid) return setError("Password too weak.");
+    if (form.roles.length === 0) return setError("Please select a role.");
 
     setIsLoading(true);
     setError('');
@@ -261,253 +216,81 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     try {
       let userId = user?.id;
 
-      // Step 1: Create user account if needed
+      // 1. Create Auth User (if not already exists from OAuth)
       if (!userId) {
-        const { data: signupData, error: signupError } = await supabase.auth.signUp({
+        const { data, error: upError } = await supabase.auth.signUp({
           email: form.email.trim(),
           password: form.password,
           options: {
-            data: {
-              first_name: form.firstName,
-              last_name: form.lastName
-            },
-            emailRedirectTo: `${window.location.origin}/?intent=signup`
+            data: { first_name: form.firstName, last_name: form.lastName }
           }
         });
 
-        if (signupError) {
-          console.error('Signup error:', signupError);
-          if (signupError.message?.includes('already registered') || signupError.message?.includes('already exists') || signupError.message?.includes('User already registered')) {
-            setError("An account with this email already exists. Please sign in instead.");
-          } else if (signupError.message?.includes('Password')) {
-            setError("Password does not meet requirements. Please check password rules.");
-          } else if (signupError.message?.includes('email')) {
-            setError("Invalid email address. Please check your email.");
-          } else {
-            setError(signupError.message || "Failed to create account. Please try again.");
-          }
+        if (upError) {
           setIsLoading(false);
-          return;
+          return setError(upError.message);
         }
 
-        // Check if email confirmation is required
-        if (signupData?.user && !signupData.session) {
-          // Email confirmation required
-          setError('');
+        if (data?.user && !data.session) {
           setIsLoading(false);
-          alert('Account created! Please check your email to confirm your account, then sign in.');
           setMode('login');
+          alert('Check your email to confirm your account!');
           return;
         }
-
-        userId = signupData?.user?.id;
-        if (!userId) {
-          setError("Account created but unable to retrieve user ID. Please try signing in.");
-          setIsLoading(false);
-          return;
-        }
+        userId = data.user.id;
       }
 
-      // Step 2: Create or update profile directly
-      console.log('Creating/updating profile...');
-      
+      // 2. Create Profile
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
-      
-      // Calculate effective display name and search terms
-      const effectiveDisplayName = form.firstName && form.lastName
-        ? `${form.firstName} ${form.lastName}`
-        : form.firstName || form.lastName || form.email.trim().split('@')[0] || 'User';
-      
-      const searchTerms = [
-        form.firstName?.toLowerCase(),
-        form.lastName?.toLowerCase(),
-        effectiveDisplayName.toLowerCase(),
-        finalRoles[0]?.toLowerCase(),
-        form.talentSubRole?.toLowerCase()
-      ].filter(Boolean);
-      
-      const profileData = {
-        first_name: form.firstName,
-        last_name: form.lastName,
-        email: form.email.trim(),
-        zip_code: form.zip || null,
-        account_types: finalRoles,
-        active_role: finalRoles[0],
-        preferred_role: finalRoles[0],
-        talent_sub_role: finalRoles.includes('Talent') ? form.talentSubRole : null,
-        effective_display_name: effectiveDisplayName,
-        search_terms: searchTerms,
-        settings: {},
-        updated_at: new Date().toISOString()
-      };
+      const displayName = `${form.firstName} ${form.lastName}`;
 
-      // Try to create/update profile with upsert
-      try {
-        console.log('Attempting profile upsert...');
-        const { error: upsertError } = await supabase
-          .from('profiles')
-          .upsert({
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
             id: userId,
-            ...profileData
-          }, { onConflict: 'id' });
-        
-        if (upsertError) {
-          console.error('Profile upsert failed:', upsertError);
-          // Fallback: try insert, then update
-          const { error: insertError } = await supabase
-            .from('profiles')
-            .insert({
-              id: userId,
-              ...profileData
-            });
-          
-          if (insertError && insertError.code !== '23505') { // Ignore duplicate key errors
-            console.error('Profile insert also failed:', insertError);
-            // Try update as last resort
-            const { error: updateError } = await supabase
-              .from('profiles')
-              .update(profileData)
-              .eq('id', userId);
-            
-            if (updateError) {
-              console.error('Profile update also failed:', updateError);
-            } else {
-              console.log('Profile updated successfully (fallback)');
-            }
-          } else {
-            console.log('Profile created successfully');
-          }
-        } else {
-          console.log('Profile upserted successfully');
-        }
-      } catch (err) {
-        console.error('Profile operation error:', err);
+            email: form.email.trim(),
+            first_name: form.firstName,
+            last_name: form.lastName,
+            zip_code: form.zip,
+            account_types: finalRoles,
+            active_role: finalRoles[0],
+            preferred_role: finalRoles[0],
+            effective_display_name: displayName,
+            search_terms: [form.firstName, form.lastName, displayName].map(s => s?.toLowerCase()).filter(Boolean),
+            updated_at: new Date().toISOString()
+        }, { onConflict: 'id' });
+
+      if (profileError) {
+          console.error("Profile creation error:", profileError);
+          // Don't block signup on profile error, try to proceed
       }
 
-      // Step 3: Ensure wallet exists (non-blocking)
-      console.log('Creating wallet...');
-      (async () => {
-        try {
-          const { error } = await supabase
-            .from('wallets')
-            .upsert({ user_id: userId, balance: 0 }, { onConflict: 'user_id' });
-          if (error) {
-            console.warn('Wallet upsert failed (non-blocking):', error.message);
-          } else {
-            console.log('Wallet created/updated successfully');
-          }
-        } catch (err) {
-          console.warn('Wallet upsert error (non-blocking):', err.message);
-        }
-      })();
-      
-      // Step 4: Create sub-profiles for selected roles (if needed)
-      // Only create sub-profiles for roles that require them (Talent, Studio, Producer, etc.)
-      const rolesNeedingSubProfiles = finalRoles.filter(role => 
-        ['Talent', 'Studio', 'Producer', 'Technician'].includes(role)
-      );
-      
-      if (rolesNeedingSubProfiles.length > 0) {
-        for (const role of rolesNeedingSubProfiles) {
-          try {
-            const { error } = await supabase
-              .from('sub_profiles')
-              .upsert({
-                user_id: userId,
-                role: role,
-                data: {},
-                updated_at: new Date().toISOString()
-              }, { onConflict: 'user_id,role' });
-            if (error) {
-              console.warn(`Sub-profile creation for ${role} failed:`, error.message);
-            }
-          } catch (err) {
-            console.warn(`Sub-profile creation for ${role} error:`, err.message);
-          }
-        }
-      }
+      // 3. Initialize Wallet
+      await supabase.from('wallets').upsert({ user_id: userId, balance: 0 }, { onConflict: 'user_id' });
 
-      // Success - redirect immediately
-      console.log('✅ Signup completed successfully - redirecting...');
-      
-      setIsLoading(false);
-      
-      // Clear form to prevent re-triggering
-      setForm({
-        email: '',
-        password: '',
-        firstName: '',
-        lastName: '',
-        zip: '',
-        roles: [],
-        talentSubRole: ''
-      });
-      
-      // Call onSuccess callback if provided (for OAuth onboarding)
-      if (onSuccess && typeof onSuccess === 'function') {
-        onSuccess();
-      }
-      
-      // Redirect to home page
-      // For OAuth users, the session should already be active
-      // For email/password signup, we need to wait for email confirmation or auto-login
-      if (mode === 'onboarding') {
-        // OAuth user - session is active, just redirect
-        window.location.href = '/';
-      } else {
-        // Email/password signup - may need email confirmation
-        // Check if user is already logged in
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session && session.user) {
-          window.location.href = '/';
-        } else {
-          // Email confirmation required
-          setError('');
-          setMode('login');
-          alert('Account created! Please check your email to confirm your account, then sign in.');
-        }
-      }
+      // 4. Success
+      if (onSuccess) onSuccess();
+      window.location.href = '/';
 
     } catch (err) {
-      console.error('Signup error:', err);
-      setError(err.message || "Failed to complete setup. Please try again.");
+      console.error(err);
+      setError("Signup failed. Please try again.");
       setIsLoading(false);
     }
   };
 
   const handleForgotPassword = async () => {
-    if (!form.email) {
-      setError("Enter email address.");
-      return;
-    }
-
+    if (!form.email) return setError("Enter your email.");
     setIsLoading(true);
-    setError('');
-
-    try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(form.email, {
-        redirectTo: window.location.origin
-      });
-
-      if (resetError) {
-        setError(resetError.message);
-      } else {
-        setResetSent(true);
-        setError('');
-      }
-    } catch (err) {
-      setError("Failed to send reset email.");
-    }
-
+    const { error } = await supabase.auth.resetPasswordForEmail(form.email, { redirectTo: window.location.origin });
     setIsLoading(false);
+    if (error) setError(error.message);
+    else setResetSent(true);
   };
 
+  // Location Helper
   const handleUseLocation = () => {
-    if (!navigator.geolocation) {
-      setError("Geolocation not supported.");
-      return;
-    }
-
+    if (!navigator.geolocation) return setError("Geolocation not supported.");
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
@@ -517,21 +300,14 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           if (data.address?.postcode) {
             setForm(prev => ({ ...prev, zip: data.address.postcode.split('-')[0] }));
           } else {
-            setError("Could not determine Zip Code.");
+            setError("Zip code not found.");
           }
-        } catch (e) {
-          setError("Failed to find location.");
-        }
+        } catch (e) { setError("Location lookup failed."); }
         setLocating(false);
       },
-      () => {
-        setError("Permission denied.");
-        setLocating(false);
-      }
+      () => { setError("Location permission denied."); setLocating(false); }
     );
   };
-
-  // === UI COMPONENTS ===
 
   const Requirement = ({ met, text }) => (
     <div className={`flex items-center gap-1.5 text-xs ${met ? 'text-green-600' : 'text-gray-400'}`}>
@@ -540,28 +316,18 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     </div>
   );
 
-  const getHeaderText = () => {
-    if (mode === 'signup') return "Create Account";
-    if (mode === 'forgot') return "Recovery";
-    if (mode === 'onboarding') return "Finalize Setup";
-    return null;
-  };
-
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
       <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
         <AuthWizardBackground onImagesLoaded={setBackgroundImagesLoaded} />
       </div>
       <div
-        className="absolute inset-0 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-black transition-opacity duration-1000"
+        className="absolute inset-0 bg-gray-100 dark:bg-black transition-opacity duration-1000"
         style={{ opacity: backgroundImagesLoaded ? 0 : 1, pointerEvents: 'none' }}
       />
 
       <div className="absolute top-6 right-6 z-20">
-        <button
-          onClick={toggleTheme}
-          className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border dark:border-gray-700"
-        >
+        <button onClick={toggleTheme} className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border dark:border-gray-700">
           {darkMode ? <Sun size={20} /> : <Moon size={20} />}
         </button>
       </div>
@@ -573,30 +339,24 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         <div ref={contentRef} className="pt-12 px-8 pb-8">
           <div className="relative w-full h-48 mb-6 flex justify-center shrink-0">
             <div className={`absolute transition-all duration-500 ${mode === 'signup' || mode === 'onboarding' ? 'top-0 scale-90' : 'top-8 scale-100'}`}>
-              <img
-                src={darkMode ? LogoWhite : LogoLight}
-                alt="SeshNx"
-                className="w-96 h-40 object-contain drop-shadow-md"
-              />
+              <img src={darkMode ? LogoWhite : LogoLight} alt="SeshNx" className="w-96 h-40 object-contain drop-shadow-md" />
             </div>
-            {getHeaderText() && (
-              <div className="absolute bottom-2 w-full text-center">
-                <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">{getHeaderText()}</p>
-              </div>
-            )}
+            <div className="absolute bottom-2 w-full text-center">
+                <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">
+                    {mode === 'signup' ? "Create Account" : mode === 'forgot' ? "Recovery" : mode === 'onboarding' ? "Finalize Setup" : ""}
+                </p>
+            </div>
           </div>
 
           {error && (
             <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4">
-              <AlertCircle size={16} />
-              {error}
+              <AlertCircle size={16} /> {error}
             </div>
           )}
 
           {resetSent && (
             <div className="bg-green-50 text-green-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4">
-              <Check size={16} />
-              Check your email.
+              <Check size={16} /> Check your email.
             </div>
           )}
 
@@ -618,10 +378,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                 onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               />
               <div className="flex justify-end">
-                <button
-                  onClick={() => setMode('forgot')}
-                  className="text-xs text-gray-500 hover:text-brand-blue"
-                >
+                <button onClick={() => setMode('forgot')} className="text-xs text-gray-500 hover:text-brand-blue">
                   Forgot Password?
                 </button>
               </div>
@@ -634,14 +391,12 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
               </button>
               <button
                 onClick={handleGoogleLogin}
+                disabled={isLoading}
                 className="w-full border dark:border-gray-600 py-3.5 rounded-xl font-bold dark:text-white hover:bg-gray-50 dark:hover:bg-gray-800"
               >
                 Continue with Google
               </button>
-              <p
-                className="text-center text-sm text-gray-500 cursor-pointer hover:text-brand-blue pt-2"
-                onClick={() => setMode('signup')}
-              >
+              <p className="text-center text-sm text-gray-500 cursor-pointer hover:text-brand-blue pt-2" onClick={() => setMode('signup')}>
                 New here? Create Account
               </p>
             </div>
@@ -650,7 +405,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           {/* SIGNUP / ONBOARDING MODE */}
           {(mode === 'signup' || mode === 'onboarding') && (
             <div>
-              {/* Step 1: Welcome / Email & Password */}
               {step === 1 && (
                 <div className="space-y-4">
                   {mode === 'signup' ? (
@@ -677,27 +431,19 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                       </div>
                       <button
                         className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold disabled:opacity-50"
-                        onClick={() => {
-                          if (isPasswordValid && form.email) setStep(2);
-                        }}
+                        onClick={() => { if (isPasswordValid && form.email) setStep(2); }}
                         disabled={!isPasswordValid || !form.email}
                       >
                         Continue
                       </button>
-                      <p
-                        className="text-center text-sm text-gray-500 cursor-pointer pt-2"
-                        onClick={() => setMode('login')}
-                      >
+                      <p className="text-center text-sm text-gray-500 cursor-pointer pt-2" onClick={() => setMode('login')}>
                         Have an account? Log In
                       </p>
                     </>
                   ) : (
                     <div className="text-center space-y-4">
                       <h3 className="text-2xl font-bold dark:text-white">Welcome!</h3>
-                      <button
-                        className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold"
-                        onClick={() => setStep(2)}
-                      >
+                      <button className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold" onClick={() => setStep(2)}>
                         Let's Go
                       </button>
                     </div>
@@ -705,7 +451,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                 </div>
               )}
 
-              {/* Step 2: Name & Location */}
               {step === 2 && (
                 <div className="space-y-4">
                   <div className="flex gap-3">
@@ -733,24 +478,16 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                       />
                       <MapPin className="absolute left-3 top-3.5 text-gray-400" size={18} />
                     </div>
-                    <button
-                      onClick={handleUseLocation}
-                      className="p-3.5 border dark:border-gray-600 rounded-xl text-brand-blue"
-                      disabled={locating}
-                    >
+                    <button onClick={handleUseLocation} className="p-3.5 border dark:border-gray-600 rounded-xl text-brand-blue" disabled={locating}>
                       {locating ? <Loader2 className="animate-spin" size={18} /> : <Crosshair size={18} />}
                     </button>
                   </div>
                   <ZipUserMap zip={form.zip} />
                   <div className="flex justify-between pt-2">
-                    <button className="text-gray-500" onClick={() => setStep(1)}>
-                      Back
-                    </button>
+                    <button className="text-gray-500" onClick={() => setStep(1)}>Back</button>
                     <button
                       className="bg-black dark:bg-white dark:text-black text-white px-6 py-2.5 rounded-xl font-bold disabled:opacity-50"
-                      onClick={() => {
-                        if (form.firstName && form.zip) setStep(3);
-                      }}
+                      onClick={() => { if (form.firstName && form.zip) setStep(3); }}
                       disabled={!form.firstName || !form.zip}
                     >
                       Next
@@ -759,7 +496,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                 </div>
               )}
 
-              {/* Step 3: Role Selection */}
               {step === 3 && (
                 <div className="space-y-5">
                   <div className="grid grid-cols-2 gap-2.5">
@@ -767,9 +503,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                       <div
                         key={role}
                         onClick={() => {
-                          const newRoles = form.roles.includes(role)
-                            ? form.roles.filter(r => r !== role)
-                            : [...form.roles, role];
+                          const newRoles = form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role];
                           setForm(prev => ({ ...prev, roles: newRoles }));
                         }}
                         className={`p-3 border-2 rounded-xl cursor-pointer text-center font-bold text-sm transition ${
@@ -789,35 +523,22 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                       onChange={(e) => setForm(prev => ({ ...prev, talentSubRole: e.target.value }))}
                     >
                       <option value="">Select Talent Type (Optional)</option>
-                      {TALENT_SUBROLES.map(subRole => (
-                        <option key={subRole} value={subRole}>{subRole}</option>
-                      ))}
+                      {TALENT_SUBROLES.map(subRole => (<option key={subRole} value={subRole}>{subRole}</option>))}
                     </select>
                   )}
-                  {form.roles.length === 0 && (
-                    <p className="text-xs text-red-500 dark:text-red-400 text-center">
-                      Please select at least one role to continue
-                    </p>
-                  )}
                   <button
-                    className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed transition"
+                    className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50"
                     onClick={handleSignup}
-                    disabled={isLoading || form.roles.length === 0 || (mode === 'signup' && !isPasswordValid)}
+                    disabled={isLoading || form.roles.length === 0}
                   >
-                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : mode === 'onboarding' ? "Complete Setup" : "Create Account"}
+                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
                   </button>
-                  <button
-                    className="w-full text-gray-400 text-xs hover:text-gray-600 dark:hover:text-gray-300"
-                    onClick={() => setStep(2)}
-                  >
-                    Back
-                  </button>
+                  <button className="w-full text-gray-400 text-xs" onClick={() => setStep(2)}>Back</button>
                 </div>
               )}
             </div>
           )}
 
-          {/* FORGOT PASSWORD MODE */}
           {mode === 'forgot' && (
             <div className="space-y-4">
               <input
@@ -834,37 +555,24 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
               >
                 {resetSent ? 'Sent!' : isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : 'Send Link'}
               </button>
-              <button
-                className="w-full text-gray-500 text-sm"
-                onClick={() => setMode('login')}
-              >
-                Back
-              </button>
+              <button className="w-full text-gray-500 text-sm" onClick={() => setMode('login')}>Back</button>
             </div>
           )}
 
-          {/* Legal Links */}
           <div className="mt-6 pt-4 border-t dark:border-gray-700 text-center">
-            <button
-              onClick={() => setShowLegalOverlay(true)}
-              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-            >
+            <button onClick={() => setShowLegalOverlay(true)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
               Terms of Service • Privacy Policy
             </button>
           </div>
         </div>
       </div>
 
-      {/* Legal Overlay */}
       {showLegalOverlay && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-[#1a1d21] rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center">
               <h2 className="text-xl font-bold dark:text-white">Legal Documents</h2>
-              <button
-                onClick={() => setShowLegalOverlay(false)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
-              >
+              <button onClick={() => setShowLegalOverlay(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
                 <X size={20} />
               </button>
             </div>

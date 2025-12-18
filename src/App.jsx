@@ -44,143 +44,78 @@ export default function App() {
         return;
     }
 
-    // Helper function to load user data
+    /**
+     * ROBUST USER DATA LOADER
+     * This function is designed to never throw an uncaught error.
+     * It will always set userData to *something*, preventing the "null account" crash.
+     */
     const loadUserData = async (userId) => {
+        // 1. Sanity Check
         if (!userId) {
             setUserData(null);
             return;
         }
 
         try {
-            // Get current auth user for metadata fallback
-            const { data: { user: authUser } } = await supabase.auth.getUser();
+            // 2. Safe Auth Retrieval
+            // We fetch the latest auth object to get metadata (names/avatar) even if the profile table is empty
+            const { data: authData } = await supabase.auth.getUser();
+            const authUser = authData?.user || null;
             
-            // Fetch Profile from 'profiles' table
+            // 3. Fetch Profile (Safely)
+            // .maybeSingle() returns null instead of throwing an error if 0 rows are found
             const { data: profile, error: profileError } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('id', userId)
-                .single();
+                .maybeSingle();
             
-            if (profile && !profileError) {
-                // Normalize data structure for the app
-                // Even if account_types is empty, set a default so user can use the app
+            if (profileError) {
+                console.warn("Minor warning fetching profile:", profileError.message);
+            }
+
+            // 4. Construct Fallback/Default Data
+            // We use the most reliable source available for each field
+            const currentEmail = profile?.email || authUser?.email || user?.email || '';
+            const metadata = authUser?.user_metadata || {};
+            
+            const currentFirstName = 
+                profile?.first_name || 
+                metadata.first_name || 
+                metadata.given_name || 
+                'User';
+                
+            const currentLastName = 
+                profile?.last_name || 
+                metadata.last_name || 
+                metadata.family_name || 
+                '';
+
+            // Base object that guarantees the app can render
+            let finalUserData = {
+                id: userId,
+                firstName: currentFirstName,
+                lastName: currentLastName,
+                email: currentEmail,
+                accountTypes: ['Fan'], // Safe default
+                activeProfileRole: 'Fan',
+                photoURL: profile?.avatar_url || metadata.avatar_url || metadata.picture || null,
+                settings: profile?.settings || {},
+                effectiveDisplayName: profile?.effective_display_name || currentFirstName
+            };
+
+            // 5. Merge Real Profile Data (if it exists)
+            if (profile) {
                 const accountTypes = profile.account_types && profile.account_types.length > 0 
                     ? profile.account_types 
                     : ['Fan'];
                 
-                // Get user email from auth if not in profile
-                let userEmail = profile.email;
-                if (!userEmail && user?.email) {
-                    userEmail = user.email;
-                }
-                
-                // Get name from profile or auth metadata
-                const firstName = profile.first_name || user?.user_metadata?.first_name || user?.user_metadata?.given_name || '';
-                const lastName = profile.last_name || user?.user_metadata?.last_name || user?.user_metadata?.family_name || '';
-                
-                // If profile exists but has no name, try to update it from auth metadata
-                if (profile && (!firstName || !lastName) && (authUser?.user_metadata || user?.user_metadata)) {
-                    const metadata = authUser?.user_metadata || user?.user_metadata;
-                    const updates = {};
-                    let needsUpdate = false;
-                    
-                    if (!firstName && (metadata.first_name || metadata.given_name)) {
-                        updates.first_name = metadata.first_name || metadata.given_name;
-                        needsUpdate = true;
-                    }
-                    if (!lastName && (metadata.last_name || metadata.family_name)) {
-                        updates.last_name = metadata.last_name || metadata.family_name;
-                        needsUpdate = true;
-                    }
-                    if (!userEmail && (authUser?.email || user?.email)) {
-                        updates.email = authUser?.email || user?.email;
-                        needsUpdate = true;
-                    }
-                    
-                // Calculate effective display name and search terms
-                const effectiveFirstName = updates.first_name || firstName;
-                const effectiveLastName = updates.last_name || lastName;
-                const effectiveEmail = updates.email || userEmail;
-                
-                if (effectiveFirstName || effectiveLastName) {
-                    const effectiveName = effectiveFirstName && effectiveLastName 
-                        ? `${effectiveFirstName} ${effectiveLastName}`
-                        : effectiveFirstName || effectiveLastName || effectiveEmail?.split('@')[0] || 'User';
-                    updates.effective_display_name = effectiveName;
-                    
-                    // Also update search_terms
-                    updates.search_terms = [
-                        effectiveFirstName?.toLowerCase(),
-                        effectiveLastName?.toLowerCase(),
-                        effectiveName.toLowerCase()
-                    ].filter(Boolean);
-                    
-                    needsUpdate = true;
-                }
-                    
-                    if (needsUpdate) {
-                        updates.updated_at = new Date().toISOString();
-                        // Silently update profile with auth metadata
-                        const { error: updateError } = await supabase
-                            .from('profiles')
-                            .update(updates)
-                            .eq('id', userId);
-                        
-                        if (updateError) {
-                            console.warn('Failed to sync auth metadata to profile:', updateError);
-                        } else {
-                            // Reload profile after update
-                            const { data: updatedProfile } = await supabase
-                                .from('profiles')
-                                .select('*')
-                                .eq('id', userId)
-                                .single();
-                            
-                            if (updatedProfile) {
-                                // Use updated profile data
-                                const updatedFirstName = updatedProfile.first_name || '';
-                                const updatedLastName = updatedProfile.last_name || '';
-                                const updatedEmail = updatedProfile.email || authUser?.email || user?.email || '';
-                                
-                                setUserData({
-                                    ...updatedProfile,
-                                    firstName: updatedFirstName,
-                                    lastName: updatedLastName,
-                                    email: updatedEmail,
-                                    accountTypes: accountTypes,
-                                    activeProfileRole: updatedProfile.active_role || accountTypes[0],
-                                    photoURL: updatedProfile.avatar_url || authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || null,
-                                    displayName: updatedProfile.display_name || null,
-                                    effectiveDisplayName: updatedProfile.effective_display_name || 
-                                        (updatedFirstName && updatedLastName ? `${updatedFirstName} ${updatedLastName}` : updatedFirstName || updatedLastName || updatedEmail?.split('@')[0] || 'User')
-                                });
-                                return; // Exit early since we've set userData
-                            }
-                        }
-                    }
-                }
-                
-                setUserData({
-                    ...profile,
-                    firstName: firstName,
-                    lastName: lastName,
-                    email: userEmail || profile.email || user?.email || null,
-                    accountTypes: accountTypes,
+                finalUserData = {
+                    ...finalUserData,
+                    ...profile, // Overwrite defaults with DB data
+                    accountTypes,
                     activeProfileRole: profile.active_role || accountTypes[0],
-                    photoURL: profile.avatar_url || user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null,
-                    displayName: profile.display_name || null,
-                    effectiveDisplayName: profile.effective_display_name || 
-                        (firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || userEmail?.split('@')[0] || 'User')
-                });
-                
-                console.log('Profile loaded:', { 
-                    userId, 
-                    firstName,
-                    lastName,
-                    hasAccountTypes: profile.account_types?.length > 0,
-                    accountTypes: accountTypes 
-                });
+                };
             } else {
                 // Profile doesn't exist - create it from auth data
                 console.log('Profile not found, creating from auth data');
@@ -223,15 +158,15 @@ export default function App() {
                 // Set userData even if creation failed (will retry on next load)
                 setUserData({
                     id: userId,
-                    firstName: firstName,
-                    lastName: lastName,
-                    email: email,
+                    firstName: 'User',
+                    lastName: '',
                     accountTypes: ['Fan'],
                     activeProfileRole: 'Fan',
-                    photoURL: user?.user_metadata?.avatar_url || user?.user_metadata?.picture || null,
-                    settings: {},
-                    effectiveDisplayName: firstName && lastName ? `${firstName} ${lastName}` : firstName || lastName || email?.split('@')[0] || 'User'
+                    effectiveDisplayName: 'User'
                 });
+            }
+        }
+    };
                 
                 if (profileError && profileError.code !== 'PGRST116') {
                     console.error("Error fetching profile:", profileError);
@@ -244,8 +179,7 @@ export default function App() {
         }
     };
 
-    // 1. Get initial session and load data immediately
-    // Increased timeout to 10 seconds to allow for slower storage access
+    // 1. Get initial session
     const loadInitialSession = async () => {
         try {
             const { data: { session }, error } = await supabase.auth.getSession();
@@ -265,118 +199,66 @@ export default function App() {
             // Validate session exists and has a valid user
             const currentUser = session?.user ?? null;
             
-            // Strict check: user must exist AND have a valid ID AND session must be valid
-            if (currentUser && currentUser.id && session && session.access_token) {
-                console.log('Session found, user ID:', currentUser.id);
+            if (currentUser && currentUser.id) {
+                console.log('Session restored:', currentUser.id);
                 setUser(currentUser);
-                // Load user data without additional timeout - if it fails, user just won't have profile yet
                 await loadUserData(currentUser.id);
             } else {
-                // No valid session - explicitly clear everything
-                console.log('No active session found - clearing user state');
                 setUser(null);
                 setUserData(null);
             }
-            
-            setLoading(false);
         } catch (err) {
             console.error("Session check failed:", err);
-            // Check if it's a storage-related error
-            if (err.message?.includes('storage') || err.message?.includes('localStorage') || err.name === 'QuotaExceededError') {
-                console.warn("Storage access blocked - continuing without session persistence");
-            }
             setUser(null);
             setUserData(null);
+        } finally {
             setLoading(false);
         }
     };
     
-    // Load initial session immediately
     loadInitialSession();
 
-    // 2. Listen for auth changes (for subsequent logins/logouts, including OAuth callbacks)
+    // 2. Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-        console.log('Auth state changed:', event, session?.user?.id);
+        console.log('Auth event:', event);
         const currentUser = session?.user ?? null;
         
-        if (currentUser && currentUser.id) {
+        if (currentUser) {
             setUser(currentUser);
-            // Load user data - this is critical for OAuth callbacks
-            await loadUserData(currentUser.id);
-            
-            // If this is a SIGNED_IN event (like OAuth callback) and profile has no account_types,
-            // set a default so components don't crash
-            if (event === 'SIGNED_IN') {
-                // Check if profile needs setup
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('account_types, first_name, last_name, avatar_url, active_role')
-                    .eq('id', currentUser.id)
-                    .single();
-                
-                // If profile exists but has no account_types, set default
-                if (profile && (!profile.account_types || profile.account_types.length === 0)) {
-                    console.log('New OAuth user detected - setting default account_types');
-                    // Update profile with default Fan role
-                    await supabase
-                        .from('profiles')
-                        .update({ 
-                            account_types: ['Fan'],
-                            active_role: 'Fan',
-                            preferred_role: 'Fan'
-                        })
-                        .eq('id', currentUser.id);
-                    
-                    // Reload user data
-                    await loadUserData(currentUser.id);
-                } else if (!profile) {
-                    // Profile doesn't exist yet - set temporary userData so components don't crash
-                    setUserData({
-                        id: currentUser.id,
-                        firstName: currentUser.user_metadata?.first_name || currentUser.user_metadata?.given_name || '',
-                        lastName: currentUser.user_metadata?.last_name || currentUser.user_metadata?.family_name || '',
-                        accountTypes: ['Fan'],
-                        activeProfileRole: 'Fan',
-                        photoURL: currentUser.user_metadata?.avatar_url || currentUser.user_metadata?.picture || null
-                    });
-                }
+            // Refresh data on sign-in or token refresh
+            if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                await loadUserData(currentUser.id);
             }
-        } else {
-            // Explicitly clear user state on logout or session end
-            console.log('Auth state changed: No user - clearing state');
+        } else if (event === 'SIGNED_OUT') {
             setUser(null);
             setUserData(null);
         }
+        
         setLoading(false);
     });
 
-    // 3. Safety timeout - ensure loading always resolves (increased to 10s to allow for session check)
+    // 3. Safety timeout to prevent infinite loading screens
     const timeoutId = setTimeout(() => {
         if (loading) {
-            console.warn("Loading timeout - forcing loading to false");
-            // Don't clear user if we're still loading - session might still be valid
+            console.warn("Force clearing loading state after timeout");
             setLoading(false);
         }
-    }, 10000); // 10 second timeout
+    }, 8000);
 
     return () => {
         subscription.unsubscribe();
         clearTimeout(timeoutId);
     };
-  }, []);
+  }, []); // Empty dependency array = runs once on mount
 
   const handleLogout = async () => {
       try {
           if (supabase) {
-              const { error } = await supabase.auth.signOut();
-              if (error) {
-                  console.error("Logout error:", error);
-              }
+              await supabase.auth.signOut();
           }
       } catch (err) {
-          console.error("Logout failed:", err);
+          console.error("Logout error:", err);
       } finally {
-          // Always clear state and navigate, even if signOut fails
           setUser(null);
           setUserData(null);
           navigate('/login');
