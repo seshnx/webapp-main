@@ -52,15 +52,18 @@ export default function App() {
     const loadUserData = async (userId) => {
         // 1. Sanity Check
         if (!userId) {
-            setUserData(null);
+            // Don't set to null - if we have a user, we should always have userData
+            // Only set to null if we truly have no user
             return;
         }
 
+        let authUser = null; // Declare outside try for use in catch block
+        
         try {
             // 2. Safe Auth Retrieval
             // We fetch the latest auth object to get metadata (names/avatar) even if the profile table is empty
             const { data: authData } = await supabase.auth.getUser();
-            const authUser = authData?.user || null;
+            authUser = authData?.user || null;
             
             // 3. Fetch Profile (Safely)
             // .maybeSingle() returns null instead of throwing an error if 0 rows are found
@@ -171,17 +174,19 @@ export default function App() {
             // Wallet fetching removed for minimal setup
         } catch (err) {
             console.error("CRITICAL: Error loading user data:", err);
-            // FAILSAFE: Ensure we still have a user object so the app doesn't white-screen
-            if (!userData) {
-                setUserData({
-                    id: userId,
-                    firstName: 'User',
-                    lastName: '',
-                    accountTypes: ['Fan'],
-                    activeProfileRole: 'Fan',
-                    effectiveDisplayName: 'User'
-                });
-            }
+            // FAILSAFE: Always set userData to prevent null state
+            // This ensures the app never renders with null userData when user exists
+            setUserData({
+                id: userId,
+                firstName: authUser?.user_metadata?.first_name || authUser?.user_metadata?.given_name || 'User',
+                lastName: authUser?.user_metadata?.last_name || authUser?.user_metadata?.family_name || '',
+                email: authUser?.email || '',
+                accountTypes: ['Fan'],
+                activeProfileRole: 'Fan',
+                effectiveDisplayName: authUser?.user_metadata?.first_name || authUser?.user_metadata?.given_name || 'User',
+                photoURL: authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || null,
+                settings: {}
+            });
         }
     };
 
@@ -238,6 +243,8 @@ export default function App() {
         } else if (event === 'SIGNED_OUT') {
             setUser(null);
             setUserData(null);
+            // Navigate to login on sign out
+            navigate('/login', { replace: true });
         }
         
         setLoading(false);
@@ -259,15 +266,26 @@ export default function App() {
 
   const handleLogout = async () => {
       try {
-          if (supabase) {
-              await supabase.auth.signOut();
-          }
-      } catch (err) {
-          console.error("Logout error:", err);
-      } finally {
+          // Clear state immediately for responsive UI
           setUser(null);
           setUserData(null);
-          navigate('/login');
+          
+          // Sign out from Supabase
+          if (supabase) {
+              const { error } = await supabase.auth.signOut();
+              if (error) {
+                  console.error("Logout error:", error);
+              }
+          }
+          
+          // Navigate to login - auth state change will also trigger, but this ensures immediate redirect
+          navigate('/login', { replace: true });
+      } catch (err) {
+          console.error("Logout error:", err);
+          // Even if signOut fails, clear state and redirect
+          setUser(null);
+          setUserData(null);
+          navigate('/login', { replace: true });
       }
   };
 
@@ -285,12 +303,34 @@ export default function App() {
   
   // === AUTHENTICATION GUARD ===
   const isAuthenticated = user && user.id;
+  const hasUserData = userData && userData.id;
   const isOnLoginPage = location.pathname === '/login';
   const isTestLoginPage = location.pathname === '/test-login';
   
+  // CRITICAL: If no user is loaded, always show AuthWizard
+  // This ensures the app never renders with null user
+  if (!isAuthenticated && !isOnLoginPage && !isTestLoginPage) {
+    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
+  }
+  
+  // CRITICAL: If user exists but no userData, show AuthWizard (shouldn't happen, but safety check)
+  // This ensures the app never renders with null userData when user exists
+  if (isAuthenticated && !hasUserData && !isOnLoginPage && !isTestLoginPage) {
+    // Still loading userData, show loading
+    if (loading) {
+      return (
+        <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
+          <Loader2 className="animate-spin text-brand-blue" size={48} />
+        </div>
+      );
+    }
+    // If loading is done but no userData, show AuthWizard
+    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
+  }
+  
   // Handle test login page (always show login, route to debug report)
   if (isTestLoginPage) {
-    if (isAuthenticated) {
+    if (isAuthenticated && hasUserData) {
       // Already logged in - redirect to debug report
       navigate('/debug-report', { replace: true });
       return null;
@@ -301,7 +341,7 @@ export default function App() {
   
   // Handle login page
   if (isOnLoginPage) {
-    if (isAuthenticated) {
+    if (isAuthenticated && hasUserData) {
       // Already logged in - redirect to dashboard
       navigate('/', { replace: true });
       return null;
@@ -311,14 +351,14 @@ export default function App() {
   }
   
   // Handle OAuth onboarding
-  if (isAuthenticated && !userData && isFromSignup) {
+  if (isAuthenticated && !hasUserData && isFromSignup) {
     return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} />;
   }
   
   // Require authentication for all other routes
-  if (!isAuthenticated) {
-    navigate('/login', { replace: true });
-    return null;
+  if (!isAuthenticated || !hasUserData) {
+    // This should be caught above, but double-check
+    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
   }
 
   // Render app with just dashboard
