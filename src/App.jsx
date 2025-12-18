@@ -44,6 +44,9 @@ export default function App() {
         return;
     }
 
+    // Track loading state to prevent duplicate calls
+    const loadingUsers = new Set();
+
     /**
      * ROBUST USER DATA LOADER
      * This function is designed to never throw an uncaught error.
@@ -56,6 +59,13 @@ export default function App() {
             // Only set to null if we truly have no user
             return;
         }
+
+        // 2. Prevent duplicate calls for the same user
+        if (loadingUsers.has(userId)) {
+            console.log('User data already loading for:', userId);
+            return;
+        }
+        loadingUsers.add(userId);
 
         let authUser = null; // Declare outside try for use in catch block
         
@@ -132,10 +142,11 @@ export default function App() {
                     ? `${firstName} ${lastName}`
                     : firstName || lastName || email?.split('@')[0] || 'User';
                 
-                // Try to create profile
+                // Try to create profile using upsert (handles race conditions)
+                // Only create if profile truly doesn't exist (AuthWizard should have created it)
                 const { error: createError } = await supabase
                     .from('profiles')
-                    .insert({
+                    .upsert({
                         id: userId,
                         email: email,
                         first_name: firstName,
@@ -143,7 +154,7 @@ export default function App() {
                         avatar_url: authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || null,
                         account_types: ['Fan'],
                         active_role: 'Fan',
-                        preferred_role: 'Fan',
+                        preferred_role: 'Fan', // Fallback role when user has multiple roles
                         effective_display_name: effectiveName,
                         search_terms: [
                             firstName?.toLowerCase(),
@@ -152,10 +163,12 @@ export default function App() {
                         ].filter(Boolean),
                         settings: {},
                         updated_at: new Date().toISOString()
-                    });
+                    }, { onConflict: 'id' });
                 
-                if (createError && createError.code !== '23505') { // Ignore duplicate key errors
-                    console.error("Error creating profile:", createError);
+                if (createError) {
+                    console.error("Error creating/updating profile:", createError);
+                } else {
+                    console.log('Profile created/updated successfully');
                 }
                 
                 // Update finalUserData with the created profile data
@@ -187,6 +200,9 @@ export default function App() {
                 photoURL: authUser?.user_metadata?.avatar_url || authUser?.user_metadata?.picture || null,
                 settings: {}
             });
+        } finally {
+            // Remove from loading set when done
+            loadingUsers.delete(userId);
         }
     };
 

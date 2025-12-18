@@ -254,7 +254,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             zip_code: form.zip,
             account_types: finalRoles,
             active_role: finalRoles[0],
-            preferred_role: finalRoles[0],
+            preferred_role: finalRoles[0], // Fallback role when user has multiple roles
             effective_display_name: displayName,
             search_terms: [form.firstName, form.lastName, displayName].map(s => s?.toLowerCase()).filter(Boolean),
             updated_at: new Date().toISOString()
