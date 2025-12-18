@@ -14,6 +14,9 @@ export default function App() {
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
   
+  // Track if initial session has been handled to prevent duplicate loading clears
+  const initialSessionHandledRef = useRef(false);
+  
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -40,6 +43,9 @@ export default function App() {
 
   // --- SUPABASE AUTH & DATA LISTENER ---
   useEffect(() => {
+    // Reset the ref on each mount
+    initialSessionHandledRef.current = false;
+    
     if (!supabase) {
         setLoading(false);
         return;
@@ -47,8 +53,6 @@ export default function App() {
 
     // Track loading state to prevent duplicate calls
     const loadingUsers = new Set();
-    // Track if initial session has been handled to prevent duplicate loading clears
-    const initialSessionHandledRef = useRef(false);
 
     /**
      * ROBUST USER DATA LOADER
