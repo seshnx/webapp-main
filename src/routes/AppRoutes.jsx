@@ -1,31 +1,6 @@
 import React from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import AuthWizard from '../components/AuthWizard';
-
-// Import components directly (no lazy loading) to avoid hook count issues
+import { Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from '../components/Dashboard';
-import SocialFeed from '../components/SocialFeed';
-import BookingSystem from '../components/BookingSystem';
-import Marketplace from '../components/Marketplace';
-import ChatInterface from '../components/ChatInterface';
-import StudioManager from '../components/StudioManager';
-import ProfileManager from '../components/ProfileManager';
-import SettingsTab from '../components/SettingsTab';
-import TechServices from '../components/TechServices';
-import LegalDocs from '../components/LegalDocs';
-import PaymentsManager from '../components/PaymentsManager';
-import LabelManager from '../components/LabelManager';
-import BusinessCenter from '../components/BusinessCenter';
-
-// EDU Components
-import EduStudentDashboard from '../components/EDU/EduStudentDashboard';
-import EduStaffDashboard from '../components/EDU/EduStaffDashboard';
-import EduAdminDashboard from '../components/EDU/EduAdminDashboard';
-import EduInternDashboard from '../components/EDU/EduInternDashboard';
-import StudentEnrollment from '../components/EDU/StudentEnrollment';
-import EduLogin from '../components/EDU/EduLogin';
-import { EduAuthProvider, useEduAuth } from '../contexts/EduAuthContext';
-import { hasEduAccess } from '../utils/eduPermissions';
 import { Loader2 } from 'lucide-react';
 
 /**
@@ -34,8 +9,6 @@ import { Loader2 } from 'lucide-react';
  * Protects routes and redirects to login if user is not authenticated
  */
 function ProtectedRoute({ children, user, loading }) {
-  const location = useLocation();
-  
   // Show loading while checking auth
   if (loading) {
     return (
@@ -47,253 +20,38 @@ function ProtectedRoute({ children, user, loading }) {
   
   // Check if user is authenticated
   if (!user) {
-    // Store the attempted location so we can redirect back after login
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    return <Navigate to="/login" replace />;
   }
   
   return children;
 }
 
 /**
- * EDU Protected Route Wrapper
- * 
- * Protects EDU routes and redirects to login if user doesn't have EDU access
+ * AppRoutes - Simplified routing with only Login and Dashboard
  */
-function EduProtectedRoute({ children, user, userData, loading }) {
-  const location = useLocation();
-  
-  // Show loading while checking auth
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin text-brand-blue" size={32} />
-      </div>
-    );
-  }
-  
-  // Check if user is authenticated
-  if (!user) {
-    return <Navigate to="/edu/login" state={{ from: location }} replace />;
-  }
-  
-  // Check if user has EDU access
-  if (!userData || !hasEduAccess(userData)) {
-    return <Navigate to="/edu/login" state={{ from: location }} replace />;
-  }
-  
-  return children;
-}
-
-/**
- * EDU Dashboard Wrapper
- * 
- * Routes to the appropriate EDU dashboard based on user role.
- * Uses keys to ensure proper component remounting when roles change.
- */
-function EduDashboardWrapper({ user, userData }) {
-  const role = userData?.accountTypes?.find(role => 
-    ['EDUAdmin', 'EDUStaff', 'Intern'].includes(role)
-  ) || 'Student';
-  
-  switch (role) {
-    case 'EDUAdmin':
-      return <EduAdminDashboard key={`admin-${user?.uid}`} user={user} userData={userData} />;
-    case 'EDUStaff':
-      return <EduStaffDashboard key={`staff-${user?.uid}`} user={user} userData={userData} />;
-    case 'Intern':
-      return <EduInternDashboard key={`intern-${user?.uid}`} user={user} userData={userData} />;
-    default:
-      return <EduStudentDashboard key={`student-${user?.uid}`} user={user} userData={userData} />;
-  }
-}
-
-/**
- * AppRoutes - Main routing component using React Router
- * 
- * Handles all application routes with proper component lifecycle management.
- * React Router ensures components are properly mounted/unmounted on route changes.
- */
-export default function AppRoutes({ user, userData, subProfiles, tokenBalance, setActiveTab, handleLogout, openPublicProfile, pendingChatTarget, clearPendingChatTarget, loading, darkMode, toggleTheme }) {
-
+export default function AppRoutes({ user, userData, loading, darkMode, toggleTheme, handleLogout }) {
   return (
     <Routes>
-        {/* Public Routes */}
-        {/* Note: /login is primarily handled by App.jsx before routes render.
-            This route is a fallback that redirects authenticated users. */}
-        <Route 
-          path="/login" 
-          element={
-            user ? (
-              <Navigate to="/" replace />
-            ) : (
-              <AuthWizard 
-                darkMode={darkMode ?? false} 
-                toggleTheme={toggleTheme ?? (() => {})} 
-                onSuccess={() => {}} 
-                isNewUser={false} 
-              />
-            )
-          } 
-        />
-        <Route 
-          path="/legal" 
-          element={
-            <LegalDocs />
-          } 
-        />
-        
-        {/* Protected Main App Routes */}
-        <Route 
-          path="/" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <Dashboard 
-                user={user} 
-                userData={userData} 
-                subProfiles={subProfiles} 
-                setActiveTab={setActiveTab} 
-                tokenBalance={tokenBalance}
-              />
-            </ProtectedRoute>
-          } 
-        />
-        <Route path="/dashboard" element={<Navigate to="/" replace />} />
-        <Route path="/home" element={<Navigate to="/" replace />} />
-        
-        <Route 
-          path="/feed" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <SocialFeed user={user} userData={userData} openPublicProfile={openPublicProfile} />
-            </ProtectedRoute>
-          } 
-        />
-        <Route path="/social" element={<Navigate to="/feed" replace />} />
-        
-        <Route 
-          path="/bookings" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <BookingSystem user={user} userData={userData} openPublicProfile={openPublicProfile} />
-            </ProtectedRoute>
-          } 
-        />
-        <Route path="/find-talent" element={<Navigate to="/bookings" replace />} />
-        
-        <Route 
-          path="/marketplace" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <Marketplace user={user} userData={userData} tokenBalance={tokenBalance} />
-            </ProtectedRoute>
-          } 
-        />
-        
-        <Route 
-          path="/messages" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <ChatInterface 
-                user={user} 
-                userData={userData} 
-                openPublicProfile={openPublicProfile}
-                pendingChatTarget={pendingChatTarget}
-                clearPendingChatTarget={clearPendingChatTarget}
-              />
-            </ProtectedRoute>
-          } 
-        />
-        
-        <Route 
-          path="/tech" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <TechServices user={user} userData={userData} />
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* Business Center - Consolidated business features */}
-        <Route 
-          path="/business-center" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <BusinessCenter user={user} userData={userData} />
-            </ProtectedRoute>
-          } 
-        />
-        
-        {/* Legacy routes redirect to Business Center */}
-        <Route path="/studio-ops" element={<Navigate to="/business-center" replace />} />
-        <Route path="/studio-manager" element={<Navigate to="/business-center" replace />} />
-        <Route path="/label-manager" element={<Navigate to="/business-center" replace />} />
-        
-        <Route 
-          path="/payments" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <PaymentsManager user={user} userData={userData} />
-            </ProtectedRoute>
-          } 
-        />
-        
-        <Route 
-          path="/profile" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} />
-            </ProtectedRoute>
-          } 
-        />
-        
-        <Route 
-          path="/settings" 
-          element={
-            <ProtectedRoute user={user} loading={loading}>
-              <SettingsTab user={user} userData={userData} handleLogout={handleLogout} />
-            </ProtectedRoute>
-          } 
-        />
-
-        {/* EDU Routes */}
-        <Route 
-          path="/edu/login" 
-          element={<EduLogin />}
-        />
-        <Route 
-          path="/edu" 
-          element={
-            <EduProtectedRoute user={user} userData={userData} loading={loading}>
-              <EduAuthProvider user={user} userData={userData}>
-                <EduDashboardWrapper user={user} userData={userData} />
-              </EduAuthProvider>
-            </EduProtectedRoute>
-          }
-        />
-        <Route 
-          path="/edu/enroll" 
-          element={
-            <EduProtectedRoute user={user} userData={userData} loading={loading}>
-              <EduAuthProvider user={user} userData={userData}>
-                <StudentEnrollment user={user} userData={userData} />
-              </EduAuthProvider>
-            </EduProtectedRoute>
-          }
-        />
-        <Route 
-          path="/edu/:view" 
-          element={
-            <EduProtectedRoute user={user} userData={userData} loading={loading}>
-              <EduAuthProvider user={user} userData={userData}>
-                <EduDashboardWrapper user={user} userData={userData} />
-              </EduAuthProvider>
-            </EduProtectedRoute>
-          }
-        />
-
-        {/* Fallback - redirect to dashboard */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      {/* Dashboard Route */}
+      <Route 
+        path="/" 
+        element={
+          <ProtectedRoute user={user} loading={loading}>
+            <Dashboard 
+              user={user} 
+              userData={userData}
+            />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Redirect dashboard aliases */}
+      <Route path="/dashboard" element={<Navigate to="/" replace />} />
+      <Route path="/home" element={<Navigate to="/" replace />} />
+      
+      {/* Fallback - redirect to dashboard */}
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
   );
 }
 

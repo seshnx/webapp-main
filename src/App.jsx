@@ -1,62 +1,20 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './config/supabase'; 
 import { Loader2 } from 'lucide-react';
-import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'react-hot-toast';
 
 // Core components
-import Navbar from './components/Navbar';
-import Sidebar from './components/Sidebar';
-import EDUSidebar from './components/EDUSidebar';
 import AuthWizard from './components/AuthWizard';
-import PublicProfileModal from './components/PublicProfileModal';
 import AppRoutes from './routes/AppRoutes';
-import { SchoolProvider } from './contexts/SchoolContext';
-import PageTransition from './components/shared/PageTransition';
 
 export default function App() {
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
-  const [subProfiles, setSubProfiles] = useState({}); 
   const [loading, setLoading] = useState(true);
   
   const navigate = useNavigate();
   const location = useLocation();
-
-  // Tab Logic
-  const getActiveTab = () => {
-    const path = location.pathname;
-    if (path === '/' || path === '/dashboard' || path === '/home') return 'dashboard';
-    if (path === '/feed' || path === '/social') return 'feed';
-    if (path === '/bookings' || path === '/find-talent') return 'bookings';
-    if (path.startsWith('/edu')) {
-      return path === '/edu/enroll' ? 'edu-enroll' : 'edu-overview';
-    }
-    return path.substring(1) || 'dashboard';
-  };
-
-  const activeTab = getActiveTab();
-  
-  const setActiveTab = (newTab) => {
-    const routeMap = {
-      'dashboard': '/', 'home': '/', 'feed': '/feed', 'social': '/feed',
-      'bookings': '/bookings', 'find-talent': '/bookings', 'marketplace': '/marketplace',
-      'seshfx': '/marketplace?tab=fx', 'messages': '/messages', 'settings': '/settings',
-      'profile': '/profile', 'edu-enroll': '/edu/enroll', 'edu-overview': '/edu',
-    };
-    
-    if (newTab.startsWith('edu-') && !routeMap[newTab]) {
-       navigate(`/edu/${newTab.replace('edu-', '')}`);
-    } else {
-       navigate(routeMap[newTab] || '/');
-    }
-  };
-  
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [viewingProfile, setViewingProfile] = useState(null);
-  const [tokenBalance, setTokenBalance] = useState(0);
-  const [pendingChatTarget, setPendingChatTarget] = useState(null);
 
   // Dark Mode
   const [darkMode, setDarkMode] = useState(() => {
@@ -90,8 +48,6 @@ export default function App() {
     const loadUserData = async (userId) => {
         if (!userId) {
             setUserData(null);
-            setSubProfiles({});
-            setTokenBalance(0);
             return;
         }
 
@@ -282,14 +238,7 @@ export default function App() {
                 }
             }
 
-            // Fetch Wallet (optional, don't fail if missing)
-            const { data: wallet } = await supabase
-                .from('wallets')
-                .select('balance')
-                .eq('user_id', userId)
-                .single();
-            
-            if (wallet) setTokenBalance(wallet.balance);
+            // Wallet fetching removed for minimal setup
         } catch (err) {
             console.error("Error fetching user data:", err);
         }
@@ -309,8 +258,6 @@ export default function App() {
                 }
                 setUser(null);
                 setUserData(null);
-                setSubProfiles({});
-                setTokenBalance(0);
                 setLoading(false);
                 return;
             }
@@ -329,8 +276,6 @@ export default function App() {
                 console.log('No active session found - clearing user state');
                 setUser(null);
                 setUserData(null);
-                setSubProfiles({});
-                setTokenBalance(0);
             }
             
             setLoading(false);
@@ -342,8 +287,6 @@ export default function App() {
             }
             setUser(null);
             setUserData(null);
-            setSubProfiles({});
-            setTokenBalance(0);
             setLoading(false);
         }
     };
@@ -403,8 +346,6 @@ export default function App() {
             console.log('Auth state changed: No user - clearing state');
             setUser(null);
             setUserData(null);
-            setSubProfiles({});
-            setTokenBalance(0);
         }
         setLoading(false);
     });
@@ -424,7 +365,7 @@ export default function App() {
     };
   }, []);
 
-  const handleLogout = useCallback(async () => {
+  const handleLogout = async () => {
       try {
           if (supabase) {
               const { error } = await supabase.auth.signOut();
@@ -438,140 +379,75 @@ export default function App() {
           // Always clear state and navigate, even if signOut fails
           setUser(null);
           setUserData(null);
-          setSubProfiles({});
-          setTokenBalance(0);
-          navigate('/');
-      }
-  }, [navigate]);
-
-  const openPublicProfile = (uid, name) => setViewingProfile({ uid, name });
-
-  const handleRoleSwitch = async (newRole) => {
-      if (!user || !supabase) return;
-      
-      // Optimistic update
-      setUserData(prev => ({ ...prev, activeProfileRole: newRole }));
-      
-      try {
-          await supabase
-              .from('profiles')
-              .update({ active_role: newRole })
-              .eq('id', user.id);
-      } catch (e) {
-          console.error("Role switch failed:", e);
+          navigate('/login');
       }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>;
+  // Show loading spinner while checking auth state
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
+        <Loader2 className="animate-spin text-brand-blue" size={48} />
+      </div>
+    );
+  }
   
   // Check if coming from OAuth signup flow
   const isFromSignup = new URLSearchParams(window.location.search).get('intent') === 'signup';
   
-  // If user exists but no profile data AND we're coming from signup (OAuth callback)
-  // Show onboarding to complete profile setup
-  if (user && user.id && !userData && isFromSignup) {
-    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.href = '/'} />;
-  }
+  // === AUTHENTICATION GUARD ===
+  const isAuthenticated = user && user.id;
+  const isOnLoginPage = location.pathname === '/login';
   
-  // If on login page and user is authenticated, redirect to dashboard
-  if (user && user.id && location.pathname === '/login') {
-    navigate('/', { replace: true });
-    return null;
-  }
-  
-  // If no user and on login page, show AuthWizard directly (handles login UI)
-  if ((!user || !user.id) && location.pathname === '/login') {
+  // Handle login page
+  if (isOnLoginPage) {
+    if (isAuthenticated) {
+      // Already logged in - redirect to dashboard
+      navigate('/', { replace: true });
+      return null;
+    }
+    // Show login form
     return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} isNewUser={false} />;
   }
   
-  // If no user and NOT on login page, redirect to login
-  // Return null to prevent flash of content during redirect
-  if ((!user || !user.id) && location.pathname !== '/login') {
+  // Handle OAuth onboarding
+  if (isAuthenticated && !userData && isFromSignup) {
+    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.href = '/'} />;
+  }
+  
+  // Require authentication for all other routes
+  if (!isAuthenticated) {
     navigate('/login', { replace: true });
     return null;
   }
 
-  const isEduMode = activeTab.startsWith('edu-');
-  const showAdminSidebar = isEduMode && (userData?.accountTypes?.includes('EDUAdmin') || userData?.accountTypes?.includes('EDUStaff'));
-
+  // Render app with just dashboard
   return (
-    <SchoolProvider user={user} userData={userData}>
-      <div className="flex h-screen flex-col bg-gray-50 dark:bg-[#1a1d21] overflow-hidden selection:bg-brand-blue selection:text-white">
-        <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
-
-        <Navbar 
-            user={user} 
-            userData={userData} 
-            subProfiles={subProfiles} 
-            onMenuClick={() => setSidebarOpen(!sidebarOpen)} 
-            setActiveTab={setActiveTab}
-            activeTab={activeTab}
-            tokenBalance={tokenBalance} 
-            darkMode={darkMode}
-            toggleTheme={toggleTheme}
-            onRoleSwitch={handleRoleSwitch}
-            openPublicProfile={openPublicProfile}
-        />
-
-        <div className="flex flex-1 overflow-hidden relative">
-            <div className={`lg:static lg:w-64 fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:translate-x-0 ${sidebarOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}`}>
-                {showAdminSidebar ? (
-                    <EDUSidebar 
-                        activeTab={activeTab} 
-                        setActiveTab={setActiveTab} 
-                        sidebarOpen={sidebarOpen}
-                        setSidebarOpen={setSidebarOpen}
-                        isStaff={userData?.accountTypes?.includes('EDUStaff')} 
-                        isAdmin={userData?.accountTypes?.includes('EDUAdmin')} 
-                    />
-                ) : (
-                    <Sidebar 
-                        activeTab={activeTab} 
-                        setActiveTab={setActiveTab} 
-                        sidebarOpen={sidebarOpen}
-                        setSidebarOpen={setSidebarOpen}
-                        userData={userData}
-                        handleLogout={handleLogout}
-                    />
-                )}
-            </div>
-
-            <main className="flex-1 overflow-y-auto p-4 md:p-6 scroll-smooth" id="main-scroll">
-                <PageTransition key={location.pathname} className="max-w-7xl mx-auto">
-                    <AppRoutes
-                      user={user}
-                      userData={userData}
-                      subProfiles={subProfiles}
-                      tokenBalance={tokenBalance}
-                      setActiveTab={setActiveTab}
-                      handleLogout={handleLogout}
-                      openPublicProfile={openPublicProfile}
-                      pendingChatTarget={pendingChatTarget}
-                      clearPendingChatTarget={() => setPendingChatTarget(null)}
-                      loading={loading}
-                      darkMode={darkMode}
-                      toggleTheme={toggleTheme}
-                    />
-                </PageTransition>
-            </main>
-        </div>
-
-        <AnimatePresence>
-          {viewingProfile && (
-              <PublicProfileModal 
-                  userId={viewingProfile.uid} 
-                  currentUser={user}
-                  currentUserData={userData}
-                  onClose={() => setViewingProfile(null)}
-                  onMessage={(targetId, targetName) => {
-                      setViewingProfile(null);
-                      setPendingChatTarget({ uid: targetId, name: targetName });
-                      setActiveTab('messages');
-                  }}
-              />
-          )}
-        </AnimatePresence>
+    <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
+      <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
+      
+      {/* Simple header with logout */}
+      <div className="bg-white dark:bg-[#1f2128] border-b dark:border-gray-700 px-6 py-4 flex justify-between items-center">
+        <h1 className="text-xl font-bold dark:text-white">SeshNx</h1>
+        <button
+          onClick={handleLogout}
+          className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
+        >
+          Logout
+        </button>
       </div>
-    </SchoolProvider>
+
+      {/* Main content */}
+      <main className="p-6">
+        <AppRoutes
+          user={user}
+          userData={userData}
+          loading={loading}
+          darkMode={darkMode}
+          toggleTheme={toggleTheme}
+          handleLogout={handleLogout}
+        />
+      </main>
+    </div>
   );
 }
