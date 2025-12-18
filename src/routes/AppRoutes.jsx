@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from '../components/Dashboard';
+import DebugReport from '../components/DebugReport';
 import { Loader2 } from 'lucide-react';
 
 /**
@@ -45,10 +46,24 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
         } 
       />
       
+      {/* Debug Report Route - Test login destination */}
+      <Route 
+        path="/debug-report" 
+        element={
+          <ProtectedRoute user={user} loading={loading}>
+            <DebugReport 
+              user={user} 
+              userData={userData}
+            />
+          </ProtectedRoute>
+        } 
+      />
+      
       {/* Redirect dashboard aliases */}
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route path="/home" element={<Navigate to="/" replace />} />
       
+      {/* Test login route - handled in App.jsx, but included here for clarity */}
       {/* Fallback - redirect to dashboard */}
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

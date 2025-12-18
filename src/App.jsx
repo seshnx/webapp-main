@@ -286,6 +286,18 @@ export default function App() {
   // === AUTHENTICATION GUARD ===
   const isAuthenticated = user && user.id;
   const isOnLoginPage = location.pathname === '/login';
+  const isTestLoginPage = location.pathname === '/test-login';
+  
+  // Handle test login page (always show login, route to debug report)
+  if (isTestLoginPage) {
+    if (isAuthenticated) {
+      // Already logged in - redirect to debug report
+      navigate('/debug-report', { replace: true });
+      return null;
+    }
+    // Show login form - route to debug report on success
+    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} isNewUser={false} />;
+  }
   
   // Handle login page
   if (isOnLoginPage) {
@@ -294,13 +306,13 @@ export default function App() {
       navigate('/', { replace: true });
       return null;
     }
-    // Show login form
-    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => {}} isNewUser={false} />;
+    // Show login form - normal flow
+    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
   }
   
   // Handle OAuth onboarding
   if (isAuthenticated && !userData && isFromSignup) {
-    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => window.location.href = '/'} />;
+    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} />;
   }
   
   // Require authentication for all other routes
