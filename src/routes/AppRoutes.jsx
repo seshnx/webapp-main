@@ -2,6 +2,9 @@ import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Dashboard from '../components/Dashboard';
 import DebugReport from '../components/DebugReport';
+import ProfileManager from '../components/ProfileManager';
+import SettingsTab from '../components/SettingsTab';
+import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
 
 /**
@@ -54,6 +57,70 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
             <DebugReport 
               user={user} 
               userData={userData}
+            />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Profile Manager Route */}
+      <Route 
+        path="/profile" 
+        element={
+          <ProtectedRoute user={user} loading={loading}>
+            <ProfileManager 
+              user={user} 
+              userData={userData}
+              handleLogout={handleLogout}
+            />
+          </ProtectedRoute>
+        } 
+      />
+      
+      {/* Settings Route */}
+      <Route 
+        path="/settings" 
+        element={
+          <ProtectedRoute user={user} loading={loading}>
+            <SettingsTab 
+              user={user} 
+              userData={userData}
+              onUpdate={async (newSettings) => {
+                // Save settings to database
+                if (user?.id && supabase) {
+                  try {
+                    const { error } = await supabase
+                      .from('profiles')
+                      .update({ 
+                        settings: newSettings, 
+                        updated_at: new Date().toISOString() 
+                      })
+                      .eq('id', user.id);
+                    
+                    if (error) {
+                      console.error('Settings save failed:', error);
+                    }
+                  } catch (err) {
+                    console.error('Settings save error:', err);
+                  }
+                }
+              }}
+              onRoleSwitch={async (newRole) => {
+                // Role switch - update active role in database
+                if (user?.id && supabase) {
+                  try {
+                    await supabase
+                      .from('profiles')
+                      .update({ 
+                        active_role: newRole, 
+                        updated_at: new Date().toISOString() 
+                      })
+                      .eq('id', user.id);
+                    console.log('Role switched to:', newRole);
+                  } catch (err) {
+                    console.error('Role switch failed:', err);
+                  }
+                }
+              }}
             />
           </ProtectedRoute>
         } 

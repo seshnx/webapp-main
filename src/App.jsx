@@ -387,9 +387,43 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
       <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
       
-      {/* Simple header with logout */}
+      {/* Simple header with navigation and logout */}
       <div className="bg-white dark:bg-[#1f2128] border-b dark:border-gray-700 px-6 py-4 flex justify-between items-center">
-        <h1 className="text-xl font-bold dark:text-white">SeshNx</h1>
+        <div className="flex items-center gap-6">
+          <h1 className="text-xl font-bold dark:text-white">SeshNx</h1>
+          <nav className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition ${
+                location.pathname === '/' 
+                  ? 'bg-brand-blue text-white' 
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => navigate('/profile')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition ${
+                location.pathname === '/profile' 
+                  ? 'bg-brand-blue text-white' 
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              Profile
+            </button>
+            <button
+              onClick={() => navigate('/settings')}
+              className={`px-3 py-1.5 text-sm font-medium rounded-lg transition ${
+                location.pathname === '/settings' 
+                  ? 'bg-brand-blue text-white' 
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              Settings
+            </button>
+          </nav>
+        </div>
         <button
           onClick={handleLogout}
           className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition"
