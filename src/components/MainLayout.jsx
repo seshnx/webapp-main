@@ -10,17 +10,38 @@ const retryLazyLoad = (importFn, retries = 3, delay = 100) => {
   return lazy(() => {
     return new Promise((resolve, reject) => {
       const attempt = (attemptNumber) => {
-        importFn()
-          .then(resolve)
-          .catch((error) => {
-            if (attemptNumber < retries) {
-              console.warn(`Lazy load failed, retrying... (${attemptNumber + 1}/${retries})`, error);
-              setTimeout(() => attempt(attemptNumber + 1), delay * attemptNumber);
-            } else {
-              console.error('Lazy load failed after retries:', error);
-              reject(error);
-            }
-          });
+        // Wrap in try-catch to handle synchronous errors
+        try {
+          const promise = importFn();
+          // If it's already a promise, handle it
+          if (promise && typeof promise.then === 'function') {
+            promise
+              .then((module) => {
+                // Ensure we get the default export
+                resolve(module.default ? module : { default: module });
+              })
+              .catch((error) => {
+                if (attemptNumber < retries) {
+                  console.warn(`Lazy load failed, retrying... (${attemptNumber + 1}/${retries})`, error);
+                  setTimeout(() => attempt(attemptNumber + 1), delay * (attemptNumber + 1));
+                } else {
+                  console.error('Lazy load failed after retries:', error);
+                  reject(error);
+                }
+              });
+          } else {
+            resolve(promise);
+          }
+        } catch (error) {
+          // Handle synchronous errors (like circular dependencies)
+          if (attemptNumber < retries) {
+            console.warn(`Lazy load sync error, retrying... (${attemptNumber + 1}/${retries})`, error);
+            setTimeout(() => attempt(attemptNumber + 1), delay * (attemptNumber + 1));
+          } else {
+            console.error('Lazy load failed after retries (sync error):', error);
+            reject(error);
+          }
+        }
       };
       attempt(0);
     });
@@ -275,15 +296,20 @@ export default function MainLayout({
       case 'dashboard':
         return (
           <ErrorBoundary name="Dashboard">
-            <Suspense fallback={<LoadingFallback />}>
-              <Dashboard
-                user={user}
-                userData={userData}
-                setActiveTab={setActiveTab}
-                bookingCount={0}
-                subProfiles={subProfiles}
-                tokenBalance={tokenBalance}
-              />
+            <Suspense 
+              fallback={<LoadingFallback />}
+              // Add error boundary inside Suspense to catch initialization errors
+            >
+              <ErrorBoundary name="Dashboard-Inner">
+                <Dashboard
+                  user={user}
+                  userData={userData}
+                  setActiveTab={setActiveTab}
+                  bookingCount={0}
+                  subProfiles={subProfiles}
+                  tokenBalance={tokenBalance}
+                />
+              </ErrorBoundary>
             </Suspense>
           </ErrorBoundary>
         );
