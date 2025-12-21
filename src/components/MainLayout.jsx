@@ -69,6 +69,22 @@ const LoadingFallback = () => (
   </div>
 );
 
+// BCM Redirect Component
+const BCMRedirect = () => {
+  useEffect(() => {
+    const bcmUrl = import.meta.env.VITE_BCM_URL || 'https://bcm.seshnx.com';
+    window.location.href = bcmUrl;
+  }, []);
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-center">
+        <Loader2 className="animate-spin text-brand-blue mx-auto mb-4" size={32} />
+        <p className="text-gray-600 dark:text-gray-400">Redirecting to Business Center...</p>
+      </div>
+    </div>
+  );
+};
+
 export default function MainLayout({ 
   user, 
   userData, 
@@ -389,14 +405,8 @@ export default function MainLayout({
         );
 
       case 'business-center':
-        return (
-          <Suspense fallback={<LoadingFallback />}>
-            <BusinessCenter
-              user={user}
-              userData={userData}
-            />
-          </Suspense>
-        );
+        // Redirect to external BCM app
+        return <BCMRedirect />;
 
       case 'legal':
         return (

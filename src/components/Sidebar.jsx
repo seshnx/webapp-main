@@ -98,17 +98,16 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
             
             {/* Business Center - Show if user has business features */}
             {hasBusinessFeatures && (
-                <button 
-                    onClick={() => handleNavigation('business-center')} 
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${
-                        activeTab === 'business-center' 
-                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400' 
-                            : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10'
-                    }`}
+                <a 
+                    href={import.meta.env.VITE_BCM_URL || 'https://bcm.seshnx.com'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10"
                 >
                     <Briefcase size={18} />
                     Business Center
-                </button>
+                    <span className="ml-auto text-xs opacity-60">↗</span>
+                </a>
             )}
         </div>
       </div>
