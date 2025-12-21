@@ -13,11 +13,7 @@ import { isConvexAvailable } from '../config/convex';
 import { supabase } from '../config/supabase'; 
 import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// Ensure React hooks are available before defining components
-if (typeof useState === 'undefined') {
-    throw new Error('React useState is not available');
-}
+import AnimatedNumber from './shared/AnimatedNumber';
 
 // Get time-based greeting
 const getGreeting = () => {
@@ -28,60 +24,7 @@ const getGreeting = () => {
     return { text: 'Good night', emoji: '🌙' };
 };
 
-// Animated counter component
-const AnimatedNumber = ({ value, duration = 1000 }) => {
-    const [displayValue, setDisplayValue] = useState(0);
-    
-    useEffect(() => {
-        let startTime;
-        const animate = (timestamp) => {
-            if (!startTime) startTime = timestamp;
-            const progress = Math.min((timestamp - startTime) / duration, 1);
-            setDisplayValue(Math.floor(progress * value));
-            if (progress < 1) requestAnimationFrame(animate);
-        };
-        requestAnimationFrame(animate);
-    }, [value, duration]);
-    
-    return <span>{displayValue.toLocaleString()}</span>;
-};
-
-// Glassmorphic stat card
-const GlassStatCard = ({ title, value, icon, gradient, onClick, trend, trendUp }) => (
-    <motion.div
-        whileHover={{ scale: 1.02, y: -4 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={onClick}
-        className={`relative p-5 rounded-[1.25rem] cursor-pointer overflow-hidden group ${gradient}`}
-    >
-        {/* Animated background elements */}
-        <div className="absolute inset-0 opacity-30">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-700" />
-            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl transform -translate-x-8 translate-y-8" />
-        </div>
-        
-        <div className="relative z-10">
-            <div className="flex items-start justify-between mb-3">
-                <div className="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl">
-                    {icon}
-                </div>
-                {trend && (
-                    <div className={`flex items-center gap-1 text-xs font-bold ${trendUp ? 'text-green-300' : 'text-red-300'}`}>
-                        <ArrowUpRight size={14} className={!trendUp ? 'rotate-90' : ''} />
-                        {trend}
-                    </div>
-                )}
-            </div>
-            <div className="text-3xl font-black text-white mb-1">
-                <AnimatedNumber value={value} />
-            </div>
-            <div className="text-white/80 text-sm font-medium">{title}</div>
-        </div>
-        
-        {/* Hover shine effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-    </motion.div>
-);
+// GlassStatCard moved inside Dashboard component to access AnimatedNumber
 
 // Quick action button with enhanced styling
 const QuickActionButton = ({ icon, label, description, onClick, color }) => (
@@ -157,6 +100,43 @@ export default function Dashboard({
     subProfiles = {}, 
     tokenBalance = 0 
 }) {
+    // Glassmorphic stat card - using Suspense for AnimatedNumber to avoid TDZ issues
+    const GlassStatCard = ({ title, value, icon, gradient, onClick, trend, trendUp }) => (
+        <motion.div
+            whileHover={{ scale: 1.02, y: -4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onClick}
+            className={`relative p-5 rounded-[1.25rem] cursor-pointer overflow-hidden group ${gradient}`}
+        >
+            {/* Animated background elements */}
+            <div className="absolute inset-0 opacity-30">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-700" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl transform -translate-x-8 translate-y-8" />
+            </div>
+            
+            <div className="relative z-10">
+                <div className="flex items-start justify-between mb-3">
+                    <div className="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl">
+                        {icon}
+                    </div>
+                    {trend && (
+                        <div className={`flex items-center gap-1 text-xs font-bold ${trendUp ? 'text-green-300' : 'text-red-300'}`}>
+                            <ArrowUpRight size={14} className={!trendUp ? 'rotate-90' : ''} />
+                            {trend}
+                        </div>
+                    )}
+                </div>
+                <div className="text-3xl font-black text-white mb-1">
+                    <AnimatedNumber value={value} />
+                </div>
+                <div className="text-white/80 text-sm font-medium">{title}</div>
+            </div>
+            
+            {/* Hover shine effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+        </motion.div>
+    );
+
     // Initialize state first to avoid TDZ issues
     const [recentConvos, setRecentConvos] = useState([]);
     const [trendingItem, setTrendingItem] = useState(null);
