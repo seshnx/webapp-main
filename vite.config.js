@@ -51,7 +51,7 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 1000, // Increased for large dependencies
-    sourcemap: import.meta.env.PROD ? 'hidden' : true, // Source maps for debugging
+    sourcemap: (import.meta.env?.PROD || process.env.NODE_ENV === 'production') ? 'hidden' : true, // Source maps for debugging
     minify: 'esbuild', // Fastest minifier
     cssMinify: 'esbuild', // Fast CSS minification
     rollupOptions: {
