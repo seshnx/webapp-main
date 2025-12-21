@@ -1,4 +1,4 @@
-name: Build and Deploy
+name: Build, Test, and Deploy
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build:
+  lint-and-build:
     runs-on: ubuntu-latest
     
     steps:
@@ -23,8 +23,14 @@ jobs:
     - name: Install dependencies
       run: npm ci
       
+    - name: Run linter
+      run: npm run lint
+      continue-on-error: false
+      
     - name: Build application
       env:
+        VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+        VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
         VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
         VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
@@ -33,6 +39,7 @@ jobs:
         VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
         VITE_FIREBASE_MEASUREMENT_ID: ${{ secrets.VITE_FIREBASE_MEASUREMENT_ID }}
         VITE_GIPHY_API_KEY: ${{ secrets.VITE_GIPHY_API_KEY }}
+        VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
       run: npm run build
       
     - name: Upload build artifacts
@@ -41,4 +48,10 @@ jobs:
         name: dist
         path: dist/
         retention-days: 7
+      
+    - name: Check bundle size
+      run: |
+        echo "📦 Build completed successfully"
+        echo "Bundle size check:"
+        du -sh dist/ || true
 

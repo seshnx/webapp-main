@@ -1,0 +1,48 @@
+# Vercel ignore file - exclude unnecessary files from deployment
+
+# Development files
+node_modules/
+.git/
+.github/
+.vscode/
+.idea/
+
+# Build artifacts (Vercel builds these)
+dist/
+build/
+
+# Documentation
+*.md
+!README.md
+
+# Config files not needed in production
+.eslintrc*
+.prettierrc*
+tsconfig.json
+vitest.config.js
+playwright.config.js
+
+# Test files
+**/__tests__/
+**/*.test.*
+**/*.spec.*
+
+# Environment files (use Vercel env vars instead)
+.env*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+*.swp
+*.swo
+*~
+

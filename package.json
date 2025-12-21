@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "build:vercel": "(npx convex deploy --yes || echo 'Convex deploy skipped') && vite build",
+    "build:analyze": "ANALYZE=true vite build",
     "lint": "eslint . --max-warnings 0",
+    "lint:fix": "eslint . --fix",
     "preview": "vite preview"
   },
   "dependencies": {

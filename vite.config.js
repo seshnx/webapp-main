@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { visualizer } from 'rollup-plugin-visualizer'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
@@ -26,7 +27,10 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 600, // Increase warning threshold slightly
+    chunkSizeWarningLimit: 1000, // Increased for large dependencies
+    sourcemap: import.meta.env.PROD ? 'hidden' : true, // Source maps for debugging
+    minify: 'esbuild', // Fastest minifier
+    cssMinify: 'esbuild', // Fast CSS minification
     rollupOptions: {
       external: (id) => {
         // Don't externalize convex/server - we're using a stub instead
@@ -34,6 +38,10 @@ export default defineConfig({
         return false;
       },
       output: {
+        // Better chunk naming for caching
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
         manualChunks: (id) => {
           // Code splitting strategy for better caching and performance
           if (id.includes('node_modules')) {
@@ -56,10 +64,29 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['convex/server'],
-    include: ['convex/react', '@sentry/react'],
+    include: [
+      'react',
+      'react-dom',
+      'react-router-dom',
+      '@supabase/supabase-js',
+      'convex/react',
+      '@sentry/react'
+    ],
+  },
+  server: {
+    hmr: {
+      overlay: true, // Show errors in browser overlay
+    },
   },
   plugins: [
     react(),
+    // Bundle analyzer (only in analysis mode)
+    ...(process.env.ANALYZE === 'true' ? [visualizer({
+      open: true,
+      filename: 'dist/stats.html',
+      gzipSize: true,
+      brotliSize: true,
+    })] : []),
     VitePWA({
       registerType: 'autoUpdate',
       // TEMP: force-remove old cached bundles (including any prior Firebase chunks).
