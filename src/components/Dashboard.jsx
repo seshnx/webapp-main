@@ -152,8 +152,11 @@ export default function Dashboard({
     subProfiles = {}, 
     tokenBalance = 0 
 }) {
+    // Initialize state first to avoid TDZ issues
     const [recentConvos, setRecentConvos] = useState([]);
     const [trendingItem, setTrendingItem] = useState(null);
+    
+    // Access constants after state initialization
     const greeting = getGreeting();
 
     // Real-time notifications from Supabase
@@ -168,19 +171,24 @@ export default function Dashboard({
     let totalPct = 0;
     let roleCount = 0;
 
+    // Safely get PROFILE_SCHEMAS to avoid TDZ issues
+    const getProfileSchema = (role) => {
+        try {
+            if (typeof PROFILE_SCHEMAS !== 'undefined' && PROFILE_SCHEMAS && PROFILE_SCHEMAS[role]) {
+                return PROFILE_SCHEMAS[role];
+            }
+        } catch (error) {
+            console.warn('Error accessing PROFILE_SCHEMAS:', error);
+        }
+        return [];
+    };
+
     roles.forEach(role => {
         const data = subProfiles?.[role] || {};
         // Also check userData for Talent subRole
         const talentData = role === 'Talent' ? { ...data, talentSubRole: userData?.talentSubRole } : data;
-        // Safely access PROFILE_SCHEMAS with error handling
-        let schema = [];
-        try {
-            schema = (PROFILE_SCHEMAS && PROFILE_SCHEMAS[role]) ? PROFILE_SCHEMAS[role] : [];
-        } catch (error) {
-            console.warn('Error accessing PROFILE_SCHEMAS:', error);
-            schema = [];
-        }
-        if (schema.length === 0) return;
+        const schema = getProfileSchema(role);
+        if (!schema || schema.length === 0) return;
         
         // Filter out toggle fields and list fields, but include subRole fields
         const relevantFields = schema.filter(f => !f.isToggle && f.type !== 'list');
