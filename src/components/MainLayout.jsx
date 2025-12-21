@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { SchoolProvider } from '../contexts/SchoolContext';
 import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
 import ErrorBoundary from './shared/ErrorBoundary';
@@ -61,6 +62,10 @@ const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
 const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
 const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
 const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
+const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
+const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
+const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
+const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
 
 // Shared loading fallback component
 const LoadingFallback = () => (
@@ -68,22 +73,6 @@ const LoadingFallback = () => (
     <Loader2 className="animate-spin text-brand-blue" size={24} />
   </div>
 );
-
-// BCM Redirect Component
-const BCMRedirect = () => {
-  useEffect(() => {
-    const bcmUrl = import.meta.env.VITE_BCM_URL || 'https://bcm.seshnx.com';
-    window.location.href = bcmUrl;
-  }, []);
-  return (
-    <div className="flex items-center justify-center h-full">
-      <div className="text-center">
-        <Loader2 className="animate-spin text-brand-blue mx-auto mb-4" size={32} />
-        <p className="text-gray-600 dark:text-gray-400">Redirecting to Business Center...</p>
-      </div>
-    </div>
-  );
-};
 
 export default function MainLayout({ 
   user, 
@@ -106,6 +95,7 @@ export default function MainLayout({
     if (path === '/business-center') return 'business-center';
     if (path === '/legal') return 'legal';
     if (path === '/studio-ops') return 'studio-ops';
+    if (path.startsWith('/edu-')) return path.substring(1);
     return 'dashboard'; // default
   };
 
@@ -190,6 +180,10 @@ export default function MainLayout({
       'profile': '/profile',
       'business-center': '/business-center',
       'legal': '/legal',
+      'edu-student': '/edu-student',
+      'edu-intern': '/edu-intern',
+      'edu-overview': '/edu-overview',
+      'edu-admin': '/edu-admin',
       'studio-ops': '/studio-ops',
     };
 
@@ -276,6 +270,7 @@ export default function MainLayout({
   const clearPendingChatTarget = useCallback(() => {
     setPendingChatTarget(null);
   }, []);
+
 
   // Determine which content to render based on activeTab
   // Using a function instead of useMemo to avoid hook initialization issues
@@ -405,13 +400,59 @@ export default function MainLayout({
         );
 
       case 'business-center':
-        // Redirect to external BCM app
-        return <BCMRedirect />;
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <BusinessCenter
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
+        );
 
       case 'legal':
         return (
           <Suspense fallback={<LoadingFallback />}>
             <LegalDocs />
+          </Suspense>
+        );
+
+      case 'edu-student':
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <EduStudentDashboard
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
+        );
+
+      case 'edu-intern':
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <EduInternDashboard
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
+        );
+
+      case 'edu-overview':
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <EduStaffDashboard
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
+        );
+
+      case 'edu-admin':
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <EduAdminDashboard
+              user={user}
+              userData={userData}
+            />
           </Suspense>
         );
 
@@ -443,6 +484,7 @@ export default function MainLayout({
   };
 
   return (
+    <SchoolProvider user={user} userData={userData}>
       <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-[#1a1d21]">
         {/* Sidebar */}
         <Suspense fallback={<LoadingFallback />}>
@@ -497,6 +539,7 @@ export default function MainLayout({
           </Suspense>
         )}
       </div>
+    </SchoolProvider>
   );
 }
 

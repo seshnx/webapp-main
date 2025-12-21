@@ -1,9 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase } from 'lucide-react';
+import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap } from 'lucide-react';
 import { supabase } from '../config/supabase';
+import { useSchool } from '../contexts/SchoolContext';
 
 export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) {
+  // Always call hook (React rules), but handle case where context might not be ready
+  const schoolContext = useSchool();
   const [isMobile, setIsMobile] = useState(false);
+  
+  // Safely extract values with fallbacks
+  const isStudent = schoolContext?.isStudent ?? (userData?.accountTypes?.includes('Student') || false);
+  const isStaff = schoolContext?.isStaff ?? (userData?.accountTypes?.includes('EDUStaff') || userData?.accountTypes?.includes('EDUAdmin') || false);
 
   // Track mobile viewport
   useEffect(() => {
@@ -26,6 +33,31 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
     { id: 'payments', icon: <CreditCard size={18} />, label: 'Billing' },
     { id: 'profile', icon: <Settings size={18} />, label: 'Profile' },
   ];
+
+  // --- EDU Panel Logic ---
+  // Now checks for Students OR Staff (EDUStaff/EDUAdmins)
+  const isIntern = userData?.accountTypes?.includes('Intern');
+  
+  if (isStudent || isIntern || isStaff || userData?.accountTypes?.includes('student')) {
+      const insertIdx = links.findIndex(l => l.id === 'payments');
+      
+      // Determine label based on role
+      let label = 'EDU Panel';
+      if (isIntern) label = 'Internship';
+      else if (isStaff) label = 'School Admin';
+
+      // Determine routing ID
+      let routeId = 'edu-overview'; // Default for staff/students
+      if (isIntern) routeId = 'edu-intern';
+      else if (isStudent) routeId = 'edu-student';
+
+      links.splice(insertIdx, 0, { 
+          id: routeId,
+          icon: <GraduationCap size={18} />, 
+          label: label, 
+          highlight: true 
+      });
+  }
 
   // Check if user has business features (Studio, Label, Agent, Talent, Producer, etc.)
   const hasBusinessFeatures = userData?.accountTypes?.some(t => 
@@ -98,16 +130,17 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
             
             {/* Business Center - Show if user has business features */}
             {hasBusinessFeatures && (
-                <a 
-                    href={import.meta.env.VITE_BCM_URL || 'https://bcm.seshnx.com'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10"
+                <button 
+                    onClick={() => handleNavigation('business-center')} 
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${
+                        activeTab === 'business-center' 
+                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400' 
+                            : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10'
+                    }`}
                 >
                     <Briefcase size={18} />
                     Business Center
-                    <span className="ml-auto text-xs opacity-60">↗</span>
-                </a>
+                </button>
             )}
         </div>
       </div>
