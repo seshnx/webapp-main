@@ -1,32 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 
 /**
- * AnimatedNumber - Animates a number from 0 to the target value
- * Separated into its own file to avoid TDZ issues during module initialization
+ * AnimatedNumber - Displays a formatted number
+ * Simplified to avoid TDZ issues - animation removed temporarily
  */
-export default function AnimatedNumber({ value, duration = 1000 }) {
-    const [displayValue, setDisplayValue] = useState(0);
-    const animationFrameRef = useRef(null);
-    
-    useEffect(() => {
-        let startTime;
-        const animate = (timestamp) => {
-            if (!startTime) startTime = timestamp;
-            const progress = Math.min((timestamp - startTime) / duration, 1);
-            setDisplayValue(Math.floor(progress * value));
-            if (progress < 1) {
-                animationFrameRef.current = requestAnimationFrame(animate);
-            }
-        };
-        animationFrameRef.current = requestAnimationFrame(animate);
-        
-        return () => {
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-        };
-    }, [value, duration]);
-    
-    return <span>{displayValue.toLocaleString()}</span>;
+export default function AnimatedNumber({ value }) {
+    // Direct display without animation to avoid TDZ issues with useState during module initialization
+    return <span>{value.toLocaleString()}</span>;
 }
 
