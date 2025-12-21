@@ -10,9 +10,21 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
 import { supabase } from '../config/supabase'; 
-import { PROFILE_SCHEMAS, BOOKING_THRESHOLD } from '../config/constants';
 import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
+
+// Lazy import constants to avoid TDZ issues during module initialization
+let constantsPromise = null;
+const getConstants = async () => {
+    if (!constantsPromise) {
+        constantsPromise = import('../config/constants');
+    }
+    const constants = await constantsPromise;
+    return {
+        PROFILE_SCHEMAS: constants.PROFILE_SCHEMAS || {},
+        BOOKING_THRESHOLD: constants.BOOKING_THRESHOLD || 60
+    };
+};
 
 // Get time-based greeting
 const getGreeting = () => {
@@ -166,50 +178,62 @@ export default function Dashboard({
     const studioRooms = subProfiles?.['Studio']?.rooms || [];
     const profileViews = userData?.profileViews || 0;
 
-    // Calculate Overall Completion for Banner
-    const roles = userData?.accountTypes || [];
-    let totalPct = 0;
-    let roleCount = 0;
-
-    // Safely get PROFILE_SCHEMAS to avoid TDZ issues
-    const getProfileSchema = (role) => {
-        try {
-            if (typeof PROFILE_SCHEMAS !== 'undefined' && PROFILE_SCHEMAS && PROFILE_SCHEMAS[role]) {
-                return PROFILE_SCHEMAS[role];
-            }
-        } catch (error) {
-            console.warn('Error accessing PROFILE_SCHEMAS:', error);
-        }
-        return [];
-    };
-
-    roles.forEach(role => {
-        const data = subProfiles?.[role] || {};
-        // Also check userData for Talent subRole
-        const talentData = role === 'Talent' ? { ...data, talentSubRole: userData?.talentSubRole } : data;
-        const schema = getProfileSchema(role);
-        if (!schema || schema.length === 0) return;
-        
-        // Filter out toggle fields and list fields, but include subRole fields
-        const relevantFields = schema.filter(f => !f.isToggle && f.type !== 'list');
-        const totalFields = relevantFields.length || 1;
-        
-        const filledFields = relevantFields.filter(f => {
-            const value = f.isSubRole ? talentData[f.key] : data[f.key];
-            // Check if the value is truthy and has content
-            if (value === null || value === undefined) return false;
-            if (Array.isArray(value)) return value.length > 0;
-            if (typeof value === 'string') return value.trim().length > 0;
-            if (typeof value === 'number') return true;
-            return !!value;
-        }).length;
-        
-        totalPct += (filledFields / totalFields);
-        roleCount++;
-    });
+    // Use state to store constants after async load
+    const [profileSchemas, setProfileSchemas] = useState(null);
+    const [bookingThreshold, setBookingThreshold] = useState(60);
     
-    const avgCompletion = roleCount > 0 ? Math.round((totalPct / roleCount) * 100) : 100;
-    const showCompletionWarning = avgCompletion < 60;
+    // Load constants asynchronously
+    useEffect(() => {
+        getConstants().then(({ PROFILE_SCHEMAS, BOOKING_THRESHOLD }) => {
+            setProfileSchemas(PROFILE_SCHEMAS);
+            setBookingThreshold(BOOKING_THRESHOLD);
+        }).catch(err => {
+            console.warn('Failed to load constants:', err);
+            setProfileSchemas({});
+        });
+    }, []);
+
+    // Calculate Overall Completion for Banner (only when constants are loaded)
+    const roles = userData?.accountTypes || [];
+    const { avgCompletion, showCompletionWarning } = useMemo(() => {
+        if (!profileSchemas) {
+            return { avgCompletion: 100, showCompletionWarning: false };
+        }
+        
+        let totalPct = 0;
+        let roleCount = 0;
+
+        roles.forEach(role => {
+            const data = subProfiles?.[role] || {};
+            // Also check userData for Talent subRole
+            const talentData = role === 'Talent' ? { ...data, talentSubRole: userData?.talentSubRole } : data;
+            const schema = profileSchemas[role] || [];
+            if (schema.length === 0) return;
+            
+            // Filter out toggle fields and list fields, but include subRole fields
+            const relevantFields = schema.filter(f => !f.isToggle && f.type !== 'list');
+            const totalFields = relevantFields.length || 1;
+            
+            const filledFields = relevantFields.filter(f => {
+                const value = f.isSubRole ? talentData[f.key] : data[f.key];
+                // Check if the value is truthy and has content
+                if (value === null || value === undefined) return false;
+                if (Array.isArray(value)) return value.length > 0;
+                if (typeof value === 'string') return value.trim().length > 0;
+                if (typeof value === 'number') return true;
+                return !!value;
+            }).length;
+            
+            totalPct += (filledFields / totalFields);
+            roleCount++;
+        });
+        
+        const completion = roleCount > 0 ? Math.round((totalPct / roleCount) * 100) : 100;
+        return { 
+            avgCompletion: completion, 
+            showCompletionWarning: completion < 60 
+        };
+    }, [profileSchemas, roles, subProfiles, userData?.talentSubRole]);
 
     // Memoize Convex availability
     const convexAvailable = useMemo(() => isConvexAvailable(), []);
