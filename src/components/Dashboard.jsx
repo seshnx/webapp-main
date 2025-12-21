@@ -1,3 +1,4 @@
+// Import React and hooks first to ensure they're available
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
     Calendar, User, MessageCircle, Search, Edit2, Zap, Sliders, 
@@ -13,18 +14,10 @@ import { supabase } from '../config/supabase';
 import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Lazy import constants to avoid TDZ issues during module initialization
-let constantsPromise = null;
-const getConstants = async () => {
-    if (!constantsPromise) {
-        constantsPromise = import('../config/constants');
-    }
-    const constants = await constantsPromise;
-    return {
-        PROFILE_SCHEMAS: constants.PROFILE_SCHEMAS || {},
-        BOOKING_THRESHOLD: constants.BOOKING_THRESHOLD || 60
-    };
-};
+// Ensure React hooks are available before defining components
+if (typeof useState === 'undefined') {
+    throw new Error('React useState is not available');
+}
 
 // Get time-based greeting
 const getGreeting = () => {
@@ -178,19 +171,29 @@ export default function Dashboard({
     const studioRooms = subProfiles?.['Studio']?.rooms || [];
     const profileViews = userData?.profileViews || 0;
 
-    // Use state to store constants after async load
+    // Use state to store constants - load asynchronously to avoid TDZ issues
     const [profileSchemas, setProfileSchemas] = useState(null);
     const [bookingThreshold, setBookingThreshold] = useState(60);
     
-    // Load constants asynchronously
+    // Load constants asynchronously after component mounts
     useEffect(() => {
-        getConstants().then(({ PROFILE_SCHEMAS, BOOKING_THRESHOLD }) => {
-            setProfileSchemas(PROFILE_SCHEMAS);
-            setBookingThreshold(BOOKING_THRESHOLD);
-        }).catch(err => {
-            console.warn('Failed to load constants:', err);
-            setProfileSchemas({});
-        });
+        // Use a small delay to ensure module initialization is complete
+        const timer = setTimeout(() => {
+            import('../config/constants').then(mod => {
+                if (mod.PROFILE_SCHEMAS) {
+                    setProfileSchemas(mod.PROFILE_SCHEMAS);
+                }
+                if (mod.BOOKING_THRESHOLD) {
+                    setBookingThreshold(mod.BOOKING_THRESHOLD);
+                }
+            }).catch(err => {
+                console.warn('Failed to load constants:', err);
+                // Set empty object as fallback
+                setProfileSchemas({});
+            });
+        }, 0);
+        
+        return () => clearTimeout(timer);
     }, []);
 
     // Calculate Overall Completion for Banner (only when constants are loaded)
