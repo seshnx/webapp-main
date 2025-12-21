@@ -487,7 +487,6 @@ export default function MainLayout({
           </Suspense>
         )}
       </div>
-    </div>
   );
 }
 
