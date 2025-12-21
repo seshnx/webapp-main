@@ -433,7 +433,7 @@ export default function MainLayout({
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-[#1a1d21]">
+      <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-[#1a1d21]">
         {/* Sidebar */}
         <Suspense fallback={<LoadingFallback />}>
           <Sidebar
