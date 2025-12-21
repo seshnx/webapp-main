@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw } from 'lucide-react';
+import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
@@ -41,6 +41,10 @@ export default function Navbar({
   const displayRole = getDisplayRole(userData); // Shows subRole if set for Talent
   const roles = userData?.accountTypes || [];
 
+  const eduRoles = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin'];
+  const hasEduAccess = roles.some(r => eduRoles.includes(r));
+  const isEduTab = activeTab.startsWith('edu');
+
   const getDisplayName = (role) => {
       if (!role || role === 'Main' || role === 'Fan' || role === 'User') {
           return userData?.effectiveDisplayName || userData?.firstName || 'User';
@@ -50,6 +54,16 @@ export default function Navbar({
   };
 
   const currentDisplayName = getDisplayName(activeRole);
+
+  const handleEduClick = () => {
+      if (activeRole === 'Student') {
+          setActiveTab('edu-student');
+      } else if (activeRole === 'Intern') {
+          setActiveTab('edu-intern'); 
+      } else {
+          setActiveTab('edu-overview'); 
+      }
+  };
 
   useEffect(() => {
       if (activeRole) {
@@ -173,6 +187,24 @@ export default function Navbar({
         </div>
         
         <div className="flex items-center gap-3 md:gap-4">
+          
+          {hasEduAccess && (
+              <div className="hidden md:flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border dark:border-gray-700">
+                  <button
+                      onClick={() => setActiveTab('dashboard')}
+                      className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${!isEduTab ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-blue dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                  >
+                      <Layout size={14}/> Studio
+                  </button>
+                  <button
+                      onClick={handleEduClick}
+                      className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${isEduTab ? 'bg-white dark:bg-gray-600 shadow-sm text-indigo-600 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                  >
+                      <GraduationCap size={14}/> Education
+                  </button>
+              </div>
+          )}
+
           {roles.length > 1 && (
               <div className="relative hidden sm:flex items-center gap-3" ref={roleRef}>
                   <button 

@@ -31,8 +31,9 @@ export function PlatformAdminProvider({ children }) {
         
         // Features available in the main app for Global Admins
         mainAppAdminFeatures: [
-            'View platform data',
-            'Manage platform-specific content'
+            'Access EDU dashboards',
+            'View school data',
+            'Manage school-specific content'
         ]
     };
 

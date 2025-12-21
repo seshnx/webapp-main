@@ -230,8 +230,42 @@ export const AUDIO_REQUIREMENTS = {
 
 // --- EXISTING CONSTANTS BELOW ---
 
+export const SCHOOL_PERMISSIONS = [
+    { id: 'manage_roster', label: 'Manage Roster', description: 'Add, remove, or edit student details.' },
+    { id: 'manage_enrollment', label: 'Admissions', description: 'Process applications and handle intake.' },
+    { id: 'approve_hours', label: 'Approve Hours', description: 'Verify and approve internship time logs.' },
+    { id: 'manage_partners', label: 'Manage Partners', description: 'Add or edit approved internship studios.' },
+    { id: 'grade_students', label: 'Grading', description: 'Submit technical and soft-skill evaluations.' },
+    { id: 'post_announcements', label: 'Announcements', description: 'Post news to the student dashboard.' },
+    { id: 'manage_resources', label: 'Resource Rules', description: 'Set quotas and booking restrictions.' },
+    { id: 'manage_staff', label: 'Manage Staff', description: 'Add new instructors and assign roles.' },
+    { id: 'view_audit', label: 'View Audit Logs', description: 'See history of administrative actions.' },
+    { id: 'edit_settings', label: 'School Settings', description: 'Change school name, address, and branding.' }
+];
+
+// EDU Authentication & Permissions
+// Note: GAdmin (Global Admin) is NOT an EDU role - it's a platform-wide role managed in separate Admin App
+export const EDU_ROLES = ['EDUAdmin', 'EDUStaff', 'Student', 'Intern'];
+
+// EDU Role Hierarchy (highest to lowest)
+export const EDU_ROLE_HIERARCHY = ['EDUAdmin', 'EDUStaff', 'Intern', 'Student'];
+
 // Global Admin role (separate from EDU roles, managed in Admin App)
 export const GLOBAL_ADMIN_ROLE = 'GAdmin';
+
+// EDU Permissions mapping (role -> permissions)
+export const EDU_PERMISSIONS = {
+    'EDUAdmin': ['ALL'], // EDU Admin (School Admin) has all school permissions
+    'EDUStaff': [
+        'manage_roster',
+        'approve_hours',
+        'grade_students',
+        'post_announcements',
+        'view_audit'
+    ],
+    'Intern': [], // Interns have no admin permissions
+    'Student': [] // Students have no admin permissions
+};
 
 export const INSTRUMENT_DATA = { 
     "Vocals": ["Soprano", "Tenor", "Baritone", "Bass", "Falsetto", "Rapping", "Beatboxing", "Growling"], 
