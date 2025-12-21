@@ -1,0 +1,543 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check } from 'lucide-react';
+import { supabase } from '../../config/supabase';
+import StarFieldVisualizer from '../shared/StarFieldVisualizer';
+import CommentSection from './CommentSection';
+import { motion, AnimatePresence } from 'framer-motion'; 
+import { createNotification } from '../../hooks/useNotifications';
+import FollowButton, { FollowButtonCompact } from './FollowButton';
+import toast from 'react-hot-toast';
+
+const REACTION_SET = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+
+const renderText = (text) => {
+    if (!text) return null;
+    return text.split(/(\s+)/).map((part, i) => {
+        if (part.match(/^#\w+/)) return <span key={i} className="text-brand-blue font-bold cursor-pointer hover:underline">{part}</span>;
+        if (part.match(/^@\w+/)) return <span key={i} className="text-purple-600 font-bold cursor-pointer hover:underline">{part}</span>;
+        return part;
+    });
+};
+
+const cardVariants = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
+    exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } }
+};
+
+export default function PostCard({ 
+    post, 
+    currentUser, 
+    currentUserData,
+    openPublicProfile, 
+    onReport,
+    isFollowingAuthor,
+    onToggleFollow 
+}) {
+    const [showComments, setShowComments] = useState(false);
+    const [commentCount, setCommentCount] = useState(post.commentCount || 0); 
+    const [isSaved, setIsSaved] = useState(false);
+    const [showReactionMenu, setShowReactionMenu] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const [linkCopied, setLinkCopied] = useState(false);
+    const [savingPost, setSavingPost] = useState(false);
+    const menuRef = useRef(null);
+    const moreMenuRef = useRef(null);
+
+    const userId = currentUser?.id || currentUser?.uid;
+    const isOwnPost = post.userId === userId;
+    const myReaction = post.reactions?.[userId];
+    const reactionCounts = post.reactions ? Object.values(post.reactions).reduce((acc, emoji) => {
+        acc[emoji] = (acc[emoji] || 0) + 1;
+        return acc;
+    }, {}) : {};
+    const totalReactions = Object.values(reactionCounts).reduce((a, b) => a + b, 0);
+
+    // Check if post is saved on mount
+    useEffect(() => {
+        if (!userId || !supabase) return;
+        
+        const checkSaved = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('saved_posts')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .eq('post_id', post.id)
+                    .maybeSingle(); // Use maybeSingle() to handle case when no record exists
+                
+                setIsSaved(!!data && !error);
+            } catch (e) {
+                console.error('Error checking saved status:', e);
+                setIsSaved(false); // Default to false on error
+            }
+        };
+        checkSaved();
+    }, [userId, post.id]);
+
+    // Close menus on outside click
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (menuRef.current && !menuRef.current.contains(event.target)) {
+                setShowReactionMenu(false);
+            }
+            if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+                setShowMoreMenu(false);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const handleReaction = async (emoji) => {
+        setShowReactionMenu(false);
+        if (!userId || !supabase) return;
+
+        try {
+            const wasReacted = !!myReaction;
+            const currentReactions = post.reactions || {};
+            
+            if (myReaction === emoji) {
+                // Remove reaction
+                const newReactions = { ...currentReactions };
+                delete newReactions[userId];
+                
+                const { error } = await supabase
+                    .from('posts')
+                    .update({
+                        reactions: newReactions,
+                        reaction_count: (post.reactionCount || 0) - 1
+                    })
+                    .eq('id', post.id);
+                
+                if (error) throw error;
+            } else {
+                // Add/change reaction
+                const newReactions = { ...currentReactions, [userId]: emoji };
+                const increment = !myReaction ? 1 : 0;
+                
+                const { error } = await supabase
+                    .from('posts')
+                    .update({
+                        reactions: newReactions,
+                        reaction_count: (post.reactionCount || 0) + increment
+                    })
+                    .eq('id', post.id);
+                
+                if (error) throw error;
+                
+                // Send notification (only for new reactions, not changes)
+                if (!wasReacted && !isOwnPost) {
+                    createNotification({
+                        targetUserId: post.userId,
+                        type: 'like',
+                        fromUserId: userId,
+                        fromUserName: currentUserData?.effectiveDisplayName || currentUserData?.firstName || 'Someone',
+                        fromUserPhoto: currentUserData?.photoURL,
+                        postId: post.id,
+                        postPreview: post.text?.substring(0, 50),
+                        message: `reacted ${emoji} to your post`
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Reaction failed", e);
+            toast.error("Couldn't add reaction");
+        }
+    };
+
+    const handleSavePost = async () => {
+        if (!userId || savingPost || !supabase) return;
+        setSavingPost(true);
+
+        try {
+            if (isSaved) {
+                // Unsave
+                const { error: deleteError } = await supabase
+                    .from('saved_posts')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('post_id', post.id);
+                
+                if (deleteError) throw deleteError;
+                
+                const { error: updateError } = await supabase
+                    .from('posts')
+                    .update({ save_count: (post.saveCount || 0) - 1 })
+                    .eq('id', post.id);
+                
+                if (updateError) throw updateError;
+                
+                setIsSaved(false);
+                toast.success('Removed from saved');
+            } else {
+                // Save
+                const { error: insertError } = await supabase
+                    .from('saved_posts')
+                    .insert({
+                        user_id: userId,
+                        post_id: post.id,
+                        author_id: post.userId,
+                        author_name: post.displayName,
+                        preview: post.text?.substring(0, 100) || 'Media post',
+                        saved_at: new Date().toISOString(),
+                        has_media: !!(post.attachments?.length || post.imageUrl || post.audioUrl)
+                    });
+                
+                if (insertError) throw insertError;
+                
+                const { error: updateError } = await supabase
+                    .from('posts')
+                    .update({ save_count: (post.saveCount || 0) + 1 })
+                    .eq('id', post.id);
+                
+                if (updateError) throw updateError;
+                
+                setIsSaved(true);
+                toast.success('Post saved!');
+
+                // Optionally notify author (some platforms do this)
+                // Uncomment if desired:
+                // if (!isOwnPost) {
+                //     createNotification({
+                //         targetUserId: post.userId,
+                //         type: 'save',
+                //         fromUserId: userId,
+                //         fromUserName: currentUserData?.effectiveDisplayName || 'Someone',
+                //         fromUserPhoto: currentUserData?.photoURL,
+                //         postId: post.id,
+                //         message: 'saved your post'
+                //     });
+                // }
+            }
+        } catch (e) {
+            console.error("Save failed", e);
+            toast.error("Couldn't save post");
+        }
+        setSavingPost(false);
+    };
+
+    const handleShare = async () => {
+        const shareUrl = `${window.location.origin}/post/${post.id}`;
+        
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Post by ${post.displayName}`,
+                    text: post.text?.substring(0, 100) || 'Check out this post',
+                    url: shareUrl
+                });
+            } catch (e) {
+                if (e.name !== 'AbortError') {
+                    copyLink(shareUrl);
+                }
+            }
+        } else {
+            copyLink(shareUrl);
+        }
+    };
+
+    const copyLink = (url) => {
+        navigator.clipboard.writeText(url);
+        setLinkCopied(true);
+        toast.success('Link copied to clipboard!');
+        setTimeout(() => setLinkCopied(false), 2000);
+    };
+
+    const handleDeletePost = async () => {
+        if (!isOwnPost || !supabase) return;
+        if (!window.confirm('Are you sure you want to delete this post?')) return;
+        
+        try {
+            const { error } = await supabase
+                .from('posts')
+                .delete()
+                .eq('id', post.id);
+            
+            if (error) throw error;
+            
+            toast.success('Post deleted');
+        } catch (e) {
+            console.error('Delete failed:', e);
+            toast.error("Couldn't delete post");
+        }
+    };
+
+    return (
+        <motion.div 
+            variants={cardVariants}
+            initial="hidden"
+            animate="show"
+            exit="exit"
+            layout
+            className="bg-white dark:bg-dark-card border dark:border-gray-700 rounded-xl overflow-visible shadow-sm mb-4 relative"
+        >
+            {/* Header */}
+            <div className="p-4 flex justify-between items-start">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div 
+                        className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden cursor-pointer shrink-0"
+                        onClick={() => post.userId && openPublicProfile(post.userId)}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`View ${post.displayName || 'user'}'s profile`}
+                    >
+                        {post.authorPhoto ? (
+                            <img 
+                                src={post.authorPhoto} 
+                                className="h-full w-full object-cover" 
+                                alt={`${post.displayName || 'User'}'s avatar`}
+                                onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                        ) : (
+                            <div className="h-full w-full bg-gradient-to-tr from-brand-blue to-purple-500 flex items-center justify-center text-white font-bold">
+                                {post.displayName?.[0]?.toUpperCase() || <User size={16} aria-hidden="true" />}
+                            </div>
+                        )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                            <h4 
+                                className="font-bold dark:text-white text-sm hover:underline decoration-brand-blue cursor-pointer truncate"
+                                onClick={() => post.userId && openPublicProfile(post.userId)}
+                            >
+                                {post.displayName || 'Unknown User'}
+                            </h4>
+                            {/* Follow button in header for non-own posts */}
+                            {!isOwnPost && onToggleFollow && !isFollowingAuthor && (
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onToggleFollow(); }}
+                                    className="text-xs font-bold text-brand-blue hover:text-blue-700 transition shrink-0"
+                                >
+                                    • Follow
+                                </button>
+                            )}
+                        </div>
+                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="truncate">{post.role}</span>
+                            <span>•</span>
+                            <span className="shrink-0">
+                                {post.timestamp || post.created_at
+                                    ? new Date(post.timestamp || post.created_at).toLocaleDateString() 
+                                    : 'Just now'
+                                }
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                
+                {/* More menu */}
+                <div className="relative" ref={moreMenuRef}>
+                    <button 
+                        className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+                        onClick={() => setShowMoreMenu(!showMoreMenu)}
+                    >
+                        <MoreHorizontal size={20}/>
+                    </button>
+
+                    <AnimatePresence>
+                        {showMoreMenu && (
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                                className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border dark:border-gray-700 overflow-hidden z-50"
+                            >
+                                <button 
+                                    onClick={() => { copyLink(`${window.location.origin}/post/${post.id}`); setShowMoreMenu(false); }}
+                                    className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                >
+                                    <Link2 size={16} className="text-gray-400" />
+                                    <span className="dark:text-gray-200">Copy link</span>
+                                </button>
+                                
+                                {!isOwnPost && (
+                                    <>
+                                        {onToggleFollow && (
+                                            <button 
+                                                onClick={() => { onToggleFollow(); setShowMoreMenu(false); }}
+                                                className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
+                                            >
+                                                <UserPlus size={16} className="text-gray-400" />
+                                                <span className="dark:text-gray-200">
+                                                    {isFollowingAuthor ? 'Unfollow' : 'Follow'} {post.displayName?.split(' ')[0]}
+                                                </span>
+                                            </button>
+                                        )}
+                                        <button 
+                                            onClick={() => { onReport(); setShowMoreMenu(false); }}
+                                            className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-red-500"
+                                        >
+                                            <Flag size={16} />
+                                            <span>Report post</span>
+                                        </button>
+                                    </>
+                                )}
+
+                                {isOwnPost && (
+                                    <button 
+                                        onClick={() => { handleDeletePost(); setShowMoreMenu(false); }}
+                                        className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-red-500"
+                                    >
+                                        <Trash2 size={16} />
+                                        <span>Delete post</span>
+                                    </button>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+            </div>
+
+            {/* Content Body */}
+            <div className="px-4 pb-2">
+                {post.text && (
+                    <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap text-sm leading-relaxed mb-3">
+                        {renderText(post.text)}
+                    </p>
+                )}
+
+                {/* Attachments */}
+                {post.attachments && post.attachments.length > 0 && (
+                    <div className={`grid gap-2 mb-3 ${post.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                        {post.attachments.map((att, i) => (
+                            <div key={i} className="rounded-lg overflow-hidden bg-transparent relative">
+                                {att.type === 'image' && <img src={att.url} className="w-full h-full object-cover max-h-96" alt="content"/>}
+                                {att.type === 'video' && <video src={att.url} controls className="w-full h-full max-h-96 bg-black"/>} 
+                                {att.type === 'audio' && (
+                                    <div className="w-full">
+                                        <StarFieldVisualizer audioUrl={att.url} fileName={att.name || 'Audio Track'} />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+                )}
+                
+                {/* Fallbacks for legacy posts */}
+                {post.audioUrl && !post.attachments && (
+                    <div className="rounded-lg overflow-hidden bg-transparent mb-3">
+                        <StarFieldVisualizer audioUrl={post.audioUrl} fileName={post.audioName || 'Track'} />
+                    </div>
+                )}
+                {post.imageUrl && !post.attachments && <img src={post.imageUrl} className="rounded-lg w-full mb-3 border dark:border-gray-700" alt="legacy content"/>}
+            </div>
+
+            {/* Engagement Stats */}
+            {(totalReactions > 0 || post.saveCount > 0) && (
+                <div className="px-4 py-2 flex items-center justify-between">
+                    <div className="flex gap-1">
+                        {Object.entries(reactionCounts).map(([emoji, count]) => (
+                            <motion.div 
+                                key={emoji}
+                                initial={{ scale: 0 }} animate={{ scale: 1 }}
+                                className={`text-xs px-2 py-1 rounded-full border flex items-center gap-1 ${myReaction === emoji ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-800 dark:border-gray-700'} dark:text-gray-300`}
+                            >
+                                <span>{emoji}</span>
+                                <span className="font-bold">{count}</span>
+                            </motion.div>
+                        ))}
+                    </div>
+                    {post.saveCount > 0 && (
+                        <span className="text-xs text-gray-400">
+                            {post.saveCount} save{post.saveCount !== 1 ? 's' : ''}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="px-4 py-3 border-t dark:border-gray-700 flex items-center justify-between relative">
+                <div className="flex gap-2 sm:gap-4">
+                    {/* Reaction Button */}
+                    <div className="relative">
+                        <motion.button 
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => setShowReactionMenu(!showReactionMenu)}
+                            className={`flex items-center gap-1.5 sm:gap-2 text-sm font-medium transition px-2 py-1 rounded-lg ${myReaction ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
+                        >
+                            {myReaction ? <span className="text-lg">{myReaction}</span> : <Smile size={18} />}
+                            <span className="hidden sm:inline">{myReaction ? 'Reacted' : 'React'}</span>
+                        </motion.button>
+
+                        <AnimatePresence>
+                            {showReactionMenu && (
+                                <motion.div 
+                                    ref={menuRef}
+                                    initial={{ opacity: 0, scale: 0.8, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.8, y: 10 }}
+                                    className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 shadow-xl rounded-full p-2 flex gap-1 sm:gap-2 z-50 border dark:border-gray-600 origin-bottom-left"
+                                >
+                                    {REACTION_SET.map(emoji => (
+                                        <motion.button 
+                                            key={emoji} 
+                                            whileHover={{ scale: 1.2 }}
+                                            whileTap={{ scale: 0.9 }}
+                                            onClick={(e) => { e.stopPropagation(); handleReaction(emoji); }} 
+                                            className={`text-xl p-1 sm:p-1.5 rounded-full ${myReaction === emoji ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
+                                        >
+                                            {emoji}
+                                        </motion.button>
+                                    ))}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
+
+                    {/* Comment Button */}
+                    <motion.button 
+                        whileTap={{ scale: 0.95 }} 
+                        onClick={() => setShowComments(!showComments)} 
+                        className="flex items-center gap-1.5 sm:gap-2 text-sm font-medium text-gray-500 hover:text-brand-blue transition px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                    >
+                        <MessageCircle size={18} />
+                        <span className="hidden sm:inline">{commentCount > 0 ? commentCount : 'Comment'}</span>
+                        {commentCount > 0 && <span className="sm:hidden">{commentCount}</span>}
+                    </motion.button>
+                    
+                    {/* Share Button */}
+                    <motion.button 
+                        whileTap={{ scale: 0.95 }} 
+                        onClick={handleShare}
+                        className={`flex items-center gap-1.5 sm:gap-2 text-sm font-medium transition px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 ${linkCopied ? 'text-green-500' : 'text-gray-500 hover:text-green-500'}`}
+                    >
+                        {linkCopied ? <Check size={18} /> : <Share2 size={18} />}
+                        <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Share'}</span>
+                    </motion.button>
+                </div>
+                
+                {/* Save Button */}
+                <motion.button 
+                    whileTap={{ scale: 0.8 }} 
+                    onClick={handleSavePost}
+                    disabled={savingPost}
+                    className={`${isSaved ? 'text-brand-blue' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'} transition p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full disabled:opacity-50`}
+                    title={isSaved ? 'Remove from saved' : 'Save post'}
+                >
+                    <Bookmark size={18} fill={isSaved ? "currentColor" : "none"}/>
+                </motion.button>
+            </div>
+
+            {/* Comments Section */}
+            <AnimatePresence>
+                {showComments && (
+                    <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden"
+                    >
+                        <CommentSection 
+                            post={post} 
+                            currentUser={currentUser}
+                            currentUserData={currentUserData}
+                            blockedUsers={[]}
+                            onCountChange={setCommentCount}
+                        />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
+    );
+}

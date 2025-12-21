@@ -1,0 +1,267 @@
+import React, { useState, useEffect } from 'react';
+import { 
+    Database, CheckCircle, Loader2, User, ThumbsUp, ThumbsDown, Copy 
+} from 'lucide-react';
+import { supabase } from '../../config/supabase';
+import { EQUIP_CATEGORIES } from '../../config/constants';
+
+export default function TechGearDatabase({ user, isTech }) {
+    const [view, setView] = useState('feed'); 
+    const [pendingItems, setPendingItems] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        if (!supabase) return;
+        
+        const channel = supabase
+            .channel('equipment-submissions')
+            .on('postgres_changes', {
+                event: '*',
+                schema: 'public',
+                table: 'equipment_submissions',
+                filter: 'status=eq.pending'
+            }, () => {
+                loadPendingItems();
+            })
+            .subscribe();
+
+        loadPendingItems();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [user?.id, user?.uid]);
+
+    const loadPendingItems = async () => {
+        if (!supabase) return;
+        setLoading(true);
+        try {
+            const { data: itemsData, error } = await supabase
+                .from('equipment_submissions')
+                .select('*')
+                .eq('status', 'pending')
+                .order('timestamp', { ascending: false })
+                .limit(20);
+            
+            if (error) throw error;
+            
+            setPendingItems((itemsData || []).map(item => ({
+                id: item.id,
+                ...item,
+                submittedBy: item.submitted_by,
+                timestamp: item.timestamp
+            })));
+        } catch (error) {
+            console.error('Error loading pending items:', error);
+        }
+        setLoading(false);
+    };
+
+    const handleVote = async (itemId, voteType, currentData) => {
+        if (!isTech || !supabase) {
+            if (!isTech) alert("Only verified Technicians can vote on gear accuracy.");
+            return;
+        }
+        
+        const userId = user?.id || user?.uid;
+        try {
+            // Get current votes and add new vote
+            const currentVotes = currentData.votes || {};
+            const voteArray = currentVotes[voteType] || [];
+            if (voteArray.includes(userId)) {
+                alert("You've already voted on this item.");
+                return;
+            }
+            
+            const updatedVotes = {
+                ...currentVotes,
+                [voteType]: [...voteArray, userId]
+            };
+            
+            await supabase
+                .from('equipment_submissions')
+                .update({ votes: updatedVotes })
+                .eq('id', itemId);
+
+            const YES_THRESHOLD = 3;
+            const REJECT_THRESHOLD = 3;
+
+            const yesVotes = (updatedVotes.yes?.length || 0);
+            const fakeVotes = (updatedVotes.fake?.length || 0);
+            const dupVotes = (updatedVotes.duplicate?.length || 0);
+
+            if (yesVotes >= YES_THRESHOLD) {
+                // Add to equipment database
+                await supabase
+                    .from('equipment_database')
+                    .insert({
+                        name: currentData.model,
+                        brand: currentData.brand,
+                        category: currentData.category,
+                        sub_category: currentData.subCategory,
+                        specs: currentData.specs,
+                        verified_by: [userId],
+                        added_by: currentData.submittedBy,
+                        added_at: new Date().toISOString()
+                    });
+                
+                // Update submission status
+                await supabase
+                    .from('equipment_submissions')
+                    .update({ status: 'approved' })
+                    .eq('id', itemId);
+                
+                // Update wallets (using RPC or direct update)
+                const { data: submitterWallet } = await supabase
+                    .from('wallets')
+                    .select('balance')
+                    .eq('user_id', currentData.submittedBy)
+                    .single();
+                
+                const { data: voterWallet } = await supabase
+                    .from('wallets')
+                    .select('balance')
+                    .eq('user_id', userId)
+                    .single();
+                
+                if (submitterWallet) {
+                    await supabase
+                        .from('wallets')
+                        .update({ balance: (submitterWallet.balance || 0) + 50 })
+                        .eq('user_id', currentData.submittedBy);
+                }
+                
+                if (voterWallet) {
+                    await supabase
+                        .from('wallets')
+                        .update({ balance: (voterWallet.balance || 0) + 5 })
+                        .eq('user_id', userId);
+                }
+                
+                alert("Consensus reached! Item approved and rewards distributed.");
+
+            } else if (fakeVotes >= REJECT_THRESHOLD || dupVotes >= REJECT_THRESHOLD) {
+                await supabase
+                    .from('equipment_submissions')
+                    .update({ status: 'rejected' })
+                    .eq('id', itemId);
+            }
+        } catch (e) { console.error("Voting failed:", e); }
+    };
+
+    return (
+        <div className="animate-in fade-in">
+            <div className="flex justify-between items-center mb-6">
+                <div>
+                    <h3 className="text-xl font-bold dark:text-white flex items-center gap-2"><Database className="text-orange-500"/> Gear Knowledge Base</h3>
+                    <p className="text-sm text-gray-500">Crowdsourced equipment specs verified by pros.</p>
+                </div>
+                <div className="flex gap-2 bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                    <button onClick={() => setView('feed')} className={`px-4 py-2 rounded-md text-xs font-bold transition ${view === 'feed' ? 'bg-white dark:bg-gray-600 shadow text-orange-600 dark:text-orange-400' : 'text-gray-500'}`}>The Bench (Queue)</button>
+                    <button onClick={() => setView('submit')} className={`px-4 py-2 rounded-md text-xs font-bold transition ${view === 'submit' ? 'bg-white dark:bg-gray-600 shadow text-orange-600 dark:text-orange-400' : 'text-gray-500'}`}>Submit New Gear</button>
+                </div>
+            </div>
+
+            {view === 'feed' && (
+                <div className="grid grid-cols-1 gap-4">
+                    {loading ? <div className="p-10 text-center"><Loader2 className="animate-spin mx-auto"/></div> : 
+                     pendingItems.length === 0 ? (
+                        <div className="text-center py-12 border-2 border-dashed dark:border-gray-700 rounded-xl">
+                            <CheckCircle size={48} className="mx-auto text-green-500 mb-2 opacity-50"/>
+                            <p className="text-gray-500">The bench is clear. No pending submissions.</p>
+                        </div>
+                     ) : (
+                        pendingItems.map(item => (
+                            <div key={item.id} className="bg-white dark:bg-[#2c2e36] p-5 rounded-xl border dark:border-gray-700 shadow-sm flex flex-col md:flex-row gap-6">
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <span className="text-[10px] font-bold uppercase bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded text-gray-500">{item.brand}</span>
+                                        <span className="text-[10px] font-bold uppercase bg-blue-50 dark:bg-blue-900/20 text-blue-600 px-2 py-0.5 rounded">{item.category?.replace(/_/g, ' ')}</span>
+                                    </div>
+                                    <h4 className="text-lg font-extrabold dark:text-white mb-2">{item.model}</h4>
+                                    <div className="bg-gray-50 dark:bg-black/20 p-3 rounded-lg text-sm text-gray-600 dark:text-gray-300 mb-2 border dark:border-gray-700">{item.specs}</div>
+                                    <div className="text-xs text-gray-400 flex items-center gap-1"><User size={12}/> Submitted by {item.submitterName || 'Unknown'} • 50 TK Reward Pending</div>
+                                </div>
+                                <div className="w-full md:w-48 flex flex-col justify-center gap-2 border-l dark:border-gray-700 pl-0 md:pl-6">
+                                    <button onClick={() => handleVote(item.id, 'yes', item)} disabled={item.votes?.yes?.includes(user.uid)} className="w-full py-2 bg-green-100 dark:bg-green-900/20 hover:bg-green-200 text-green-700 dark:text-green-400 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"><ThumbsUp size={14}/> Yes ({item.votes?.yes?.length || 0})</button>
+                                    <button onClick={() => handleVote(item.id, 'fake', item)} disabled={item.votes?.fake?.includes(user.uid)} className="w-full py-2 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 text-red-700 dark:text-red-400 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"><ThumbsDown size={14}/> Fake ({item.votes?.fake?.length || 0})</button>
+                                    <button onClick={() => handleVote(item.id, 'duplicate', item)} disabled={item.votes?.duplicate?.includes(user.uid)} className="w-full py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-600 dark:text-gray-300 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition disabled:opacity-50"><Copy size={14}/> Dup ({item.votes?.duplicate?.length || 0})</button>
+                                </div>
+                            </div>
+                        ))
+                     )}
+                </div>
+            )}
+
+            {view === 'submit' && <GearSubmissionForm user={user} userData={userData} onSuccess={() => setView('feed')} />}
+        </div>
+    );
+}
+
+function GearSubmissionForm({ user, userData, onSuccess }) {
+    const [form, setForm] = useState({ brand: '', model: '', category: EQUIP_CATEGORIES[0].id, subCategory: '', specs: '' });
+    const [submitting, setSubmitting] = useState(false);
+
+    const handleSubmit = async () => {
+        if (!form.brand || !form.model || !form.specs) return alert("All fields required.");
+        if (!supabase) {
+            alert("Database unavailable.");
+            return;
+        }
+        
+        setSubmitting(true);
+        try {
+            const userId = user?.id || user?.uid;
+            const submitterName = userData 
+                ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' 
+                : 'User';
+            
+            const { error } = await supabase
+                .from('equipment_submissions')
+                .insert({
+                    brand: form.brand,
+                    model: form.model,
+                    category: form.category,
+                    sub_category: form.subCategory,
+                    specs: form.specs,
+                    submitted_by: userId,
+                    submitter_name: submitterName,
+                    status: 'pending',
+                    timestamp: new Date().toISOString(),
+                    votes: { yes: [], fake: [], duplicate: [] }
+                });
+            
+            if (error) throw error;
+            
+            alert("Submission Received! You'll earn 50 TK once verified.");
+            onSuccess();
+        } catch (e) { 
+            console.error(e); 
+            alert("Submission failed: " + (e.message || "Unknown error")); 
+        }
+        setSubmitting(false);
+    };
+
+    return (
+        <div className="max-w-xl mx-auto bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border border-orange-200 dark:border-gray-700 shadow-lg">
+            <h4 className="font-bold text-lg dark:text-white mb-4">Submit New Equipment</h4>
+            <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Category</label>
+                        <select className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white text-sm" value={form.category} onChange={e => setForm({...form, category: e.target.value})}>
+                            {EQUIP_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                        </select>
+                    </div>
+                    <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Sub-Category</label><input className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white text-sm" placeholder="e.g. Compressor" value={form.subCategory} onChange={e => setForm({...form, subCategory: e.target.value})}/></div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                    <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Brand</label><input className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white text-sm" placeholder="e.g. Neve" value={form.brand} onChange={e => setForm({...form, brand: e.target.value})}/></div>
+                    <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Model</label><input className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white text-sm" placeholder="e.g. 1073LB" value={form.model} onChange={e => setForm({...form, model: e.target.value})}/></div>
+                </div>
+                <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Specs / Description</label><textarea className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white text-sm h-24" placeholder="Brief technical specs..." value={form.specs} onChange={e => setForm({...form, specs: e.target.value})}/></div>
+                <button onClick={handleSubmit} disabled={submitting} className="w-full bg-orange-600 text-white py-2.5 rounded-lg font-bold hover:bg-orange-700 flex items-center justify-center gap-2">{submitting ? <Loader2 className="animate-spin"/> : "Submit for Verification"}</button>
+            </div>
+        </div>
+    );
+}
