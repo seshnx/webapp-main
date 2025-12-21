@@ -172,7 +172,14 @@ export default function Dashboard({
         const data = subProfiles?.[role] || {};
         // Also check userData for Talent subRole
         const talentData = role === 'Talent' ? { ...data, talentSubRole: userData?.talentSubRole } : data;
-        const schema = PROFILE_SCHEMAS[role] || [];
+        // Safely access PROFILE_SCHEMAS with error handling
+        let schema = [];
+        try {
+            schema = (PROFILE_SCHEMAS && PROFILE_SCHEMAS[role]) ? PROFILE_SCHEMAS[role] : [];
+        } catch (error) {
+            console.warn('Error accessing PROFILE_SCHEMAS:', error);
+            schema = [];
+        }
         if (schema.length === 0) return;
         
         // Filter out toggle fields and list fields, but include subRole fields
