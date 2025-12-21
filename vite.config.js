@@ -1,13 +1,36 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
-import { visualizer } from 'rollup-plugin-visualizer'
+import { createRequire } from 'module'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 // Derive __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+// Conditionally get visualizer plugin (only when ANALYZE=true and package is installed)
+function getVisualizerPlugin() {
+  if (process.env.ANALYZE !== 'true') return null;
+  
+  try {
+    // Use createRequire for ES modules compatibility
+    const require = createRequire(import.meta.url);
+    const { visualizer } = require('rollup-plugin-visualizer');
+    return visualizer({
+      open: true,
+      filename: 'dist/stats.html',
+      gzipSize: true,
+      brotliSize: true,
+    });
+  } catch (e) {
+    // Package not installed - skip analyzer
+    if (process.env.ANALYZE === 'true') {
+      console.warn('⚠️ rollup-plugin-visualizer not found. Install with: npm install --save-dev rollup-plugin-visualizer');
+    }
+    return null;
+  }
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -80,13 +103,11 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    // Bundle analyzer (only in analysis mode)
-    ...(process.env.ANALYZE === 'true' ? [visualizer({
-      open: true,
-      filename: 'dist/stats.html',
-      gzipSize: true,
-      brotliSize: true,
-    })] : []),
+    // Bundle analyzer (only in analysis mode) - conditionally loaded
+    ...(() => {
+      const plugin = getVisualizerPlugin();
+      return plugin ? [plugin] : [];
+    })(),
     VitePWA({
       registerType: 'autoUpdate',
       // TEMP: force-remove old cached bundles (including any prior Firebase chunks).
