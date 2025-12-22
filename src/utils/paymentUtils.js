@@ -1,12 +1,11 @@
 import { loadStripe } from '@stripe/stripe-js';
-import { supabase } from '../config/supabase';
 import { STRIPE_PUBLIC_KEY } from '../config/constants';
 
 let stripePromise;
 
 export const getStripe = () => {
   if (!STRIPE_PUBLIC_KEY) {
-    console.warn('Stripe public key not configured');
+    console.warn('Stripe public key not configured. Please set VITE_STRIPE_PUBLISHABLE_KEY in Vercel environment variables.');
     return null;
   }
   if (!stripePromise) {
@@ -16,52 +15,82 @@ export const getStripe = () => {
 };
 
 /**
+ * Gets the base API URL for Vercel serverless functions
+ * In development, uses localhost. In production, uses Vercel deployment URL.
+ */
+const getApiUrl = () => {
+  if (import.meta.env.DEV) {
+    return 'http://localhost:3000/api';
+  }
+  // In production, Vercel automatically provides the deployment URL
+  return '/api';
+};
+
+/**
  * Initiates a token purchase flow using Stripe Payment Intents.
- * Uses Supabase Edge Function or direct API call.
+ * Uses Vercel API route for payment processing.
  * @param {Object} pack - The token package object { id, price, tokens }
  * @param {string} userId - The current user's ID
  * @returns {Promise<string>} Client secret for payment intent
  */
 export const handleTokenPurchase = async (pack, userId) => {
   if (!userId) throw new Error("User not authenticated.");
-  if (!supabase) throw new Error("Database not available.");
   
   try {
-    // Try Supabase Edge Function first
-    const { data, error } = await supabase.functions.invoke('create-token-purchase', {
-      body: { packId: pack.id, userId }
+    const response = await fetch(`${getApiUrl()}/stripe/create-payment-intent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        packId: pack.id,
+        userId,
+        amount: pack.price,
+        currency: 'usd',
+      }),
     });
     
-    if (error) throw error;
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Payment processing failed' }));
+      throw new Error(error.message || 'Payment processing failed');
+    }
+    
+    const data = await response.json();
     
     if (data?.clientSecret) {
       return data.clientSecret;
     }
     
-    // Fallback: If Edge Function doesn't exist, use direct API approach
-    // This requires a backend endpoint - for now, show helpful error
-    throw new Error("Payment processing requires backend configuration. Please set up Supabase Edge Function 'create-token-purchase' or configure payment API endpoint.");
+    throw new Error("No client secret returned from payment server.");
   } catch (error) {
     console.error("Token purchase error:", error);
-    if (error.message?.includes('Function not found') || error.message?.includes('404')) {
-      throw new Error("Payment system not configured. Please contact support or configure payment backend.");
-    }
     throw error;
   }
 };
 
 /**
  * Initiates the Stripe Connect onboarding flow for talent.
+ * @param {string} userId - The current user's ID
  * @returns {Promise<string>} Onboarding URL
  */
-export const handleConnectOnboarding = async () => {
-  if (!supabase) throw new Error("Database not available.");
+export const handleConnectOnboarding = async (userId) => {
+  if (!userId) throw new Error("User not authenticated.");
   
   try {
-    // Try Supabase Edge Function
-    const { data, error } = await supabase.functions.invoke('stripe-connect-onboard', {});
+    const response = await fetch(`${getApiUrl()}/stripe/connect-onboard`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId }),
+    });
     
-    if (error) throw error;
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Onboarding failed' }));
+      throw new Error(error.message || 'Onboarding failed');
+    }
+    
+    const data = await response.json();
     
     if (data?.url) {
       return data.url;
@@ -70,9 +99,6 @@ export const handleConnectOnboarding = async () => {
     throw new Error("No onboarding URL returned from server.");
   } catch (error) {
     console.error("Connect onboarding error:", error);
-    if (error.message?.includes('Function not found') || error.message?.includes('404')) {
-      throw new Error("Stripe Connect not configured. Please set up Supabase Edge Function 'stripe-connect-onboard'.");
-    }
     throw error;
   }
 };
@@ -80,25 +106,31 @@ export const handleConnectOnboarding = async () => {
 /**
  * Triggers a payout of available funds to the connected Stripe account/Bank.
  * @param {number} amount - Amount to cash out
+ * @param {string} userId - The current user's ID
  * @returns {Promise<Object>} Payout result
  */
-export const handlePayout = async (amount) => {
+export const handlePayout = async (amount, userId) => {
     if (amount <= 0) throw new Error("No funds available to cash out.");
-    if (!supabase) throw new Error("Database not available.");
+    if (!userId) throw new Error("User not authenticated.");
     
     try {
-        const { data, error } = await supabase.functions.invoke('initiate-payout', {
-          body: { amount }
+        const response = await fetch(`${getApiUrl()}/stripe/initiate-payout`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ amount, userId }),
         });
         
-        if (error) throw error;
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({ message: 'Payout failed' }));
+          throw new Error(error.message || 'Payout failed');
+        }
         
+        const data = await response.json();
         return data;
     } catch (error) {
         console.error("Payout failed:", error);
-        if (error.message?.includes('Function not found') || error.message?.includes('404')) {
-            throw new Error("Payout system not configured. Please set up Supabase Edge Function 'initiate-payout'.");
-        }
         throw error;
     }
 };

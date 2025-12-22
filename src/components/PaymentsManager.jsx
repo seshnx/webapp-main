@@ -76,24 +76,29 @@ export default function PaymentsManager({ user, userData }) {
   }, [user?.id, user?.uid]);
 
   const handleCheckout = async (priceId, mode = 'payment') => {
-      if (!supabase) {
-          alert("Payment system unavailable. Please refresh and try again.");
-          return;
-      }
-      
       setProcessing(true);
       try {
-          // Use Supabase Edge Function for checkout
-          const { data, error } = await supabase.functions.invoke('create-checkout-session', {
-              body: {
-                  price: priceId,
+          // Use Vercel API route for checkout
+          const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
+          const response = await fetch(`${apiUrl}/stripe/create-checkout-session`, {
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                  priceId: priceId,
                   mode: mode,
-                  success_url: window.location.href,
-                  cancel_url: window.location.href,
-              }
+                  successUrl: window.location.href,
+                  cancelUrl: window.location.href,
+              }),
           });
           
-          if (error) throw error;
+          if (!response.ok) {
+              const error = await response.json().catch(() => ({ message: 'Checkout failed' }));
+              throw new Error(error.message || 'Checkout failed');
+          }
+          
+          const data = await response.json();
           
           if (data?.url) {
             window.location.assign(data.url);
@@ -102,10 +107,7 @@ export default function PaymentsManager({ user, userData }) {
           }
       } catch (error) {
           console.error("Checkout Error:", error);
-          const errorMsg = error.message?.includes('Function not found') || error.message?.includes('404')
-              ? "Payment system not configured. Please set up Supabase Edge Function 'create-checkout-session'."
-              : error.message || "Checkout failed. Please try again.";
-          alert(`Checkout failed: ${errorMsg}`);
+          alert(`Checkout failed: ${error.message || "Please try again."}`);
       } finally {
           setProcessing(false);
       }
@@ -128,7 +130,8 @@ export default function PaymentsManager({ user, userData }) {
 
       setProcessing(true);
       try {
-          await handlePayout(walletData.payoutBalance);
+          const userId = user?.id || user?.uid;
+          await handlePayout(walletData.payoutBalance, userId);
           alert("Cash out initiated! Funds should arrive in your bank account shortly.");
       } catch (error) {
           alert(error.message);

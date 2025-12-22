@@ -65,10 +65,15 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
             // Handle payment if total > 0
             let paymentIntentId = null;
             
-            if (finalTotal > 0 && supabase) {
+            if (finalTotal > 0) {
                 try {
-                    const { data: paymentResult, error: paymentError } = await supabase.functions.invoke('create-split-payment', {
-                        body: {
+                    const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
+                    const response = await fetch(`${apiUrl}/stripe/create-split-payment`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
                             totalAmount: finalTotal,
                             description: `Session: ${data.sessionName}`,
                             transfers: lineItems.map(item => ({
@@ -76,14 +81,17 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
                                 amount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
                                 role: item.accountTypes?.[0] || 'Creative'
                             }))
-                        }
+                        }),
                     });
                     
-                    if (paymentError) {
-                        console.warn("Payment initialization failed, continuing without payment:", paymentError);
+                    if (!response.ok) {
+                        console.warn("Payment initialization failed, continuing without payment");
                         // Continue without payment - session can still be created
-                    } else if (paymentResult?.paymentIntentId) {
-                        paymentIntentId = paymentResult.paymentIntentId;
+                    } else {
+                        const paymentResult = await response.json();
+                        if (paymentResult?.paymentIntentId) {
+                            paymentIntentId = paymentResult.paymentIntentId;
+                        }
                     }
                 } catch (paymentErr) {
                     console.warn("Payment setup error, continuing without payment:", paymentErr);

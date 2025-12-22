@@ -3,7 +3,9 @@
     "allow": [
       "Bash(npm run build)",
       "Bash(powershell -Command \"Select-String -Path ''dist\\\\assets\\\\edu-BHo9UNWn.js'' -Pattern ''export\\\\{'' | Select-Object -First 3\")",
-      "Bash(powershell -Command \"Select-String -Path ''dist\\\\assets\\\\index-UHjVoFE9.js'' -Pattern ''from.*config-'' | Select-Object -First 5 Line\")"
+      "Bash(powershell -Command \"Select-String -Path ''dist\\\\assets\\\\index-UHjVoFE9.js'' -Pattern ''from.*config-'' | Select-Object -First 5 Line\")",
+      "Bash(npm run build:*)",
+      "Bash(npx eslint:*)"
     ]
   }
 }

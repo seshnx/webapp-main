@@ -1,8 +1,8 @@
 // src/config/constants.js
 
 export const BOOKING_THRESHOLD = 60;
-// Note: In production, Stripe keys should be in environment variables
-export const STRIPE_PUBLIC_KEY = "pk_test_TYooMQauvdEDq54NiTphI7jx"; 
+// Stripe public key from Vercel environment variables
+export const STRIPE_PUBLIC_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || import.meta.env.VITE_STRIPE_PUBLIC_KEY; 
 
 export const ACCOUNT_TYPES = [
     "Talent", "Engineer", "Producer", "Composer", "Studio", "Technician", "Fan",

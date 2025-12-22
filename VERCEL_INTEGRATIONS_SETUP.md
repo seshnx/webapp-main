@@ -4,7 +4,38 @@ This guide covers setting up native Vercel integrations to eliminate workarounds
 
 ## 🚀 Immediate Integrations (Recommended)
 
-### 1. Supabase Native Integration
+### 1. Stripe Payment Integration ⭐ NEW
+
+**Why:** Native Stripe integration for secure payment processing without custom backend setup.
+
+**Setup Steps:**
+
+1. Go to [Vercel Dashboard](https://vercel.com/dashboard)
+2. Select your project → **Settings** → **Integrations**
+3. Search for **"Stripe"** in the marketplace
+4. Click **"Add Integration"**
+5. Follow the setup wizard:
+   - Connect your Stripe account (or create one at [stripe.com](https://stripe.com))
+   - Vercel will automatically set environment variables:
+     - `STRIPE_SECRET_KEY` (server-side, for API routes)
+     - `VITE_STRIPE_PUBLISHABLE_KEY` (client-side, for Stripe.js)
+   - Optionally set `STRIPE_WEBHOOK_SECRET` for webhook verification
+
+**Benefits:**
+- ✅ Automatic environment variable management
+- ✅ Secure key handling (secret key never exposed to client)
+- ✅ Native dashboard integration
+- ✅ Automatic webhook handling
+- ✅ No need for Supabase Edge Functions
+
+**After Setup:**
+- API routes are already created in `/api/stripe/`
+- See `VERCEL_STRIPE_SETUP.md` for detailed setup instructions
+- Redeploy your application to pick up the new variables
+
+---
+
+### 2. Supabase Native Integration
 
 **Why:** Eliminates manual environment variable management and improves session handling.
 
