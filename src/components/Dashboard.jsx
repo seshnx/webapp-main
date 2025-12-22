@@ -24,74 +24,6 @@ const getGreeting = () => {
     return { text: 'Good night', emoji: '🌙' };
 };
 
-// GlassStatCard moved inside Dashboard component to access AnimatedNumber
-
-// Quick action button with enhanced styling
-const QuickActionButton = ({ icon, label, description, onClick, color }) => (
-    <motion.button
-        whileHover={{ scale: 1.01, x: 4 }}
-        whileTap={{ scale: 0.99 }}
-        onClick={onClick}
-        className="w-full text-left px-4 py-3.5 rounded-xl border dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-[#1f2128] hover:shadow-lg dark:hover:shadow-black/20 transition-all duration-300 group"
-    >
-        <div className="flex items-center gap-4">
-            <div className={`p-2.5 rounded-xl ${color} group-hover:scale-110 transition-transform duration-300`}>
-                {icon}
-            </div>
-            <div className="flex-1">
-                <span className="font-semibold dark:text-white block">{label}</span>
-                <span className="text-xs text-gray-500 dark:text-gray-400">{description}</span>
-            </div>
-            <ArrowRight size={16} className="text-gray-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
-        </div>
-    </motion.button>
-);
-
-// Activity item with better styling
-const ActivityItem = ({ notification, onClick, formatTime }) => {
-    const getActivityIcon = (type) => {
-        switch (type) {
-            case 'follow': return { icon: <Users size={14} />, color: 'bg-blue-500' };
-            case 'like': return { icon: <Heart size={14} />, color: 'bg-red-500' };
-            case 'comment': return { icon: <MessageCircle size={14} />, color: 'bg-green-500' };
-            case 'mention': return { icon: <Mic2 size={14} />, color: 'bg-purple-500' };
-            case 'booking': return { icon: <Calendar size={14} />, color: 'bg-amber-500' };
-            default: return { icon: <Bell size={14} />, color: 'bg-gray-500' };
-        }
-    };
-    
-    const { icon, color } = getActivityIcon(notification.type);
-    
-    return (
-        <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            whileHover={{ x: 4, backgroundColor: 'rgba(59, 130, 246, 0.05)' }}
-            onClick={onClick}
-            className={`p-4 cursor-pointer transition-colors duration-200 ${!notification.read ? 'bg-gradient-to-r from-blue-50/50 to-transparent dark:from-blue-900/10' : ''}`}
-        >
-            <div className="flex items-start gap-3">
-                <div className={`${color} p-2 rounded-full text-white shrink-0`}>
-                    {icon}
-                </div>
-                <div className="flex-1 min-w-0">
-                    <p className="text-sm dark:text-gray-200">
-                        <span className="font-semibold">{notification.fromUserName}</span>{' '}
-                        <span className="text-gray-600 dark:text-gray-400">{notification.message}</span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                        <Clock size={10} />
-                        {formatTime(notification.timestamp)}
-                    </p>
-                </div>
-                {!notification.read && (
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shrink-0 mt-2" />
-                )}
-            </div>
-        </motion.div>
-    );
-};
-
 export default function Dashboard({ 
     user, 
     userData, 
@@ -100,61 +32,27 @@ export default function Dashboard({
     subProfiles = {}, 
     tokenBalance = 0 
 }) {
-    // Glassmorphic stat card - using Suspense for AnimatedNumber to avoid TDZ issues
-    const GlassStatCard = ({ title, value, icon, gradient, onClick, trend, trendUp }) => (
-        <motion.div
-            whileHover={{ scale: 1.02, y: -4 }}
-            whileTap={{ scale: 0.98 }}
-            onClick={onClick}
-            className={`relative p-5 rounded-[1.25rem] cursor-pointer overflow-hidden group ${gradient}`}
-        >
-            {/* Animated background elements */}
-            <div className="absolute inset-0 opacity-30">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-700" />
-                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl transform -translate-x-8 translate-y-8" />
-            </div>
-            
-            <div className="relative z-10">
-                <div className="flex items-start justify-between mb-3">
-                    <div className="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl">
-                        {icon}
-                    </div>
-                    {trend && (
-                        <div className={`flex items-center gap-1 text-xs font-bold ${trendUp ? 'text-green-300' : 'text-red-300'}`}>
-                            <ArrowUpRight size={14} className={!trendUp ? 'rotate-90' : ''} />
-                            {trend}
-                        </div>
-                    )}
-                </div>
-                <div className="text-3xl font-black text-white mb-1">
-                    <AnimatedNumber value={value} />
-                </div>
-                <div className="text-white/80 text-sm font-medium">{title}</div>
-            </div>
-            
-            {/* Hover shine effect */}
-            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
-        </motion.div>
-    );
-
+    // ===== ALL HOOKS MUST BE CALLED FIRST (React Rules) =====
     // Initialize state first to avoid TDZ issues
     const [recentConvos, setRecentConvos] = useState([]);
     const [trendingItem, setTrendingItem] = useState(null);
-    
-    // Access constants after state initialization
-    const greeting = getGreeting();
+    const [profileSchemas, setProfileSchemas] = useState(null);
+    const [bookingThreshold, setBookingThreshold] = useState(60);
 
     // Real-time notifications from Supabase
     const { notifications, unreadCount } = useNotifications(user?.id || user?.uid);
-    
-    const isStudio = userData?.accountTypes?.includes('Studio');
-    const studioRooms = subProfiles?.['Studio']?.rooms || [];
-    const profileViews = userData?.profileViews || 0;
 
-    // Use state to store constants - load asynchronously to avoid TDZ issues
-    const [profileSchemas, setProfileSchemas] = useState(null);
-    const [bookingThreshold, setBookingThreshold] = useState(60);
-    
+    // Memoize Convex availability
+    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+    const conversationsQuery = useMemo(() => {
+        return (user?.id || user?.uid) && convexAvailable ? { userId: user?.id || user?.uid } : "skip";
+    }, [user?.uid, convexAvailable]);
+
+    const conversationsData = useQuery(
+        api.conversations.getConversations,
+        conversationsQuery
+    );
+
     // Load constants asynchronously after component mounts
     useEffect(() => {
         // Use a small delay to ensure module initialization is complete
@@ -176,8 +74,14 @@ export default function Dashboard({
         return () => clearTimeout(timer);
     }, []);
 
-    // Calculate Overall Completion for Banner (only when constants are loaded)
+    // ===== DERIVED VALUES (after hooks) =====
+    const greeting = getGreeting();
+    const isStudio = userData?.accountTypes?.includes('Studio');
+    const studioRooms = subProfiles?.['Studio']?.rooms || [];
+    const profileViews = userData?.profileViews || 0;
     const roles = userData?.accountTypes || [];
+
+    // Calculate Overall Completion for Banner (only when constants are loaded)
     const { avgCompletion, showCompletionWarning } = useMemo(() => {
         if (!profileSchemas) {
             return { avgCompletion: 100, showCompletionWarning: false };
@@ -218,17 +122,112 @@ export default function Dashboard({
         };
     }, [profileSchemas, roles, subProfiles, userData?.talentSubRole]);
 
-    // Memoize Convex availability
-    const convexAvailable = useMemo(() => isConvexAvailable(), []);
-    const conversationsQuery = useMemo(() => {
-        return (user?.id || user?.uid) && convexAvailable ? { userId: user?.id || user?.uid } : "skip";
-    }, [user?.uid, convexAvailable]);
-
-    const conversationsData = useQuery(
-        api.conversations.getConversations,
-        conversationsQuery
+    // ===== COMPONENT DEFINITIONS (after all hooks and derived values) =====
+    // Glassmorphic stat card - using Suspense for AnimatedNumber to avoid TDZ issues
+    const GlassStatCard = ({ title, value, icon, gradient, onClick, trend, trendUp }) => (
+        <motion.div
+            whileHover={{ scale: 1.02, y: -4 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={onClick}
+            className={`relative p-5 rounded-[1.25rem] cursor-pointer overflow-hidden group ${gradient}`}
+        >
+            {/* Animated background elements */}
+            <div className="absolute inset-0 opacity-30">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-700" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl transform -translate-x-8 translate-y-8" />
+            </div>
+            
+            <div className="relative z-10">
+                <div className="flex items-start justify-between mb-3">
+                    <div className="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl">
+                        {icon}
+                    </div>
+                    {trend && (
+                        <div className={`flex items-center gap-1 text-xs font-bold ${trendUp ? 'text-green-300' : 'text-red-300'}`}>
+                            <ArrowUpRight size={14} className={!trendUp ? 'rotate-90' : ''} />
+                            {trend}
+                        </div>
+                    )}
+                </div>
+                <div className="text-3xl font-black text-white mb-1">
+                    <AnimatedNumber value={value} />
+                </div>
+                <div className="text-white/80 text-sm font-medium">{title}</div>
+            </div>
+            
+            {/* Hover shine effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+        </motion.div>
     );
 
+    // Quick action button with enhanced styling - moved inside to avoid TDZ issues
+    const QuickActionButton = ({ icon, label, description, onClick, color }) => (
+        <motion.button
+            whileHover={{ scale: 1.01, x: 4 }}
+            whileTap={{ scale: 0.99 }}
+            onClick={onClick}
+            className="w-full text-left px-4 py-3.5 rounded-xl border dark:border-gray-700/50 hover:border-gray-300 dark:hover:border-gray-600 bg-white dark:bg-[#1f2128] hover:shadow-lg dark:hover:shadow-black/20 transition-all duration-300 group"
+        >
+            <div className="flex items-center gap-4">
+                <div className={`p-2.5 rounded-xl ${color} group-hover:scale-110 transition-transform duration-300`}>
+                    {icon}
+                </div>
+                <div className="flex-1">
+                    <span className="font-semibold dark:text-white block">{label}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{description}</span>
+                </div>
+                <ArrowRight size={16} className="text-gray-400 opacity-0 group-hover:opacity-100 group-hover:translate-x-1 transition-all duration-300" />
+            </div>
+        </motion.button>
+    );
+
+    // Activity item with better styling - moved inside to avoid TDZ issues
+    const ActivityItem = ({ notification, onClick, formatTime }) => {
+        const getActivityIcon = (type) => {
+            switch (type) {
+                case 'follow': return { icon: <Users size={14} />, color: 'bg-blue-500' };
+                case 'like': return { icon: <Heart size={14} />, color: 'bg-red-500' };
+                case 'comment': return { icon: <MessageCircle size={14} />, color: 'bg-green-500' };
+                case 'mention': return { icon: <Mic2 size={14} />, color: 'bg-purple-500' };
+                case 'booking': return { icon: <Calendar size={14} />, color: 'bg-amber-500' };
+                default: return { icon: <Bell size={14} />, color: 'bg-gray-500' };
+            }
+        };
+        
+        const { icon, color } = getActivityIcon(notification.type);
+        
+        return (
+            <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                whileHover={{ x: 4, backgroundColor: 'rgba(59, 130, 246, 0.05)' }}
+                onClick={onClick}
+                className={`p-4 cursor-pointer transition-colors duration-200 ${!notification.read ? 'bg-gradient-to-r from-blue-50/50 to-transparent dark:from-blue-900/10' : ''}`}
+            >
+                <div className="flex items-start gap-3">
+                    <div className={`${color} p-2 rounded-full text-white shrink-0`}>
+                        {icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm dark:text-gray-200">
+                            <span className="font-semibold">{notification.fromUserName}</span>{' '}
+                            <span className="text-gray-600 dark:text-gray-400">{notification.message}</span>
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                            <Clock size={10} />
+                            {formatTime(notification.timestamp)}
+                        </p>
+                    </div>
+                    {!notification.read && (
+                        <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse shrink-0 mt-2" />
+                    )}
+                </div>
+            </motion.div>
+        );
+    };
+
+    // ===== EFFECTS AND DATA FETCHING (after component definitions) =====
+    // Process conversations data when it changes
     useEffect(() => {
         if (!conversationsData) {
             setRecentConvos([]);
