@@ -141,21 +141,24 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
                   
                   {/* Group Items */}
                   <div className="space-y-1">
-                    {group.items.map(link => (
-                      <button
-                        key={link.id}
-                        onClick={() => handleNavigation(link.id)}
-                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
-                        ${activeTab === link.id 
-                            ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' 
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
-                        ${link.highlight ? 'text-amber-600 dark:text-amber-500' : ''}
-                        `}
-                      >
-                        {link.icon}
-                        {link.label}
-                      </button>
-                    ))}
+                    {group.items.map(link => {
+                      const ItemIcon = link.icon;
+                      return (
+                        <button
+                          key={link.id}
+                          onClick={() => handleNavigation(link.id)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
+                          ${activeTab === link.id 
+                              ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' 
+                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
+                          ${link.highlight ? 'text-amber-600 dark:text-amber-500' : ''}
+                          `}
+                        >
+                          <ItemIcon size={18} className={link.highlight ? 'text-amber-600 dark:text-amber-500' : ''} />
+                          {link.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
               );
