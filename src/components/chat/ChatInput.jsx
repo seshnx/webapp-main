@@ -26,6 +26,7 @@ import EmojiPicker from './media/EmojiPicker';
 import GifPicker from './media/GifPicker';
 import VideoRecorder from './media/VideoRecorder';
 import { formatTypingUsers } from '../../hooks/useTypingIndicator';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function ChatInput({ 
     activeChatId, 
@@ -39,6 +40,7 @@ export default function ChatInput({
     onTyping,
     onStopTyping
 }) {
+    const { t } = useLanguage();
     const [input, setInput] = useState('');
     const [attachment, setAttachment] = useState(null);
     const [isRecording, setIsRecording] = useState(false);
@@ -598,9 +600,9 @@ export default function ChatInput({
                         ref={textareaRef}
                         className="w-full bg-transparent p-3 max-h-32 min-h-[44px] text-sm resize-none outline-none dark:text-white custom-scrollbar pr-20" 
                         placeholder={
-                            editingMessage ? "Update message..." : 
-                            dragActive ? "Drop files here..." : 
-                            "Type a message..."
+                            editingMessage ? t('editingMessage') + '...' : 
+                            dragActive ? t('dropFiles') + '...' : 
+                            t('typeMessage')
                         } 
                         value={input} 
                         onChange={handleTyping} 

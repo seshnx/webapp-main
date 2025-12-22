@@ -6,6 +6,7 @@ import SeshFxStore from './marketplace/SeshFxStore'; // Sample Pack Store
 export default function Marketplace({ user, userData, tokenBalance }) {
     const location = useLocation();
     const navigate = useNavigate();
+    const { t } = useLanguage();
     
     // Get tab from URL path (e.g., /marketplace/fx -> 'fx')
     const getTabFromPath = (path) => {
@@ -33,14 +34,14 @@ export default function Marketplace({ user, userData, tokenBalance }) {
     };
 
     const tabs = [
-        { id: 'gear', label: 'Gear Exchange' },
-        { id: 'fx', label: 'SeshFX Store' },
+        { id: 'gear', label: t('gearExchange') },
+        { id: 'fx', label: t('seshFxStore') },
     ];
 
     return (
         <div className="space-y-6">
             <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold dark:text-white">Marketplace</h1>
+                <h1 className="text-2xl font-bold dark:text-white">{t('marketplace')}</h1>
                 <div className="bg-white dark:bg-gray-800 p-1 rounded-lg border dark:border-gray-700 flex gap-1">
                     {tabs.map(tab => (
                         <button

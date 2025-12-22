@@ -13,8 +13,10 @@ import { useReadReceipts } from '../../hooks/useReadReceipts';
 import { useTypingIndicator, formatTypingUsers } from '../../hooks/useTypingIndicator';
 import getLinkPreview from '../../utils/linkPreview'; 
 import UserAvatar from '../shared/UserAvatar';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function ChatWindow({ user, userData, activeChat, conversations, onBack, toggleDetails, openPublicProfile }) {
+    const { t } = useLanguage();
     const [linkPreviewData, setLinkPreviewData] = useState({});
     const [embedModal, setEmbedModal] = useState({ isOpen: false, url: '', previewData: null }); 
     const [replyingTo, setReplyingTo] = useState(null);
@@ -23,7 +25,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
     const messagesEndRef = useRef(null);
 
     const chatId = activeChat?.id;
-    const chatName = activeChat?.name || activeChat?.n || 'Unknown User';
+    const chatName = activeChat?.name || activeChat?.n || t('unknownUser');
 
     // Get other user's UID for direct chats (for presence and read receipts)
     const otherUserId = useMemo(() => {
@@ -426,7 +428,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
             <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar-hide">
                 {messages.length === 0 ? (
                     <div className="flex items-center justify-center h-full text-gray-400">
-                        <p>No messages yet. Start the conversation!</p>
+                        <p>{t('noMessages')}. {t('startConversation')}!</p>
                     </div>
                 ) : (
                     messages.map((message, index) => {

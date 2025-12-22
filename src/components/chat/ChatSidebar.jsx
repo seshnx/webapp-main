@@ -6,8 +6,10 @@ import { api } from "../../../convex/_generated/api";
 import { isConvexAvailable } from '../../config/convex';
 import ConversationItem from './ConversationItem';
 import UserAvatar from '../shared/UserAvatar';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function ChatSidebar({ user, conversations = [], activeChat, onSelectChat }) {
+    const { t } = useLanguage();
     // ... (State logic unchanged) ...
     const [showSearch, setShowSearch] = useState(false);
     const [showGroupModal, setShowGroupModal] = useState(false);
@@ -134,10 +136,10 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
     return (
         <div className="flex flex-col h-full relative overflow-hidden bg-white dark:bg-[#1f2128]">
             <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#23262f] shrink-0">
-                <h2 className="font-extrabold text-lg dark:text-white tracking-tight">Messages</h2>
+                <h2 className="font-extrabold text-lg dark:text-white tracking-tight">{t('messages')}</h2>
                 <div className="flex gap-2">
-                    <button onClick={openGroupModal} className="p-2 bg-white dark:bg-gray-700 rounded-full shadow-sm hover:text-brand-blue transition" title="New Group"><Users size={18}/></button>
-                    <button onClick={() => { setSearchMode('direct'); setShowSearch(true); }} className="p-2 bg-white dark:bg-gray-700 rounded-full shadow-sm hover:text-brand-blue transition" title="New Chat"><Plus size={18}/></button>
+                    <button onClick={openGroupModal} className="p-2 bg-white dark:bg-gray-700 rounded-full shadow-sm hover:text-brand-blue transition" title={t('newGroup')}><Users size={18}/></button>
+                    <button onClick={() => { setSearchMode('direct'); setShowSearch(true); }} className="p-2 bg-white dark:bg-gray-700 rounded-full shadow-sm hover:text-brand-blue transition" title={t('newMessage')}><Plus size={18}/></button>
                 </div>
             </div>
 
@@ -163,15 +165,15 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
                 <div className="absolute inset-0 bg-white dark:bg-[#1f2128] z-20 flex flex-col animate-in slide-in-from-right-10 duration-200">
                     <div className="p-4 border-b dark:border-gray-700 flex items-center gap-3 bg-gray-50 dark:bg-[#23262f]">
                         <button onClick={() => setShowGroupModal(false)} className="hover:bg-gray-200 dark:hover:bg-gray-700 p-1 rounded-full"><ArrowLeft size={20}/></button>
-                        <h3 className="font-bold dark:text-white">New Group</h3>
+                        <h3 className="font-bold dark:text-white">{t('newGroup')}</h3>
                     </div>
                     
                     <div className="p-4 flex-1 overflow-y-auto">
                         <div className="mb-6">
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">1. Group Name</label>
+                            <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">1. {t('groupName')}</label>
                             <input 
                                 className="w-full p-3 border rounded-xl dark:bg-black/20 dark:border-gray-600 dark:text-white focus:ring-2 focus:ring-brand-blue outline-none" 
-                                placeholder="Enter group name..." 
+                                placeholder={t('groupName') + '...'} 
                                 value={groupName} 
                                 onChange={e=>setGroupName(e.target.value)} 
                                 autoFocus
@@ -180,12 +182,12 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
 
                         <div>
                             <div className="flex justify-between items-center mb-2">
-                                <label className="text-xs font-bold text-gray-500 uppercase">2. Members ({groupMembers.length})</label>
-                                <button onClick={handleAddMemberClick} className="text-xs font-bold text-brand-blue flex items-center gap-1 hover:underline"><Plus size={14}/> Add Member</button>
+                                <label className="text-xs font-bold text-gray-500 uppercase">2. {t('addMembers')} ({groupMembers.length})</label>
+                                <button onClick={handleAddMemberClick} className="text-xs font-bold text-brand-blue flex items-center gap-1 hover:underline"><Plus size={14}/> {t('addMembers')}</button>
                             </div>
                             <div className="space-y-2">
                                 {groupMembers.length === 0 ? (
-                                    <div className="text-center py-8 border-2 border-dashed dark:border-gray-700 rounded-xl text-gray-400 text-sm">No members selected</div>
+                                    <div className="text-center py-8 border-2 border-dashed dark:border-gray-700 rounded-xl text-gray-400 text-sm">{t('noMembersSelected')}</div>
                                 ) : (
                                     groupMembers.map(m => (
                                         <div key={m.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-white/5 rounded-lg border dark:border-gray-700">
@@ -204,7 +206,7 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
 
                     <div className="p-4 border-t dark:border-gray-700">
                         <button onClick={handleCreateGroup} disabled={!groupName || groupMembers.length === 0 || isCreating} className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-lg flex justify-center items-center gap-2">
-                            {isCreating ? <Loader2 className="animate-spin" size={20}/> : <>Create Group <ChevronRight size={18}/></>}
+                            {isCreating ? <Loader2 className="animate-spin" size={20}/> : <>{t('createGroup')} <ChevronRight size={18}/></>}
                         </button>
                     </div>
                 </div>
@@ -214,11 +216,11 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
                 <div className="absolute inset-0 bg-white dark:bg-[#1f2128] z-30 flex flex-col animate-in fade-in duration-200">
                     <div className="p-3 border-b dark:border-gray-700 flex items-center gap-2 bg-white dark:bg-[#1f2128]">
                         <Search size={18} className="text-gray-400 ml-2"/>
-                        <input autoFocus className="flex-1 p-2 bg-transparent outline-none dark:text-white placeholder-gray-400" placeholder="Search..." value={searchQuery} onChange={(e) => handleUserSearch(e.target.value)}/>
+                        <input autoFocus className="flex-1 p-2 bg-transparent outline-none dark:text-white placeholder-gray-400" placeholder={t('search') + '...'} value={searchQuery} onChange={(e) => handleUserSearch(e.target.value)}/>
                         <button onClick={closeSearch} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"><X size={20} className="text-gray-500"/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2">
-                        {searchResults.length === 0 && searchQuery.length > 1 && <div className="text-center py-10 text-gray-400 text-sm">No users found.</div>}
+                        {searchResults.length === 0 && searchQuery.length > 1 && <div className="text-center py-10 text-gray-400 text-sm">{t('noUsersFound')}.</div>}
                         {searchResults.map(res => {
                             const isSelected = searchMode === 'add_member' && groupMembers.find(m => m.id === res.id);
                             return (

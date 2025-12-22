@@ -8,10 +8,12 @@ import ChatWindow from './chat/ChatWindow';
 import ChatDetailsPane from './chat/ChatDetailsPane';
 import { usePresence } from '../hooks/usePresence';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function ChatInterface({ user, userData, openPublicProfile, pendingChatTarget, clearPendingChatTarget }) {
     const location = useLocation();
     const navigate = useNavigate();
+    const { t } = useLanguage();
     const [activeChat, setActiveChat] = useState(null);
     const [showDetails, setShowDetails] = useState(false);
 

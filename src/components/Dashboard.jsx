@@ -511,7 +511,7 @@ export default function Dashboard({
                                     <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
                                         <Activity size={16} className="text-blue-600 dark:text-blue-400" />
                                     </div>
-                                    Activity Feed
+                                    {t('activityFeed')}
                                 </h3>
                                 {unreadCount > 0 && (
                                     <span className="bg-gradient-to-r from-red-500 to-pink-500 text-white text-xs px-3 py-1 rounded-full font-bold animate-pulse shadow-lg">
@@ -525,8 +525,8 @@ export default function Dashboard({
                                         <div className="w-16 h-16 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-800 dark:to-gray-700 rounded-[1.25rem] flex items-center justify-center mx-auto mb-4">
                                             <Sparkles size={28} className="text-gray-400" />
                                         </div>
-                                        <p className="text-gray-600 dark:text-gray-400 font-medium">All caught up!</p>
-                                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">No new notifications</p>
+                                        <p className="text-gray-600 dark:text-gray-400 font-medium">{t('allCaughtUp')}</p>
+                                        <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{t('noNewNotifications')}</p>
                                     </div>
                                 ) : (
                                     notifications.slice(0, 5).map((n, i) => (
@@ -545,7 +545,7 @@ export default function Dashboard({
                                         onClick={() => setActiveTab('feed')}
                                         className="w-full text-center text-sm text-brand-blue font-semibold hover:underline"
                                     >
-                                        View All Activity →
+                                        {t('viewAllActivity')} →
                                     </button>
                                 </div>
                             )}
@@ -570,7 +570,7 @@ export default function Dashboard({
                                         onClick={() => setActiveTab('studio-ops')} 
                                         className="text-sm text-purple-600 dark:text-purple-400 hover:underline flex items-center gap-1 font-medium"
                                     >
-                                        Manage <ArrowRight size={14}/>
+                                        {t('manage')} <ArrowRight size={14}/>
                                     </button>
                                 </div>
                                 
@@ -578,12 +578,12 @@ export default function Dashboard({
                                     {studioRooms.length === 0 ? (
                                         <div className="text-center py-8 border-2 border-dashed dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-[#1a1c23]">
                                             <Radio size={32} className="mx-auto mb-3 text-gray-400" />
-                                            <p className="text-gray-500 mb-3">No rooms configured yet</p>
+                                            <p className="text-gray-500 mb-3">{t('noRoomsConfigured')}</p>
                                             <button 
                                                 onClick={() => setActiveTab('studio-ops')}
                                                 className="text-purple-600 font-bold hover:underline"
                                             >
-                                                + Add Your First Room
+                                                {t('addFirstRoom')}
                                             </button>
                                         </div>
                                     ) : (
@@ -630,21 +630,21 @@ export default function Dashboard({
                                     <div className="p-1.5 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg">
                                         <MessageCircle size={16} className="text-emerald-600 dark:text-emerald-400" />
                                     </div>
-                                    Recent Messages
+                                    {t('recentMessages')}
                                 </h3>
                                 <button 
                                     onClick={() => setActiveTab('messages')} 
                                     className="text-sm text-emerald-600 dark:text-emerald-400 hover:underline font-medium"
                                 >
-                                    View All
+                                    {t('viewAll')}
                                 </button>
                             </div>
                             <div className="p-4 space-y-2">
                                 {recentConvos.length === 0 ? (
                                     <div className="text-center text-gray-400 py-8">
                                         <MessageCircle size={32} className="mx-auto mb-3 opacity-50" />
-                                        <p className="font-medium">No messages yet</p>
-                                        <p className="text-sm text-gray-400">Start a conversation!</p>
+                                        <p className="font-medium">{t('noMessages')}</p>
+                                        <p className="text-sm text-gray-400">{t('startConversation')}!</p>
                                     </div>
                                 ) : (
                                     recentConvos.map((c, i) => (
@@ -666,13 +666,13 @@ export default function Dashboard({
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex justify-between items-center mb-0.5">
-                                                    <span className="font-semibold dark:text-white truncate">{c.name || 'Unknown User'}</span>
+                                                    <span className="font-semibold dark:text-white truncate">{c.name || t('unknownUser')}</span>
                                                     <span className="text-[10px] text-gray-400 shrink-0 ml-2">
                                                         {new Date(c.timestamp).toLocaleDateString()}
                                                     </span>
                                                 </div>
                                                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                                                    {c.isMe && <span className="text-gray-400">You: </span>}
+                                                    {c.isMe && <span className="text-gray-400">{t('you')}: </span>}
                                                     {c.lastMessage}
                                                 </p>
                                             </div>
@@ -695,7 +695,7 @@ export default function Dashboard({
                         >
                             <h3 className="font-bold mb-4 dark:text-white flex items-center gap-2">
                                 <Flame size={18} className="text-orange-500" />
-                                Quick Actions
+                                {t('quickActions')}
                             </h3>
                             <div className="space-y-3">
                                 {/* Professional role-specific actions */}
