@@ -104,7 +104,10 @@ export default function MainLayout({
     return 'dashboard'; // default
   };
 
-  // Breadcrumbs based on active tab
+  // Initialize activeTab from current pathname (now location is available)
+  const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
+  
+  // Breadcrumbs based on active tab (must be after activeTab is declared)
   const breadcrumbMap = {
     'dashboard': ['Dashboard'],
     'feed': ['Dashboard', 'Social'],
@@ -124,9 +127,6 @@ export default function MainLayout({
   };
 
   const breadcrumbs = breadcrumbMap[activeTab] || ['Dashboard'];
-
-  // Initialize activeTab from current pathname (now location is available)
-  const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subProfiles, setSubProfiles] = useState({});
   const [tokenBalance, setTokenBalance] = useState(0);
