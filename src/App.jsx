@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './config/supabase'; 
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
-// Core components
-import AuthWizard from './components/AuthWizard';
-import AppRoutes from './routes/AppRoutes';
-import MainLayout from './components/MainLayout';
+// Lazy load components to avoid initialization order issues
+const AuthWizard = lazy(() => import('./components/AuthWizard'));
+const AppRoutes = lazy(() => import('./routes/AppRoutes'));
+const MainLayout = lazy(() => import('./components/MainLayout'));
 
 export default function App() {
   const [user, setUser] = useState(null);
@@ -17,6 +17,8 @@ export default function App() {
   // Track if initial session has been handled to prevent duplicate loading clears
   const initialSessionHandledRef = useRef(false);
   
+  // These hooks must be called unconditionally at the top level
+  // They're safe because App is always rendered inside BrowserRouter
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -394,7 +396,11 @@ export default function App() {
   // CRITICAL: If no user is loaded, always show AuthWizard
   // This ensures the app never renders with null user
   if (!isAuthenticated && !isOnLoginPage && !isTestLoginPage) {
-    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
+      </Suspense>
+    );
   }
   
   // CRITICAL: If user exists but no userData, show loading (not AuthWizard)
@@ -417,7 +423,11 @@ export default function App() {
       return null;
     }
     // Show login form - route to debug report on success
-    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} isNewUser={false} />;
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} isNewUser={false} />
+      </Suspense>
+    );
   }
   
   // Handle login page
@@ -428,18 +438,30 @@ export default function App() {
       return null;
     }
     // Show login form - normal flow
-    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
+      </Suspense>
+    );
   }
   
   // Handle OAuth onboarding
   if (isAuthenticated && !hasUserData && isFromSignup) {
-    return <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} />;
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} />
+      </Suspense>
+    );
   }
   
   // Require authentication for all other routes
   if (!isAuthenticated || !hasUserData) {
     // This should be caught above, but double-check
-    return <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />;
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
+      </Suspense>
+    );
   }
 
   // Render app with full layout (Sidebar + Navbar + Content)
@@ -451,7 +473,21 @@ export default function App() {
       {location.pathname === '/settings' || location.pathname === '/debug-report' ? (
         // Settings and Debug Report use simple layout
         <main className="p-6">
-          <AppRoutes
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+            <AppRoutes
+              user={user}
+              userData={userData}
+              loading={loading}
+              darkMode={darkMode}
+              toggleTheme={toggleTheme}
+              handleLogout={handleLogout}
+            />
+          </Suspense>
+        </main>
+      ) : (
+        // All other routes use MainLayout with Sidebar + Navbar
+        <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+          <MainLayout
             user={user}
             userData={userData}
             loading={loading}
@@ -459,17 +495,7 @@ export default function App() {
             toggleTheme={toggleTheme}
             handleLogout={handleLogout}
           />
-        </main>
-      ) : (
-        // All other routes use MainLayout with Sidebar + Navbar
-        <MainLayout
-          user={user}
-          userData={userData}
-          loading={loading}
-          darkMode={darkMode}
-          toggleTheme={toggleTheme}
-          handleLogout={handleLogout}
-        />
+        </Suspense>
       )}
     </div>
   );

@@ -68,6 +68,11 @@ export default defineConfig({
         manualChunks: (id) => {
           // Code splitting strategy for better caching and performance
           if (id.includes('node_modules')) {
+            // CRITICAL: React Router must be in the main vendor chunk to avoid initialization errors
+            // Keep it with other core React dependencies
+            if (id.includes('react-router')) {
+              return 'vendor'; // Ensure React Router loads with main vendor chunk
+            }
             // Large libraries get their own chunks for better caching
             if (id.includes('convex/react')) return 'vendor-convex';
             if (id.includes('framer-motion')) return 'vendor-framer';
@@ -93,11 +98,17 @@ export default defineConfig({
     include: [
       'react',
       'react-dom',
+      'react-router',
       'react-router-dom',
       '@supabase/supabase-js',
       'convex/react',
       '@sentry/react'
     ],
+    // Force React Router to be pre-bundled and available immediately
+    esbuildOptions: {
+      // Ensure proper initialization order
+      target: 'es2020',
+    },
   },
   server: {
     hmr: {
