@@ -16,13 +16,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedNumber from './shared/AnimatedNumber';
 import { useLanguage } from '../contexts/LanguageContext';
 
-// Get time-based greeting
-const getGreeting = () => {
+// Get time-based greeting key - will be translated in component
+const getGreetingKey = () => {
     const hour = new Date().getHours();
-    if (hour < 12) return { text: 'Good morning', emoji: '☀️' };
-    if (hour < 17) return { text: 'Good afternoon', emoji: '🌤️' };
-    if (hour < 21) return { text: 'Good evening', emoji: '🌅' };
-    return { text: 'Good night', emoji: '🌙' };
+    if (hour < 12) return 'goodMorning';
+    if (hour < 17) return 'goodAfternoon';
+    if (hour < 21) return 'goodEvening';
+    return 'goodNight';
 };
 
 export default function Dashboard({ 
