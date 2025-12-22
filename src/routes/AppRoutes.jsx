@@ -3,11 +3,54 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
 
-// Lazy load components to avoid circular dependencies
+// Retry wrapper for lazy loading to handle network errors and failed imports
+const retryLazyLoad = (importFn, retries = 3, delay = 100) => {
+  return lazy(() => {
+    return new Promise((resolve, reject) => {
+      const attempt = (attemptNumber) => {
+        // Wrap in try-catch to handle synchronous errors
+        try {
+          const promise = importFn();
+          // If it's already a promise, handle it
+          if (promise && typeof promise.then === 'function') {
+            promise
+              .then((module) => {
+                // Ensure we get the default export
+                resolve(module.default ? module : { default: module });
+              })
+              .catch((error) => {
+                if (attemptNumber < retries) {
+                  console.warn(`Lazy load failed, retrying... (${attemptNumber + 1}/${retries})`, error);
+                  setTimeout(() => attempt(attemptNumber + 1), delay * (attemptNumber + 1));
+                } else {
+                  console.error('Lazy load failed after retries:', error);
+                  reject(error);
+                }
+              });
+          } else {
+            resolve(promise);
+          }
+        } catch (error) {
+          // Handle synchronous errors (like circular dependencies)
+          if (attemptNumber < retries) {
+            console.warn(`Lazy load sync error, retrying... (${attemptNumber + 1}/${retries})`, error);
+            setTimeout(() => attempt(attemptNumber + 1), delay * (attemptNumber + 1));
+          } else {
+            console.error('Lazy load failed after retries (sync error):', error);
+            reject(error);
+          }
+        }
+      };
+      attempt(0);
+    });
+  });
+};
+
+// Lazy load components to avoid circular dependencies with retry mechanism
 // Note: Dashboard is handled by MainLayout, not needed here
-const DebugReport = lazy(() => import('../components/DebugReport'));
-const ProfileManager = lazy(() => import('../components/ProfileManager'));
-const SettingsTab = lazy(() => import('../components/SettingsTab'));
+const DebugReport = retryLazyLoad(() => import('../components/DebugReport'));
+const ProfileManager = retryLazyLoad(() => import('../components/ProfileManager'));
+const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
 
 /**
  * Protected Route Wrapper
