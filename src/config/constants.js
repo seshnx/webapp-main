@@ -33,6 +33,16 @@ export const TALENT_SUBROLES = [
     "Band"
 ];
 
+// ⚠️ MOVE THESE BEFORE PROFILE_SCHEMAS - They're used in the schema definitions
+// Sub-roles that are vocal-focused
+export const VOCAL_SUBROLES = ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"];
+
+// Sub-roles that are instrument-focused
+export const INSTRUMENTALIST_SUBROLES = ["Guitarist", "Bassist", "Drummer", "Keyboardist", "Pianist", "Violinist", "Cellist", "Saxophonist", "Trumpeter", "Multi-Instrumentalist", "Session Musician"];
+
+// Sub-roles that are DJ/electronic-focused
+export const DJ_SUBROLES = ["DJ", "Beatmaker"];
+
 // Vocal-specific data for singers
 export const VOCAL_RANGES = [
     "Soprano",
@@ -151,122 +161,6 @@ export const AVAILABILITY_STATUS = {
     TOURING: { id: 'touring', label: 'On Tour', color: 'purple' }
 };
 
-// Sub-roles that are vocal-focused
-export const VOCAL_SUBROLES = ["Singer", "Singer-Songwriter", "Vocalist", "Backup Singer", "Rapper"];
-
-// Sub-roles that are instrument-focused
-export const INSTRUMENTALIST_SUBROLES = ["Guitarist", "Bassist", "Drummer", "Keyboardist", "Pianist", "Violinist", "Cellist", "Saxophonist", "Trumpeter", "Multi-Instrumentalist", "Session Musician"];
-
-// Sub-roles that are DJ/electronic-focused
-export const DJ_SUBROLES = ["DJ", "Beatmaker"];
-
-// Helper function to get display role - shows subRole if available, otherwise shows accountType
-export const getDisplayRole = (userData) => {
-    if (!userData) return 'User';
-    
-    const activeRole = userData.activeProfileRole || userData.accountTypes?.[0];
-    
-    // If the active role is Talent and they have a subRole set, show the subRole
-    if (activeRole === 'Talent' && userData.talentSubRole) {
-        return userData.talentSubRole;
-    }
-    
-    return activeRole || 'User';
-};
-
-export const SUBSCRIPTION_PLAN_KEYS = { FREE: 'FREE', BASIC: 'BASIC', PRO: 'PRO', STUDIO: 'STUDIO', LABEL: 'LABEL' };
-export const SUBSCRIPTION_PLANS = [];
-export const TOKEN_PACKAGES = [];
-
-export const POPULAR_PLUGINS_LIST = [
-    "Xfer Serum", "NI Massive", "Sylenth1", "FabFilter Pro-Q 3", "Valhalla VintageVerb", 
-    "RC-20 Retro Color", "Omnisphere", "Kontakt", "Auto-Tune", "Soundtoys Decapitator", 
-    "Waves CLA-2A", "SerumFX", "Vital", "Diva"
-];
-
-// --- DISTRIBUTION & DDEX STANDARDS (NEW) ---
-
-export const RELEASE_TYPES = [
-    { id: 'single', label: 'Single', maxTracks: 1 },
-    { id: 'ep', label: 'EP', maxTracks: 6 },
-    { id: 'album', label: 'Album', maxTracks: 100 }
-];
-
-export const DISTRIBUTION_STORES = [
-    { id: 'spotify', name: 'Spotify', icon: 'spotify' },
-    { id: 'apple', name: 'Apple Music', icon: 'apple' },
-    { id: 'tiktok', name: 'TikTok / Resso', icon: 'music' },
-    { id: 'instagram', name: 'Instagram & Facebook', icon: 'instagram' },
-    { id: 'youtube', name: 'YouTube Music', icon: 'youtube' },
-    { id: 'amazon', name: 'Amazon Music', icon: 'shopping-cart' },
-    { id: 'tidal', name: 'Tidal', icon: 'music' },
-    { id: 'deezer', name: 'Deezer', icon: 'music' },
-    { id: 'soundcloud', name: 'SoundCloud', icon: 'cloud' }
-];
-
-// DDEX-Compliant Genre List (Simplified Subset)
-export const DDEX_GENRES = [
-    "Alternative", "Blues", "Children's Music", "Christian & Gospel", "Classical", 
-    "Comedy", "Country", "Dance", "Electronic", "Fitness & Workout", "Folk", 
-    "Hip Hop/Rap", "Holiday", "Indie Pop", "Instrumental", "Jazz", "K-Pop", 
-    "Latin", "Metal", "New Age", "Pop", "R&B/Soul", "Reggae", "Rock", 
-    "Singer/Songwriter", "Soundtrack", "Spoken Word", "World"
-];
-
-export const ARTWORK_REQUIREMENTS = {
-    minWidth: 3000,
-    minHeight: 3000,
-    aspectRatio: 1, // 1:1 Square
-    formats: ['image/jpeg', 'image/png'],
-    maxSizeMB: 10
-};
-
-export const AUDIO_REQUIREMENTS = {
-    format: 'audio/wav',
-    bitDepth: [16, 24],
-    sampleRate: [44100, 48000],
-    maxSizeMB: 200 // Per track limit for upload
-};
-
-// --- EXISTING CONSTANTS BELOW ---
-
-export const SCHOOL_PERMISSIONS = [
-    { id: 'manage_roster', label: 'Manage Roster', description: 'Add, remove, or edit student details.' },
-    { id: 'manage_enrollment', label: 'Admissions', description: 'Process applications and handle intake.' },
-    { id: 'approve_hours', label: 'Approve Hours', description: 'Verify and approve internship time logs.' },
-    { id: 'manage_partners', label: 'Manage Partners', description: 'Add or edit approved internship studios.' },
-    { id: 'grade_students', label: 'Grading', description: 'Submit technical and soft-skill evaluations.' },
-    { id: 'post_announcements', label: 'Announcements', description: 'Post news to the student dashboard.' },
-    { id: 'manage_resources', label: 'Resource Rules', description: 'Set quotas and booking restrictions.' },
-    { id: 'manage_staff', label: 'Manage Staff', description: 'Add new instructors and assign roles.' },
-    { id: 'view_audit', label: 'View Audit Logs', description: 'See history of administrative actions.' },
-    { id: 'edit_settings', label: 'School Settings', description: 'Change school name, address, and branding.' }
-];
-
-// EDU Authentication & Permissions
-// Note: GAdmin (Global Admin) is NOT an EDU role - it's a platform-wide role managed in separate Admin App
-export const EDU_ROLES = ['EDUAdmin', 'EDUStaff', 'Student', 'Intern'];
-
-// EDU Role Hierarchy (highest to lowest)
-export const EDU_ROLE_HIERARCHY = ['EDUAdmin', 'EDUStaff', 'Intern', 'Student'];
-
-// Global Admin role (separate from EDU roles, managed in Admin App)
-export const GLOBAL_ADMIN_ROLE = 'GAdmin';
-
-// EDU Permissions mapping (role -> permissions)
-export const EDU_PERMISSIONS = {
-    'EDUAdmin': ['ALL'], // EDU Admin (School Admin) has all school permissions
-    'EDUStaff': [
-        'manage_roster',
-        'approve_hours',
-        'grade_students',
-        'post_announcements',
-        'view_audit'
-    ],
-    'Intern': [], // Interns have no admin permissions
-    'Student': [] // Students have no admin permissions
-};
-
 export const INSTRUMENT_DATA = { 
     "Vocals": ["Soprano", "Tenor", "Baritone", "Bass", "Falsetto", "Rapping", "Beatboxing", "Growling"], 
     "Guitars": ["Electric Guitar", "Acoustic Guitar", "Bass Guitar", "Classical/Nylon", "12-String Acoustic", "Upright Bass"],
@@ -284,6 +178,7 @@ export const AMENITIES_DATA = ["Wi-Fi", "Kitchen", "Lounge", "Private Parking", 
 
 const NAME_FIELDS = [{ key: "useRealName", label: "Use Primary Name?", type: "checkbox", isToggle: true }, { key: "profileName", label: "Profile/Stage Name", type: "text" }];
 
+// ✅ NOW PROFILE_SCHEMAS CAN USE THE CONSTANTS DEFINED ABOVE
 export const PROFILE_SCHEMAS = {
   "Talent": [
     { key: "talentSubRole", label: "What best describes you?", type: "select", options: ["", ...TALENT_SUBROLES], isSubRole: true },
@@ -400,6 +295,113 @@ export const PROFILE_SCHEMAS = {
     { key: "bio", label: "Bio", type: "textarea" },
     { key: "skills", label: "Skills", type: "textarea" }
   ]
+};
+
+// Helper function to get display role - shows subRole if available, otherwise shows accountType
+export const getDisplayRole = (userData) => {
+    if (!userData) return 'User';
+    
+    const activeRole = userData.activeProfileRole || userData.accountTypes?.[0];
+    
+    // If the active role is Talent and they have a subRole set, show the subRole
+    if (activeRole === 'Talent' && userData.talentSubRole) {
+        return userData.talentSubRole;
+    }
+    
+    return activeRole || 'User';
+};
+
+export const SUBSCRIPTION_PLAN_KEYS = { FREE: 'FREE', BASIC: 'BASIC', PRO: 'PRO', STUDIO: 'STUDIO', LABEL: 'LABEL' };
+export const SUBSCRIPTION_PLANS = [];
+export const TOKEN_PACKAGES = [];
+
+export const POPULAR_PLUGINS_LIST = [
+    "Xfer Serum", "NI Massive", "Sylenth1", "FabFilter Pro-Q 3", "Valhalla VintageVerb", 
+    "RC-20 Retro Color", "Omnisphere", "Kontakt", "Auto-Tune", "Soundtoys Decapitator", 
+    "Waves CLA-2A", "SerumFX", "Vital", "Diva"
+];
+
+// --- DISTRIBUTION & DDEX STANDARDS (NEW) ---
+
+export const RELEASE_TYPES = [
+    { id: 'single', label: 'Single', maxTracks: 1 },
+    { id: 'ep', label: 'EP', maxTracks: 6 },
+    { id: 'album', label: 'Album', maxTracks: 100 }
+];
+
+export const DISTRIBUTION_STORES = [
+    { id: 'spotify', name: 'Spotify', icon: 'spotify' },
+    { id: 'apple', name: 'Apple Music', icon: 'apple' },
+    { id: 'tiktok', name: 'TikTok / Resso', icon: 'music' },
+    { id: 'instagram', name: 'Instagram & Facebook', icon: 'instagram' },
+    { id: 'youtube', name: 'YouTube Music', icon: 'youtube' },
+    { id: 'amazon', name: 'Amazon Music', icon: 'shopping-cart' },
+    { id: 'tidal', name: 'Tidal', icon: 'music' },
+    { id: 'deezer', name: 'Deezer', icon: 'music' },
+    { id: 'soundcloud', name: 'SoundCloud', icon: 'cloud' }
+];
+
+// DDEX-Compliant Genre List (Simplified Subset)
+export const DDEX_GENRES = [
+    "Alternative", "Blues", "Children's Music", "Christian & Gospel", "Classical", 
+    "Comedy", "Country", "Dance", "Electronic", "Fitness & Workout", "Folk", 
+    "Hip Hop/Rap", "Holiday", "Indie Pop", "Instrumental", "Jazz", "K-Pop", 
+    "Latin", "Metal", "New Age", "Pop", "R&B/Soul", "Reggae", "Rock", 
+    "Singer/Songwriter", "Soundtrack", "Spoken Word", "World"
+];
+
+export const ARTWORK_REQUIREMENTS = {
+    minWidth: 3000,
+    minHeight: 3000,
+    aspectRatio: 1, // 1:1 Square
+    formats: ['image/jpeg', 'image/png'],
+    maxSizeMB: 10
+};
+
+export const AUDIO_REQUIREMENTS = {
+    format: 'audio/wav',
+    bitDepth: [16, 24],
+    sampleRate: [44100, 48000],
+    maxSizeMB: 200 // Per track limit for upload
+};
+
+// --- EXISTING CONSTANTS BELOW ---
+
+export const SCHOOL_PERMISSIONS = [
+    { id: 'manage_roster', label: 'Manage Roster', description: 'Add, remove, or edit student details.' },
+    { id: 'manage_enrollment', label: 'Admissions', description: 'Process applications and handle intake.' },
+    { id: 'approve_hours', label: 'Approve Hours', description: 'Verify and approve internship time logs.' },
+    { id: 'manage_partners', label: 'Manage Partners', description: 'Add or edit approved internship studios.' },
+    { id: 'grade_students', label: 'Grading', description: 'Submit technical and soft-skill evaluations.' },
+    { id: 'post_announcements', label: 'Announcements', description: 'Post news to the student dashboard.' },
+    { id: 'manage_resources', label: 'Resource Rules', description: 'Set quotas and booking restrictions.' },
+    { id: 'manage_staff', label: 'Manage Staff', description: 'Add new instructors and assign roles.' },
+    { id: 'view_audit', label: 'View Audit Logs', description: 'See history of administrative actions.' },
+    { id: 'edit_settings', label: 'School Settings', description: 'Change school name, address, and branding.' }
+];
+
+// EDU Authentication & Permissions
+// Note: GAdmin (Global Admin) is NOT an EDU role - it's a platform-wide role managed in separate Admin App
+export const EDU_ROLES = ['EDUAdmin', 'EDUStaff', 'Student', 'Intern'];
+
+// EDU Role Hierarchy (highest to lowest)
+export const EDU_ROLE_HIERARCHY = ['EDUAdmin', 'EDUStaff', 'Intern', 'Student'];
+
+// Global Admin role (separate from EDU roles, managed in Admin App)
+export const GLOBAL_ADMIN_ROLE = 'GAdmin';
+
+// EDU Permissions mapping (role -> permissions)
+export const EDU_PERMISSIONS = {
+    'EDUAdmin': ['ALL'], // EDU Admin (School Admin) has all school permissions
+    'EDUStaff': [
+        'manage_roster',
+        'approve_hours',
+        'grade_students',
+        'post_announcements',
+        'view_audit'
+    ],
+    'Intern': [], // Interns have no admin permissions
+    'Student': [] // Students have no admin permissions
 };
 
 // Tech service catalogue - Main App handles tech bookings
