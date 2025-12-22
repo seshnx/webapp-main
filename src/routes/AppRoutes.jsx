@@ -1,5 +1,5 @@
-import React, { lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import React, { lazy, Suspense, useEffect } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
 
@@ -13,8 +13,11 @@ const SettingsTab = lazy(() => import('../components/SettingsTab'));
  * Protected Route Wrapper
  * 
  * Protects routes and redirects to login if user is not authenticated
+ * Uses useNavigate hook instead of Navigate component to avoid initialization issues
  */
 function ProtectedRoute({ children, user, loading }) {
+  const navigate = useNavigate();
+  
   // Show loading while checking auth
   if (loading) {
     return (
@@ -24,9 +27,16 @@ function ProtectedRoute({ children, user, loading }) {
     );
   }
   
-  // Check if user is authenticated
+  // Check if user is authenticated - use useEffect to navigate to avoid initialization issues
+  useEffect(() => {
+    if (!user && !loading) {
+      navigate('/login', { replace: true });
+    }
+  }, [user, loading, navigate]);
+  
+  // Don't render children if user is not authenticated
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return null;
   }
   
   return children;
