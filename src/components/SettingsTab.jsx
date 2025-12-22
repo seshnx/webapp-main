@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
     X, Loader2, Settings, Bell, Shield, Moon, Users, RefreshCw, Star, 
     Filter, Lock, AlertTriangle, Key, Mail, CheckCircle, Eye, MapPin, 
-    MessageSquare, UserX, Download
+    MessageSquare, UserX, Download, Globe, Calendar, ShoppingBag, 
+    Image, Accessibility, Zap, Clock, Volume2, VolumeX, Monitor,
+    Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
+    FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save
 } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { ACCOUNT_TYPES } from '../config/constants';
@@ -10,21 +13,194 @@ import { ACCOUNT_TYPES } from '../config/constants';
 // Roles that should never be shown in account settings (managed through other systems)
 const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
 
+// Tab definitions
+const SETTINGS_TABS = [
+    { id: 'general', label: 'General', icon: Settings },
+    { id: 'security', label: 'Security & Privacy', icon: Shield },
+    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'messaging', label: 'Messaging', icon: MessageSquare },
+    { id: 'social', label: 'Social & Feed', icon: Users },
+    { id: 'bookings', label: 'Bookings', icon: Calendar },
+    { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
+    { id: 'content', label: 'Content & Media', icon: Image },
+    { id: 'accessibility', label: 'Accessibility', icon: Accessibility },
+    { id: 'performance', label: 'Performance', icon: Zap },
+];
+
 export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) {
-    const [localSettings, setLocalSettings] = useState(userData?.settings || {
-        notifications: { email: true, push: true, marketing: false },
-        privacy: { publicProfile: true, showLocation: true, hideProfile: false },
-        theme: 'system',
-        social: { mutedUsers: [], blockedUsers: [] },
-        messenger: { mutedThreads: [], blockedContacts: [] },
-        preferences: { seeAllProfiles: false }
+    const [activeTab, setActiveTab] = useState('general');
+    const [localSettings, setLocalSettings] = useState(() => {
+        const defaults = {
+            // General
+            theme: 'system',
+            language: 'en',
+            dateFormat: 'MM/DD/YYYY',
+            timeFormat: '12h',
+            timezone: 'auto',
+            currency: 'USD',
+            numberFormat: '1,000.00',
+            
+            // Security & Privacy
+            privacy: {
+                publicProfile: true,
+                showLocation: true,
+                hideProfile: false,
+                showEmail: false,
+                showPhone: false,
+                showOnlineStatus: true,
+                showLastSeen: true,
+                allowSearchEngines: false,
+                allowTagging: true,
+                reviewTagsBeforeAppear: false,
+                showFollowingList: true,
+                showFollowersList: true,
+            },
+            twoFactorEnabled: false,
+            
+            // Notifications
+            notifications: {
+                email: true,
+                push: true,
+                marketing: false,
+                booking: {
+                    newRequests: true,
+                    confirmations: true,
+                    reminders: true,
+                    cancellations: true,
+                },
+                social: {
+                    likes: true,
+                    comments: true,
+                    follows: true,
+                    mentions: true,
+                    reposts: true,
+                },
+                marketplace: {
+                    newOffers: true,
+                    sales: true,
+                    messages: true,
+                },
+                system: {
+                    maintenance: true,
+                    updates: true,
+                    security: true,
+                },
+                quietHours: {
+                    enabled: false,
+                    start: '22:00',
+                    end: '08:00',
+                },
+                soundEnabled: true,
+                badgeCount: true,
+            },
+            
+            // Messaging
+            messaging: {
+                readReceipts: true,
+                typingIndicators: true,
+                messageRequests: true,
+                whoCanMessage: 'everyone', // 'everyone', 'followers', 'none'
+                autoArchive: false,
+                soundNotifications: true,
+                previewInNotifications: true,
+                mutedThreads: [],
+                blockedContacts: [],
+            },
+            
+            // Social & Feed
+            social: {
+                feedAlgorithm: 'recommended', // 'chronological', 'recommended', 'following'
+                autoPlayVideos: true,
+                showSensitiveContentWarning: true,
+                showActivityStatus: true,
+                showSuggestedAccounts: true,
+                mutedUsers: [],
+                blockedUsers: [],
+            },
+            contentFiltering: {
+                sensitivityFilter: 'medium', // 'off', 'low', 'medium', 'high'
+                hideKeywords: [],
+                muteWords: [],
+                autoHideReported: true,
+                showAgeRestricted: false,
+            },
+            
+            // Bookings
+            bookings: {
+                autoAccept: false,
+                autoAcceptCriteria: {},
+                defaultBufferTime: 15, // minutes
+                showAvailabilityPublicly: false,
+                requireDeposit: false,
+                autoDeclineExpired: true,
+                defaultSessionDuration: 60, // minutes
+                notifications: {
+                    newRequests: true,
+                    confirmations: true,
+                    reminders: true,
+                    cancellations: true,
+                },
+            },
+            
+            // Marketplace
+            marketplace: {
+                autoListItems: false,
+                requireApproval: true,
+                defaultShippingMethod: 'standard',
+                defaultPaymentTerms: 'immediate',
+                autoAcceptOffersAbove: false,
+                autoAcceptThreshold: 0,
+                showSoldItems: true,
+                notifications: {
+                    newOffers: true,
+                    sales: true,
+                    messages: true,
+                },
+            },
+            
+            // Content & Media
+            content: {
+                imageQuality: 'high', // 'high', 'medium', 'low'
+                videoQuality: 'high',
+                autoSaveUploaded: true,
+                compressImages: true,
+                maxUploadSize: 10, // MB
+            },
+            
+            // Accessibility
+            accessibility: {
+                fontSize: 'medium', // 'small', 'medium', 'large', 'xlarge'
+                reducedMotion: false,
+                highContrast: false,
+                screenReaderAnnouncements: true,
+                keyboardHints: true,
+            },
+            
+            // Performance
+            performance: {
+                dataUsage: 'auto', // 'wifi-only', 'auto', 'never'
+                offlineMode: false,
+                backgroundSync: true,
+                autoClearOldNotifications: true,
+                autoClearAfterDays: 30,
+            },
+            
+            // Legacy/Other
+            preferences: {
+                seeAllProfiles: false,
+            },
+        };
+        
+        // Merge with existing settings
+        return { ...defaults, ...(userData?.settings || {}) };
     });
     
     const [roles, setRoles] = useState(userData?.accountTypes || []);
     const [preferredRole, setPreferredRole] = useState(userData?.preferredRole || roles[0]);
     const [activeRole, setActiveRole] = useState(userData?.activeProfileRole || roles[0]);
-    const [savingRoles, setSavingRoles] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [exporting, setExporting] = useState(false);
+    const [activeSessions, setActiveSessions] = useState([]);
     
     // Deletion State
     const [isDeleting, setIsDeleting] = useState(false);
@@ -33,10 +209,9 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     
     // Security / Account State
     const [showSecurityModal, setShowSecurityModal] = useState(false);
-    const [securityAction, setSecurityAction] = useState(null); // 'email' or 'password'
+    const [securityAction, setSecurityAction] = useState(null);
     const [securityForm, setSecurityForm] = useState({ newEmail: '', newPassword: '', currentPassword: '' });
     const [isSecurityLoading, setIsSecurityLoading] = useState(false);
-
 
     useEffect(() => {
         if (userData?.activeProfileRole) {
@@ -44,32 +219,82 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         }
     }, [userData?.activeProfileRole]);
 
-    // Generic Toggle Handler for nested settings
-    const handleToggle = (category, key) => {
+    // Generic Toggle Handler
+    const handleToggle = (category, key, subKey = null) => {
         setLocalSettings(prev => {
-            const updated = { 
-                ...prev, 
-                [category]: { 
-                    ...prev[category], 
-                    [key]: !prev[category]?.[key] 
-                } 
-            };
+            const updated = { ...prev };
+            if (subKey) {
+                updated[category] = {
+                    ...prev[category],
+                    [key]: {
+                        ...prev[category]?.[key],
+                        [subKey]: !prev[category]?.[key]?.[subKey]
+                    }
+                };
+            } else if (category && key) {
+                updated[category] = {
+                    ...prev[category],
+                    [key]: !prev[category]?.[key]
+                };
+            } else {
+                updated[key] = !prev[key];
+            }
+            onUpdate(updated);
+            return updated;
+        });
+    };
+
+    const handleValueChange = (category, key, value, subKey = null) => {
+        setLocalSettings(prev => {
+            const updated = { ...prev };
+            if (subKey) {
+                updated[category] = {
+                    ...prev[category],
+                    [key]: {
+                        ...prev[category]?.[key],
+                        [subKey]: value
+                    }
+                };
+            } else if (category && key) {
+                updated[category] = {
+                    ...prev[category],
+                    [key]: value
+                };
+            } else {
+                updated[key] = value;
+            }
             onUpdate(updated);
             return updated;
         });
     };
 
     const handleThemeChange = (val) => {
-        setLocalSettings(prev => {
-            const updated = { ...prev, theme: val };
-            onUpdate(updated);
-            return updated;
-        });
+        handleValueChange(null, 'theme', val);
+    };
+
+    const saveSettings = async () => {
+        if (!supabase || !user) return;
+        setSaving(true);
+        try {
+            await supabase
+                .from('profiles')
+                .update({
+                    settings: localSettings,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', user.id);
+            
+            alert("Settings saved successfully!");
+        } catch (e) {
+            console.error(e);
+            alert("Failed to save settings.");
+        }
+        setSaving(false);
     };
 
     const updateAccountTypes = async () => {
         if (roles.length === 0 || !supabase) return alert("You must have at least one role.");
-        setSavingRoles(true);
+        setSaving(true);
         try {
             await supabase
                 .from('profiles')
@@ -84,22 +309,19 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             if (userData && activeRole !== userData.activeProfileRole && onRoleSwitch) {
                 onRoleSwitch(activeRole);
             }
-
-            // Note: Sub-profiles can be handled separately if needed
-            // For now, we'll just update the main profile
             alert("Roles & Preferences updated!");
         } catch (e) {
             console.error(e);
             alert("Failed to update.");
         }
-        setSavingRoles(false);
+        setSaving(false);
     };
 
     const toggleRole = (role) => {
         setRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]);
     };
 
-    // --- SECURITY HANDLERS ---
+    // Security handlers
     const openSecurityModal = (action) => {
         setSecurityAction(action);
         setSecurityForm({ newEmail: '', newPassword: '', currentPassword: '' });
@@ -114,7 +336,6 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         setIsSecurityLoading(true);
 
         try {
-            // Verify current password by attempting to sign in
             const { error: verifyError } = await supabase.auth.signInWithPassword({
                 email: user.email,
                 password: securityForm.currentPassword
@@ -131,7 +352,6 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 });
                 if (emailError) throw emailError;
                 
-                // Update profile email
                 await supabase
                     .from('profiles')
                     .update({ email: securityForm.newEmail, updated_at: new Date().toISOString() })
@@ -174,7 +394,6 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         try {
             const userId = user.id;
             
-            // Collect all user data from Supabase
             const [profile, wallet, bookings, reviews, follows, notifications] = await Promise.all([
                 supabase.from('profiles').select('*').eq('id', userId).single(),
                 supabase.from('wallets').select('*').eq('user_id', userId).single(),
@@ -184,13 +403,11 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 supabase.from('notifications').select('*').eq('user_id', userId).limit(1000)
             ]);
             
-            // Also check for sub_profiles
             const { data: subProfiles } = await supabase
                 .from('sub_profiles')
                 .select('*')
                 .eq('user_id', userId);
             
-            // Compile export data
             const exportData = {
                 exportDate: new Date().toISOString(),
                 userId: userId,
@@ -203,7 +420,6 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 notifications: notifications.data || []
             };
             
-            // Create JSON blob and download
             const jsonString = JSON.stringify(exportData, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -223,45 +439,27 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         setExporting(false);
     };
 
-    // --- DELETION LOGIC ---
     const handleDeleteAccount = async () => {
         if (deleteConfirm !== 'DELETE' || !supabase || !user) return;
         setIsDeleting(true);
         const userId = user.id;
         
         try {
-            // Step 1: Delete all related data first to avoid foreign key constraint violations
-            // Delete profile and related records
             const relatedTables = [
-                'profiles',
-                'wallets',
-                'notifications',
-                'saved_posts',
-                'followers',
-                'following',
-                'posts',
-                'comments',
-                'bookings',
-                'marketplace_items',
-                'distribution_releases',
-                'equipment_submissions',
-                'safe_exchange_transactions',
-                'shipping_transactions'
+                'profiles', 'wallets', 'notifications', 'saved_posts',
+                'followers', 'following', 'posts', 'comments', 'bookings',
+                'marketplace_items', 'distribution_releases', 'equipment_submissions',
+                'safe_exchange_transactions', 'shipping_transactions'
             ];
             
             for (const table of relatedTables) {
                 try {
-                    // Delete records where user is the owner or participant
                     const deleteQueries = [];
                     
                     if (table === 'profiles' || table === 'wallets') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('id', userId)
-                        );
+                        deleteQueries.push(supabase.from(table).delete().eq('id', userId));
                     } else if (table === 'notifications' || table === 'saved_posts') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('user_id', userId)
-                        );
+                        deleteQueries.push(supabase.from(table).delete().eq('user_id', userId));
                     } else if (table === 'followers') {
                         deleteQueries.push(
                             supabase.from(table).delete().eq('follower_id', userId),
@@ -273,26 +471,18 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                             supabase.from(table).delete().eq('target_id', userId)
                         );
                     } else if (table === 'posts' || table === 'comments') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('user_id', userId)
-                        );
+                        deleteQueries.push(supabase.from(table).delete().eq('user_id', userId));
                     } else if (table === 'bookings') {
                         deleteQueries.push(
                             supabase.from(table).delete().eq('sender_id', userId),
                             supabase.from(table).delete().eq('target_id', userId)
                         );
                     } else if (table === 'marketplace_items') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('seller_id', userId)
-                        );
+                        deleteQueries.push(supabase.from(table).delete().eq('seller_id', userId));
                     } else if (table === 'distribution_releases') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('uploader_id', userId)
-                        );
+                        deleteQueries.push(supabase.from(table).delete().eq('uploader_id', userId));
                     } else if (table === 'equipment_submissions') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('submitted_by', userId)
-                        );
+                        deleteQueries.push(supabase.from(table).delete().eq('submitted_by', userId));
                     } else if (table === 'safe_exchange_transactions') {
                         deleteQueries.push(
                             supabase.from(table).delete().eq('buyer_id', userId),
@@ -305,21 +495,15 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                         );
                     }
                     
-                    // Execute all delete queries for this table
                     await Promise.all(deleteQueries);
                 } catch (tableError) {
-                    // Log but don't fail - some tables might not exist or have different schemas
                     console.warn(`Could not delete from ${table}:`, tableError);
                 }
             }
             
-            // Step 2: Call Supabase admin API to delete the auth user
-            // Note: This requires a backend endpoint with service_role key
-            // For now, we'll use the Supabase client which may not have permissions
             const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
             
             if (deleteError) {
-                // If admin API fails, try regular signOut and show message
                 console.warn("Admin delete failed, using signOut:", deleteError);
                 await supabase.auth.signOut();
                 alert("Account data has been deleted. Please contact support to complete account deletion if needed.");
@@ -327,7 +511,6 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 alert("Account successfully deleted.");
             }
             
-            // Step 3: Clear local state and redirect
             setShowDeleteModal(false);
             setDeleteConfirm('');
             window.location.href = '/';
@@ -339,12 +522,85 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         }
     };
 
-    
+    const clearCache = () => {
+        if ('caches' in window) {
+            caches.keys().then(names => {
+                names.forEach(name => caches.delete(name));
+            });
+        }
+        localStorage.clear();
+        sessionStorage.clear();
+        alert("Cache cleared successfully!");
+    };
 
-    // Helper for Block Lists
+    // Helper components
+    const ToggleSwitch = ({ checked, onChange, label, description, icon: Icon }) => (
+        <div className="flex items-center justify-between p-3 border rounded-lg dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition">
+            <div className="flex items-center gap-3 flex-1">
+                {Icon && <Icon size={16} className="text-gray-400 shrink-0" />}
+                <div className="flex-1">
+                    <span className="text-sm font-medium dark:text-gray-200 block">{label}</span>
+                    {description && <p className="text-xs text-gray-500 mt-0.5">{description}</p>}
+                </div>
+            </div>
+            <div 
+                onClick={onChange}
+                className={`w-10 h-5 rounded-full p-0.5 flex cursor-pointer transition-colors shrink-0 ${
+                    checked ? 'bg-brand-blue justify-end' : 'bg-gray-300 dark:bg-gray-600 justify-start'
+                }`}
+            >
+                <div className="w-4 h-4 bg-white rounded-full shadow-sm"></div>
+            </div>
+        </div>
+    );
+
+    const SelectField = ({ label, value, onChange, options, icon: Icon, description }) => (
+        <div className="space-y-1">
+            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                {Icon && <Icon size={12} />}
+                {label}
+            </label>
+            {description && <p className="text-xs text-gray-500">{description}</p>}
+            <select 
+                className="w-full p-2 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                value={value}
+                onChange={e => onChange(e.target.value)}
+            >
+                {options.map(opt => (
+                    <option key={typeof opt === 'object' ? opt.value : opt} value={typeof opt === 'object' ? opt.value : opt}>
+                        {typeof opt === 'object' ? opt.label : opt}
+                    </option>
+                ))}
+            </select>
+        </div>
+    );
+
+    const NumberInput = ({ label, value, onChange, min, max, unit, icon: Icon, description }) => (
+        <div className="space-y-1">
+            <label className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1">
+                {Icon && <Icon size={12} />}
+                {label}
+            </label>
+            {description && <p className="text-xs text-gray-500">{description}</p>}
+            <div className="flex items-center gap-2">
+                <input 
+                    type="number"
+                    className="flex-1 p-2 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                    value={value}
+                    onChange={e => onChange(Number(e.target.value))}
+                    min={min}
+                    max={max}
+                />
+                {unit && <span className="text-xs text-gray-500">{unit}</span>}
+            </div>
+        </div>
+    );
+
     const ListManager = ({ title, items, type, icon: Icon }) => (
         <div className="mt-4 border-t dark:border-gray-700 pt-4">
-            <h5 className="text-sm font-bold dark:text-gray-300 mb-2 flex items-center gap-2"><Icon size={14}/> {title}</h5>
+            <h5 className="text-sm font-bold dark:text-gray-300 mb-2 flex items-center gap-2">
+                <Icon size={14}/> {title}
+            </h5>
             {items && items.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                     {items.map((id, i) => (
@@ -359,292 +615,1090 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         </div>
     );
 
-    // Always filter out EDU and GAdmin roles from settings - they are managed through other systems
     const displayedRoles = ACCOUNT_TYPES.filter(role => !HIDDEN_ROLES.includes(role));
+    const activeTabInfo = SETTINGS_TABS.find(t => t.id === activeTab);
 
     return (
         <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300 pb-20">
-            
-            {/* 1. ROLES & WORKFLOW */}
-            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm">
-                <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Users size={18} className="text-purple-500"/> Roles & Workflow</h3>
-                
-                <div className="mb-6">
-                    <div className="mb-2">
-                        <label className="text-xs font-bold text-gray-500 uppercase block">Active Account Types</label>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 mb-4">
-                        {displayedRoles.map(role => (
-                            <button 
-                                key={role} 
-                                onClick={() => toggleRole(role)}
-                                className={`px-3 py-1.5 rounded-full text-xs font-bold transition border ${roles.includes(role) ? 'bg-purple-100 border-purple-200 text-purple-700 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-300' : 'bg-gray-50 border-gray-200 text-gray-500 dark:bg-transparent dark:border-gray-600 dark:text-gray-400'}`}
+            {/* Tab Navigation */}
+            <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 shadow-sm overflow-hidden">
+                <div className="flex overflow-x-auto scrollbar-hide border-b dark:border-gray-700">
+                    {SETTINGS_TABS.map(tab => {
+                        const TabIcon = tab.icon;
+                        return (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 ${
+                                    activeTab === tab.id
+                                        ? 'border-brand-blue text-brand-blue bg-blue-50 dark:bg-blue-900/20'
+                                        : 'border-transparent text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                }`}
                             >
-                                {role}
+                                <TabIcon size={16} />
+                                {tab.label}
                             </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-4">
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block flex items-center gap-1"><Star size={12}/> Preferred Profile</label>
-                        <select 
-                            className="w-full p-2 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
-                            value={preferredRole}
-                            onChange={e => setPreferredRole(e.target.value)}
-                        >
-                            {roles.filter(r => !HIDDEN_ROLES.includes(r)).map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block flex items-center gap-1"><RefreshCw size={12}/> Active Workflow Context</label>
-                        <select 
-                            className="w-full p-2 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
-                            value={activeRole}
-                            onChange={e => setActiveRole(e.target.value)}
-                        >
-                            {roles.filter(r => !HIDDEN_ROLES.includes(r)).map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                    </div>
-                </div>
-
-                <label className="flex items-center justify-between cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 p-2 rounded transition border border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center gap-2">
-                        <Filter size={16} className="text-brand-blue"/>
-                        <div>
-                            <span className="text-sm font-bold text-gray-700 dark:text-gray-200">See All (Unfiltered View)</span>
-                            <p className="text-[10px] text-gray-500">Show all content types regardless of active workflow.</p>
-                        </div>
-                    </div>
-                    <div className={`w-10 h-5 rounded-full p-0.5 flex transition-colors ${localSettings.preferences?.seeAllProfiles ? 'bg-brand-blue justify-end' : 'bg-gray-300 dark:bg-gray-600 justify-start'}`}>
-                        <input type="checkbox" className="hidden" checked={localSettings.preferences?.seeAllProfiles || false} onChange={() => handleToggle('preferences', 'seeAllProfiles')} />
-                        <div className="w-4 h-4 bg-white rounded-full shadow-sm"></div>
-                    </div>
-                </label>
-
-                <div className="mt-4 pt-4 border-t dark:border-gray-700">
-                    <button onClick={updateAccountTypes} disabled={savingRoles} className="w-full bg-purple-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-md transition">
-                        {savingRoles ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} Save Workflow Settings
-                    </button>
+                        );
+                    })}
                 </div>
             </div>
 
-            {/* 2. ACCOUNT SECURITY */}
+            {/* Tab Content */}
             <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm">
-                <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2">
-                    <Shield size={18} className="text-blue-500"/> Account Security
-                </h3>
-                
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400">
-                                <Mail size={18}/>
-                            </div>
-                            <div>
-                                <div className="text-sm font-bold dark:text-white">Email Address</div>
-                                <div className="text-xs text-gray-500">{user.email}</div>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => openSecurityModal('email')}
-                            className="text-xs font-bold bg-white dark:bg-gray-700 border dark:border-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition"
-                        >
-                            Change Email
-                        </button>
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
-                        <div className="flex items-center gap-3">
-                            <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400">
-                                <Key size={18}/>
-                            </div>
-                            <div>
-                                <div className="text-sm font-bold dark:text-white">Password</div>
-                                <div className="text-xs text-gray-500">Last changed: Never (or unknown)</div>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => openSecurityModal('password')}
-                            className="text-xs font-bold bg-white dark:bg-gray-700 border dark:border-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition"
-                        >
-                            Change Password
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* 3. MODULE SETTINGS (Content & Safety) */}
-            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm">
-                <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Settings size={18} className="text-gray-500"/> Content & Safety</h3>
-                
-                <ListManager 
-                    title="Blocked Users" 
-                    items={localSettings.social?.blockedUsers} 
-                    type="blocks" 
-                    icon={UserX}
-                />
-                
-                <ListManager 
-                    title="Muted Threads" 
-                    items={localSettings.messenger?.mutedThreads} 
-                    type="mutes" 
-                    icon={MessageSquare}
-                />
-            </div>
-
-            {/* 4. NOTIFICATION PREFERENCES */}
-            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm">
-                <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Bell size={18} className="text-brand-blue"/> Notification Preferences</h3>
-                <div className="space-y-3">
-                    {Object.entries({
-                        email: "Email Notifications",
-                        push: "Push Notifications",
-                        marketing: "Marketing & Updates"
-                    }).map(([key, label]) => (
-                        <div key={key} className="flex items-center justify-between">
-                            <span className="text-sm dark:text-gray-300">{label}</span>
-                            <div 
-                                onClick={() => handleToggle('notifications', key)}
-                                className={`w-10 h-5 rounded-full p-0.5 flex cursor-pointer transition-colors ${localSettings.notifications?.[key] ? 'bg-brand-blue justify-end' : 'bg-gray-300 dark:bg-gray-600 justify-start'}`}
-                            >
-                                <div className="w-4 h-4 bg-white rounded-full shadow-sm"></div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* 5. PRIVACY & VISIBILITY */}
-            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm">
-                <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Shield size={18} className="text-green-500"/> Privacy & Visibility</h3>
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <Eye size={16} className="text-gray-400"/>
-                            <span className="text-sm dark:text-gray-300">Public Profile Visibility</span>
-                        </div>
-                        <div 
-                            onClick={() => handleToggle('privacy', 'publicProfile')}
-                            className={`w-10 h-5 rounded-full p-0.5 flex cursor-pointer transition-colors ${localSettings.privacy?.publicProfile ? 'bg-green-500 justify-end' : 'bg-gray-300 dark:bg-gray-600 justify-start'}`}
-                        >
-                            <div className="w-4 h-4 bg-white rounded-full shadow-sm"></div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <MapPin size={16} className="text-gray-400"/>
-                            <span className="text-sm dark:text-gray-300">Show Location on Map</span>
-                        </div>
-                        <div 
-                            onClick={() => handleToggle('privacy', 'showLocation')}
-                            className={`w-10 h-5 rounded-full p-0.5 flex cursor-pointer transition-colors ${localSettings.privacy?.showLocation ? 'bg-green-500 justify-end' : 'bg-gray-300 dark:bg-gray-600 justify-start'}`}
-                        >
-                            <div className="w-4 h-4 bg-white rounded-full shadow-sm"></div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                            <UserX size={16} className="text-gray-400"/>
-                            <span className="text-sm dark:text-gray-300">Hide Profile Completely</span>
-                        </div>
-                        <div 
-                            onClick={() => handleToggle('privacy', 'hideProfile')}
-                            className={`w-10 h-5 rounded-full p-0.5 flex cursor-pointer transition-colors ${localSettings.privacy?.hideProfile ? 'bg-brand-blue justify-end' : 'bg-gray-300 dark:bg-gray-600 justify-start'}`}
-                        >
-                            <div className="w-4 h-4 bg-white rounded-full shadow-sm"></div>
-                        </div>
-                    </div>
-               
-        
-                    {/* NEW: Data Export Button */}
-                    <div className="pt-4 mt-2 border-t dark:border-gray-700">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <span className="text-sm font-bold dark:text-white">Your Data</span>
-                                <p className="text-[10px] text-gray-500">Download a copy of your personal data (GDPR/CCPA).</p>
-                            </div>
-                            <button 
-                                onClick={handleDataExport} 
-                                disabled={exporting}
-                                className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-200 transition"
-                            >
-                                {exporting ? <Loader2 size={14} className="animate-spin"/> : <Download size={14}/>}
-                                Download Data
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            {/* 6. APPEARANCE */}
-            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm">
-                <h3 className="font-bold text-lg dark:text-white mb-4 flex items-center gap-2"><Moon size={18} className="text-purple-500"/> Appearance</h3>
-                <div className="flex bg-gray-100 dark:bg-black/20 p-1 rounded-lg">
-                    {['light', 'dark', 'system'].map(t => (
-                        <button 
-                            key={t} 
-                            onClick={() => handleThemeChange(t)}
-                            className={`flex-1 py-2 text-xs font-bold rounded-md capitalize transition-all ${localSettings.theme === t ? 'bg-white dark:bg-gray-700 shadow-sm text-brand-blue' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
-                        >
-                            {t}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* 7. DANGER ZONE */}
-            <div className="bg-red-50 dark:bg-red-900/10 p-6 rounded-xl border border-red-100 dark:border-red-800/30 shadow-sm">
-                <h3 className="font-bold text-lg text-red-600 dark:text-red-400 mb-2 flex items-center gap-2"><Lock size={18}/> Danger Zone</h3>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-                    Deleting your account is permanent. This action will trigger the data cleanup process, removing your profile, posts, and messages.
-                </p>
-                
-                {!showDeleteModal ? (
-                    <button 
-                        onClick={() => setShowDeleteModal(true)}
-                        className="bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 px-4 py-2 rounded-lg text-sm font-bold transition"
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
+                        {activeTabInfo && <activeTabInfo.icon size={18} className="text-brand-blue" />}
+                        {activeTabInfo?.label || 'Settings'}
+                    </h3>
+                    <button
+                        onClick={saveSettings}
+                        disabled={saving}
+                        className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 text-sm font-medium transition"
                     >
-                        Delete Account
+                        {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                        Save All
                     </button>
-                ) : (
-                    <div className="bg-white dark:bg-[#1f2128] p-4 rounded-xl border border-red-200 dark:border-red-900 shadow-lg animate-in fade-in slide-in-from-bottom-2">
-                        <h4 className="font-bold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2"><AlertTriangle size={16}/> Confirm Deletion</h4>
-                        <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
-                            Type <strong>DELETE</strong> below to confirm. This cannot be undone.
-                        </p>
-                        <input 
-                            type="text" 
-                            className="w-full p-2 border border-red-300 dark:border-red-900 rounded mb-3 text-sm focus:ring-2 focus:ring-red-500 outline-none dark:bg-black/20 dark:text-white"
-                            placeholder="Type DELETE"
-                            value={deleteConfirm}
-                            onChange={(e) => setDeleteConfirm(e.target.value)}
+                </div>
+
+                {/* General Tab */}
+                {activeTab === 'general' && (
+                    <div className="space-y-6">
+                        {/* Roles & Workflow */}
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Users size={16} className="text-purple-500"/> Roles & Workflow
+                            </h4>
+                            
+                            <div className="mb-4">
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Active Account Types</label>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                    {displayedRoles.map(role => (
+                                        <button 
+                                            key={role} 
+                                            onClick={() => toggleRole(role)}
+                                            className={`px-3 py-1.5 rounded-full text-xs font-bold transition border ${
+                                                roles.includes(role) 
+                                                    ? 'bg-purple-100 border-purple-200 text-purple-700 dark:bg-purple-900/30 dark:border-purple-700 dark:text-purple-300' 
+                                                    : 'bg-gray-50 border-gray-200 text-gray-500 dark:bg-transparent dark:border-gray-600 dark:text-gray-400'
+                                            }`}
+                                        >
+                                            {role}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <SelectField
+                                    label="Preferred Profile"
+                                    value={preferredRole}
+                                    onChange={setPreferredRole}
+                                    options={roles.filter(r => !HIDDEN_ROLES.includes(r))}
+                                    icon={Star}
+                                />
+                                <SelectField
+                                    label="Active Workflow Context"
+                                    value={activeRole}
+                                    onChange={setActiveRole}
+                                    options={roles.filter(r => !HIDDEN_ROLES.includes(r))}
+                                    icon={RefreshCw}
+                                />
+                            </div>
+
+                            <ToggleSwitch
+                                checked={localSettings.preferences?.seeAllProfiles || false}
+                                onChange={() => handleToggle('preferences', 'seeAllProfiles')}
+                                label="See All (Unfiltered View)"
+                                description="Show all content types regardless of active workflow"
+                                icon={Filter}
+                            />
+
+                            <button 
+                                onClick={updateAccountTypes} 
+                                disabled={saving} 
+                                className="mt-4 w-full bg-purple-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-md transition"
+                            >
+                                {saving ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} Save Workflow Settings
+                            </button>
+                        </div>
+
+                        {/* Appearance */}
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Moon size={16} className="text-purple-500"/> Appearance
+                            </h4>
+                            <div className="flex bg-gray-100 dark:bg-black/20 p-1 rounded-lg">
+                                {['light', 'dark', 'system'].map(t => (
+                                    <button 
+                                        key={t} 
+                                        onClick={() => handleThemeChange(t)}
+                                        className={`flex-1 py-2 text-xs font-bold rounded-md capitalize transition-all ${
+                                            localSettings.theme === t 
+                                                ? 'bg-white dark:bg-gray-700 shadow-sm text-brand-blue' 
+                                                : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                                        }`}
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Language & Localization */}
+                        <div className="space-y-4">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Languages size={16} className="text-blue-500"/> Language & Localization
+                            </h4>
+                            
+                            <SelectField
+                                label="Language"
+                                value={localSettings.language || 'en'}
+                                onChange={val => handleValueChange(null, 'language', val)}
+                                options={[
+                                    { value: 'en', label: 'English' },
+                                    { value: 'es', label: 'Spanish' },
+                                    { value: 'fr', label: 'French' },
+                                    { value: 'de', label: 'German' },
+                                ]}
+                                icon={Globe}
+                            />
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <SelectField
+                                    label="Date Format"
+                                    value={localSettings.dateFormat || 'MM/DD/YYYY'}
+                                    onChange={val => handleValueChange(null, 'dateFormat', val)}
+                                    options={['MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD']}
+                                />
+                                <SelectField
+                                    label="Time Format"
+                                    value={localSettings.timeFormat || '12h'}
+                                    onChange={val => handleValueChange(null, 'timeFormat', val)}
+                                    options={['12h', '24h']}
+                                />
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <SelectField
+                                    label="Timezone"
+                                    value={localSettings.timezone || 'auto'}
+                                    onChange={val => handleValueChange(null, 'timezone', val)}
+                                    options={[
+                                        { value: 'auto', label: 'Auto-detect' },
+                                        { value: 'America/New_York', label: 'Eastern Time' },
+                                        { value: 'America/Chicago', label: 'Central Time' },
+                                        { value: 'America/Denver', label: 'Mountain Time' },
+                                        { value: 'America/Los_Angeles', label: 'Pacific Time' },
+                                    ]}
+                                />
+                                <SelectField
+                                    label="Currency"
+                                    value={localSettings.currency || 'USD'}
+                                    onChange={val => handleValueChange(null, 'currency', val)}
+                                    options={['USD', 'EUR', 'GBP', 'CAD', 'AUD']}
+                                    icon={DollarSign}
+                                />
+                            </div>
+
+                            <SelectField
+                                label="Number Format"
+                                value={localSettings.numberFormat || '1,000.00'}
+                                onChange={val => handleValueChange(null, 'numberFormat', val)}
+                                options={['1,000.00', '1.000,00', '1 000.00']}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Security & Privacy Tab */}
+                {activeTab === 'security' && (
+                    <div className="space-y-6">
+                        {/* Account Security */}
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Shield size={16} className="text-blue-500"/> Account Security
+                            </h4>
+                            
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400">
+                                            <Mail size={18}/>
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-bold dark:text-white">Email Address</div>
+                                            <div className="text-xs text-gray-500">{user.email}</div>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => openSecurityModal('email')}
+                                        className="text-xs font-bold bg-white dark:bg-gray-700 border dark:border-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition"
+                                    >
+                                        Change Email
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center justify-between p-3 border rounded-lg dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                                    <div className="flex items-center gap-3">
+                                        <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400">
+                                            <Key size={18}/>
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-bold dark:text-white">Password</div>
+                                            <div className="text-xs text-gray-500">Last changed: Unknown</div>
+                                        </div>
+                                    </div>
+                                    <button 
+                                        onClick={() => openSecurityModal('password')}
+                                        className="text-xs font-bold bg-white dark:bg-gray-700 border dark:border-gray-600 px-3 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition"
+                                    >
+                                        Change Password
+                                    </button>
+                                </div>
+
+                                <ToggleSwitch
+                                    checked={localSettings.twoFactorEnabled || false}
+                                    onChange={() => handleToggle(null, 'twoFactorEnabled')}
+                                    label="Two-Factor Authentication (2FA)"
+                                    description="Add an extra layer of security to your account"
+                                    icon={Lock}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Privacy Settings */}
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Eye size={16} className="text-green-500"/> Privacy & Visibility
+                            </h4>
+                            
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.publicProfile !== false}
+                                    onChange={() => handleToggle('privacy', 'publicProfile')}
+                                    label="Public Profile Visibility"
+                                    description="Allow others to view your profile"
+                                    icon={Eye}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.showLocation !== false}
+                                    onChange={() => handleToggle('privacy', 'showLocation')}
+                                    label="Show Location on Map"
+                                    description="Display your location on studio maps"
+                                    icon={MapPin}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.hideProfile || false}
+                                    onChange={() => handleToggle('privacy', 'hideProfile')}
+                                    label="Hide Profile Completely"
+                                    description="Make your profile invisible to others"
+                                    icon={EyeOff}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.showEmail || false}
+                                    onChange={() => handleToggle('privacy', 'showEmail')}
+                                    label="Show Email Address"
+                                    description="Display your email on your profile"
+                                    icon={Mail}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.showPhone || false}
+                                    onChange={() => handleToggle('privacy', 'showPhone')}
+                                    label="Show Phone Number"
+                                    description="Display your phone on your profile"
+                                    icon={Smartphone}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.showOnlineStatus !== false}
+                                    onChange={() => handleToggle('privacy', 'showOnlineStatus')}
+                                    label="Show Online Status"
+                                    description="Let others see when you're online"
+                                    icon={Monitor}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.showLastSeen !== false}
+                                    onChange={() => handleToggle('privacy', 'showLastSeen')}
+                                    label="Show Last Seen"
+                                    description="Display when you were last active"
+                                    icon={Clock}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.allowSearchEngines || false}
+                                    onChange={() => handleToggle('privacy', 'allowSearchEngines')}
+                                    label="Allow Search Engine Indexing"
+                                    description="Let search engines index your profile"
+                                    icon={Search}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.allowTagging !== false}
+                                    onChange={() => handleToggle('privacy', 'allowTagging')}
+                                    label="Allow Tagging"
+                                    description="Let others tag you in posts"
+                                    icon={Hash}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.reviewTagsBeforeAppear || false}
+                                    onChange={() => handleToggle('privacy', 'reviewTagsBeforeAppear')}
+                                    label="Review Tags Before They Appear"
+                                    description="Approve tags before they show on your profile"
+                                    icon={UserCheck}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.showFollowingList !== false}
+                                    onChange={() => handleToggle('privacy', 'showFollowingList')}
+                                    label="Show Following List"
+                                    description="Let others see who you follow"
+                                    icon={UserPlus}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.privacy?.showFollowersList !== false}
+                                    onChange={() => handleToggle('privacy', 'showFollowersList')}
+                                    label="Show Followers List"
+                                    description="Let others see your followers"
+                                    icon={Users}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Content & Safety */}
+                        <div>
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Shield size={16} className="text-red-500"/> Content & Safety
+                            </h4>
+                            
+                            <ListManager 
+                                title="Blocked Users" 
+                                items={localSettings.social?.blockedUsers || []} 
+                                type="blocks" 
+                                icon={UserX}
+                            />
+                        </div>
+
+                        {/* Data Export */}
+                        <div className="pt-4 border-t dark:border-gray-700">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <span className="text-sm font-bold dark:text-white">Your Data</span>
+                                    <p className="text-xs text-gray-500">Download a copy of your personal data (GDPR/CCPA).</p>
+                                </div>
+                                <button 
+                                    onClick={handleDataExport} 
+                                    disabled={exporting}
+                                    className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-xs font-bold text-gray-700 dark:text-gray-200 transition"
+                                >
+                                    {exporting ? <Loader2 size={14} className="animate-spin"/> : <Download size={14}/>}
+                                    Download Data
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Danger Zone */}
+                        <div className="pt-4 border-t dark:border-gray-700">
+                            <h4 className="text-sm font-bold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
+                                <Lock size={16}/> Danger Zone
+                            </h4>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
+                                Deleting your account is permanent. This action will remove your profile, posts, and messages.
+                            </p>
+                            
+                            {!showDeleteModal ? (
+                                <button 
+                                    onClick={() => setShowDeleteModal(true)}
+                                    className="bg-red-100 hover:bg-red-200 dark:bg-red-900/40 dark:hover:bg-red-900/60 text-red-700 dark:text-red-300 px-4 py-2 rounded-lg text-sm font-bold transition"
+                                >
+                                    Delete Account
+                                </button>
+                            ) : (
+                                <div className="bg-white dark:bg-[#1f2128] p-4 rounded-xl border border-red-200 dark:border-red-900 shadow-lg">
+                                    <h5 className="font-bold text-red-600 dark:text-red-400 mb-2 flex items-center gap-2">
+                                        <AlertTriangle size={16}/> Confirm Deletion
+                                    </h5>
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+                                        Type <strong>DELETE</strong> below to confirm. This cannot be undone.
+                                    </p>
+                                    <input 
+                                        type="text" 
+                                        className="w-full p-2 border border-red-300 dark:border-red-900 rounded mb-3 text-sm focus:ring-2 focus:ring-red-500 outline-none dark:bg-black/20 dark:text-white"
+                                        placeholder="Type DELETE"
+                                        value={deleteConfirm}
+                                        onChange={(e) => setDeleteConfirm(e.target.value)}
+                                    />
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={handleDeleteAccount} 
+                                            disabled={deleteConfirm !== 'DELETE' || isDeleting}
+                                            className="flex-1 bg-red-600 text-white py-2 rounded font-bold text-xs hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                        >
+                                            {isDeleting ? <Loader2 className="animate-spin" size={14}/> : 'Confirm Delete'}
+                                        </button>
+                                        <button 
+                                            onClick={() => { setShowDeleteModal(false); setDeleteConfirm(''); }}
+                                            className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 py-2 rounded font-bold text-xs hover:opacity-80"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Notifications Tab - Continue in next part due to length */}
+                {activeTab === 'notifications' && (
+                    <div className="space-y-6">
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Bell size={16} className="text-brand-blue"/> General Notifications
+                            </h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.email !== false}
+                                    onChange={() => handleToggle('notifications', 'email')}
+                                    label="Email Notifications"
+                                    icon={Mail}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.push !== false}
+                                    onChange={() => handleToggle('notifications', 'push')}
+                                    label="Push Notifications"
+                                    icon={Bell}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.marketing || false}
+                                    onChange={() => handleToggle('notifications', 'marketing')}
+                                    label="Marketing & Updates"
+                                    icon={Star}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.soundEnabled !== false}
+                                    onChange={() => handleToggle('notifications', 'soundEnabled')}
+                                    label="Sound Notifications"
+                                    icon={Volume2}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.badgeCount !== false}
+                                    onChange={() => handleToggle('notifications', 'badgeCount')}
+                                    label="Badge Count"
+                                    description="Show unread count on app icon"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4">Booking Notifications</h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.booking?.newRequests !== false}
+                                    onChange={() => handleToggle('notifications', 'booking', 'newRequests')}
+                                    label="New Booking Requests"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.booking?.confirmations !== false}
+                                    onChange={() => handleToggle('notifications', 'booking', 'confirmations')}
+                                    label="Booking Confirmations"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.booking?.reminders !== false}
+                                    onChange={() => handleToggle('notifications', 'booking', 'reminders')}
+                                    label="Booking Reminders"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.booking?.cancellations !== false}
+                                    onChange={() => handleToggle('notifications', 'booking', 'cancellations')}
+                                    label="Booking Cancellations"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4">Social Notifications</h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.social?.likes !== false}
+                                    onChange={() => handleToggle('notifications', 'social', 'likes')}
+                                    label="Likes"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.social?.comments !== false}
+                                    onChange={() => handleToggle('notifications', 'social', 'comments')}
+                                    label="Comments"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.social?.follows !== false}
+                                    onChange={() => handleToggle('notifications', 'social', 'follows')}
+                                    label="Follows"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.social?.mentions !== false}
+                                    onChange={() => handleToggle('notifications', 'social', 'mentions')}
+                                    label="Mentions"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.social?.reposts !== false}
+                                    onChange={() => handleToggle('notifications', 'social', 'reposts')}
+                                    label="Reposts"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4">Marketplace Notifications</h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.marketplace?.newOffers !== false}
+                                    onChange={() => handleToggle('notifications', 'marketplace', 'newOffers')}
+                                    label="New Offers"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.marketplace?.sales !== false}
+                                    onChange={() => handleToggle('notifications', 'marketplace', 'sales')}
+                                    label="Sales"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.marketplace?.messages !== false}
+                                    onChange={() => handleToggle('notifications', 'marketplace', 'messages')}
+                                    label="Messages"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="border-b dark:border-gray-700 pb-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4">System Notifications</h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.system?.maintenance !== false}
+                                    onChange={() => handleToggle('notifications', 'system', 'maintenance')}
+                                    label="Maintenance Alerts"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.system?.updates !== false}
+                                    onChange={() => handleToggle('notifications', 'system', 'updates')}
+                                    label="Updates"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.notifications?.system?.security !== false}
+                                    onChange={() => handleToggle('notifications', 'system', 'security')}
+                                    label="Security Alerts"
+                                />
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 className="text-sm font-bold dark:text-white mb-4">Quiet Hours</h4>
+                            <ToggleSwitch
+                                checked={localSettings.notifications?.quietHours?.enabled || false}
+                                onChange={() => handleToggle('notifications', 'quietHours', 'enabled')}
+                                label="Enable Quiet Hours"
+                                description="Disable notifications during specific times"
+                            />
+                            {localSettings.notifications?.quietHours?.enabled && (
+                                <div className="mt-4 grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Start Time</label>
+                                        <input
+                                            type="time"
+                                            className="w-full p-2 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                            value={localSettings.notifications?.quietHours?.start || '22:00'}
+                                            onChange={e => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    notifications: {
+                                                        ...prev.notifications,
+                                                        quietHours: {
+                                                            ...prev.notifications?.quietHours,
+                                                            start: e.target.value
+                                                        }
+                                                    }
+                                                }));
+                                            }}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">End Time</label>
+                                        <input
+                                            type="time"
+                                            className="w-full p-2 text-sm border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                            value={localSettings.notifications?.quietHours?.end || '08:00'}
+                                            onChange={e => {
+                                                setLocalSettings(prev => ({
+                                                    ...prev,
+                                                    notifications: {
+                                                        ...prev.notifications,
+                                                        quietHours: {
+                                                            ...prev.notifications?.quietHours,
+                                                            end: e.target.value
+                                                        }
+                                                    }
+                                                }));
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Messaging Tab */}
+                {activeTab === 'messaging' && (
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <ToggleSwitch
+                                checked={localSettings.messaging?.readReceipts !== false}
+                                onChange={() => handleToggle('messaging', 'readReceipts')}
+                                label="Read Receipts"
+                                description="Show when messages are read"
+                                icon={CheckCircle}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.messaging?.typingIndicators !== false}
+                                onChange={() => handleToggle('messaging', 'typingIndicators')}
+                                label="Typing Indicators"
+                                description="Show when someone is typing"
+                                icon={MessageSquare}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.messaging?.messageRequests || false}
+                                onChange={() => handleToggle('messaging', 'messageRequests')}
+                                label="Message Requests"
+                                description="Require approval for messages from non-contacts"
+                                icon={UserCheck}
+                            />
+                            <SelectField
+                                label="Who Can Message You"
+                                value={localSettings.messaging?.whoCanMessage || 'everyone'}
+                                onChange={val => handleValueChange('messaging', 'whoCanMessage', val)}
+                                options={[
+                                    { value: 'everyone', label: 'Everyone' },
+                                    { value: 'followers', label: 'Followers Only' },
+                                    { value: 'none', label: 'No One' },
+                                ]}
+                                icon={UserX}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.messaging?.autoArchive || false}
+                                onChange={() => handleToggle('messaging', 'autoArchive')}
+                                label="Auto-archive Old Conversations"
+                                description="Automatically archive conversations older than 30 days"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.messaging?.soundNotifications !== false}
+                                onChange={() => handleToggle('messaging', 'soundNotifications')}
+                                label="Sound Notifications for Messages"
+                                icon={Volume2}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.messaging?.previewInNotifications !== false}
+                                onChange={() => handleToggle('messaging', 'previewInNotifications')}
+                                label="Message Preview in Notifications"
+                                description="Show message content in notifications"
+                            />
+                        </div>
+
+                        <ListManager 
+                            title="Muted Threads" 
+                            items={localSettings.messaging?.mutedThreads || []} 
+                            type="mutes" 
+                            icon={VolumeX}
                         />
-                        <div className="flex gap-2">
-                            <button 
-                                onClick={handleDeleteAccount} 
-                                disabled={deleteConfirm !== 'DELETE' || isDeleting}
-                                className="flex-1 bg-red-600 text-white py-2 rounded font-bold text-xs hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        <ListManager 
+                            title="Blocked Contacts" 
+                            items={localSettings.messaging?.blockedContacts || []} 
+                            type="blocks" 
+                            icon={UserX}
+                        />
+                    </div>
+                )}
+
+                {/* Social & Feed Tab */}
+                {activeTab === 'social' && (
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <SelectField
+                                label="Feed Algorithm"
+                                value={localSettings.social?.feedAlgorithm || 'recommended'}
+                                onChange={val => handleValueChange('social', 'feedAlgorithm', val)}
+                                options={[
+                                    { value: 'chronological', label: 'Chronological' },
+                                    { value: 'recommended', label: 'Recommended' },
+                                    { value: 'following', label: 'Following Only' },
+                                ]}
+                                icon={RefreshCw}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.social?.autoPlayVideos !== false}
+                                onChange={() => handleToggle('social', 'autoPlayVideos')}
+                                label="Auto-play Videos in Feed"
+                                icon={Video}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.social?.showSensitiveContentWarning !== false}
+                                onChange={() => handleToggle('social', 'showSensitiveContentWarning')}
+                                label="Show Sensitive Content Warning"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.social?.showActivityStatus !== false}
+                                onChange={() => handleToggle('social', 'showActivityStatus')}
+                                label="Show Activity Status"
+                                description="Let others see when you're active"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.social?.showSuggestedAccounts !== false}
+                                onChange={() => handleToggle('social', 'showSuggestedAccounts')}
+                                label="Show Suggested Accounts"
+                            />
+                        </div>
+
+                        <div className="border-t dark:border-gray-700 pt-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4">Content Filtering</h4>
+                            <div className="space-y-3">
+                                <SelectField
+                                    label="Sensitivity Filter"
+                                    value={localSettings.contentFiltering?.sensitivityFilter || 'medium'}
+                                    onChange={val => handleValueChange('contentFiltering', 'sensitivityFilter', val)}
+                                    options={[
+                                        { value: 'off', label: 'Off' },
+                                        { value: 'low', label: 'Low' },
+                                        { value: 'medium', label: 'Medium' },
+                                        { value: 'high', label: 'High' },
+                                    ]}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.contentFiltering?.autoHideReported !== false}
+                                    onChange={() => handleToggle('contentFiltering', 'autoHideReported')}
+                                    label="Auto-hide Reported Content"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.contentFiltering?.showAgeRestricted || false}
+                                    onChange={() => handleToggle('contentFiltering', 'showAgeRestricted')}
+                                    label="Show Age-Restricted Content"
+                                />
+                            </div>
+                        </div>
+
+                        <ListManager 
+                            title="Muted Users" 
+                            items={localSettings.social?.mutedUsers || []} 
+                            type="mutes" 
+                            icon={VolumeX}
+                        />
+                        <ListManager 
+                            title="Blocked Users" 
+                            items={localSettings.social?.blockedUsers || []} 
+                            type="blocks" 
+                            icon={UserX}
+                        />
+                    </div>
+                )}
+
+                {/* Bookings Tab */}
+                {activeTab === 'bookings' && (
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <ToggleSwitch
+                                checked={localSettings.bookings?.autoAccept || false}
+                                onChange={() => handleToggle('bookings', 'autoAccept')}
+                                label="Auto-accept Bookings"
+                                description="Automatically accept bookings that meet your criteria"
+                            />
+                            <NumberInput
+                                label="Default Buffer Time"
+                                value={localSettings.bookings?.defaultBufferTime || 15}
+                                onChange={val => handleValueChange('bookings', 'defaultBufferTime', val)}
+                                min={0}
+                                max={120}
+                                unit="minutes"
+                                icon={Clock}
+                                description="Time between sessions"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.bookings?.showAvailabilityPublicly || false}
+                                onChange={() => handleToggle('bookings', 'showAvailabilityPublicly')}
+                                label="Show Availability Calendar Publicly"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.bookings?.requireDeposit || false}
+                                onChange={() => handleToggle('bookings', 'requireDeposit')}
+                                label="Require Deposit for Bookings"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.bookings?.autoDeclineExpired !== false}
+                                onChange={() => handleToggle('bookings', 'autoDeclineExpired')}
+                                label="Auto-decline Expired Booking Requests"
+                            />
+                            <NumberInput
+                                label="Default Session Duration"
+                                value={localSettings.bookings?.defaultSessionDuration || 60}
+                                onChange={val => handleValueChange('bookings', 'defaultSessionDuration', val)}
+                                min={15}
+                                max={480}
+                                unit="minutes"
+                                icon={Clock}
+                            />
+                        </div>
+
+                        <div className="border-t dark:border-gray-700 pt-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4">Booking Notifications</h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.bookings?.notifications?.newRequests !== false}
+                                    onChange={() => handleToggle('bookings', 'notifications', 'newRequests')}
+                                    label="New Booking Requests"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.bookings?.notifications?.confirmations !== false}
+                                    onChange={() => handleToggle('bookings', 'notifications', 'confirmations')}
+                                    label="Booking Confirmations"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.bookings?.notifications?.reminders !== false}
+                                    onChange={() => handleToggle('bookings', 'notifications', 'reminders')}
+                                    label="Booking Reminders"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.bookings?.notifications?.cancellations !== false}
+                                    onChange={() => handleToggle('bookings', 'notifications', 'cancellations')}
+                                    label="Booking Cancellations"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Marketplace Tab */}
+                {activeTab === 'marketplace' && (
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <ToggleSwitch
+                                checked={localSettings.marketplace?.autoListItems || false}
+                                onChange={() => handleToggle('marketplace', 'autoListItems')}
+                                label="Auto-list Items"
+                                description="Automatically list items for sale"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.marketplace?.requireApproval !== false}
+                                onChange={() => handleToggle('marketplace', 'requireApproval')}
+                                label="Require Approval"
+                                description="Review items before they go live"
+                            />
+                            <SelectField
+                                label="Default Shipping Method"
+                                value={localSettings.marketplace?.defaultShippingMethod || 'standard'}
+                                onChange={val => handleValueChange('marketplace', 'defaultShippingMethod', val)}
+                                options={['standard', 'express', 'overnight', 'pickup']}
+                            />
+                            <SelectField
+                                label="Default Payment Terms"
+                                value={localSettings.marketplace?.defaultPaymentTerms || 'immediate'}
+                                onChange={val => handleValueChange('marketplace', 'defaultPaymentTerms', val)}
+                                options={[
+                                    { value: 'immediate', label: 'Immediate' },
+                                    { value: 'net15', label: 'Net 15' },
+                                    { value: 'net30', label: 'Net 30' },
+                                ]}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.marketplace?.autoAcceptOffersAbove || false}
+                                onChange={() => handleToggle('marketplace', 'autoAcceptOffersAbove')}
+                                label="Auto-accept Offers Above Threshold"
+                            />
+                            {localSettings.marketplace?.autoAcceptOffersAbove && (
+                                <NumberInput
+                                    label="Auto-accept Threshold"
+                                    value={localSettings.marketplace?.autoAcceptThreshold || 0}
+                                    onChange={val => handleValueChange('marketplace', 'autoAcceptThreshold', val)}
+                                    min={0}
+                                    unit="$"
+                                    icon={DollarSign}
+                                />
+                            )}
+                            <ToggleSwitch
+                                checked={localSettings.marketplace?.showSoldItems !== false}
+                                onChange={() => handleToggle('marketplace', 'showSoldItems')}
+                                label="Show Sold Items in Listings"
+                            />
+                        </div>
+
+                        <div className="border-t dark:border-gray-700 pt-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4">Marketplace Notifications</h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.marketplace?.notifications?.newOffers !== false}
+                                    onChange={() => handleToggle('marketplace', 'notifications', 'newOffers')}
+                                    label="New Offers"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.marketplace?.notifications?.sales !== false}
+                                    onChange={() => handleToggle('marketplace', 'notifications', 'sales')}
+                                    label="Sales"
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.marketplace?.notifications?.messages !== false}
+                                    onChange={() => handleToggle('marketplace', 'notifications', 'messages')}
+                                    label="Messages"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Content & Media Tab */}
+                {activeTab === 'content' && (
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <SelectField
+                                label="Image Quality"
+                                value={localSettings.content?.imageQuality || 'high'}
+                                onChange={val => handleValueChange('content', 'imageQuality', val)}
+                                options={[
+                                    { value: 'high', label: 'High' },
+                                    { value: 'medium', label: 'Medium' },
+                                    { value: 'low', label: 'Low (Faster Loading)' },
+                                ]}
+                                icon={Image}
+                            />
+                            <SelectField
+                                label="Video Quality"
+                                value={localSettings.content?.videoQuality || 'high'}
+                                onChange={val => handleValueChange('content', 'videoQuality', val)}
+                                options={[
+                                    { value: 'high', label: 'High' },
+                                    { value: 'medium', label: 'Medium' },
+                                    { value: 'low', label: 'Low (Faster Loading)' },
+                                ]}
+                                icon={Video}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.content?.autoSaveUploaded !== false}
+                                onChange={() => handleToggle('content', 'autoSaveUploaded')}
+                                label="Auto-save Uploaded Media"
+                                description="Automatically save uploaded images and videos"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.content?.compressImages !== false}
+                                onChange={() => handleToggle('content', 'compressImages')}
+                                label="Compress Images Before Upload"
+                                description="Reduce file size for faster uploads"
+                            />
+                            <NumberInput
+                                label="Maximum Upload Size"
+                                value={localSettings.content?.maxUploadSize || 10}
+                                onChange={val => handleValueChange('content', 'maxUploadSize', val)}
+                                min={1}
+                                max={100}
+                                unit="MB"
+                                icon={FileText}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Accessibility Tab */}
+                {activeTab === 'accessibility' && (
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <SelectField
+                                label="Font Size"
+                                value={localSettings.accessibility?.fontSize || 'medium'}
+                                onChange={val => handleValueChange('accessibility', 'fontSize', val)}
+                                options={[
+                                    { value: 'small', label: 'Small' },
+                                    { value: 'medium', label: 'Medium' },
+                                    { value: 'large', label: 'Large' },
+                                    { value: 'xlarge', label: 'Extra Large' },
+                                ]}
+                                icon={FileText}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.accessibility?.reducedMotion || false}
+                                onChange={() => handleToggle('accessibility', 'reducedMotion')}
+                                label="Reduced Motion"
+                                description="Disable animations for better accessibility"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.accessibility?.highContrast || false}
+                                onChange={() => handleToggle('accessibility', 'highContrast')}
+                                label="High Contrast Mode"
+                                description="Increase contrast for better visibility"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.accessibility?.screenReaderAnnouncements !== false}
+                                onChange={() => handleToggle('accessibility', 'screenReaderAnnouncements')}
+                                label="Screen Reader Announcements"
+                                description="Enable announcements for screen readers"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.accessibility?.keyboardHints !== false}
+                                onChange={() => handleToggle('accessibility', 'keyboardHints')}
+                                label="Keyboard Navigation Hints"
+                                description="Show hints for keyboard navigation"
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {/* Performance Tab */}
+                {activeTab === 'performance' && (
+                    <div className="space-y-6">
+                        <div className="space-y-3">
+                            <SelectField
+                                label="Data Usage"
+                                value={localSettings.performance?.dataUsage || 'auto'}
+                                onChange={val => handleValueChange('performance', 'dataUsage', val)}
+                                options={[
+                                    { value: 'wifi-only', label: 'WiFi Only (for media)' },
+                                    { value: 'auto', label: 'Auto' },
+                                    { value: 'never', label: 'Never (save data)' },
+                                ]}
+                                icon={Wifi}
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.performance?.offlineMode || false}
+                                onChange={() => handleToggle('performance', 'offlineMode')}
+                                label="Offline Mode"
+                                description="Enable offline functionality"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.performance?.backgroundSync !== false}
+                                onChange={() => handleToggle('performance', 'backgroundSync')}
+                                label="Background Sync"
+                                description="Sync data in the background"
+                            />
+                            <ToggleSwitch
+                                checked={localSettings.performance?.autoClearOldNotifications !== false}
+                                onChange={() => handleToggle('performance', 'autoClearOldNotifications')}
+                                label="Auto-clear Old Notifications"
+                            />
+                            {localSettings.performance?.autoClearOldNotifications && (
+                                <NumberInput
+                                    label="Clear After"
+                                    value={localSettings.performance?.autoClearAfterDays || 30}
+                                    onChange={val => handleValueChange('performance', 'autoClearAfterDays', val)}
+                                    min={1}
+                                    max={365}
+                                    unit="days"
+                                    icon={Clock}
+                                />
+                            )}
+                        </div>
+
+                        <div className="border-t dark:border-gray-700 pt-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4">Cache Management</h4>
+                            <button
+                                onClick={clearCache}
+                                className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-200 transition"
                             >
-                                {isDeleting ? <Loader2 className="animate-spin" size={14}/> : 'Confirm Delete'}
+                                <HardDrive size={16} />
+                                Clear Cache
                             </button>
-                            <button 
-                                onClick={() => { setShowDeleteModal(false); setDeleteConfirm(''); }}
-                                className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 py-2 rounded font-bold text-xs hover:opacity-80"
-                            >
-                                Cancel
-                            </button>
+                            <p className="text-xs text-gray-500 mt-2">Clear cached data to free up storage space</p>
                         </div>
                     </div>
                 )}
             </div>
 
-            {/* --- SECURITY MODAL --- */}
+            {/* Security Modal */}
             {showSecurityModal && (
                 <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-[#2c2e36] w-full max-w-md rounded-xl p-6 shadow-2xl animate-in zoom-in-95 border dark:border-gray-700">
@@ -659,7 +1713,6 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                         </div>
 
                         <div className="space-y-4">
-                            {/* Current Password Field (Always Required) */}
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Current Password (Required)</label>
                                 <input 
@@ -671,7 +1724,6 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                 />
                             </div>
 
-                            {/* Dynamic Field based on Action */}
                             {securityAction === 'email' ? (
                                 <div>
                                     <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">New Email Address</label>
