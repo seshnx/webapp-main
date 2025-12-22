@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { ACCOUNT_TYPES } from '../config/constants';
+import { useSettings } from '../hooks/useSettings';
 
 // Roles that should never be shown in account settings (managed through other systems)
 const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
@@ -219,7 +220,10 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         }
     }, [userData?.activeProfileRole]);
 
-    // Generic Toggle Handler
+    // Apply settings immediately when they change
+    useSettings(localSettings, userData);
+
+    // Generic Toggle Handler - applies immediately
     const handleToggle = (category, key, subKey = null) => {
         setLocalSettings(prev => {
             const updated = { ...prev };
@@ -239,7 +243,22 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             } else {
                 updated[key] = !prev[key];
             }
+            // Apply immediately and save
             onUpdate(updated);
+            // Auto-save to database
+            if (supabase && user?.id) {
+                supabase
+                    .from('profiles')
+                    .update({
+                        settings: updated,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', user.id)
+                    .then(() => {
+                        // Silently saved
+                    })
+                    .catch(err => console.error('Auto-save failed:', err));
+            }
             return updated;
         });
     };
@@ -263,7 +282,22 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             } else {
                 updated[key] = value;
             }
+            // Apply immediately and save
             onUpdate(updated);
+            // Auto-save to database
+            if (supabase && user?.id) {
+                supabase
+                    .from('profiles')
+                    .update({
+                        settings: updated,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', user.id)
+                    .then(() => {
+                        // Silently saved
+                    })
+                    .catch(err => console.error('Auto-save failed:', err));
+            }
             return updated;
         });
     };

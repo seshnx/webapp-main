@@ -361,3 +361,73 @@ body {
     font-size: 16px; /* Prevents zoom on focus */
   }
 }
+
+/* Accessibility Features */
+/* Reduced Motion */
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* High Contrast Mode */
+.high-contrast {
+  --contrast-bg: #000000;
+  --contrast-text: #ffffff;
+  --contrast-border: #ffffff;
+}
+
+.high-contrast body {
+  background: var(--contrast-bg) !important;
+  color: var(--contrast-text) !important;
+}
+
+.high-contrast button,
+.high-contrast a {
+  border: 2px solid var(--contrast-border) !important;
+}
+
+.high-contrast input,
+.high-contrast select,
+.high-contrast textarea {
+  border: 2px solid var(--contrast-border) !important;
+  background: var(--contrast-bg) !important;
+  color: var(--contrast-text) !important;
+}
+
+/* Font Size Overrides */
+html[style*="font-size: 14px"] {
+  font-size: 14px !important;
+}
+
+html[style*="font-size: 16px"] {
+  font-size: 16px !important;
+}
+
+html[style*="font-size: 18px"] {
+  font-size: 18px !important;
+}
+
+html[style*="font-size: 20px"] {
+  font-size: 20px !important;
+}
+
+/* Font Size Classes */
+.font-size-small {
+  font-size: 14px !important;
+}
+
+.font-size-medium {
+  font-size: 16px !important;
+}
+
+.font-size-large {
+  font-size: 18px !important;
+}
+
+.font-size-xlarge {
+  font-size: 20px !important;
+}

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from './config/supabase'; 
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
+import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
 
 // Lazy load components to avoid initialization order issues
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
@@ -22,7 +23,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Dark Mode
+  // Dark Mode - now synced with user settings
   const [darkMode, setDarkMode] = useState(() => {
     if (typeof window !== 'undefined') {
         return localStorage.getItem('theme') === 'dark' ||
@@ -30,6 +31,93 @@ export default function App() {
     }
     return false;
   });
+
+  // Initialize settings from storage on mount
+  useEffect(() => {
+    const storedSettings = initializeSettingsFromStorage();
+    if (storedSettings) {
+      // Apply stored settings immediately
+      const root = document.documentElement;
+      
+      // Apply theme
+      if (storedSettings.theme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (prefersDark) {
+          root.classList.add('dark');
+          setDarkMode(true);
+        } else {
+          root.classList.remove('dark');
+          setDarkMode(false);
+        }
+      } else if (storedSettings.theme === 'dark') {
+        root.classList.add('dark');
+        setDarkMode(true);
+      } else {
+        root.classList.remove('dark');
+        setDarkMode(false);
+      }
+    }
+  }, []);
+
+  // Apply settings from userData when it loads
+  useEffect(() => {
+    if (userData?.settings) {
+      const settings = userData.settings;
+      const root = document.documentElement;
+      
+      // Apply theme
+      if (settings.theme) {
+        if (settings.theme === 'system') {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (prefersDark) {
+            root.classList.add('dark');
+            setDarkMode(true);
+          } else {
+            root.classList.remove('dark');
+            setDarkMode(false);
+          }
+        } else if (settings.theme === 'dark') {
+          root.classList.add('dark');
+          setDarkMode(true);
+        } else {
+          root.classList.remove('dark');
+          setDarkMode(false);
+        }
+      }
+      
+      // Apply font size
+      if (settings.accessibility?.fontSize) {
+        const fontSizes = {
+          small: '14px',
+          medium: '16px',
+          large: '18px',
+          xlarge: '20px',
+        };
+        root.style.fontSize = fontSizes[settings.accessibility.fontSize] || fontSizes.medium;
+      }
+      
+      // Apply reduced motion
+      if (settings.accessibility?.reducedMotion) {
+        root.classList.add('reduce-motion');
+        root.style.setProperty('--motion-duration', '0s');
+      } else {
+        root.classList.remove('reduce-motion');
+        root.style.removeProperty('--motion-duration');
+      }
+      
+      // Apply high contrast
+      if (settings.accessibility?.highContrast) {
+        root.classList.add('high-contrast');
+      } else {
+        root.classList.remove('high-contrast');
+      }
+      
+      // Apply language
+      if (settings.language) {
+        document.documentElement.lang = settings.language;
+      }
+    }
+  }, [userData?.settings]);
 
   useEffect(() => {
     if (darkMode) {

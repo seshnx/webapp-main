@@ -32,7 +32,8 @@ export default function PostCard({
     openPublicProfile, 
     onReport,
     isFollowingAuthor,
-    onToggleFollow 
+    onToggleFollow,
+    autoPlayVideos = false
 }) {
     const [showComments, setShowComments] = useState(false);
     const [commentCount, setCommentCount] = useState(post.commentCount || 0); 
@@ -403,7 +404,17 @@ export default function PostCard({
                         {post.attachments.map((att, i) => (
                             <div key={i} className="rounded-lg overflow-hidden bg-transparent relative">
                                 {att.type === 'image' && <img src={att.url} className="w-full h-full object-cover max-h-96" alt="content"/>}
-                                {att.type === 'video' && <video src={att.url} controls className="w-full h-full max-h-96 bg-black"/>} 
+                                {att.type === 'video' && (
+                                    <video 
+                                        src={att.url} 
+                                        controls 
+                                        className="w-full h-full max-h-96 bg-black"
+                                        autoPlay={autoPlayVideos}
+                                        playsInline
+                                        muted={autoPlayVideos}
+                                        preload="metadata"
+                                    />
+                                )} 
                                 {att.type === 'audio' && (
                                     <div className="w-full">
                                         <StarFieldVisualizer audioUrl={att.url} fileName={att.name || 'Audio Track'} />

@@ -25,6 +25,11 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
     const [feedMode, setFeedMode] = useState(FEED_MODES.FOR_YOU);
     const [suggestedUsers, setSuggestedUsers] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    
+    // Get feed algorithm from settings
+    const feedAlgorithm = userData?.settings?.social?.feedAlgorithm || 'recommended';
+    const autoPlayVideos = userData?.settings?.social?.autoPlayVideos !== false;
+    const showSuggestedAccounts = userData?.settings?.social?.showSuggestedAccounts !== false;
 
     // Use the follow system hook
     const userId = user?.id || user?.uid;
@@ -158,6 +163,27 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                 reactionCount: post.reaction_count || 0,
                 saveCount: post.save_count || 0
             }));
+            
+            // Apply feed algorithm based on settings (only for "For You" feed)
+            if (feedMode === FEED_MODES.FOR_YOU) {
+                if (feedAlgorithm === 'following') {
+                    // Show only following posts
+                    if (followingIds.length > 0) {
+                        newPosts = newPosts.filter(p => followingIds.includes(p.userId));
+                    } else {
+                        newPosts = [];
+                    }
+                } else if (feedAlgorithm === 'chronological') {
+                    // Already sorted by created_at desc, no changes needed
+                } else {
+                    // Recommended algorithm (default) - prioritize posts with more engagement
+                    newPosts.sort((a, b) => {
+                        const aScore = (a.reactionCount || 0) * 2 + (a.commentCount || 0) * 3 + (a.saveCount || 0);
+                        const bScore = (b.reactionCount || 0) * 2 + (b.commentCount || 0) * 3 + (b.saveCount || 0);
+                        return bScore - aScore;
+                    });
+                }
+            }
             
             // Client-side filtering for Following feed
             if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
@@ -377,37 +403,41 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                                 </p>
                             </div>
 
-                            {/* Suggested users */}
-                            {loadingSuggestions ? (
-                                <div className="space-y-2">
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                                        Suggested for you
-                                    </h4>
-                                    {[1, 2, 3].map(i => (
-                                        <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 animate-pulse">
-                                            <div className="flex items-center gap-3 flex-1">
-                                                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700" />
-                                                <div className="flex-1 space-y-2">
-                                                    <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
-                                                    <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
+                            {/* Suggested users - only show if setting is enabled */}
+                            {showSuggestedAccounts && (
+                                <>
+                                    {loadingSuggestions ? (
+                                        <div className="space-y-2">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                                                Suggested for you
+                                            </h4>
+                                            {[1, 2, 3].map(i => (
+                                                <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 animate-pulse">
+                                                    <div className="flex items-center gap-3 flex-1">
+                                                        <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700" />
+                                                        <div className="flex-1 space-y-2">
+                                                            <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+                                                            <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="h-8 w-20 bg-gray-200 dark:bg-gray-700 rounded-lg" />
                                                 </div>
-                                            </div>
-                                            <div className="h-8 w-20 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+                                            ))}
                                         </div>
-                                    ))}
-                                </div>
-                            ) : suggestedUsers.length > 0 && (
-                                <div className="space-y-2">
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                                        Suggested for you
-                                    </h4>
-                                    {suggestedUsers.map(suggestedUser => (
-                                        <SuggestedUserCard 
-                                            key={suggestedUser.userId} 
-                                            suggestedUser={suggestedUser} 
-                                        />
-                                    ))}
-                                </div>
+                                    ) : suggestedUsers.length > 0 && (
+                                        <div className="space-y-2">
+                                            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                                                Suggested for you
+                                            </h4>
+                                            {suggestedUsers.map(suggestedUser => (
+                                                <SuggestedUserCard 
+                                                    key={suggestedUser.userId} 
+                                                    suggestedUser={suggestedUser} 
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </motion.div>
                     )}
@@ -434,6 +464,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                                         photoURL: post.authorPhoto,
                                         role: post.role
                                     })}
+                                    autoPlayVideos={autoPlayVideos}
                                 />
                             ))}
                         </AnimatePresence>
