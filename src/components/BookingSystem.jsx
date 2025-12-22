@@ -1,17 +1,26 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Clock, User, MapPin, DollarSign, MessageSquare, CheckCircle, XCircle, AlertCircle, Loader2, Filter } from 'lucide-react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
+import { Calendar, Clock, User, MapPin, DollarSign, MessageSquare, CheckCircle, XCircle, AlertCircle, Loader2, Filter, Search, Plus } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import BookingCalendar from './shared/BookingCalendar';
 import SessionDetailsModal from './SessionDetailsModal';
 import UserAvatar from './shared/UserAvatar';
 
-export default function BookingSystem({ user, userData, subProfiles }) {
-    const [activeTab, setActiveTab] = useState('my-bookings'); // 'my-bookings' or 'calendar'
+// Lazy load the missing modules
+const TalentSearch = lazy(() => import('./TalentSearch'));
+const SessionBuilderModal = lazy(() => import('./SessionBuilderModal'));
+const SessionWizard = lazy(() => import('./SessionWizard'));
+
+export default function BookingSystem({ user, userData, subProfiles, openPublicProfile }) {
+    const [activeTab, setActiveTab] = useState('my-bookings'); // 'my-bookings', 'calendar', 'find-talent', or 'session-builder'
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'pending', 'confirmed', 'completed', 'cancelled'
     const [filterType, setFilterType] = useState('all'); // 'all', 'sent', 'received'
+    const [showSessionBuilder, setShowSessionBuilder] = useState(false);
+    const [sessionCart, setSessionCart] = useState([]);
+    const [sessionParams, setSessionParams] = useState(null);
+    const [showSessionWizard, setShowSessionWizard] = useState(false);
     
     const isStudioManager = userData?.accountTypes?.includes('Studio');
     
@@ -189,6 +198,16 @@ export default function BookingSystem({ user, userData, subProfiles }) {
                         Manage your sessions and bookings
                     </p>
                 </div>
+                <button
+                    onClick={() => {
+                        setShowSessionWizard(true);
+                        setActiveTab('session-builder');
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                    <Plus size={18} />
+                    New Session
+                </button>
             </div>
             
             {/* Tabs */}
@@ -212,6 +231,17 @@ export default function BookingSystem({ user, userData, subProfiles }) {
                     }`}
                 >
                     Calendar View
+                </button>
+                <button
+                    onClick={() => setActiveTab('find-talent')}
+                    className={`px-4 py-2 font-medium text-sm transition-colors ${
+                        activeTab === 'find-talent'
+                            ? 'border-b-2 border-brand-blue text-brand-blue'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                >
+                    <Search size={16} className="inline mr-1" />
+                    Find Talent
                 </button>
             </div>
             
@@ -384,6 +414,44 @@ export default function BookingSystem({ user, userData, subProfiles }) {
                 </div>
             )}
             
+            {/* Find Talent Tab */}
+            {activeTab === 'find-talent' && (
+                <div className="flex-1 overflow-y-auto">
+                    <Suspense fallback={
+                        <div className="flex items-center justify-center h-64">
+                            <Loader2 className="animate-spin text-brand-blue" size={32} />
+                        </div>
+                    }>
+                        <TalentSearch
+                            user={user}
+                            userData={userData}
+                            openPublicProfile={openPublicProfile || (() => {})}
+                        />
+                    </Suspense>
+                </div>
+            )}
+            
+            {/* Session Builder Tab */}
+            {activeTab === 'session-builder' && showSessionWizard && (
+                <div className="flex-1 overflow-y-auto">
+                    <Suspense fallback={
+                        <div className="flex items-center justify-center h-64">
+                            <Loader2 className="animate-spin text-brand-blue" size={32} />
+                        </div>
+                    }>
+                        <SessionWizard
+                            userData={userData}
+                            sessionParams={sessionParams}
+                            setSessionParams={setSessionParams}
+                            onNext={() => {
+                                setShowSessionWizard(false);
+                                setShowSessionBuilder(true);
+                            }}
+                        />
+                    </Suspense>
+                </div>
+            )}
+            
             {/* Booking Details Modal */}
             {selectedBooking && (
                 <SessionDetailsModal
@@ -400,6 +468,31 @@ export default function BookingSystem({ user, userData, subProfiles }) {
                     }}
                     onClose={() => setSelectedBooking(null)}
                 />
+            )}
+            
+            {/* Session Builder Modal */}
+            {showSessionBuilder && (
+                <Suspense fallback={null}>
+                    <SessionBuilderModal
+                        user={user}
+                        userData={userData}
+                        cart={sessionCart}
+                        onRemoveFromCart={(index) => {
+                            setSessionCart(prev => prev.filter((_, i) => i !== index));
+                        }}
+                        onClose={() => {
+                            setShowSessionBuilder(false);
+                            setActiveTab('my-bookings');
+                        }}
+                        onComplete={() => {
+                            setShowSessionBuilder(false);
+                            setSessionCart([]);
+                            setActiveTab('my-bookings');
+                            // Reload bookings
+                            window.location.reload();
+                        }}
+                    />
+                </Suspense>
             )}
         </div>
     );

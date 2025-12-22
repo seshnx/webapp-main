@@ -350,6 +350,7 @@ export default function MainLayout({
               user={user}
               userData={userData}
               subProfiles={subProfiles}
+              openPublicProfile={openPublicProfile}
             />
           </Suspense>
         );
