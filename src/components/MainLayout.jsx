@@ -126,6 +126,7 @@ export default function MainLayout({
     'studio-ops': ['Dashboard', 'Studio Ops'],
   };
 
+  // Only show breadcrumbs when there is a hierarchy (e.g., Dashboard / X), not just "Dashboard"
   const breadcrumbs = breadcrumbMap[activeTab] || ['Dashboard'];
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subProfiles, setSubProfiles] = useState({});
@@ -543,19 +544,21 @@ export default function MainLayout({
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto pb-16 lg:pb-0 px-fluid pt-4">
-          {/* Breadcrumbs */}
-          <nav className="mb-3 text-sm text-gray-500 dark:text-gray-400" aria-label="Breadcrumb">
-            <ol className="flex items-center gap-2 flex-wrap">
-              {breadcrumbs.map((crumb, idx) => (
-                <li key={crumb} className="flex items-center gap-2">
-                  <span className={idx === breadcrumbs.length - 1 ? 'font-semibold text-gray-700 dark:text-gray-200' : ''}>
-                    {crumb}
-                  </span>
-                  {idx < breadcrumbs.length - 1 && <span className="text-gray-400">/</span>}
-                </li>
-              ))}
-            </ol>
-          </nav>
+          {/* Breadcrumbs - desktop only and only when we have more than one level */}
+          {breadcrumbs.length > 1 && (
+            <nav className="mb-3 text-xs text-gray-500 dark:text-gray-400 hidden md:block" aria-label="Breadcrumb">
+              <ol className="flex items-center gap-2 flex-wrap">
+                {breadcrumbs.map((crumb, idx) => (
+                  <li key={crumb} className="flex items-center gap-2">
+                    <span className={idx === breadcrumbs.length - 1 ? 'font-semibold text-gray-700 dark:text-gray-200' : ''}>
+                      {crumb}
+                    </span>
+                    {idx < breadcrumbs.length - 1 && <span className="text-gray-400">/</span>}
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )}
 
           {renderContent()}
         </main>
