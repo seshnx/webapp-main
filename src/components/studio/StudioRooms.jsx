@@ -6,13 +6,18 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
+import { useLanguage } from '../../contexts/LanguageContext';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import FloorplanEditor from './FloorplanEditor';
+import Panorama360Viewer from './Panorama360Viewer';
+import { useImageUpload } from '../../hooks/useImageUpload';
+import { Image as ImageIcon, Upload, X } from 'lucide-react';
 
 /**
  * StudioRooms - Complete room management interface
  */
 export default function StudioRooms({ user, userData, onUpdate }) {
+    const { t } = useLanguage();
     const [rooms, setRooms] = useState(userData?.rooms || []);
     const [walls, setWalls] = useState(userData?.floorplanWalls || []);
     const [structures, setStructures] = useState(userData?.floorplanStructures || []);
@@ -31,7 +36,8 @@ export default function StudioRooms({ user, userData, onUpdate }) {
         amenities: [],
         minBookingHours: 1,
         active: true,
-        color: '#3B82F6'
+        color: '#3B82F6',
+        panorama360Url: null // 360-degree image URL
     };
 
     const handleSave = async (updatedRooms, updatedWalls = walls, updatedStructures = structures) => {
@@ -225,15 +231,16 @@ export default function StudioRooms({ user, userData, onUpdate }) {
 
             {/* Add New Room Form */}
             {isAdding && editingRoom && (
-                <RoomEditor
-                    room={editingRoom}
-                    setRoom={setEditingRoom}
-                    onSave={handleSaveRoom}
-                    onCancel={handleCancelEdit}
-                    saving={saving}
-                    isNew={true}
-                    roomAmenities={ROOM_AMENITIES}
-                />
+                                    <RoomEditor
+                                        room={editingRoom}
+                                        setRoom={setEditingRoom}
+                                        onSave={handleSaveRoom}
+                                        onCancel={handleCancelEdit}
+                                        saving={saving}
+                                        isNew={true}
+                                        roomAmenities={ROOM_AMENITIES}
+                                        user={user}
+                                    />
             )}
 
             {/* Floorplan View */}
@@ -350,6 +357,7 @@ export default function StudioRooms({ user, userData, onUpdate }) {
                                         saving={saving}
                                         isNew={false}
                                         roomAmenities={ROOM_AMENITIES}
+                                        user={user}
                                     />
                                 </div>
                             )}
@@ -383,7 +391,11 @@ export default function StudioRooms({ user, userData, onUpdate }) {
 /**
  * RoomEditor - Form for editing room details
  */
-function RoomEditor({ room, setRoom, onSave, onCancel, saving, isNew, roomAmenities }) {
+function RoomEditor({ room, setRoom, onSave, onCancel, saving, isNew, roomAmenities, user }) {
+    const { uploadImage, uploading } = useImageUpload();
+    const [show360Viewer, setShow360Viewer] = React.useState(false);
+    const fileInputRef = React.useRef(null);
+
     const handleAmenityToggle = (amenity) => {
         const current = room.amenities || [];
         if (current.includes(amenity)) {
@@ -391,6 +403,46 @@ function RoomEditor({ room, setRoom, onSave, onCancel, saving, isNew, roomAmenit
         } else {
             setRoom({ ...room, amenities: [...current, amenity] });
         }
+    };
+
+    const handle360ImageUpload = async (e) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Validate file type (equirectangular 360 images)
+        const validTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+        if (!validTypes.includes(file.type)) {
+            toast.error('Please upload a JPEG or PNG image');
+            return;
+        }
+
+        // Validate file size (max 20MB for 360 images)
+        if (file.size > 20 * 1024 * 1024) {
+            toast.error('Image size must be less than 20MB');
+            return;
+        }
+
+        const userId = user?.id || user?.uid || 'temp';
+        const path = `studio-rooms/${userId}/360-images`;
+        
+        const toastId = toast.loading('Uploading 360° image...');
+        
+        try {
+            const url = await uploadImage(file, path);
+            if (url) {
+                setRoom({ ...room, panorama360Url: url });
+                toast.success('360° image uploaded successfully!', { id: toastId });
+            } else {
+                toast.error('Upload failed', { id: toastId });
+            }
+        } catch (error) {
+            console.error('360 image upload error:', error);
+            toast.error('Failed to upload image', { id: toastId });
+        }
+    };
+
+    const handleRemove360Image = () => {
+        setRoom({ ...room, panorama360Url: null });
     };
 
     return (
@@ -510,6 +562,64 @@ function RoomEditor({ room, setRoom, onSave, onCancel, saving, isNew, roomAmenit
                             {amenity}
                         </button>
                     ))}
+                </div>
+            </div>
+
+            {/* 360° Image Section */}
+            <div>
+                <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">360° Panorama Image</label>
+                <div className="space-y-3">
+                    {room.panorama360Url ? (
+                        <div className="relative">
+                            <Panorama360Viewer 
+                                imageUrl={room.panorama360Url} 
+                                title={room.name || 'Room View'}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleRemove360Image}
+                                className="absolute top-3 right-3 p-2 bg-red-500 hover:bg-red-600 text-white rounded-lg shadow-lg transition z-20"
+                                title="Remove 360° image"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+                    ) : (
+                        <div className="border-2 border-dashed dark:border-gray-600 rounded-xl p-8 text-center bg-white dark:bg-[#2c2e36]">
+                            <ImageIcon size={48} className="mx-auto mb-3 text-gray-400" />
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                                Upload a 360° equirectangular panorama image
+                            </p>
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/jpeg,image/jpg,image/png"
+                                onChange={handle360ImageUpload}
+                                className="hidden"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => fileInputRef.current?.click()}
+                                disabled={uploading}
+                                className="px-4 py-2 bg-brand-blue text-white rounded-lg font-medium hover:bg-blue-600 transition flex items-center gap-2 mx-auto disabled:opacity-50"
+                            >
+                                {uploading ? (
+                                    <>
+                                        <Loader2 className="animate-spin" size={18} />
+                                        Uploading...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Upload size={18} />
+                                        Upload 360° Image
+                                    </>
+                                )}
+                            </button>
+                            <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+                                Supports JPEG/PNG • Max 20MB • Equirectangular format recommended
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
 
