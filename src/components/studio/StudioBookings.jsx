@@ -6,7 +6,17 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
-import { notifyBookingStatusChange, checkBookingConflicts, validateStatusTransition } from '../../utils/bookingNotifications';
+import { 
+    notifyBookingStatusChange, 
+    checkBookingConflicts, 
+    validateStatusTransition,
+    trackBookingHistory,
+    calculateCancellationFee,
+    canCancelBooking
+} from '../../utils/bookingNotifications';
+import { scheduleBookingReminder } from '../../utils/bookingReminders';
+import RecurringBookingModal from './RecurringBookingModal';
+import MultiRoomBookingModal from './MultiRoomBookingModal';
 
 const STATUS_CONFIG = {
     pending: { 
@@ -54,6 +64,10 @@ export default function StudioBookings({ user, onNavigateToChat }) {
     const [blockTimeSlot, setBlockTimeSlot] = useState('full'); // 'full', 'morning', 'afternoon', 'evening', 'custom'
     const [customStartTime, setCustomStartTime] = useState('09:00');
     const [customEndTime, setCustomEndTime] = useState('17:00');
+    const [showRecurringModal, setShowRecurringModal] = useState(false);
+    const [showMultiRoomModal, setShowMultiRoomModal] = useState(false);
+    const [selectedBookingForRecurring, setSelectedBookingForRecurring] = useState(null);
+    const [selectedBookingForRooms, setSelectedBookingForRooms] = useState(null);
 
     // Fetch bookings from Supabase
     useEffect(() => {
@@ -264,16 +278,31 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                 }
             }
 
-            // Handle refunds for cancelled confirmed bookings
-            if (newStatus === 'Cancelled' && currentStatus === 'Confirmed' && currentBooking.payment_intent_id) {
+            // Handle refunds for cancelled confirmed bookings with cancellation policy
+            if ((newStatus === 'Cancelled' || newStatus === 'cancelled') && (currentStatus === 'Confirmed' || currentStatus === 'confirmed') && currentBooking.payment_intent_id) {
                 try {
+                    // Get cancellation policy (from studio settings or default)
+                    const { data: policyData } = await supabase
+                        .from('cancellation_policies')
+                        .select('*')
+                        .eq('studio_id', user?.id || user?.uid)
+                        .eq('is_default', true)
+                        .single();
+
+                    const cancellationPolicy = policyData || null;
+                    const feeCalculation = calculateCancellationFee(currentBooking, cancellationPolicy);
+
                     const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
+                    
+                    // Refund amount (after fee deduction)
+                    const refundAmount = feeCalculation.refund;
+                    
                     const refundResponse = await fetch(`${apiUrl}/stripe/refund-payment`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                             paymentIntentId: currentBooking.payment_intent_id,
-                            amount: currentBooking.offer_amount,
+                            amount: refundAmount, // Partial refund if fee applies
                             reason: 'requested_by_customer'
                         })
                     });
@@ -281,15 +310,32 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                     if (!refundResponse.ok) {
                         const errorData = await refundResponse.json().catch(() => ({}));
                         console.warn('Refund failed:', errorData);
-                        toast.error('Booking cancelled but refund failed. Please contact support.', { id: toastId });
+                        toast.error(
+                            feeCalculation.fee > 0 
+                                ? `Booking cancelled. Cancellation fee: $${feeCalculation.fee.toFixed(2)}. Refund failed - please contact support.`
+                                : 'Booking cancelled but refund failed. Please contact support.',
+                            { id: toastId }
+                        );
                     } else {
-                        toast.success(`Booking cancelled and refund processed`, { id: toastId });
+                        const message = feeCalculation.fee > 0
+                            ? `Booking cancelled. Cancellation fee: $${feeCalculation.fee.toFixed(2)}. Refunded: $${refundAmount.toFixed(2)}`
+                            : `Booking cancelled and refund processed`;
+                        toast.success(message, { id: toastId });
                     }
                 } catch (refundError) {
                     console.error('Refund error:', refundError);
                     toast.error('Booking cancelled but refund failed. Please contact support.', { id: toastId });
                 }
             }
+
+            // Track booking history before update
+            await trackBookingHistory(
+                bookingId,
+                currentStatus,
+                newStatus,
+                user?.id || user?.uid,
+                `Status changed from ${currentStatus} to ${newStatus}`
+            );
 
             // Update booking status
             const { error } = await supabase
@@ -301,6 +347,11 @@ export default function StudioBookings({ user, onNavigateToChat }) {
 
             // Send notification to client
             await notifyBookingStatusChange(currentBooking, newStatus, user?.id || user?.uid);
+
+            // Schedule reminders for confirmed bookings
+            if (newStatus === 'Confirmed' || newStatus === 'confirmed') {
+                await scheduleBookingReminder({ ...currentBooking, status: newStatus }, [24, 2]);
+            }
 
             // Only show success if we haven't already shown an error
             if (newStatus !== 'Cancelled' || currentStatus !== 'Confirmed') {
@@ -995,7 +1046,37 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                                 </div>
                             )}
 
-                            <div className="text-xs text-gray-400">
+                            {/* Action Buttons */}
+                            <div className="flex gap-2 pt-2 border-t dark:border-gray-700">
+                                {((selectedBooking.status || '').toLowerCase() === 'confirmed') && (
+                                    <>
+                                        <button
+                                            onClick={() => {
+                                                setSelectedBookingForRecurring(selectedBooking);
+                                                setShowRecurringModal(true);
+                                            }}
+                                            className="flex-1 py-2 px-3 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded-lg hover:bg-purple-200 dark:hover:bg-purple-900/50 transition text-sm font-medium flex items-center justify-center gap-2"
+                                        >
+                                            <Repeat size={14} />
+                                            Make Recurring
+                                        </button>
+                                        {userData?.rooms && userData.rooms.length > 0 && (
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedBookingForRooms(selectedBooking);
+                                                    setShowMultiRoomModal(true);
+                                                }}
+                                                className="flex-1 py-2 px-3 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition text-sm font-medium flex items-center justify-center gap-2"
+                                            >
+                                                <Home size={14} />
+                                                Assign Rooms
+                                            </button>
+                                        )}
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="text-xs text-gray-400 pt-2">
                                 Booked {selectedBooking.createdAt && selectedBooking.createdAt instanceof Date
                                     ? selectedBooking.createdAt.toLocaleDateString()
                                     : new Date(selectedBooking.created_at || selectedBooking.timestamp || Date.now()).toLocaleDateString()}
@@ -1003,6 +1084,35 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* Recurring Booking Modal */}
+            {showRecurringModal && selectedBookingForRecurring && (
+                <RecurringBookingModal
+                    booking={selectedBookingForRecurring}
+                    onClose={() => {
+                        setShowRecurringModal(false);
+                        setSelectedBookingForRecurring(null);
+                    }}
+                    onSuccess={() => {
+                        loadBookings();
+                    }}
+                />
+            )}
+
+            {/* Multi-Room Booking Modal */}
+            {showMultiRoomModal && selectedBookingForRooms && (
+                <MultiRoomBookingModal
+                    booking={selectedBookingForRooms}
+                    rooms={userData?.rooms || []}
+                    onClose={() => {
+                        setShowMultiRoomModal(false);
+                        setSelectedBookingForRooms(null);
+                    }}
+                    onSuccess={() => {
+                        loadBookings();
+                    }}
+                />
             )}
         </div>
     );

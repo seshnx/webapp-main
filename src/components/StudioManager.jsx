@@ -110,7 +110,7 @@ export default function StudioManager({ user, userData }) {
             case 'policies':
                 return <StudioPolicies {...commonProps} />;
             case 'bookings':
-                return <StudioBookings {...commonProps} />;
+                return <StudioBookings {...commonProps} userData={localUserData} />;
             case 'settings':
                 return <StudioSettings {...commonProps} />;
             default:
