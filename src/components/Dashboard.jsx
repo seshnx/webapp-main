@@ -14,6 +14,7 @@ import { supabase } from '../config/supabase';
 import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedNumber from './shared/AnimatedNumber';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // Get time-based greeting
 const getGreeting = () => {
@@ -75,7 +76,10 @@ export default function Dashboard({
     }, []);
 
     // ===== DERIVED VALUES (after hooks) =====
-    const greeting = getGreeting();
+    const { t } = useLanguage();
+    const greetingKey = getGreetingKey();
+    const greetingEmoji = greetingKey === 'goodMorning' ? '☀️' : greetingKey === 'goodAfternoon' ? '🌤️' : greetingKey === 'goodEvening' ? '🌅' : '🌙';
+    const greeting = { text: t(greetingKey), emoji: greetingEmoji };
     const isStudio = userData?.accountTypes?.includes('Studio');
     const studioRooms = subProfiles?.['Studio']?.rooms || [];
     const profileViews = userData?.profileViews || 0;

@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Briefcase as BriefcaseIcon, Zap } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useSchool } from '../contexts/SchoolContext';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) {
   // Always call hook (React rules), but handle case where context might not be ready
   const schoolContext = useSchool();
+  const { t } = useLanguage();
   const [isMobile, setIsMobile] = useState(false);
   
   // Safely extract values with fallbacks
@@ -54,27 +56,27 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
       label: 'Primary',
       icon: Home,
       items: [
-        { id: 'dashboard', icon: Home, label: 'Dashboard' },
-        { id: 'feed', icon: MessageSquare, label: 'SocialNx' },
-        { id: 'messages', icon: MessageCircle, label: 'Messages' },
+        { id: 'dashboard', icon: Home, label: t('dashboard') },
+        { id: 'feed', icon: MessageSquare, label: t('socialNx') },
+        { id: 'messages', icon: MessageCircle, label: t('messages') },
       ]
     },
     {
       label: 'Work',
       icon: BriefcaseIcon,
       items: [
-        { id: 'bookings', icon: Calendar, label: 'Bookings' },
-        { id: 'marketplace', icon: ShoppingBag, label: 'Marketplace' },
-        { id: 'tech', icon: Wrench, label: 'Tech Services' },
+        { id: 'bookings', icon: Calendar, label: t('bookings') },
+        { id: 'marketplace', icon: ShoppingBag, label: t('marketplace') },
+        { id: 'tech', icon: Wrench, label: t('techServices') },
       ]
     },
     {
       label: 'Business',
       icon: Briefcase,
       items: [
-        ...(hasBusinessFeatures ? [{ id: 'business-center', icon: Briefcase, label: 'Business Center' }] : []),
-        { id: 'profile', icon: Settings, label: 'Profile' },
-        { id: 'payments', icon: CreditCard, label: 'Billing' },
+        ...(hasBusinessFeatures ? [{ id: 'business-center', icon: Briefcase, label: t('businessCenter') }] : []),
+        { id: 'profile', icon: Settings, label: t('profile') },
+        { id: 'payments', icon: CreditCard, label: t('billing') },
       ]
     },
     ...(eduRoute ? [{
@@ -181,7 +183,7 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
 
       <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-white dark:bg-[#1f2128]">
         <button onClick={onLogout} className="flex items-center gap-2 text-red-500 text-sm font-medium hover:opacity-80 px-2 w-full py-2 rounded hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
-          <LogOut size={16} /> Sign Out
+          <LogOut size={16} /> {t('logout')}
         </button>
       </div>
     </>

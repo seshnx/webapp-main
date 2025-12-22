@@ -4,6 +4,7 @@ import { supabase } from './config/supabase';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
+import { LanguageProvider } from './contexts/LanguageContext';
 
 // Lazy load components to avoid initialization order issues
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
@@ -554,28 +555,29 @@ export default function App() {
 
   // Render app with full layout (Sidebar + Navbar + Content)
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
-      <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
-      
-      {/* Check if we're on a special route that needs different layout */}
-      {location.pathname === '/settings' || location.pathname === '/debug-report' ? (
-        // Settings and Debug Report use simple layout
-        <main className="p-6">
+    <LanguageProvider userData={userData}>
+      <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
+        <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
+        
+        {/* Check if we're on a special route that needs different layout */}
+        {location.pathname === '/settings' || location.pathname === '/debug-report' ? (
+          // Settings and Debug Report use simple layout
+          <main className="p-6">
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+              <AppRoutes
+                user={user}
+                userData={userData}
+                loading={loading}
+                darkMode={darkMode}
+                toggleTheme={toggleTheme}
+                handleLogout={handleLogout}
+              />
+            </Suspense>
+          </main>
+        ) : (
+          // All other routes use MainLayout with Sidebar + Navbar
           <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
-            <AppRoutes
-              user={user}
-              userData={userData}
-              loading={loading}
-              darkMode={darkMode}
-              toggleTheme={toggleTheme}
-              handleLogout={handleLogout}
-            />
-          </Suspense>
-        </main>
-      ) : (
-        // All other routes use MainLayout with Sidebar + Navbar
-        <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
-          <MainLayout
+            <MainLayout
             user={user}
             userData={userData}
             loading={loading}
@@ -585,6 +587,7 @@ export default function App() {
           />
         </Suspense>
       )}
-    </div>
+      </div>
+    </LanguageProvider>
   );
 }

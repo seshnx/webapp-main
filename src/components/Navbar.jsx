@@ -7,6 +7,7 @@ import UserAvatar from './shared/UserAvatar';
 import NotificationsPanel, { NotificationBadge } from './social/NotificationsPanel';
 import { useNotifications } from '../hooks/useNotifications';
 import { getDisplayRole } from '../config/constants';
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function Navbar({ 
     user, 
@@ -27,6 +28,7 @@ export default function Navbar({
   const notifRef = useRef(null);
   const roleRef = useRef(null);
   const searchInputRef = useRef(null);
+  const { t } = useLanguage();
 
   // Use the new notifications system
   const {
@@ -219,7 +221,7 @@ export default function Navbar({
                 ref={searchInputRef}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search people, bookings, posts... (Ctrl/Cmd + K)"
+                placeholder={t('searchPlaceholder')}
                 className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none"
               />
               <button

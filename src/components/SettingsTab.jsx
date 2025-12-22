@@ -10,25 +10,27 @@ import {
 import { supabase } from '../config/supabase';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { useSettings } from '../hooks/useSettings';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // Roles that should never be shown in account settings (managed through other systems)
 const HIDDEN_ROLES = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin', 'GAdmin'];
 
-// Tab definitions
+// Tab definitions - will be translated in component
 const SETTINGS_TABS = [
-    { id: 'general', label: 'General', icon: Settings },
-    { id: 'security', label: 'Security & Privacy', icon: Shield },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
-    { id: 'messaging', label: 'Messaging', icon: MessageSquare },
-    { id: 'social', label: 'Social & Feed', icon: Users },
-    { id: 'bookings', label: 'Bookings', icon: Calendar },
-    { id: 'marketplace', label: 'Marketplace', icon: ShoppingBag },
-    { id: 'content', label: 'Content & Media', icon: Image },
-    { id: 'accessibility', label: 'Accessibility', icon: Accessibility },
-    { id: 'performance', label: 'Performance', icon: Zap },
+    { id: 'general', labelKey: 'general', icon: Settings },
+    { id: 'security', labelKey: 'security', icon: Shield },
+    { id: 'notifications', labelKey: 'notifications', icon: Bell },
+    { id: 'messaging', labelKey: 'messaging', icon: MessageSquare },
+    { id: 'social', labelKey: 'social', icon: Users },
+    { id: 'bookings', labelKey: 'bookings', icon: Calendar },
+    { id: 'marketplace', labelKey: 'marketplace', icon: ShoppingBag },
+    { id: 'content', labelKey: 'content', icon: Image },
+    { id: 'accessibility', labelKey: 'accessibility', icon: Accessibility },
+    { id: 'performance', labelKey: 'performance', icon: Zap },
 ];
 
 export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) {
+    const { t, language } = useLanguage();
     const [activeTab, setActiveTab] = useState('general');
     const [localSettings, setLocalSettings] = useState(() => {
         const defaults = {
@@ -670,7 +672,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                 }`}
                             >
                                 <TabIcon size={16} />
-                                {tab.label}
+                                {t(tab.labelKey)}
                             </button>
                         );
                     })}
@@ -682,7 +684,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="font-bold text-lg dark:text-white flex items-center gap-2">
                         {activeTabInfo && <activeTabInfo.icon size={18} className="text-brand-blue" />}
-                        {activeTabInfo?.label || 'Settings'}
+                        {activeTabInfo ? t(activeTabInfo.labelKey) : t('general')}
                     </h3>
                     <button
                         onClick={saveSettings}
@@ -690,7 +692,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                         className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 text-sm font-medium transition"
                     >
                         {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                        Save All
+                        {t('saveAll')}
                     </button>
                 </div>
 
@@ -700,11 +702,11 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                         {/* Roles & Workflow */}
                         <div className="border-b dark:border-gray-700 pb-6">
                             <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
-                                <Users size={16} className="text-purple-500"/> Roles & Workflow
+                                <Users size={16} className="text-purple-500"/> {t('rolesWorkflow')}
                             </h4>
                             
                             <div className="mb-4">
-                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">Active Account Types</label>
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-2">{t('activeAccountTypes')}</label>
                                 <div className="flex flex-wrap gap-2 mb-4">
                                     {displayedRoles.map(role => (
                                         <button 
@@ -724,14 +726,14 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <SelectField
-                                    label="Preferred Profile"
+                                    label={t('preferredProfile')}
                                     value={preferredRole}
                                     onChange={setPreferredRole}
                                     options={roles.filter(r => !HIDDEN_ROLES.includes(r))}
                                     icon={Star}
                                 />
                                 <SelectField
-                                    label="Active Workflow Context"
+                                    label={t('activeWorkflowContext')}
                                     value={activeRole}
                                     onChange={setActiveRole}
                                     options={roles.filter(r => !HIDDEN_ROLES.includes(r))}
@@ -742,8 +744,8 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                             <ToggleSwitch
                                 checked={localSettings.preferences?.seeAllProfiles || false}
                                 onChange={() => handleToggle('preferences', 'seeAllProfiles')}
-                                label="See All (Unfiltered View)"
-                                description="Show all content types regardless of active workflow"
+                                label={t('seeAllUnfiltered')}
+                                description={t('seeAllDescription')}
                                 icon={Filter}
                             />
 
@@ -752,27 +754,27 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                 disabled={saving} 
                                 className="mt-4 w-full bg-purple-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-md transition"
                             >
-                                {saving ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} Save Workflow Settings
+                                {saving ? <Loader2 className="animate-spin" size={16}/> : <RefreshCw size={16}/>} {t('saveWorkflowSettings')}
                             </button>
                         </div>
 
                         {/* Appearance */}
                         <div className="border-b dark:border-gray-700 pb-6">
                             <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
-                                <Moon size={16} className="text-purple-500"/> Appearance
+                                <Moon size={16} className="text-purple-500"/> {t('appearance')}
                             </h4>
                             <div className="flex bg-gray-100 dark:bg-black/20 p-1 rounded-lg">
-                                {['light', 'dark', 'system'].map(t => (
+                                {['light', 'dark', 'system'].map(theme => (
                                     <button 
-                                        key={t} 
-                                        onClick={() => handleThemeChange(t)}
+                                        key={theme} 
+                                        onClick={() => handleThemeChange(theme)}
                                         className={`flex-1 py-2 text-xs font-bold rounded-md capitalize transition-all ${
-                                            localSettings.theme === t 
+                                            localSettings.theme === theme 
                                                 ? 'bg-white dark:bg-gray-700 shadow-sm text-brand-blue' 
                                                 : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
                                         }`}
                                     >
-                                        {t}
+                                        {t(theme)}
                                     </button>
                                 ))}
                             </div>
@@ -781,18 +783,25 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                         {/* Language & Localization */}
                         <div className="space-y-4">
                             <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
-                                <Languages size={16} className="text-blue-500"/> Language & Localization
+                                <Languages size={16} className="text-blue-500"/> {t('languageLocalization')}
                             </h4>
                             
                             <SelectField
-                                label="Language"
+                                label={t('language')}
                                 value={localSettings.language || 'en'}
-                                onChange={val => handleValueChange(null, 'language', val)}
+                                onChange={val => {
+                                    handleValueChange(null, 'language', val);
+                                    // Update language context immediately
+                                    if (typeof window !== 'undefined') {
+                                        localStorage.setItem('language', val);
+                                        document.documentElement.lang = val;
+                                    }
+                                }}
                                 options={[
                                     { value: 'en', label: 'English' },
-                                    { value: 'es', label: 'Spanish' },
-                                    { value: 'fr', label: 'French' },
-                                    { value: 'de', label: 'German' },
+                                    { value: 'es', label: 'Español' },
+                                    { value: 'fr', label: 'Français' },
+                                    { value: 'de', label: 'Deutsch' },
                                 ]}
                                 icon={Globe}
                             />

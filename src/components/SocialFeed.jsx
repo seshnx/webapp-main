@@ -10,6 +10,7 @@ import Discover from './social/Discover';
 import { useFollowSystem } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // Feed mode tabs
 const FEED_MODES = {
@@ -27,6 +28,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
     
     // Get feed algorithm from settings
+    const { t } = useLanguage();
     const feedAlgorithm = userData?.settings?.social?.feedAlgorithm || 'recommended';
     const autoPlayVideos = userData?.settings?.social?.autoPlayVideos !== false;
     const showSuggestedAccounts = userData?.settings?.social?.showSuggestedAccounts !== false;
@@ -336,7 +338,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     }`}
                 >
                     <Compass size={16} />
-                    <span>For You</span>
+                    <span>{t('forYou')}</span>
                 </button>
                 <button
                     onClick={() => setFeedMode(FEED_MODES.FOLLOWING)}
@@ -347,7 +349,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     }`}
                 >
                     <Users size={16} />
-                    <span>Following</span>
+                    <span>{t('following')}</span>
                     {stats.followingCount > 0 && (
                         <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                             feedMode === FEED_MODES.FOLLOWING
@@ -367,7 +369,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     }`}
                 >
                     <Search size={16} />
-                    <span>Discover</span>
+                    <span>{t('discover')}</span>
                 </button>
             </div>
 
@@ -476,7 +478,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                                 className="text-center py-10 text-gray-500"
                             >
                                 <RefreshCw className="mx-auto mb-2 opacity-50" size={32}/>
-                                <p>No posts yet. Be the first to share something!</p>
+                                <p>{t('noPosts')}. {t('beFirst')}</p>
                             </motion.div>
                         )}
 
@@ -487,12 +489,12 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                                 className="text-center py-10 text-gray-500"
                             >
                                 <Users className="mx-auto mb-2 opacity-50" size={32}/>
-                                <p>No recent posts from people you follow.</p>
+                                <p>{t('noPostsFollowing')}.</p>
                                 <button 
                                     onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
                                     className="mt-3 text-brand-blue hover:underline text-sm font-medium"
                                 >
-                                    Browse For You feed →
+                                    {t('browseForYou')}
                                 </button>
                             </motion.div>
                         )}

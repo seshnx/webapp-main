@@ -14,8 +14,9 @@ const BroadcastRequest = lazy(() => import('./BroadcastRequest'));
 const BroadcastList = lazy(() => import('./BroadcastList'));
 
 export default function BookingSystem({ user, userData, subProfiles, openPublicProfile }) {
-    const location = useLocation();
-    const navigate = useNavigate();
+        const location = useLocation();
+        const navigate = useNavigate();
+        const { t } = useLanguage();
     
     // Get tab from URL path (e.g., /bookings/calendar -> 'calendar')
     const getTabFromPath = (path) => {
@@ -69,14 +70,14 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     
     // Primary tabs (always visible)
     const primaryTabs = [
-        { id: 'my-bookings', label: 'My Bookings', icon: Calendar },
-        { id: 'calendar', label: 'Calendar', icon: Calendar },
+        { id: 'my-bookings', label: t('myBookings'), icon: Calendar },
+        { id: 'calendar', label: t('calendar'), icon: Calendar },
     ];
     
     // Secondary tabs (in dropdown menu)
     const secondaryTabs = [
-        { id: 'find-talent', label: 'Find Talent', icon: Search },
-        { id: 'broadcast-list', label: 'Broadcasts', icon: Zap },
+        { id: 'find-talent', label: t('findTalent'), icon: Search },
+        { id: 'broadcast-list', label: t('broadcasts'), icon: Zap },
     ];
     
     // Fetch all bookings for the user
@@ -248,9 +249,9 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold dark:text-white">Bookings</h1>
+                    <h1 className="text-2xl font-bold dark:text-white">{t('bookings')}</h1>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                        Manage your sessions and bookings
+                        {t('manageSessions')}
                     </p>
                 </div>
                 <button
@@ -261,7 +262,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                     className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 transition-colors"
                 >
                     <Plus size={18} />
-                    New Session
+                    {t('newSession')}
                 </button>
             </div>
             
@@ -564,7 +565,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                             className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 transition-colors"
                         >
                             <Plus size={18} />
-                            Create Broadcast
+                            {t('createBroadcast')}
                         </button>
                     </div>
                     <Suspense fallback={

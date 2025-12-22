@@ -6,6 +6,7 @@ import * as Sentry from '@sentry/react'
 import App from './App.jsx'
 import { convex } from './config/convex'
 import ErrorBoundary from './components/shared/ErrorBoundary'
+import { LanguageProvider } from './contexts/LanguageContext'
 import './index.css'
 
 // Initialize Sentry if DSN is provided
