@@ -1,5 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { Calendar, Clock, User, MapPin, DollarSign, MessageSquare, CheckCircle, XCircle, AlertCircle, Loader2, Filter, Search, Plus } from 'lucide-react';
+import { Calendar, Clock, User, MapPin, DollarSign, MessageSquare, CheckCircle, XCircle, AlertCircle, Loader2, Filter, Search, Plus, Zap } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import BookingCalendar from './shared/BookingCalendar';
 import SessionDetailsModal from './SessionDetailsModal';
@@ -9,9 +9,11 @@ import UserAvatar from './shared/UserAvatar';
 const TalentSearch = lazy(() => import('./TalentSearch'));
 const SessionBuilderModal = lazy(() => import('./SessionBuilderModal'));
 const SessionWizard = lazy(() => import('./SessionWizard'));
+const BroadcastRequest = lazy(() => import('./BroadcastRequest'));
+const BroadcastList = lazy(() => import('./BroadcastList'));
 
 export default function BookingSystem({ user, userData, subProfiles, openPublicProfile }) {
-    const [activeTab, setActiveTab] = useState('my-bookings'); // 'my-bookings', 'calendar', 'find-talent', or 'session-builder'
+    const [activeTab, setActiveTab] = useState('my-bookings'); // 'my-bookings', 'calendar', 'find-talent', 'session-builder', 'broadcast-request', or 'broadcast-list'
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedBooking, setSelectedBooking] = useState(null);
@@ -21,6 +23,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     const [sessionCart, setSessionCart] = useState([]);
     const [sessionParams, setSessionParams] = useState(null);
     const [showSessionWizard, setShowSessionWizard] = useState(false);
+    const [showBroadcastRequest, setShowBroadcastRequest] = useState(false);
     
     const isStudioManager = userData?.accountTypes?.includes('Studio');
     
@@ -242,6 +245,17 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                 >
                     <Search size={16} className="inline mr-1" />
                     Find Talent
+                </button>
+                <button
+                    onClick={() => setActiveTab('broadcast-list')}
+                    className={`px-4 py-2 font-medium text-sm transition-colors ${
+                        activeTab === 'broadcast-list'
+                            ? 'border-b-2 border-brand-blue text-brand-blue'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                    }`}
+                >
+                    <Zap size={16} className="inline mr-1" />
+                    Broadcasts
                 </button>
             </div>
             
@@ -468,6 +482,60 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                     }}
                     onClose={() => setSelectedBooking(null)}
                 />
+            )}
+            
+            {/* Broadcast List Tab */}
+            {activeTab === 'broadcast-list' && !showBroadcastRequest && (
+                <div className="flex-1 overflow-y-auto">
+                    <div className="flex justify-between items-center mb-4">
+                        <h2 className="text-xl font-bold dark:text-white">Active Broadcasts</h2>
+                        <button
+                            onClick={() => setShowBroadcastRequest(true)}
+                            className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 transition-colors"
+                        >
+                            <Plus size={18} />
+                            Create Broadcast
+                        </button>
+                    </div>
+                    <Suspense fallback={
+                        <div className="flex items-center justify-center h-64">
+                            <Loader2 className="animate-spin text-brand-blue" size={32} />
+                        </div>
+                    }>
+                        <BroadcastList
+                            user={user}
+                            userData={userData}
+                            onBid={(broadcast) => {
+                                // Handle bid action - could open a modal or navigate
+                                console.log('Bid on broadcast:', broadcast);
+                            }}
+                        />
+                    </Suspense>
+                </div>
+            )}
+            
+            {/* Broadcast Request Tab */}
+            {activeTab === 'broadcast-list' && showBroadcastRequest && (
+                <div className="flex-1 overflow-y-auto">
+                    <Suspense fallback={
+                        <div className="flex items-center justify-center h-64">
+                            <Loader2 className="animate-spin text-brand-blue" size={32} />
+                        </div>
+                    }>
+                        <BroadcastRequest
+                            user={user}
+                            userData={userData}
+                            onBack={() => {
+                                setShowBroadcastRequest(false);
+                            }}
+                            onSuccess={() => {
+                                setShowBroadcastRequest(false);
+                                // Reload broadcasts
+                                window.location.reload();
+                            }}
+                        />
+                    </Suspense>
+                </div>
             )}
             
             {/* Session Builder Modal */}
