@@ -42,8 +42,8 @@ export default function Dashboard({
     // Real-time notifications from Supabase
     const { notifications, unreadCount } = useNotifications(user?.id || user?.uid);
 
-    // Memoize Convex availability
-    const convexAvailable = useMemo(() => isConvexAvailable(), []);
+    // Check Convex availability directly to avoid hook initialization issues
+    const convexAvailable = isConvexAvailable();
     const conversationsQuery = useMemo(() => {
         return (user?.id || user?.uid) && convexAvailable ? { userId: user?.id || user?.uid } : "skip";
     }, [user?.uid, convexAvailable]);
