@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout } from 'lucide-react';
+import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
@@ -23,8 +23,10 @@ export default function Navbar({
   const [showNotifs, setShowNotifs] = useState(false);
   const [showRoleMenu, setShowRoleMenu] = useState(false);
   const [isSwitching, setIsSwitching] = useState(false); 
+  const [searchQuery, setSearchQuery] = useState('');
   const notifRef = useRef(null);
   const roleRef = useRef(null);
+  const searchInputRef = useRef(null);
 
   // Use the new notifications system
   const {
@@ -145,6 +147,28 @@ export default function Navbar({
       setShowRoleMenu(false);
   };
 
+  // Global search submit: navigate to feed for now
+  const handleSearchSubmit = (e) => {
+      e.preventDefault();
+      setShowNotifs(false);
+      setActiveTab('feed');
+      // Placeholder: tie into actual search when backend ready
+  };
+
+  // Keyboard shortcut Ctrl/Cmd + K to focus search
+  useEffect(() => {
+      const handleKeyDown = (e) => {
+          const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+          const metaKey = isMac ? e.metaKey : e.ctrlKey;
+          if (metaKey && e.key.toLowerCase() === 'k') {
+              e.preventDefault();
+              searchInputRef.current?.focus();
+          }
+      };
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   const formatTime = (ts) => {
       if (!ts) return '';
       const date = ts.toMillis ? new Date(ts.toMillis()) : new Date(ts);
@@ -167,7 +191,7 @@ export default function Navbar({
       ></div>
 
       <nav className="h-16 bg-white dark:bg-dark-card border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 shrink-0 z-20 sticky top-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-[180px]">
           <button 
               onClick={onMenuClick}
               className="p-2 -ml-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden"
@@ -185,7 +209,29 @@ export default function Navbar({
               />
           </div>
         </div>
-        
+
+        {/* Global Search - desktop only */}
+        <div className="hidden md:flex flex-1 max-w-xl px-4">
+          <form onSubmit={handleSearchSubmit} className="w-full">
+            <div className="flex items-center gap-2 w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-1.5 focus-within:ring-2 focus-within:ring-brand-blue/70">
+              <SearchIcon size={16} className="text-gray-400" />
+              <input
+                ref={searchInputRef}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search people, bookings, posts... (Ctrl/Cmd + K)"
+                className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none"
+              />
+              <button
+                type="submit"
+                className="text-xs font-semibold text-white bg-brand-blue hover:bg-blue-600 rounded-full px-3 py-1 transition-colors"
+              >
+                Search
+              </button>
+            </div>
+          </form>
+        </div>
+
         <div className="flex items-center gap-3 md:gap-4">
           
           {hasEduAccess && (

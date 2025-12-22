@@ -85,6 +85,42 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
         setLoadingSuggestions(false);
     };
 
+    // Skeleton loader for feed
+    const renderSkeleton = () => {
+        const skeletonItems = Array.from({ length: 3 });
+        return (
+            <div className="space-y-4 p-fluid">
+                <div className="bg-white dark:bg-[#1f2128] rounded-2xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse">
+                    <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded-xl w-48 mb-3"></div>
+                    <div className="h-14 bg-gray-100 dark:bg-gray-800 rounded-xl w-full mb-2"></div>
+                </div>
+                {skeletonItems.map((_, idx) => (
+                    <div key={idx} className="bg-white dark:bg-[#1f2128] rounded-2xl border border-gray-200 dark:border-gray-700 p-4 animate-pulse space-y-3">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-gray-700"></div>
+                            <div className="flex-1">
+                                <div className="h-3.5 w-32 bg-gray-200 dark:bg-gray-700 rounded-full mb-2"></div>
+                                <div className="h-3 w-20 bg-gray-100 dark:bg-gray-800 rounded-full"></div>
+                            </div>
+                        </div>
+                        <div className="h-3 w-5/6 bg-gray-100 dark:bg-gray-800 rounded-full"></div>
+                        <div className="h-3 w-2/3 bg-gray-100 dark:bg-gray-800 rounded-full"></div>
+                        <div className="h-48 bg-gray-100 dark:bg-gray-800 rounded-xl"></div>
+                        <div className="flex gap-3">
+                            <div className="h-3 w-16 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                            <div className="h-3 w-12 bg-gray-200 dark:bg-gray-700 rounded-full"></div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    };
+
+    // Render loading skeletons while feed loads
+    if (loading) {
+        return renderSkeleton();
+    }
+
     // Main feed listener
     useEffect(() => {
         if (!supabase) {
