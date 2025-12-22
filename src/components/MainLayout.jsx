@@ -104,6 +104,27 @@ export default function MainLayout({
     return 'dashboard'; // default
   };
 
+  // Breadcrumbs based on active tab
+  const breadcrumbMap = {
+    'dashboard': ['Dashboard'],
+    'feed': ['Dashboard', 'Social'],
+    'messages': ['Dashboard', 'Messages'],
+    'bookings': ['Dashboard', 'Bookings'],
+    'marketplace': ['Dashboard', 'Marketplace'],
+    'tech': ['Dashboard', 'Tech Services'],
+    'payments': ['Dashboard', 'Billing'],
+    'profile': ['Dashboard', 'Profile'],
+    'business-center': ['Dashboard', 'Business Center'],
+    'legal': ['Dashboard', 'Legal'],
+    'edu-student': ['Dashboard', 'Education', 'Student'],
+    'edu-intern': ['Dashboard', 'Education', 'Intern'],
+    'edu-overview': ['Dashboard', 'Education', 'Overview'],
+    'edu-admin': ['Dashboard', 'Education', 'Admin'],
+    'studio-ops': ['Dashboard', 'Studio Ops'],
+  };
+
+  const breadcrumbs = breadcrumbMap[activeTab] || ['Dashboard'];
+
   // Initialize activeTab from current pathname (now location is available)
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -521,7 +542,21 @@ export default function MainLayout({
         </Suspense>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
+        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0 px-fluid pt-4">
+          {/* Breadcrumbs */}
+          <nav className="mb-3 text-sm text-gray-500 dark:text-gray-400" aria-label="Breadcrumb">
+            <ol className="flex items-center gap-2 flex-wrap">
+              {breadcrumbs.map((crumb, idx) => (
+                <li key={crumb} className="flex items-center gap-2">
+                  <span className={idx === breadcrumbs.length - 1 ? 'font-semibold text-gray-700 dark:text-gray-200' : ''}>
+                    {crumb}
+                  </span>
+                  {idx < breadcrumbs.length - 1 && <span className="text-gray-400">/</span>}
+                </li>
+              ))}
+            </ol>
+          </nav>
+
           {renderContent()}
         </main>
       </div>
