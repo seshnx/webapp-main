@@ -11,7 +11,7 @@ export default function TechServices({ user, userData, openPublicProfile }) {
     const isTech = userData?.accountTypes?.includes('Technician');
 
     return (
-        <div className="max-w-6xl mx-auto space-y-6 pb-20">
+        <div className="max-w-6xl mx-auto gap-fluid pb-20 container-fluid">
             <div className="bg-gradient-to-r from-orange-900 to-slate-900 p-8 rounded-2xl text-white shadow-xl relative overflow-hidden flex flex-col md:flex-row justify-between items-end">
                 <div className="relative z-10">
                     <div className="flex items-center gap-2 text-orange-400 font-bold uppercase tracking-widest text-xs mb-2"><Wrench size={14}/> SeshNx Technical</div>

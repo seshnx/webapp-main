@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap } from 'lucide-react';
+import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Briefcase as BriefcaseIcon, Zap } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import { useSchool } from '../contexts/SchoolContext';
 
@@ -23,46 +23,68 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  const links = [
-    { id: 'dashboard', icon: <User size={18} />, label: 'Dashboard' },
-    { id: 'feed', icon: <MessageSquare size={18} />, label: 'SocialNx' },
-    { id: 'marketplace', icon: <ShoppingBag size={18} />, label: 'Marketplace' },
-    { id: 'tech', icon: <Wrench size={18} />, label: 'Tech Services' }, 
-    { id: 'bookings', icon: <Calendar size={18} />, label: 'Bookings' },
-    { id: 'messages', icon: <MessageCircle size={18} />, label: 'Messages' },
-    { id: 'payments', icon: <CreditCard size={18} />, label: 'Billing' },
-    { id: 'profile', icon: <Settings size={18} />, label: 'Profile' },
-  ];
-
   // --- EDU Panel Logic ---
   // Now checks for Students OR Staff (EDUStaff/EDUAdmins)
   const isIntern = userData?.accountTypes?.includes('Intern');
   
+  // Determine EDU route and label
+  let eduRoute = null;
+  let eduLabel = 'EDU Panel';
   if (isStudent || isIntern || isStaff || userData?.accountTypes?.includes('student')) {
-      const insertIdx = links.findIndex(l => l.id === 'payments');
-      
-      // Determine label based on role
-      let label = 'EDU Panel';
-      if (isIntern) label = 'Internship';
-      else if (isStaff) label = 'School Admin';
-
-      // Determine routing ID
-      let routeId = 'edu-overview'; // Default for staff/students
-      if (isIntern) routeId = 'edu-intern';
-      else if (isStudent) routeId = 'edu-student';
-
-      links.splice(insertIdx, 0, { 
-          id: routeId,
-          icon: <GraduationCap size={18} />, 
-          label: label, 
-          highlight: true 
-      });
+    if (isIntern) {
+      eduRoute = 'edu-intern';
+      eduLabel = 'Internship';
+    } else if (isStudent) {
+      eduRoute = 'edu-student';
+      eduLabel = 'Student';
+    } else {
+      eduRoute = 'edu-overview';
+      eduLabel = 'School Admin';
+    }
   }
 
   // Check if user has business features (Studio, Label, Agent, Talent, Producer, etc.)
   const hasBusinessFeatures = userData?.accountTypes?.some(t => 
     ['Studio', 'Label', 'Agent', 'Talent', 'Producer', 'Engineer'].includes(t)
   );
+
+  // Organized navigation groups
+  const navGroups = [
+    {
+      label: 'Primary',
+      icon: Home,
+      items: [
+        { id: 'dashboard', icon: Home, label: 'Dashboard' },
+        { id: 'feed', icon: MessageSquare, label: 'SocialNx' },
+        { id: 'messages', icon: MessageCircle, label: 'Messages' },
+      ]
+    },
+    {
+      label: 'Work',
+      icon: BriefcaseIcon,
+      items: [
+        { id: 'bookings', icon: Calendar, label: 'Bookings' },
+        { id: 'marketplace', icon: ShoppingBag, label: 'Marketplace' },
+        { id: 'tech', icon: Wrench, label: 'Tech Services' },
+      ]
+    },
+    {
+      label: 'Business',
+      icon: Briefcase,
+      items: [
+        ...(hasBusinessFeatures ? [{ id: 'business-center', icon: Briefcase, label: 'Business Center' }] : []),
+        { id: 'profile', icon: Settings, label: 'Profile' },
+        { id: 'payments', icon: CreditCard, label: 'Billing' },
+      ]
+    },
+    ...(eduRoute ? [{
+      label: 'Education',
+      icon: GraduationCap,
+      items: [
+        { id: eduRoute, icon: GraduationCap, label: eduLabel, highlight: true }
+      ]
+    }] : [])
+  ];
 
   const onLogout = handleLogout || (async () => {
     try {
@@ -104,44 +126,53 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
             </div>
         )}
         
-        <nav className="space-y-1 px-2">
-            {links.map(link => (
-            <button
-                key={link.id}
-                onClick={() => handleNavigation(link.id)}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
-                ${activeTab === link.id 
-                    ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' 
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
-                ${link.highlight ? 'text-amber-600 dark:text-amber-500' : ''}
-                `}
-            >
-                {link.icon}
-                {link.label}
-            </button>
-            ))}
+        <nav className="space-y-6 px-2">
+            {navGroups.map((group, groupIndex) => {
+              const GroupIcon = group.icon;
+              return (
+                <div key={group.label} className="space-y-1">
+                  {/* Group Header */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 mb-1">
+                    <GroupIcon size={14} className="text-gray-400 dark:text-gray-500" />
+                    <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                      {group.label}
+                    </span>
+                  </div>
+                  
+                  {/* Group Items */}
+                  <div className="space-y-1">
+                    {group.items.map(link => (
+                      <button
+                        key={link.id}
+                        onClick={() => handleNavigation(link.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
+                        ${activeTab === link.id 
+                            ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' 
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
+                        ${link.highlight ? 'text-amber-600 dark:text-amber-500' : ''}
+                        `}
+                      >
+                        {link.icon}
+                        {link.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
         </nav>
 
-        <div className="mt-auto px-2 pt-4 space-y-1">
+        <div className="mt-auto px-2 pt-4 space-y-1 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-2 px-3 py-1.5 mb-1">
+              <ShieldCheck size={14} className="text-gray-400 dark:text-gray-500" />
+              <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                Resources
+              </span>
+            </div>
             <button onClick={() => handleNavigation('legal')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${activeTab === 'legal' ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                 <ShieldCheck size={18} />
                 Legal Center
             </button>
-            
-            {/* Business Center - Show if user has business features */}
-            {hasBusinessFeatures && (
-                <button 
-                    onClick={() => handleNavigation('business-center')} 
-                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${
-                        activeTab === 'business-center' 
-                            ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-400' 
-                            : 'text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10'
-                    }`}
-                >
-                    <Briefcase size={18} />
-                    Business Center
-                </button>
-            )}
         </div>
       </div>
 

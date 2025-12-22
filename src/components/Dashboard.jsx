@@ -338,7 +338,7 @@ export default function Dashboard({
     };
 
     return (
-        <div className="min-h-screen pb-24 px-4 md:px-6 pt-4 md:pt-6">
+        <div className="min-h-screen pb-24 px-fluid pt-fluid">
             {/* Hero Section with Gradient Background */}
             <div className="relative overflow-hidden rounded-3xl md:rounded-[2rem] shadow-2xl max-w-7xl mx-auto">
                 {/* Animated gradient background */}

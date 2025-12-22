@@ -1,5 +1,5 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
-import { Calendar, Clock, User, MapPin, DollarSign, MessageSquare, CheckCircle, XCircle, AlertCircle, Loader2, Filter, Search, Plus, Zap } from 'lucide-react';
+import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
+import { Calendar, Clock, User, MapPin, DollarSign, MessageSquare, CheckCircle, XCircle, AlertCircle, Loader2, Filter, Search, Plus, Zap, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import BookingCalendar from './shared/BookingCalendar';
 import SessionDetailsModal from './SessionDetailsModal';
@@ -24,8 +24,33 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     const [sessionParams, setSessionParams] = useState(null);
     const [showSessionWizard, setShowSessionWizard] = useState(false);
     const [showBroadcastRequest, setShowBroadcastRequest] = useState(false);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    const moreMenuRef = useRef(null);
     
     const isStudioManager = userData?.accountTypes?.includes('Studio');
+    
+    // Close more menu when clicking outside
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (moreMenuRef.current && !moreMenuRef.current.contains(event.target)) {
+                setShowMoreMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+    
+    // Primary tabs (always visible)
+    const primaryTabs = [
+        { id: 'my-bookings', label: 'My Bookings', icon: Calendar },
+        { id: 'calendar', label: 'Calendar', icon: Calendar },
+    ];
+    
+    // Secondary tabs (in dropdown menu)
+    const secondaryTabs = [
+        { id: 'find-talent', label: 'Find Talent', icon: Search },
+        { id: 'broadcast-list', label: 'Broadcasts', icon: Zap },
+    ];
     
     // Fetch all bookings for the user
     useEffect(() => {
@@ -192,7 +217,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     }
     
     return (
-        <div className="h-full flex flex-col p-6 space-y-6">
+        <div className="h-full flex flex-col p-fluid gap-fluid">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -213,50 +238,68 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                 </button>
             </div>
             
-            {/* Tabs */}
-            <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-                <button
-                    onClick={() => setActiveTab('my-bookings')}
-                    className={`px-4 py-2 font-medium text-sm transition-colors ${
-                        activeTab === 'my-bookings'
-                            ? 'border-b-2 border-brand-blue text-brand-blue'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                >
-                    My Bookings
-                </button>
-                <button
-                    onClick={() => setActiveTab('calendar')}
-                    className={`px-4 py-2 font-medium text-sm transition-colors ${
-                        activeTab === 'calendar'
-                            ? 'border-b-2 border-brand-blue text-brand-blue'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                >
-                    Calendar View
-                </button>
-                <button
-                    onClick={() => setActiveTab('find-talent')}
-                    className={`px-4 py-2 font-medium text-sm transition-colors ${
-                        activeTab === 'find-talent'
-                            ? 'border-b-2 border-brand-blue text-brand-blue'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                >
-                    <Search size={16} className="inline mr-1" />
-                    Find Talent
-                </button>
-                <button
-                    onClick={() => setActiveTab('broadcast-list')}
-                    className={`px-4 py-2 font-medium text-sm transition-colors ${
-                        activeTab === 'broadcast-list'
-                            ? 'border-b-2 border-brand-blue text-brand-blue'
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                    }`}
-                >
-                    <Zap size={16} className="inline mr-1" />
-                    Broadcasts
-                </button>
+            {/* Tabs - Primary tabs visible, secondary in dropdown */}
+            <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700 items-end">
+                {/* Primary Tabs */}
+                {primaryTabs.map(tab => {
+                    const TabIcon = tab.icon;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`px-4 py-2 font-medium text-sm transition-colors flex items-center gap-2 ${
+                                activeTab === tab.id
+                                    ? 'border-b-2 border-brand-blue text-brand-blue'
+                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                            }`}
+                        >
+                            <TabIcon size={16} />
+                            {tab.label}
+                        </button>
+                    );
+                })}
+                
+                {/* More Menu Dropdown */}
+                <div className="relative ml-auto" ref={moreMenuRef}>
+                    <button
+                        onClick={() => setShowMoreMenu(!showMoreMenu)}
+                        className={`px-4 py-2 font-medium text-sm transition-colors flex items-center gap-2 ${
+                            secondaryTabs.some(tab => activeTab === tab.id)
+                                ? 'border-b-2 border-brand-blue text-brand-blue'
+                                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                        }`}
+                    >
+                        <MoreHorizontal size={16} />
+                        More
+                        <ChevronDown size={14} className={`transition-transform ${showMoreMenu ? 'rotate-180' : ''}`} />
+                    </button>
+                    
+                    {/* Dropdown Menu */}
+                    {showMoreMenu && (
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-[#1f2128] border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 py-1">
+                            {secondaryTabs.map(tab => {
+                                const TabIcon = tab.icon;
+                                return (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => {
+                                            setActiveTab(tab.id);
+                                            setShowMoreMenu(false);
+                                        }}
+                                        className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
+                                            activeTab === tab.id
+                                                ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400'
+                                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                                        }`}
+                                    >
+                                        <TabIcon size={16} />
+                                        {tab.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
             </div>
             
             {/* Studio Manager View */}

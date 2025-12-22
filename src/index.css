@@ -53,6 +53,120 @@ body {
   padding-right: env(safe-area-inset-right, 0);
 }
 
+/* Responsive Spacing System */
+@layer utilities {
+  /* Fluid padding - scales from mobile to desktop */
+  .p-fluid {
+    padding: clamp(1rem, 2vw, 1.5rem);
+  }
+  
+  .px-fluid {
+    padding-left: clamp(1rem, 2vw, 1.5rem);
+    padding-right: clamp(1rem, 2vw, 1.5rem);
+  }
+  
+  .py-fluid {
+    padding-top: clamp(1rem, 2vw, 1.5rem);
+    padding-bottom: clamp(1rem, 2vw, 1.5rem);
+  }
+  
+  /* Fluid gap for flex/grid */
+  .gap-fluid {
+    gap: clamp(0.75rem, 1.5vw, 1.5rem);
+  }
+  
+  /* Container with responsive max-width and padding */
+  .container-fluid {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: clamp(1rem, 4vw, 2rem);
+    padding-right: clamp(1rem, 4vw, 2rem);
+  }
+  
+  /* Responsive section spacing */
+  .section-spacing {
+    padding-top: clamp(2rem, 5vw, 4rem);
+    padding-bottom: clamp(2rem, 5vw, 4rem);
+  }
+}
+
+/* Fluid Typography System */
+@layer base {
+  /* Base font sizes that scale responsively */
+  h1 {
+    font-size: clamp(1.75rem, 4vw, 2.5rem);
+    line-height: 1.2;
+    font-weight: 800;
+  }
+  
+  h2 {
+    font-size: clamp(1.5rem, 3vw, 2rem);
+    line-height: 1.3;
+    font-weight: 700;
+  }
+  
+  h3 {
+    font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  
+  h4 {
+    font-size: clamp(1.125rem, 2vw, 1.25rem);
+    line-height: 1.4;
+    font-weight: 600;
+  }
+  
+  /* Body text with minimum readable size */
+  p, .text-base {
+    font-size: clamp(0.9375rem, 1.5vw, 1rem);
+    line-height: 1.6;
+  }
+  
+  /* Small text */
+  .text-sm {
+    font-size: clamp(0.8125rem, 1.2vw, 0.875rem);
+    line-height: 1.5;
+  }
+  
+  /* Extra small text */
+  .text-xs {
+    font-size: clamp(0.75rem, 1vw, 0.8125rem);
+    line-height: 1.4;
+  }
+  
+  /* Large text */
+  .text-lg {
+    font-size: clamp(1.125rem, 2vw, 1.25rem);
+    line-height: 1.5;
+  }
+  
+  /* Extra large text */
+  .text-xl {
+    font-size: clamp(1.25rem, 2.5vw, 1.5rem);
+    line-height: 1.4;
+  }
+  
+  /* 2XL text */
+  .text-2xl {
+    font-size: clamp(1.5rem, 3vw, 1.875rem);
+    line-height: 1.3;
+  }
+  
+  /* 3XL text */
+  .text-3xl {
+    font-size: clamp(1.875rem, 4vw, 2.25rem);
+    line-height: 1.2;
+  }
+  
+  /* 4XL text */
+  .text-4xl {
+    font-size: clamp(2.25rem, 5vw, 3rem);
+    line-height: 1.1;
+  }
+}
+
 /* Animation Utility Classes */
 .fade-in {
   animation: fadeIn 0.4s ease-out forwards;
