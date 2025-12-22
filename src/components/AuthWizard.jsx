@@ -1,12 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { supabase } from '../config/supabase';
 import { Loader2, AlertCircle, Check, Sun, Moon, MapPin, Crosshair, X } from 'lucide-react';
 import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ACCOUNT_TYPES, TALENT_SUBROLES } from '../config/constants';
 import { fetchZipLocation } from '../utils/geocode';
-import LegalDocs from './LegalDocs';
 import AuthWizardBackground from './AuthWizardBackground';
+
+// Lazy load LegalDocs to match MainLayout's dynamic import pattern
+// This prevents mixed static/dynamic import bundling issues
+const LegalDocs = lazy(() => import('./LegalDocs'));
 
 // Assets
 import LogoLight from '../assets/SeshNx-PNG cCropped.png';
@@ -577,7 +580,9 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <LegalDocs isEmbedded={true} />
+              <Suspense fallback={<div className="flex items-center justify-center p-8"><Loader2 className="animate-spin" size={24} /></div>}>
+                <LegalDocs isEmbedded={true} />
+              </Suspense>
             </div>
           </div>
         </div>
