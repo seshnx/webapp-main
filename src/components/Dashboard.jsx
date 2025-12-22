@@ -868,9 +868,9 @@ export default function Dashboard({
                             </div>
                             
                             <div className="space-y-3">
-                                {(userData?.accountTypes || []).map(role => {
+                            {profileSchemas && (userData?.accountTypes || []).map(role => {
                                     const data = subProfiles?.[role] || {};
-                                    const schema = PROFILE_SCHEMAS[role] || [];
+                                    const schema = profileSchemas?.[role] || [];  
                                     if (schema.length === 0) return null;
 
                                     const total = schema.filter(f => !f.isToggle && f.type !== 'list').length || 1;
