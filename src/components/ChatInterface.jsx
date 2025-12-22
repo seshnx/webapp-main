@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
@@ -9,6 +10,8 @@ import { usePresence } from '../hooks/usePresence';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function ChatInterface({ user, userData, openPublicProfile, pendingChatTarget, clearPendingChatTarget }) {
+    const location = useLocation();
+    const navigate = useNavigate();
     const [activeChat, setActiveChat] = useState(null);
     const [showDetails, setShowDetails] = useState(false);
 
@@ -19,7 +22,7 @@ export default function ChatInterface({ user, userData, openPublicProfile, pendi
     useEffect(() => {
         if (pendingChatTarget && user?.uid) {
             const chatId = [user.uid, pendingChatTarget.uid].sort().join('_');
-            setActiveChat({
+            handleChatSelect({
                 id: chatId,
                 uid: pendingChatTarget.uid,
                 name: pendingChatTarget.name,
@@ -62,6 +65,41 @@ export default function ChatInterface({ user, userData, openPublicProfile, pendi
             uc: conv.unreadCount || 0,
         })).sort((a, b) => (b.lmt || 0) - (a.lmt || 0));
     }, [conversationsData]);
+    
+    // Update URL when chat changes
+    const handleChatSelect = (chat) => {
+        setActiveChat(chat);
+        if (chat?.id) {
+            navigate(`/messages/chat/${chat.id}`, { replace: true });
+        } else {
+            navigate('/messages', { replace: true });
+        }
+    };
+    
+    // Sync activeChat with URL (e.g., /messages/chat/chatId)
+    useEffect(() => {
+        const pathParts = location.pathname.split('/').filter(Boolean);
+        if (pathParts[0] === 'messages' && pathParts[1] === 'chat' && pathParts[2]) {
+            const chatIdFromUrl = pathParts[2];
+            // Find conversation matching the chat ID
+            const conversation = conversations.find(c => c.id === chatIdFromUrl);
+            if (conversation) {
+                // Only update if different from current
+                setActiveChat(prev => {
+                    if (prev?.id === chatIdFromUrl) return prev;
+                    return {
+                        id: conversation.id,
+                        uid: conversation.uid,
+                        name: conversation.name,
+                        type: conversation.type
+                    };
+                });
+            }
+        } else if (pathParts[0] === 'messages' && (!pathParts[1] || pathParts[1] !== 'chat')) {
+            // If we're on /messages without a chat ID, clear active chat
+            setActiveChat(prev => prev ? null : prev);
+        }
+    }, [location.pathname, conversations]);
 
     // Check if Convex is available
     useEffect(() => {
@@ -83,7 +121,7 @@ export default function ChatInterface({ user, userData, openPublicProfile, pendi
                     userData={userData}
                     conversations={conversations}
                     activeChat={activeChat} 
-                    onSelectChat={setActiveChat}
+                    onSelectChat={handleChatSelect}
                 />
             </motion.div>
 
@@ -95,7 +133,7 @@ export default function ChatInterface({ user, userData, openPublicProfile, pendi
                     user={user} 
                     userData={userData}
                     conversations={conversations}
-                    onBack={() => setActiveChat(null)}
+                    onBack={() => handleChatSelect(null)}
                     toggleDetails={() => setShowDetails(!showDetails)}
                     openPublicProfile={openPublicProfile}
                 />

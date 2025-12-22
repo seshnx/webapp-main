@@ -1,4 +1,5 @@
 import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, User, MapPin, DollarSign, MessageSquare, CheckCircle, XCircle, AlertCircle, Loader2, Filter, Search, Plus, Zap, ChevronDown, MoreHorizontal } from 'lucide-react';
 import { supabase } from '../config/supabase';
 import BookingCalendar from './shared/BookingCalendar';
@@ -13,7 +14,19 @@ const BroadcastRequest = lazy(() => import('./BroadcastRequest'));
 const BroadcastList = lazy(() => import('./BroadcastList'));
 
 export default function BookingSystem({ user, userData, subProfiles, openPublicProfile }) {
-    const [activeTab, setActiveTab] = useState('my-bookings'); // 'my-bookings', 'calendar', 'find-talent', 'session-builder', 'broadcast-request', or 'broadcast-list'
+    const location = useLocation();
+    const navigate = useNavigate();
+    
+    // Get tab from URL path (e.g., /bookings/calendar -> 'calendar')
+    const getTabFromPath = (path) => {
+        const parts = path.split('/').filter(Boolean);
+        if (parts[0] === 'bookings' && parts[1]) {
+            return parts[1]; // Return the nested route (calendar, find-talent, etc.)
+        }
+        return 'my-bookings'; // Default tab
+    };
+    
+    const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedBooking, setSelectedBooking] = useState(null);
@@ -28,6 +41,20 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     const moreMenuRef = useRef(null);
     
     const isStudioManager = userData?.accountTypes?.includes('Studio');
+    
+    // Sync activeTab with URL
+    useEffect(() => {
+        const tabFromUrl = getTabFromPath(location.pathname);
+        if (tabFromUrl !== activeTab) {
+            setActiveTab(tabFromUrl);
+        }
+    }, [location.pathname]);
+    
+    // Update URL when tab changes
+    const handleTabChange = (tabId) => {
+        setActiveTab(tabId);
+        navigate(`/bookings/${tabId}`, { replace: true });
+    };
     
     // Close more menu when clicking outside
     useEffect(() => {
@@ -229,7 +256,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                 <button
                     onClick={() => {
                         setShowSessionWizard(true);
-                        setActiveTab('session-builder');
+                        handleTabChange('session-builder');
                     }}
                     className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 transition-colors"
                 >
@@ -246,7 +273,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                     return (
                         <button
                             key={tab.id}
-                            onClick={() => setActiveTab(tab.id)}
+                            onClick={() => handleTabChange(tab.id)}
                             className={`px-4 py-2 font-medium text-sm transition-colors flex items-center gap-2 ${
                                 activeTab === tab.id
                                     ? 'border-b-2 border-brand-blue text-brand-blue'
@@ -283,7 +310,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                                     <button
                                         key={tab.id}
                                         onClick={() => {
-                                            setActiveTab(tab.id);
+                                            handleTabChange(tab.id);
                                             setShowMoreMenu(false);
                                         }}
                                         className={`w-full flex items-center gap-2 px-4 py-2 text-sm transition-colors ${
@@ -593,12 +620,12 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                         }}
                         onClose={() => {
                             setShowSessionBuilder(false);
-                            setActiveTab('my-bookings');
+                            handleTabChange('my-bookings');
                         }}
                         onComplete={() => {
                             setShowSessionBuilder(false);
                             setSessionCart([]);
-                            setActiveTab('my-bookings');
+                            handleTabChange('my-bookings');
                             // Reload bookings
                             window.location.reload();
                         }}

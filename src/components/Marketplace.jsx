@@ -1,29 +1,35 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import GearExchange from './marketplace/GearExchange';
 import SeshFxStore from './marketplace/SeshFxStore'; // Sample Pack Store
 
 export default function Marketplace({ user, userData, tokenBalance }) {
-    const [searchParams, setSearchParams] = useSearchParams();
-    const initialTab = searchParams.get('tab') || 'gear';
-    const [subTab, setSubTab] = useState(initialTab);
-
-    // Update tab when URL params change
-    useEffect(() => {
-        const tabParam = searchParams.get('tab');
-        if (tabParam && (tabParam === 'gear' || tabParam === 'fx')) {
-            setSubTab(tabParam);
+    const location = useLocation();
+    const navigate = useNavigate();
+    
+    // Get tab from URL path (e.g., /marketplace/fx -> 'fx')
+    const getTabFromPath = (path) => {
+        const parts = path.split('/').filter(Boolean);
+        if (parts[0] === 'marketplace' && parts[1]) {
+            return parts[1]; // Return the nested route (gear, fx, etc.)
         }
-    }, [searchParams]);
+        return 'gear'; // Default tab
+    };
+    
+    const [subTab, setSubTab] = useState(() => getTabFromPath(location.pathname));
+
+    // Update tab when URL changes
+    useEffect(() => {
+        const tabFromUrl = getTabFromPath(location.pathname);
+        if (tabFromUrl !== subTab) {
+            setSubTab(tabFromUrl);
+        }
+    }, [location.pathname]);
 
     // Update URL when tab changes
     const handleTabChange = (tab) => {
         setSubTab(tab);
-        if (tab === 'gear') {
-            setSearchParams({});
-        } else {
-            setSearchParams({ tab });
-        }
+        navigate(`/marketplace/${tab}`, { replace: true });
     };
 
     const tabs = [

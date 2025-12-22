@@ -87,47 +87,25 @@ export default function MainLayout({
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Helper function to get tab from pathname
+  // Helper function to get tab from pathname (supports nested routes)
   const getTabFromPath = (path) => {
     if (path === '/') return 'dashboard';
-    if (path === '/feed' || path === '/social') return 'feed';
-    if (path === '/messages' || path === '/chat') return 'messages';
-    if (path === '/bookings') return 'bookings';
-    if (path === '/marketplace') return 'marketplace';
-    if (path === '/tech') return 'tech';
-    if (path === '/payments' || path === '/billing') return 'payments';
-    if (path === '/profile') return 'profile';
-    if (path === '/business-center') return 'business-center';
+    if (path.startsWith('/feed') || path === '/social') return 'feed';
+    if (path.startsWith('/messages') || path.startsWith('/chat')) return 'messages';
+    if (path.startsWith('/bookings')) return 'bookings';
+    if (path.startsWith('/marketplace')) return 'marketplace';
+    if (path.startsWith('/tech')) return 'tech';
+    if (path.startsWith('/payments') || path === '/billing') return 'payments';
+    if (path.startsWith('/profile')) return 'profile';
+    if (path.startsWith('/business-center')) return 'business-center';
     if (path === '/legal') return 'legal';
-    if (path === '/studio-ops') return 'studio-ops';
-    if (path.startsWith('/edu-')) return path.substring(1);
+    if (path.startsWith('/studio-ops')) return 'studio-ops';
+    if (path.startsWith('/edu-')) return path.substring(1).split('/')[0]; // Handle nested edu routes
     return 'dashboard'; // default
   };
 
   // Initialize activeTab from current pathname (now location is available)
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
-  
-  // Breadcrumbs based on active tab (must be after activeTab is declared)
-  const breadcrumbMap = {
-    'dashboard': ['Dashboard'],
-    'feed': ['Dashboard', 'Social'],
-    'messages': ['Dashboard', 'Messages'],
-    'bookings': ['Dashboard', 'Bookings'],
-    'marketplace': ['Dashboard', 'Marketplace'],
-    'tech': ['Dashboard', 'Tech Services'],
-    'payments': ['Dashboard', 'Billing'],
-    'profile': ['Dashboard', 'Profile'],
-    'business-center': ['Dashboard', 'Business Center'],
-    'legal': ['Dashboard', 'Legal'],
-    'edu-student': ['Dashboard', 'Education', 'Student'],
-    'edu-intern': ['Dashboard', 'Education', 'Intern'],
-    'edu-overview': ['Dashboard', 'Education', 'Overview'],
-    'edu-admin': ['Dashboard', 'Education', 'Admin'],
-    'studio-ops': ['Dashboard', 'Studio Ops'],
-  };
-
-  // Only show breadcrumbs when there is a hierarchy (e.g., Dashboard / X), not just "Dashboard"
-  const breadcrumbs = breadcrumbMap[activeTab] || ['Dashboard'];
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subProfiles, setSubProfiles] = useState({});
   const [tokenBalance, setTokenBalance] = useState(0);
@@ -213,8 +191,9 @@ export default function MainLayout({
     };
 
     const route = tabRoutes[activeTab];
-    // Only navigate if route exists and pathname doesn't match
-    if (route && location.pathname !== route) {
+    // Only navigate if route exists and pathname doesn't start with the route
+    // This allows nested routes to persist (e.g., /bookings/calendar stays as is)
+    if (route && !location.pathname.startsWith(route)) {
       isNavigatingRef.current = true; // Mark that we're navigating
       navigate(route, { replace: true });
     }
@@ -544,22 +523,6 @@ export default function MainLayout({
 
         {/* Content */}
         <main className="flex-1 overflow-y-auto pb-16 lg:pb-0 px-fluid pt-4">
-          {/* Breadcrumbs - desktop only and only when we have more than one level */}
-          {breadcrumbs.length > 1 && (
-            <nav className="mb-3 text-xs text-gray-500 dark:text-gray-400 hidden md:block" aria-label="Breadcrumb">
-              <ol className="flex items-center gap-2 flex-wrap">
-                {breadcrumbs.map((crumb, idx) => (
-                  <li key={crumb} className="flex items-center gap-2">
-                    <span className={idx === breadcrumbs.length - 1 ? 'font-semibold text-gray-700 dark:text-gray-200' : ''}>
-                      {crumb}
-                    </span>
-                    {idx < breadcrumbs.length - 1 && <span className="text-gray-400">/</span>}
-                  </li>
-                ))}
-              </ol>
-            </nav>
-          )}
-
           {renderContent()}
         </main>
       </div>
