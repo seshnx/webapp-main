@@ -78,6 +78,9 @@ export default defineConfig({
             // Other vendor dependencies
             return 'vendor';
           }
+          // IMPORTANT: Keep config files in their own chunk to ensure proper initialization
+          // This prevents TDZ errors when multiple chunks import from config
+          if (id.includes('/config/constants')) return 'config';
           // Feature-based code splitting
           if (id.includes('/EDU/')) return 'edu';
           if (id.includes('/chat/')) return 'chat';
