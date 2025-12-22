@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
 
@@ -40,6 +40,24 @@ function ProtectedRoute({ children, user, loading }) {
   }
   
   return children;
+}
+
+/**
+ * Redirect Component
+ * 
+ * Uses useNavigate hook instead of Navigate component to avoid initialization issues
+ */
+function Redirect({ to, replace = true }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  useEffect(() => {
+    if (location.pathname !== to) {
+      navigate(to, { replace });
+    }
+  }, [to, replace, navigate, location.pathname]);
+  
+  return null;
 }
 
 /**
@@ -135,14 +153,14 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
       />
       
       {/* Redirect dashboard aliases */}
-      <Route path="/dashboard" element={<Navigate to="/" replace />} />
-      <Route path="/home" element={<Navigate to="/" replace />} />
-      <Route path="/social" element={<Navigate to="/feed" replace />} />
-      <Route path="/chat" element={<Navigate to="/messages" replace />} />
-      <Route path="/billing" element={<Navigate to="/payments" replace />} />
+      <Route path="/dashboard" element={<Redirect to="/" />} />
+      <Route path="/home" element={<Redirect to="/" />} />
+      <Route path="/social" element={<Redirect to="/feed" />} />
+      <Route path="/chat" element={<Redirect to="/messages" />} />
+      <Route path="/billing" element={<Redirect to="/payments" />} />
       
       {/* Fallback - redirect to dashboard */}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Redirect to="/" />} />
     </Routes>
   );
 }
