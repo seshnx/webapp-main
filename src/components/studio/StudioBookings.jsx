@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
+import { notifyBookingStatusChange, checkBookingConflicts, validateStatusTransition } from '../../utils/bookingNotifications';
 
 const STATUS_CONFIG = {
     pending: { 
@@ -78,33 +79,52 @@ export default function StudioBookings({ user, onNavigateToChat }) {
         };
     }, [user?.id, user?.uid]);
 
+    // Helper function to safely parse booking dates
+    const parseBookingDate = (dateValue) => {
+        if (!dateValue || dateValue === 'Flexible') return null;
+        try {
+            const parsed = new Date(dateValue);
+            return isNaN(parsed.getTime()) ? null : parsed;
+        } catch {
+            return null;
+        }
+    };
+
     const loadBookings = async () => {
         if (!supabase) return;
         const userId = user?.id || user?.uid;
         setLoading(true);
         try {
+            // Fix: Check both studio_owner_id AND target_id to catch all studio bookings
             const { data: bookingsData, error } = await supabase
                 .from('bookings')
                 .select('*')
-                .eq('studio_owner_id', userId)
+                .or(`studio_owner_id.eq.${userId},target_id.eq.${userId}`)
                 .order('created_at', { ascending: false });
             
             if (error) throw error;
             
-            const bookingsList = (bookingsData || []).map(b => ({
-                id: b.id,
-                ...b,
-                studioOwnerId: b.studio_owner_id,
-                clientId: b.client_id,
-                clientName: b.client_name,
-                date: b.date ? new Date(b.date) : new Date(),
-                createdAt: b.created_at ? new Date(b.created_at) : new Date()
-            }));
+            const bookingsList = (bookingsData || []).map(b => {
+                const parsedDate = parseBookingDate(b.date);
+                return {
+                    id: b.id,
+                    ...b,
+                    studioOwnerId: b.studio_owner_id,
+                    clientId: b.sender_id || b.client_id, // Fix: Use sender_id as fallback
+                    clientName: b.sender_name || b.client_name, // Fix: Use sender_name as fallback
+                    date: parsedDate || new Date(),
+                    createdAt: b.created_at ? new Date(b.created_at) : new Date(),
+                    // Ensure status is properly formatted
+                    status: b.status || 'Pending'
+                };
+            });
             setBookings(bookingsList);
         } catch (error) {
             console.error('Error fetching bookings:', error);
+            toast.error('Failed to load bookings');
+        } finally {
+            setLoading(false);
         }
-        setLoading(false);
     };
 
     // Fetch blocked dates
@@ -153,6 +173,7 @@ export default function StudioBookings({ user, onNavigateToChat }) {
             setBlockedDates(blockedList);
         } catch (error) {
             console.error('Error fetching blocked dates:', error);
+            toast.error('Failed to load blocked dates');
             setBlockedDates([]);
         }
     };
@@ -163,24 +184,134 @@ export default function StudioBookings({ user, onNavigateToChat }) {
         const toastId = toast.loading(`Updating booking...`);
         
         try {
+            // Get current booking to validate transition
+            const { data: currentBooking, error: fetchError } = await supabase
+                .from('bookings')
+                .select('*')
+                .eq('id', bookingId)
+                .single();
+
+            if (fetchError) throw fetchError;
+            if (!currentBooking) throw new Error('Booking not found');
+
+            const currentStatus = currentBooking.status || 'Pending';
+            
+            // Validate status transition using utility function
+            const validation = validateStatusTransition(currentStatus, newStatus);
+            if (!validation.isValid) {
+                throw new Error(
+                    `Invalid status transition: ${currentStatus} → ${newStatus}. ` +
+                    `Allowed transitions: ${validation.allowedStatuses.join(', ') || 'none'}`
+                );
+            }
+            
+            // Check for booking conflicts before confirming
+            if (newStatus === 'Confirmed') {
+                const userId = user?.id || user?.uid;
+                const conflictCheck = await checkBookingConflicts({ ...currentBooking, id: bookingId }, userId);
+                
+                if (conflictCheck.hasConflict) {
+                    const conflictNames = conflictCheck.conflicts.map(c => c.sender_name || 'Unknown').join(', ');
+                    throw new Error(
+                        `Time slot conflict detected. Conflicting bookings: ${conflictNames}. ` +
+                        `Please check calendar before confirming.`
+                    );
+                }
+            }
+
             const now = new Date().toISOString();
+            
+            // Fix: Use validated status timestamp fields instead of dynamic property
+            const statusTimestampFields = {
+                Confirmed: 'confirmed_at',
+                Cancelled: 'cancelled_at',
+                Completed: 'completed_at',
+                Pending: 'pending_at'
+            };
+
             const updateData = {
                 status: newStatus,
-                updated_at: now,
-                [`${newStatus}_at`]: now
+                updated_at: now
             };
-            
+
+            // Only add timestamp field if it exists in our mapping
+            const timestampField = statusTimestampFields[newStatus];
+            if (timestampField) {
+                updateData[timestampField] = now;
+            }
+
+            // Handle payment processing for confirmed bookings
+            if (newStatus === 'Confirmed' && currentBooking.payment_intent_id) {
+                try {
+                    const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
+                    const captureResponse = await fetch(`${apiUrl}/stripe/capture-payment`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            paymentIntentId: currentBooking.payment_intent_id
+                        })
+                    });
+
+                    if (!captureResponse.ok) {
+                        const errorData = await captureResponse.json().catch(() => ({}));
+                        console.warn('Payment capture failed:', errorData);
+                        // Continue with booking confirmation even if payment capture fails
+                        // Payment may have already been captured or will be handled by webhook
+                    }
+                } catch (paymentError) {
+                    console.error('Payment capture error:', paymentError);
+                    // Continue with booking confirmation
+                }
+            }
+
+            // Handle refunds for cancelled confirmed bookings
+            if (newStatus === 'Cancelled' && currentStatus === 'Confirmed' && currentBooking.payment_intent_id) {
+                try {
+                    const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
+                    const refundResponse = await fetch(`${apiUrl}/stripe/refund-payment`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            paymentIntentId: currentBooking.payment_intent_id,
+                            amount: currentBooking.offer_amount,
+                            reason: 'requested_by_customer'
+                        })
+                    });
+
+                    if (!refundResponse.ok) {
+                        const errorData = await refundResponse.json().catch(() => ({}));
+                        console.warn('Refund failed:', errorData);
+                        toast.error('Booking cancelled but refund failed. Please contact support.', { id: toastId });
+                    } else {
+                        toast.success(`Booking cancelled and refund processed`, { id: toastId });
+                    }
+                } catch (refundError) {
+                    console.error('Refund error:', refundError);
+                    toast.error('Booking cancelled but refund failed. Please contact support.', { id: toastId });
+                }
+            }
+
+            // Update booking status
             const { error } = await supabase
                 .from('bookings')
                 .update(updateData)
                 .eq('id', bookingId);
             
             if (error) throw error;
-            
-            toast.success(`Booking ${newStatus}!`, { id: toastId });
+
+            // Send notification to client
+            await notifyBookingStatusChange(currentBooking, newStatus, user?.id || user?.uid);
+
+            // Only show success if we haven't already shown an error
+            if (newStatus !== 'Cancelled' || currentStatus !== 'Confirmed') {
+                toast.success(`Booking ${newStatus}!`, { id: toastId });
+            }
+
+            // Reload bookings to reflect changes
+            await loadBookings();
         } catch (error) {
             console.error('Update failed:', error);
-            toast.error('Failed to update booking', { id: toastId });
+            toast.error(error.message || 'Failed to update booking', { id: toastId });
         } finally {
             setUpdating(null);
         }
@@ -213,9 +344,11 @@ export default function StudioBookings({ user, onNavigateToChat }) {
             setBlockReason('');
             setBlockTimeSlot('full');
             setSelectedDate(null);
+            // Reload blocked dates to reflect changes
+            await loadBlockedDates();
         } catch (error) {
             console.error('Error blocking date:', error);
-            toast.error('Failed to block time slot', { id: toastId });
+            toast.error(error.message || 'Failed to block time slot. Please try again.', { id: toastId });
         }
     };
 
@@ -245,7 +378,9 @@ export default function StudioBookings({ user, onNavigateToChat }) {
 
     // Filter and search bookings
     const filteredBookings = bookings.filter(booking => {
-        const matchesFilter = filter === 'all' || booking.status === filter;
+        const bookingStatus = (booking.status || '').toLowerCase();
+        const filterStatus = filter.toLowerCase();
+        const matchesFilter = filter === 'all' || bookingStatus === filterStatus;
         const matchesSearch = !searchTerm || 
             booking.clientName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             booking.roomName?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -254,6 +389,7 @@ export default function StudioBookings({ user, onNavigateToChat }) {
 
     // Group bookings by date
     const groupedBookings = filteredBookings.reduce((groups, booking) => {
+        if (!booking.date) return groups; // Skip bookings without valid dates
         const dateKey = booking.date.toDateString();
         if (!groups[dateKey]) groups[dateKey] = [];
         groups[dateKey].push(booking);
@@ -261,14 +397,18 @@ export default function StudioBookings({ user, onNavigateToChat }) {
     }, {});
 
     // Stats
-    const pendingCount = bookings.filter(b => b.status === 'pending').length;
+    const pendingCount = bookings.filter(b => (b.status || '').toLowerCase() === 'pending').length;
     const todayBookings = bookings.filter(b => {
+        if (!b.date) return false;
         const today = new Date().toDateString();
-        return b.date.toDateString() === today && b.status === 'confirmed';
+        return b.date.toDateString() === today && (b.status || '').toLowerCase() === 'confirmed';
     }).length;
     const upcomingRevenue = bookings
-        .filter(b => b.status === 'confirmed' && b.date >= new Date())
-        .reduce((sum, b) => sum + (b.totalPrice || 0), 0);
+        .filter(b => {
+            if (!b.date) return false;
+            return (b.status || '').toLowerCase() === 'confirmed' && b.date >= new Date();
+        })
+        .reduce((sum, b) => sum + (b.totalPrice || b.offer_amount || 0), 0);
 
     if (loading) {
         return (
@@ -423,18 +563,22 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                                     
                                     // Get bookings for this day
                                     const dayBookings = bookings.filter(b => {
-                                        const bookingDate = new Date(b.date);
+                                        if (!b.date) return false;
+                                        const bookingDate = b.date instanceof Date ? b.date : new Date(b.date);
+                                        if (isNaN(bookingDate.getTime())) return false;
                                         return bookingDate.toDateString() === date.toDateString();
                                     });
                                     
                                     // Get blocks for this day
                                     const dayBlocks = blockedDates.filter(b => {
-                                        const blockDate = new Date(b.date);
+                                        if (!b.date) return false;
+                                        const blockDate = b.date instanceof Date ? b.date : new Date(b.date);
+                                        if (isNaN(blockDate.getTime())) return false;
                                         return blockDate.toDateString() === date.toDateString();
                                     });
                                     
-                                    const hasConfirmed = dayBookings.some(b => b.status === 'confirmed');
-                                    const hasPending = dayBookings.some(b => b.status === 'pending');
+                                    const hasConfirmed = dayBookings.some(b => (b.status || '').toLowerCase() === 'confirmed');
+                                    const hasPending = dayBookings.some(b => (b.status || '').toLowerCase() === 'pending');
                                     const isBlocked = dayBlocks.length > 0;
                                     
                                     days.push(
@@ -570,7 +714,7 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                             </h3>
                             <div className="space-y-3">
                                 {dateBookings.map(booking => {
-                                    const statusConfig = STATUS_CONFIG[booking.status] || STATUS_CONFIG.pending;
+                                    const statusConfig = getStatusConfig(booking.status);
                                     
                                     return (
                                         <div 
@@ -610,10 +754,10 @@ export default function StudioBookings({ user, onNavigateToChat }) {
 
                                                 {/* Actions */}
                                                 <div className="flex items-center gap-2">
-                                                    {booking.status === 'pending' && (
+                                                    {(booking.status || '').toLowerCase() === 'pending' && (
                                                         <>
                                                             <button
-                                                                onClick={() => handleUpdateStatus(booking.id, 'confirmed')}
+                                                                onClick={() => handleUpdateStatus(booking.id, 'Confirmed')}
                                                                 disabled={updating === booking.id}
                                                                 className="p-2 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-lg hover:bg-green-200 dark:hover:bg-green-900/50 transition"
                                                                 title="Approve"
@@ -621,7 +765,7 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                                                                 <Check size={18} />
                                                             </button>
                                                             <button
-                                                                onClick={() => handleUpdateStatus(booking.id, 'cancelled')}
+                                                                onClick={() => handleUpdateStatus(booking.id, 'Cancelled')}
                                                                 disabled={updating === booking.id}
                                                                 className="p-2 bg-red-100 dark:bg-red-900/30 text-red-600 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 transition"
                                                                 title="Decline"
@@ -630,9 +774,9 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                                                             </button>
                                                         </>
                                                     )}
-                                                    {booking.status === 'confirmed' && (
+                                                    {(booking.status || '').toLowerCase() === 'confirmed' && (
                                                         <button
-                                                            onClick={() => handleUpdateStatus(booking.id, 'completed')}
+                                                            onClick={() => handleUpdateStatus(booking.id, 'Completed')}
                                                             disabled={updating === booking.id}
                                                             className="px-3 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900/50 transition text-sm font-medium"
                                                         >
@@ -838,7 +982,9 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                                 </div>
                                 <div className="bg-gray-50 dark:bg-[#1f2128] p-3 rounded-lg">
                                     <div className="text-xs text-gray-500 uppercase font-bold mb-1">Total</div>
-                                    <div className="dark:text-white font-bold text-green-600">${selectedBooking.totalPrice}</div>
+                                    <div className="dark:text-white font-bold text-green-600">
+                                        ${selectedBooking.totalPrice || selectedBooking.offer_amount || 0}
+                                    </div>
                                 </div>
                             </div>
 
@@ -850,7 +996,9 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                             )}
 
                             <div className="text-xs text-gray-400">
-                                Booked {selectedBooking.createdAt.toLocaleDateString()}
+                                Booked {selectedBooking.createdAt && selectedBooking.createdAt instanceof Date
+                                    ? selectedBooking.createdAt.toLocaleDateString()
+                                    : new Date(selectedBooking.created_at || selectedBooking.timestamp || Date.now()).toLocaleDateString()}
                             </div>
                         </div>
                     </div>

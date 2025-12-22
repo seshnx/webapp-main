@@ -45,11 +45,11 @@ export default function StudioManager({ user, userData }) {
             const userId = user.id || user.uid;
             
             try {
-                // Fetch bookings where user is the target (studio owner receiving bookings)
+                // Fetch bookings where user is the target OR studio_owner_id (studio owner receiving bookings)
                 const { data: bookings, error } = await supabase
                     .from('bookings')
                     .select('*')
-                    .eq('target_id', userId)
+                    .or(`target_id.eq.${userId},studio_owner_id.eq.${userId}`)
                     .order('date', { ascending: true });
 
                 if (error) throw error;
