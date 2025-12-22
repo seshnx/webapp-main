@@ -5,6 +5,7 @@ import { supabase } from '../config/supabase';
 import BookingCalendar from './shared/BookingCalendar';
 import SessionDetailsModal from './SessionDetailsModal';
 import UserAvatar from './shared/UserAvatar';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // Lazy load the missing modules
 const TalentSearch = lazy(() => import('./TalentSearch'));

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import GearExchange from './marketplace/GearExchange';
 import SeshFxStore from './marketplace/SeshFxStore'; // Sample Pack Store
+import { useLanguage } from '../contexts/LanguageContext';
 
 export default function Marketplace({ user, userData, tokenBalance }) {
     const location = useLocation();
