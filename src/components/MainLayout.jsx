@@ -4,6 +4,7 @@ import { SchoolProvider } from '../contexts/SchoolContext';
 import { supabase } from '../config/supabase';
 import { Loader2 } from 'lucide-react';
 import ErrorBoundary from './shared/ErrorBoundary';
+import MobileBottomNav from './MobileBottomNav';
 
 // Retry wrapper for lazy loading to handle initialization errors
 const retryLazyLoad = (importFn, retries = 3, delay = 100) => {
@@ -520,10 +521,13 @@ export default function MainLayout({
         </Suspense>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-16 lg:pb-0">
           {renderContent()}
         </main>
       </div>
+
+        {/* Mobile Bottom Navigation */}
+        <MobileBottomNav activeTab={activeTab} setActiveTab={setActiveTab} />
 
         {/* Public Profile Modal */}
         {viewingProfile && (
