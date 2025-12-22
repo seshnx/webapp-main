@@ -60,7 +60,15 @@ const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
  */
 function ProtectedRoute({ children, user, loading }) {
   const navigate = useNavigate();
-  
+
+  // Check if user is authenticated - use useEffect to navigate to avoid initialization issues
+  // NOTE: This must be called before any conditional returns to satisfy React's rules of hooks
+  useEffect(() => {
+    if (!user && !loading) {
+      navigate('/login', { replace: true });
+    }
+  }, [user, loading, navigate]);
+
   // Show loading while checking auth
   if (loading) {
     return (
@@ -69,19 +77,12 @@ function ProtectedRoute({ children, user, loading }) {
       </div>
     );
   }
-  
-  // Check if user is authenticated - use useEffect to navigate to avoid initialization issues
-  useEffect(() => {
-    if (!user && !loading) {
-      navigate('/login', { replace: true });
-    }
-  }, [user, loading, navigate]);
-  
+
   // Don't render children if user is not authenticated
   if (!user) {
     return null;
   }
-  
+
   return children;
 }
 
