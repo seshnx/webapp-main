@@ -82,6 +82,10 @@ export default function MainLayout({
   toggleTheme, 
   handleLogout 
 }) {
+  // CRITICAL: Call hooks first before using them in state initializers
+  const navigate = useNavigate();
+  const location = useLocation();
+  
   // Helper function to get tab from pathname
   const getTabFromPath = (path) => {
     if (path === '/') return 'dashboard';
@@ -99,15 +103,13 @@ export default function MainLayout({
     return 'dashboard'; // default
   };
 
-  // Initialize activeTab from current pathname
+  // Initialize activeTab from current pathname (now location is available)
   const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [subProfiles, setSubProfiles] = useState({});
   const [tokenBalance, setTokenBalance] = useState(0);
   const [viewingProfile, setViewingProfile] = useState(null);
   const [pendingChatTarget, setPendingChatTarget] = useState(null);
-  const navigate = useNavigate();
-  const location = useLocation();
   
   // Track if we're initializing to prevent navigation loops
   const isInitializingRef = useRef(true);
