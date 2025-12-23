@@ -1,6 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useEquipmentDatabase } from './useEquipmentDatabase';
 
+/**
+ * Hook for searching equipment database
+ * Provides search functionality for the EquipmentAutocomplete component
+ */
 export const useEquipmentSearch = () => {
     const { data: equipData, loading } = useEquipmentDatabase();
     const [results, setResults] = useState([]);
@@ -11,40 +15,43 @@ export const useEquipmentSearch = () => {
         let flattened = [];
         
         try {
-            // 1. Iterate Categories (e.g., "microphones_and_input_transducers")
+            // Iterate through categories
             Object.keys(equipData).forEach(categoryKey => {
-                const categoryDocs = equipData[categoryKey];
-                if (!categoryDocs) return;
+                const categoryData = equipData[categoryKey];
+                if (!categoryData || typeof categoryData !== 'object') return;
 
-                // 2. Iterate Documents (e.g., "shure_sm57")
-                // In your structure, each value here is the full Item Object
-                Object.entries(categoryDocs).forEach(([docId, item]) => {
-                    if (!item || typeof item !== 'object') return;
+                // Iterate through subcategories
+                Object.entries(categoryData).forEach(([subcategoryKey, subcategoryItems]) => {
+                    if (!Array.isArray(subcategoryItems)) return;
 
-                    // 3. Extract Metadata
-                    // Prefer root fields, fallback to searchTokens logic
-                    const brand = item.brand || (item.searchTokens && item.searchTokens[0]) || 'Unknown';
-                    const name = item.name || (item.searchTokens && item.searchTokens[1]) || 'Unknown Item';
-                    
-                    // 4. Build Powerful Search String
-                    // Combine explicit name/brand with your robust searchTokens array into one giant string
-                    const tokens = item.searchTokens || [];
-                    const searchString = [
-                        name,
-                        brand,
-                        ...tokens
-                    ].join(' ').toLowerCase();
+                    // Process each item in the subcategory
+                    subcategoryItems.forEach(item => {
+                        if (!item || typeof item !== 'object') return;
 
-                    flattened.push({
-                        id: docId,
-                        name: name,
-                        brand: brand,
-                        category: item.category || categoryKey,
-                        subCategory: item.subCategory || 'General',
-                        // Store the search string for filtering
-                        searchString: searchString,
-                        // Keep original data just in case
-                        original: item
+                        // Extract data
+                        const brand = item.brand || 'Unknown';
+                        const name = item.name || item.model || 'Unknown Item';
+                        const subCategory = item.subCategory || subcategoryKey;
+                        
+                        // Build search string from name, brand, model, and search tokens
+                        const searchTokens = item.searchTokens || [];
+                        const searchString = [
+                            name,
+                            brand,
+                            item.model,
+                            ...searchTokens
+                        ].filter(Boolean).join(' ').toLowerCase();
+
+                        flattened.push({
+                            id: item.id,
+                            name: name,
+                            brand: brand,
+                            model: item.model || name,
+                            category: item.category || categoryKey,
+                            subCategory: subCategory,
+                            searchString: searchString,
+                            original: item.original || item
+                        });
                     });
                 });
             });
@@ -61,14 +68,20 @@ export const useEquipmentSearch = () => {
             return;
         }
 
-        // 1. Split user query into individual terms (e.g. "SSL Origin" -> ["ssl", "origin"])
-        const queryTerms = searchTerm.toLowerCase().trim().split(/\s+/);
+        // Split user query into individual terms
+        const queryTerms = searchTerm.toLowerCase().trim().split(/\s+/).filter(term => term.length > 0);
         
-        // 2. Filter: Item must match ALL terms
+        if (queryTerms.length === 0) {
+            setResults([]);
+            return;
+        }
+        
+        // Filter: Item must match ALL terms
         const filteredResults = allItems.filter(item => {
-            // "Every" term in the query must be found somewhere in the item's search string
+            // Check if all query terms are found in the search string
             return queryTerms.every(term => item.searchString.includes(term));
-        }).slice(0, 50); // Limit results for performance
+        })
+        .slice(0, 50); // Limit results for performance
 
         setResults(filteredResults);
     };

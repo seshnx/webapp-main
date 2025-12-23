@@ -1,15 +1,10 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../config/supabase';
 
-// Main categories matching your Firestore layout
-const COLLECTIONS = [
-    { id: 'computer_audio_and_interfaces', label: 'Computer Audio & Interfaces' },
-    { id: 'microphones_and_input_transducers', label: 'Microphones' },
-    { id: 'mixing_consoles_and_control', label: 'Mixing Consoles' },
-    { id: 'monitoring_and_playback', label: 'Monitoring & Playback' },
-    { id: 'outboard_signal_processing', label: 'Outboard Gear' }
-];
-
+/**
+ * Hook to fetch equipment database from Supabase
+ * Returns all equipment items grouped by category for use in autocomplete/search
+ */
 export const useEquipmentDatabase = () => {
     const [dbData, setDbData] = useState({});
     const [loading, setLoading] = useState(true);
@@ -22,45 +17,56 @@ export const useEquipmentDatabase = () => {
             }
 
             setLoading(true);
-            const newData = {};
 
             try {
-                // Fetch all equipment items grouped by category
+                // Fetch all verified equipment items
                 const { data, error } = await supabase
-                    .from('equipment_items')
+                    .from('equipment_database')
                     .select('*')
-                    .order('category_id')
-                    .order('subcategory_id');
+                    .eq('verified', true)
+                    .order('category')
+                    .order('subcategory')
+                    .order('brand')
+                    .order('name');
 
                 if (error) throw error;
 
-                // Group by category and subcategory to match original structure
-                COLLECTIONS.forEach(col => {
-                    const categoryItems = (data || []).filter(item => item.category_id === col.id);
+                // Group by category and subcategory
+                const grouped = {};
+                
+                (data || []).forEach(item => {
+                    const category = item.category || 'Other';
+                    const subcategory = item.subcategory || 'General';
                     
-                    const colItems = {};
-                    categoryItems.forEach(item => {
-                        const subcatId = item.subcategory_id || 'default';
-                        if (!colItems[subcatId]) {
-                            colItems[subcatId] = { Types: [] };
-                        }
-                        // Store item data in the expected format
-                        colItems[subcatId].Types.push({
-                            ...item.data,
-                            id: item.id,
-                            name: item.name,
-                            manufacturer: item.manufacturer,
-                            model: item.model
-                        });
+                    if (!grouped[category]) {
+                        grouped[category] = {};
+                    }
+                    
+                    if (!grouped[category][subcategory]) {
+                        grouped[category][subcategory] = [];
+                    }
+                    
+                    // Format item for compatibility with existing search
+                    grouped[category][subcategory].push({
+                        id: item.id,
+                        name: item.name || item.model,
+                        brand: item.brand || 'Unknown',
+                        model: item.model,
+                        category: category,
+                        subCategory: subcategory,
+                        description: item.description,
+                        specifications: item.specifications,
+                        searchTokens: item.search_tokens || [],
+                        original: item
                     });
-                    
-                    newData[col.id] = colItems;
                 });
                 
-                setDbData(newData);
+                setDbData(grouped);
             } catch (error) {
                 console.error("Failed to load equipment database:", error);
+                setDbData({});
             }
+            
             setLoading(false);
         };
 
@@ -69,7 +75,6 @@ export const useEquipmentDatabase = () => {
 
     return { 
         loading, 
-        data: dbData,
-        categories: COLLECTIONS
+        data: dbData
     };
 };
