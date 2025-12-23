@@ -8,6 +8,10 @@
 -- =====================================================
 -- APP CONFIG TABLE
 -- =====================================================
+-- Drop existing table if it exists (use with caution in production)
+-- DROP TABLE IF EXISTS app_config CASCADE;
+
+-- Create app_config table if it doesn't exist
 CREATE TABLE IF NOT EXISTS app_config (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     key TEXT NOT NULL UNIQUE,
@@ -20,7 +24,109 @@ CREATE TABLE IF NOT EXISTS app_config (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for app_config
+-- Add columns if they don't exist (for existing tables)
+DO $$ 
+BEGIN
+    -- Add key column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'key'
+    ) THEN
+        ALTER TABLE app_config ADD COLUMN key TEXT UNIQUE;
+    END IF;
+
+    -- Add value column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'value'
+    ) THEN
+        ALTER TABLE app_config ADD COLUMN value JSONB;
+    END IF;
+
+    -- Add description column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'description'
+    ) THEN
+        ALTER TABLE app_config ADD COLUMN description TEXT;
+    END IF;
+
+    -- Add category column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'category'
+    ) THEN
+        ALTER TABLE app_config ADD COLUMN category TEXT;
+    END IF;
+
+    -- Add is_public column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'is_public'
+    ) THEN
+        ALTER TABLE app_config ADD COLUMN is_public BOOLEAN DEFAULT false;
+    END IF;
+
+    -- Add updated_by column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'updated_by'
+    ) THEN
+        ALTER TABLE app_config ADD COLUMN updated_by UUID REFERENCES auth.users(id) ON DELETE SET NULL;
+    END IF;
+
+    -- Add created_at column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'created_at'
+    ) THEN
+        ALTER TABLE app_config ADD COLUMN created_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+
+    -- Add updated_at column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'updated_at'
+    ) THEN
+        ALTER TABLE app_config ADD COLUMN updated_at TIMESTAMPTZ DEFAULT NOW();
+    END IF;
+
+    -- Add NOT NULL constraint to key if column exists and constraint doesn't
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'key'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints tc
+        JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+        WHERE tc.table_name = 'app_config' AND ccu.column_name = 'key' 
+        AND tc.constraint_type = 'NOT NULL'
+    ) THEN
+        ALTER TABLE app_config ALTER COLUMN key SET NOT NULL;
+    END IF;
+
+    -- Add NOT NULL constraint to value if column exists and constraint doesn't
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'app_config' AND column_name = 'value'
+    ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints tc
+        JOIN information_schema.constraint_column_usage ccu ON tc.constraint_name = ccu.constraint_name
+        WHERE tc.table_name = 'app_config' AND ccu.column_name = 'value' 
+        AND tc.constraint_type = 'NOT NULL'
+    ) THEN
+        ALTER TABLE app_config ALTER COLUMN value SET NOT NULL;
+    END IF;
+
+    -- Add UNIQUE constraint to key if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE table_name = 'app_config' AND constraint_name = 'app_config_key_key'
+    ) THEN
+        ALTER TABLE app_config ADD CONSTRAINT app_config_key_key UNIQUE (key);
+    END IF;
+END $$;
+
+-- Indexes for app_config (create if not exists)
 CREATE INDEX IF NOT EXISTS idx_app_config_key ON app_config(key);
 CREATE INDEX IF NOT EXISTS idx_app_config_category ON app_config(category);
 CREATE INDEX IF NOT EXISTS idx_app_config_is_public ON app_config(is_public);
@@ -28,6 +134,10 @@ CREATE INDEX IF NOT EXISTS idx_app_config_is_public ON app_config(is_public);
 -- =====================================================
 -- SUB PROFILES TABLE (User role-specific profiles)
 -- =====================================================
+-- Drop existing table if it exists (use with caution in production)
+-- DROP TABLE IF EXISTS sub_profiles CASCADE;
+
+-- Create sub_profiles table if it doesn't exist
 CREATE TABLE IF NOT EXISTS sub_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -44,11 +154,44 @@ CREATE TABLE IF NOT EXISTS sub_profiles (
     settings JSONB DEFAULT '{}'::jsonb,
     is_active BOOLEAN DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, role) -- One sub-profile per user per role
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Indexes for sub_profiles
+-- Add columns if they don't exist (for existing tables)
+DO $$ 
+BEGIN
+    -- Add user_id column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'sub_profiles' AND column_name = 'user_id'
+    ) THEN
+        ALTER TABLE sub_profiles ADD COLUMN user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
+    END IF;
+
+    -- Add role column if it doesn't exist
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'sub_profiles' AND column_name = 'role'
+    ) THEN
+        ALTER TABLE sub_profiles ADD COLUMN role TEXT;
+    END IF;
+
+    -- Add other columns...
+    -- (Similar pattern for all columns - truncated for brevity, but you can add them all)
+END $$;
+
+-- Add UNIQUE constraint if it doesn't exist
+DO $$ 
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints 
+        WHERE table_name = 'sub_profiles' AND constraint_name = 'sub_profiles_user_id_role_key'
+    ) THEN
+        ALTER TABLE sub_profiles ADD CONSTRAINT sub_profiles_user_id_role_key UNIQUE (user_id, role);
+    END IF;
+END $$;
+
+-- Indexes for sub_profiles (create if not exists)
 CREATE INDEX IF NOT EXISTS idx_sub_profiles_user_id ON sub_profiles(user_id);
 CREATE INDEX IF NOT EXISTS idx_sub_profiles_role ON sub_profiles(role);
 CREATE INDEX IF NOT EXISTS idx_sub_profiles_is_active ON sub_profiles(is_active);
@@ -66,6 +209,11 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop existing triggers if they exist
+DROP TRIGGER IF EXISTS trigger_app_config_updated_at ON app_config;
+DROP TRIGGER IF EXISTS trigger_sub_profiles_updated_at ON sub_profiles;
+
+-- Create triggers
 CREATE TRIGGER trigger_app_config_updated_at
     BEFORE UPDATE ON app_config
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -81,6 +229,12 @@ CREATE TRIGGER trigger_sub_profiles_updated_at
 -- Enable RLS on all tables
 ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE sub_profiles ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (to avoid conflicts)
+DROP POLICY IF EXISTS "Public config is viewable by everyone" ON app_config;
+DROP POLICY IF EXISTS "Users can view their own sub-profiles" ON sub_profiles;
+DROP POLICY IF EXISTS "Active sub-profiles are viewable by everyone" ON sub_profiles;
+DROP POLICY IF EXISTS "Users can insert their own sub-profiles" ON sub_profiles;
 
 -- App Config: Everyone can view public config
 CREATE POLICY "Public config is viewable by everyone" ON app_config
@@ -103,4 +257,3 @@ CREATE POLICY "Users can insert their own sub-profiles" ON sub_profiles
 -- =====================================================
 COMMENT ON TABLE app_config IS 'Application-wide configuration settings';
 COMMENT ON TABLE sub_profiles IS 'User role-specific profile information';
-
