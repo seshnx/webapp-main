@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Sofa, Chair, Table, Bed } from 'lucide-react';
+import { Box, RectangleHorizontal, Square, Circle } from 'lucide-react';
 
 /**
  * FurnitureComponent - Renders furniture on the floor plan
@@ -9,10 +9,10 @@ export default function FurnitureComponent({ furniture, isSelected, onClick, onM
     
     const icons = {
         box: Box,
-        sofa: Sofa,
-        chair: Chair,
-        table: Table,
-        bed: Bed,
+        sofa: RectangleHorizontal,
+        chair: Square,
+        table: Circle,
+        bed: RectangleHorizontal,
     };
     
     const Icon = icons[subType] || Box;
