@@ -20,6 +20,15 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
     const [loadingStudios, setLoadingStudios] = useState(false);
     const [availableStudios, setAvailableStudios] = useState([]);
 
+    // Ensure sessionParams has default values
+    const safeSessionParams = sessionParams || {
+        date: '',
+        time: '',
+        radius: 25,
+        urgency: 'Normal',
+        location: null
+    };
+
     // --- STEP 1: LOGISTICS ---
     const handleLogisticsSubmit = (e) => {
         e.preventDefault();
@@ -41,16 +50,21 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
             if (error) throw error;
             
             // Client-side filtering for distance
+            if (!safeSessionParams.location) {
+                setAvailableStudios([]);
+                return;
+            }
+            
             const filtered = (profilesData || []).filter(studio => {
-                if (!studio.location || !sessionParams.location) return false;
+                if (!studio.location || !safeSessionParams.location) return false;
                 const dist = calcDist(
-                    sessionParams.location.lat, sessionParams.location.lng,
+                    safeSessionParams.location.lat, safeSessionParams.location.lng,
                     studio.location.lat, studio.location.lng
                 );
-                return dist <= sessionParams.radius;
+                return dist <= (safeSessionParams.radius || 25);
             }).map(s => ({
                 ...s,
-                distance: calcDist(sessionParams.location.lat, sessionParams.location.lng, s.location.lat, s.location.lng)
+                distance: calcDist(safeSessionParams.location.lat, safeSessionParams.location.lng, s.location.lat, s.location.lng)
             })).sort((a, b) => a.distance - b.distance);
 
             setAvailableStudios(filtered);
@@ -61,7 +75,7 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
     };
 
     const selectStudio = (studio) => {
-        setSessionParams(prev => ({ ...prev, venue: studio }));
+        setSessionParams(prev => ({ ...(prev || safeSessionParams), venue: studio }));
         onNext(); // Move to Talent Search/Summary
     };
 
@@ -88,8 +102,8 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
                             <input 
                                 type="date" required 
                                 className="w-full p-3 border rounded-xl dark:bg-black/20 dark:border-gray-600 dark:text-white outline-none focus:ring-2 focus:ring-brand-blue"
-                                value={sessionParams.date}
-                                onChange={e => setSessionParams({...sessionParams, date: e.target.value})}
+                                value={safeSessionParams.date || ''}
+                                onChange={e => setSessionParams(prev => ({ ...(prev || safeSessionParams), date: e.target.value }))}
                             />
                         </div>
                         <div>
@@ -97,8 +111,8 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
                             <input 
                                 type="time" required 
                                 className="w-full p-3 border rounded-xl dark:bg-black/20 dark:border-gray-600 dark:text-white outline-none focus:ring-2 focus:ring-brand-blue"
-                                value={sessionParams.time}
-                                onChange={e => setSessionParams({...sessionParams, time: e.target.value})}
+                                value={safeSessionParams.time || ''}
+                                onChange={e => setSessionParams(prev => ({ ...(prev || safeSessionParams), time: e.target.value }))}
                             />
                         </div>
                     </div>
@@ -107,18 +121,18 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
                         <LocationPicker 
                             initialZip={userData?.zip} 
                             label="Center Location"
-                            onLocationChange={(loc) => setSessionParams({...sessionParams, location: loc})}
+                            onLocationChange={(loc) => setSessionParams(prev => ({ ...(prev || safeSessionParams), location: loc }))}
                         />
                         
                         <div>
                             <div className="flex justify-between mb-2">
                                 <label className="text-xs font-bold text-gray-500 uppercase">Max Distance</label>
-                                <span className="text-xs font-bold text-brand-blue">{sessionParams.radius} miles</span>
+                                <span className="text-xs font-bold text-brand-blue">{safeSessionParams.radius || 25} miles</span>
                             </div>
                             <input 
                                 type="range" min="5" max="100" step="5"
-                                value={sessionParams.radius}
-                                onChange={e => setSessionParams({...sessionParams, radius: parseInt(e.target.value)})}
+                                value={safeSessionParams.radius || 25}
+                                onChange={e => setSessionParams(prev => ({ ...(prev || safeSessionParams), radius: parseInt(e.target.value) }))}
                                 className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
                             />
                         </div>
@@ -129,8 +143,8 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
                                 {['Low', 'Normal', 'High'].map(u => (
                                     <button
                                         key={u} type="button"
-                                        onClick={() => setSessionParams({...sessionParams, urgency: u})}
-                                        className={`flex-1 py-2 rounded-lg text-sm font-bold border transition ${sessionParams.urgency === u ? 'bg-brand-blue text-white border-brand-blue' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
+                                        onClick={() => setSessionParams(prev => ({ ...(prev || safeSessionParams), urgency: u }))}
+                                        className={`flex-1 py-2 rounded-lg text-sm font-bold border transition ${(safeSessionParams.urgency || 'Normal') === u ? 'bg-brand-blue text-white border-brand-blue' : 'border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                                     >
                                         {u}
                                     </button>
@@ -196,10 +210,10 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
                             <div className="hidden md:block w-1/2 h-full border-l dark:border-gray-700 relative">
                                 <StudioMap 
                                     locations={availableStudios} 
-                                    center={[sessionParams.location?.lat, sessionParams.location?.lng]} 
+                                    center={[safeSessionParams.location?.lat, safeSessionParams.location?.lng]} 
                                     height="100%" 
                                     drawRadius={true}
-                                    radiusMiles={sessionParams.radius}
+                                    radiusMiles={safeSessionParams.radius || 25}
                                 />
                             </div>
                         </div>
