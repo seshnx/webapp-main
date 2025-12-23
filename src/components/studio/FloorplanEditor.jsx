@@ -76,14 +76,14 @@ export default function FloorplanEditor({ rooms, walls: propWalls, structures: p
     
     // --- DATA STATE ---
     const [walls, setWalls] = useState(propWalls || []); 
-    const [structures, setStructures] = useState(propStructures || []);
+    const [structures, setStructures] = useState(propStructures || []); 
     const [doors, setDoors] = useState([]);
     const [windows, setWindows] = useState([]);
     const [furniture, setFurniture] = useState([]);
     const [textLabels, setTextLabels] = useState([]);
     const [measurements, setMeasurements] = useState([]);
     const [backgroundImage, setBackgroundImage] = useState(null);
-    const [clipboard, setClipboard] = useState(null);
+    const [clipboard, setClipboard] = useState(null); 
     const [customShapes, setCustomShapes] = useState([]); // circles, polygons, etc.
     const [layers, setLayers] = useState({
         structures: { visible: true, locked: false },
@@ -598,7 +598,7 @@ export default function FloorplanEditor({ rooms, walls: propWalls, structures: p
         // Commit changes on mouse up
         if (isDragging || isResizing) {
             if (activeStructureId) {
-                onStructuresChange(structures);
+                onStructuresChange(structures); 
                 setHistoryState({ ...floorplanState, structures });
             } else if (activeDoorId) {
                 commitDoors(doors);
@@ -627,15 +627,15 @@ export default function FloorplanEditor({ rooms, walls: propWalls, structures: p
         // WALL TOOL
         if (activeTool === 'wall') {
             e.stopPropagation();
-            if (!wallStartPoint) {
-                setWallStartPoint({ x, y });
-            } else {
-                const newWall = {
+        if (!wallStartPoint) {
+            setWallStartPoint({ x, y });
+        } else {
+            const newWall = {
                     id: generateId('wall'),
-                    x1: wallStartPoint.x, y1: wallStartPoint.y,
-                    x2: x, y2: y,
-                    stroke: '#52525B', strokeWidth: 5
-                };
+                x1: wallStartPoint.x, y1: wallStartPoint.y,
+                x2: x, y2: y,
+                stroke: '#52525B', strokeWidth: 5
+            };
                 commitWalls([...walls.filter(w => w.id !== 'preview'), newWall]);
                 setWallStartPoint(null);
             }
@@ -1224,34 +1224,34 @@ export default function FloorplanEditor({ rooms, walls: propWalls, structures: p
             />
 
             <div className="flex flex-col flex-1">
-                {/* Control Bar */}
-                <div className='p-3 border-b dark:border-gray-700 flex justify-between items-center bg-white dark:bg-[#2c2e36] rounded-t-xl'>
-                    <div className='flex gap-4 text-sm text-gray-500 font-medium'>
+            {/* Control Bar */}
+            <div className='p-3 border-b dark:border-gray-700 flex justify-between items-center bg-white dark:bg-[#2c2e36] rounded-t-xl'>
+                <div className='flex gap-4 text-sm text-gray-500 font-medium'>
                         <button onClick={handleCopy} disabled={!activeStructureId && !activeWallId && !activeDoorId && !activeWindowId && !activeFurnitureId} className='hover:text-brand-blue disabled:opacity-50 flex items-center gap-1'><Copy size={14}/> Copy</button>
-                        <button onClick={handlePaste} disabled={!clipboard} className='hover:text-brand-blue disabled:opacity-50 flex items-center gap-1'><Clipboard size={14}/> Paste</button>
+                    <button onClick={handlePaste} disabled={!clipboard} className='hover:text-brand-blue disabled:opacity-50 flex items-center gap-1'><Clipboard size={14}/> Paste</button>
                         <button onClick={handleCut} disabled={!activeStructureId && !activeWallId && !activeDoorId && !activeWindowId && !activeFurnitureId} className='hover:text-brand-blue disabled:opacity-50 flex items-center gap-1'><Scissors size={14}/> Cut</button>
                         <button onClick={handleDelete} disabled={!activeStructureId && !activeWallId && !activeDoorId && !activeWindowId && !activeFurnitureId} className='hover:text-red-500 disabled:opacity-50 flex items-center gap-1'><Trash2 size={14}/> Delete</button>
-                    </div>
-                    
-                    <div className="flex gap-2 items-center">
-                        <span className="text-xs text-gray-500">Zoom: {(zoom * 100).toFixed(0)}%</span>
-                        <button 
-                            className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition ${activeTool === 'structure' ? 'bg-purple-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200'}`}
-                            onClick={() => setTool('structure')}
-                        >
-                            <BoxSelect size={16}/> Add Area
-                        </button>
-                        <button 
-                            className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition ${activeTool === 'wall' ? 'bg-red-500 text-white shadow-lg' : 'bg-brand-blue text-white hover:bg-blue-600'}`}
-                            onClick={() => setTool(activeTool === 'wall' ? 'select' : 'wall')}
-                        >
-                            <Zap size={16}/> {activeTool === 'wall' ? (wallStartPoint ? 'Finish' : 'Wall') : 'Add Wall'}
-                        </button>
-                    </div>
                 </div>
                 
-                {/* SVG Canvas */}
-                <div 
+                    <div className="flex gap-2 items-center">
+                        <span className="text-xs text-gray-500">Zoom: {(zoom * 100).toFixed(0)}%</span>
+                    <button 
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition ${activeTool === 'structure' ? 'bg-purple-500 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200'}`}
+                        onClick={() => setTool('structure')}
+                    >
+                            <BoxSelect size={16}/> Add Area
+                    </button>
+                    <button 
+                        className={`px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-2 transition ${activeTool === 'wall' ? 'bg-red-500 text-white shadow-lg' : 'bg-brand-blue text-white hover:bg-blue-600'}`}
+                        onClick={() => setTool(activeTool === 'wall' ? 'select' : 'wall')}
+                    >
+                            <Zap size={16}/> {activeTool === 'wall' ? (wallStartPoint ? 'Finish' : 'Wall') : 'Add Wall'}
+                    </button>
+                </div>
+            </div>
+            
+            {/* SVG Canvas */}
+            <div 
                     ref={containerRef}
                     className="flex-1 overflow-hidden bg-gray-50 dark:bg-[#1f2128] rounded-b-xl border-x border-b dark:border-gray-700 relative"
                     style={{ cursor: activeTool === 'wall' || activeTool === 'measure' ? 'crosshair' : isPanning ? 'grabbing' : 'default' }}
@@ -1265,8 +1265,8 @@ export default function FloorplanEditor({ rooms, walls: propWalls, structures: p
                         if (item) {
                             setContextMenu({ x: e.clientX, y: e.clientY });
                         }
-                    }}
-                >
+                }}
+            >
                 <svg 
                     ref={svgRef}
                     width={width} height={height} 
@@ -1296,8 +1296,8 @@ export default function FloorplanEditor({ rooms, walls: propWalls, structures: p
                         <>
                             <pattern id="smallGrid" width={gridSize} height={gridSize} patternUnits="userSpaceOnUse">
                                 <path d={`M ${gridSize} 0 L 0 0 0 ${gridSize}`} fill="none" stroke="#e5e7eb" strokeWidth="0.5"/>
-                            </pattern>
-                            <rect width="100%" height="100%" fill="url(#smallGrid)" />
+                    </pattern>
+                    <rect width="100%" height="100%" fill="url(#smallGrid)" />
                         </>
                     )}
                     
