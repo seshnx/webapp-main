@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
     Plus, Edit2, Trash2, Users, DollarSign, Mic, 
     LayoutGrid, Save, Loader2, ChevronDown, ChevronUp,
-    Copy, Map, List, X
+    Copy, Map, List
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
