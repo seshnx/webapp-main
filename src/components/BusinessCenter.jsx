@@ -128,15 +128,18 @@ export default function BusinessCenter({ user, userData }) {
 
                         {/* Stats Grid */}
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {stats.map((stat, i) => (
+                            {stats.map((stat, i) => {
+                            const IconComponent = stat.icon;
+                            return (
                                 <div key={i} className="bg-white dark:bg-[#2c2e36] p-5 rounded-xl border dark:border-gray-700 shadow-sm">
                                     <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400 mb-2">
-                                        {stat.icon}
+                                        <IconComponent size={stat.iconSize} />
                                         <span className="text-xs font-bold uppercase tracking-wide">{stat.label}</span>
                                     </div>
                                     <div className="text-2xl font-bold dark:text-white">{stat.value}</div>
                                 </div>
-                            ))}
+                            );
+                        })}
                         </div>
 
                         {/* Quick Actions */}
@@ -147,24 +150,27 @@ export default function BusinessCenter({ user, userData }) {
                                     Quick Actions
                                 </h2>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    {quickActions.map(action => (
-                                        <button
-                                            key={action.id}
-                                            onClick={() => setActiveTab(action.id)}
-                                            className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm hover:shadow-md transition-all text-left group hover:border-brand-blue dark:hover:border-brand-blue"
-                                        >
-                                            <div className={`w-12 h-12 rounded-xl bg-${action.color}-50 dark:bg-${action.color}-900/20 flex items-center justify-center mb-4`}>
-                                                {action.icon}
-                                            </div>
-                                            <h3 className="font-bold dark:text-white mb-1 flex items-center gap-2">
-                                                {action.title}
-                                                <ChevronRight size={16} className="text-gray-400 group-hover:text-brand-blue group-hover:translate-x-1 transition-all" />
-                                            </h3>
-                                            <p className="text-sm text-gray-500 dark:text-gray-400">
-                                                {action.description}
-                                            </p>
-                                        </button>
-                                    ))}
+                                    {quickActions.map(action => {
+                                        const IconComponent = action.icon;
+                                        return (
+                                            <button
+                                                key={action.id}
+                                                onClick={() => setActiveTab(action.id)}
+                                                className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm hover:shadow-md transition-all text-left group hover:border-brand-blue dark:hover:border-brand-blue"
+                                            >
+                                                <div className={`w-12 h-12 rounded-xl bg-${action.color}-50 dark:bg-${action.color}-900/20 flex items-center justify-center mb-4`}>
+                                                    <IconComponent className={action.iconClassName} />
+                                                </div>
+                                                <h3 className="font-bold dark:text-white mb-1 flex items-center gap-2">
+                                                    {action.title}
+                                                    <ChevronRight size={16} className="text-gray-400 group-hover:text-brand-blue group-hover:translate-x-1 transition-all" />
+                                                </h3>
+                                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                                    {action.description}
+                                                </p>
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
@@ -219,22 +225,25 @@ export default function BusinessCenter({ user, userData }) {
         <div className="max-w-7xl mx-auto pb-20">
             {/* Tab Navigation */}
             <div className="mb-6 bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-1.5 flex flex-wrap gap-1 shadow-sm sticky top-0 z-10">
-                {tabs.map(tab => (
-                    <button
-                        key={tab.id}
-                        onClick={() => setActiveTab(tab.id)}
-                        className={`
-                            flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all
-                            ${activeTab === tab.id 
-                                ? 'bg-brand-blue text-white shadow-md' 
-                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                            }
-                        `}
-                    >
-                        {tab.icon}
-                        <span className="hidden sm:inline">{tab.label}</span>
-                    </button>
-                ))}
+                {tabs.map(tab => {
+                    const IconComponent = tab.icon;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`
+                                flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all
+                                ${activeTab === tab.id 
+                                    ? 'bg-brand-blue text-white shadow-md' 
+                                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                                }
+                            `}
+                        >
+                            <IconComponent size={tab.iconSize} />
+                            <span className="hidden sm:inline">{tab.label}</span>
+                        </button>
+                    );
+                })}
             </div>
 
             {/* Content Area */}
