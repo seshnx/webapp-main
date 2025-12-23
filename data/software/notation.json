@@ -1,0 +1,51 @@
+{
+  "Music Notation": {
+    "Desktop Notation Software": [
+      "Avid Sibelius",
+      "Avid Sibelius Ultimate",
+      "Avid Sibelius First",
+      "MuseScore",
+      "MuseScore 3",
+      "MuseScore 4",
+      "MakeMusic Finale",
+      "Steinberg Dorico",
+      "PreSonus Notion",
+      "Noteflight",
+      "Flat",
+      "StaffPad"
+    ],
+    "Mobile Notation Apps": [
+      "MuseScore",
+      "MuseScore 3",
+      "MuseScore 4",
+      "Noteflight",
+      "Flat",
+      "StaffPad",
+      "PreSonus Notion",
+      "ForScore",
+      "Newzik",
+      "Piascore",
+      "Musicnotes",
+      "Sheet Music Direct",
+      "Tomplay",
+      "SmartMusic"
+    ],
+    "Tablature Software": [
+      "Guitar Pro",
+      "Guitar Pro 8",
+      "Guitar Pro 7",
+      "TuxGuitar",
+      "Power Tab Editor",
+      "TabIt",
+      "MuseScore",
+      "MuseScore 3",
+      "MuseScore 4",
+      "MakeMusic Finale",
+      "Noteflight",
+      "Flat",
+      "Avid Sibelius",
+      "Avid Sibelius Ultimate"
+    ]
+  }
+}
+

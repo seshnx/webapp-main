@@ -10,6 +10,107 @@ import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import { EQUIP_CATEGORIES } from '../../config/constants';
 
 /**
+ * Map database category names to EQUIP_CATEGORIES IDs
+ */
+function mapCategoryToId(dbCategory) {
+    if (!dbCategory) return 'other';
+    
+    const categoryLower = dbCategory.toLowerCase().trim();
+    
+    // Direct mappings from database category names to EQUIP_CATEGORIES IDs
+    const categoryMap = {
+        // Recording & Production
+        'microphones': 'microphones',
+        'microphones & transducers': 'microphones',
+        'audio interfaces': 'audio_interfaces',
+        'preamps': 'preamps',
+        'preamps & channel strips': 'preamps',
+        'mixing consoles': 'mixing_consoles',
+        'mixers & consoles': 'mixing_consoles',
+        'mixing consoles & mixers': 'mixing_consoles',
+        'studio monitors': 'monitors',
+        'monitors': 'monitors',
+        'headphones': 'headphones',
+        'outboard gear': 'outboard_processing',
+        'outboard processing': 'outboard_processing',
+        'effects processors': 'effects_processors',
+        'converters': 'converters',
+        'ad/da converters': 'converters',
+        'recording devices': 'recorders',
+        'recorders': 'recorders',
+        
+        // Instruments
+        'electric guitars': 'electric_guitars',
+        'acoustic guitars': 'acoustic_guitars',
+        'bass guitars': 'bass_guitars',
+        'guitar amps': 'guitar_amps',
+        'guitar & bass amplifiers': 'guitar_amps',
+        'guitar effects': 'guitar_effects',
+        'guitar pedals': 'guitar_effects',
+        'synthesizers': 'synthesizers',
+        'keyboards': 'keyboards',
+        'midi controllers': 'midi_controllers',
+        'pianos': 'pianos',
+        'drum kits': 'drum_kits',
+        'electronic drums': 'electronic_drums',
+        'drum machines': 'drum_machines',
+        'string instruments': 'string_instruments',
+        'wind instruments': 'wind_instruments',
+        
+        // Live Sound
+        'pa speakers': 'pa_speakers',
+        'power amps': 'power_amps',
+        'live mixers': 'live_mixers',
+        'wireless systems': 'wireless_systems',
+        'in ear monitors': 'in_ear_monitors',
+        'stage gear': 'stage_gear',
+        
+        // DJ
+        'turntables': 'turntables',
+        'dj controllers': 'dj_controllers',
+        'dj mixers': 'dj_mixers',
+        
+        // Other
+        'cables': 'cables',
+        'patchbays': 'patchbays',
+        'acoustic treatment': 'acoustic_treatment',
+        'studio furniture': 'studio_furniture',
+        'computers': 'computers',
+        'software licenses': 'software_licenses',
+        'storage drives': 'storage_drives',
+        'stands & mounts': 'stands_mounts',
+        'cases & bags': 'cases_bags',
+        'vintage gear': 'vintage_gear'
+    };
+    
+    // Try exact match first
+    if (categoryMap[categoryLower]) {
+        return categoryMap[categoryLower];
+    }
+    
+    // Try partial matches
+    for (const [key, value] of Object.entries(categoryMap)) {
+        if (categoryLower.includes(key) || key.includes(categoryLower)) {
+            return value;
+        }
+    }
+    
+    // Try to find by label match in EQUIP_CATEGORIES
+    const matched = EQUIP_CATEGORIES.find(cat => 
+        cat.label.toLowerCase() === categoryLower ||
+        cat.label.toLowerCase().includes(categoryLower) ||
+        categoryLower.includes(cat.label.toLowerCase())
+    );
+    
+    if (matched) {
+        return matched.id;
+    }
+    
+    // Default to 'other' if no match found
+    return 'other';
+}
+
+/**
  * StudioEquipment - Full equipment inventory management
  */
 export default function StudioEquipment({ user, userData, onUpdate }) {
@@ -218,6 +319,11 @@ export default function StudioEquipment({ user, userData, onUpdate }) {
                                                     <span className="font-bold dark:text-white">
                                                         {item.brand && <span className="text-gray-500 font-medium">{item.brand}</span>} {item.name || item.model}
                                                     </span>
+                                                    {(item.quantity && item.quantity > 1) && (
+                                                        <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded font-medium">
+                                                            Qty: {item.quantity}
+                                                        </span>
+                                                    )}
                                                     {item.featured && (
                                                         <span className="text-xs bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-2 py-0.5 rounded">
                                                             Featured
@@ -291,7 +397,8 @@ function EquipmentModal({ item, onSave, onClose, saving }) {
         serial: '',
         value: '',
         notes: '',
-        featured: false
+        featured: false,
+        quantity: 1
     });
 
     const handleSubmit = () => {
@@ -303,12 +410,15 @@ function EquipmentModal({ item, onSave, onClose, saving }) {
     };
 
     const handleAutocompleteSelect = (selected) => {
+        // Map database category to EQUIP_CATEGORIES ID
+        const mappedCategory = mapCategoryToId(selected.category);
+        
         setFormData(prev => ({
             ...prev,
             name: selected.name || prev.name,
             brand: selected.brand || prev.brand,
             model: selected.model || prev.model,
-            category: selected.category || prev.category
+            category: mappedCategory // Use mapped category ID
         }));
     };
 
@@ -324,16 +434,27 @@ function EquipmentModal({ item, onSave, onClose, saving }) {
                     </button>
                 </div>
                 <div className="p-4 space-y-4">
-                    {/* Quick Add */}
+                    {/* Primary: Equipment Search */}
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Quick Search</label>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                            Search Equipment Database
+                            <span className="text-gray-400 font-normal ml-2">(Recommended)</span>
+                        </label>
                         <EquipmentAutocomplete
                             onSelect={handleAutocompleteSelect}
-                            placeholder="Search for equipment..."
+                            placeholder="Search for equipment (e.g. U87, SSL, Fender Twin)..."
+                            className="w-full"
                         />
+                        <p className="text-xs text-gray-400 mt-1">
+                            Start typing to search from verified equipment database
+                        </p>
                     </div>
 
                     <div className="border-t dark:border-gray-700 pt-4 space-y-4">
+                        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                            <p className="text-xs font-medium text-blue-700 dark:text-blue-300 mb-2">
+                                Or enter manually:
+                            </p>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Brand</label>
@@ -354,6 +475,7 @@ function EquipmentModal({ item, onSave, onClose, saving }) {
                                 />
                             </div>
                         </div>
+                        </div>
 
                         <div>
                             <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Category</label>
@@ -369,7 +491,18 @@ function EquipmentModal({ item, onSave, onClose, saving }) {
                             </select>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-3 gap-4">
+                            <div>
+                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Quantity</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={formData.quantity || 1}
+                                    onChange={(e) => setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })}
+                                    className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:border-gray-600 dark:text-white"
+                                    placeholder="1"
+                                />
+                            </div>
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Serial Number</label>
                                 <input

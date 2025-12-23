@@ -1,0 +1,84 @@
+{
+  "Live Performance": {
+    "DJ Software": [
+      "Serato DJ",
+      "Serato DJ Pro",
+      "Native Instruments Traktor",
+      "Native Instruments Traktor Pro",
+      "Pioneer Rekordbox",
+      "Atomix VirtualDJ",
+      "Mixxx",
+      "Mixvibes Cross",
+      "Algoriddim djay"
+    ],
+    "Live Looping": [
+      "Ableton Live",
+      "Ableton Live Suite",
+      "Ableton Live Standard",
+      "Ableton Live Intro",
+      "Boss RC-505",
+      "Boss RC-600",
+      "Boss RC-300",
+      "Electro-Harmonix 2880",
+      "Electro-Harmonix 45000",
+      "Pigtronix Infinity",
+      "TC Electronic Ditto",
+      "TC Electronic Ditto X4",
+      "TC Electronic Flashback",
+      "TC Electronic Flashback X4",
+      "Boomerang III"
+    ],
+    "Live Performance DAWs": [
+      "Ableton Live",
+      "Ableton Live Suite",
+      "Ableton Live Standard",
+      "Ableton Live Intro",
+      "Bitwig Studio",
+      "PreSonus Studio One",
+      "PreSonus Studio One Professional",
+      "PreSonus Studio One Artist",
+      "Cockos REAPER",
+      "Image-Line FL Studio",
+      "Image-Line FL Studio Producer",
+      "Image-Line FL Studio Signature",
+      "Apple Logic Pro",
+      "Apple GarageBand",
+      "Steinberg Cubase"
+    ],
+    "MIDI Controllers Software": [
+      "Native Instruments Komplete Kontrol",
+      "Native Instruments Maschine",
+      "Native Instruments Traktor",
+      "Ableton Push",
+      "Ableton Live",
+      "Arturia KeyLab",
+      "Arturia BeatStep",
+      "Arturia MiniLab",
+      "Novation Launchpad",
+      "Novation Launchkey",
+      "Novation Launch Control",
+      "Akai MPC",
+      "Akai MPC Live",
+      "Akai MPC X",
+      "Akai MPC Studio"
+    ],
+    "Backing Track Players": [
+      "OnSong",
+      "BandHelper",
+      "Setlist Maker",
+      "Setlist Helper",
+      "SongBook",
+      "Musicnotes",
+      "Sheet Music Direct",
+      "Tomplay",
+      "SmartMusic",
+      "ForScore",
+      "Newzik",
+      "Piascore",
+      "MuseScore",
+      "Noteflight",
+      "Flat"
+    ]
+  }
+}
+

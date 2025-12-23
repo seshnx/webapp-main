@@ -1,0 +1,70 @@
+{
+  "Video Audio": {
+    "Video Editing with Audio": [
+      "Adobe Premiere Pro",
+      "Adobe After Effects",
+      "Adobe Audition",
+      "Apple Final Cut Pro",
+      "Apple Logic Pro",
+      "Avid Media Composer",
+      "Avid Pro Tools",
+      "Blackmagic DaVinci Resolve",
+      "Steinberg Nuendo",
+      "Steinberg Cubase",
+      "PreSonus Studio One",
+      "Cockos REAPER",
+      "Image-Line FL Studio",
+      "Ableton Live"
+    ],
+    "Audio for Video Post": [
+      "Avid Pro Tools",
+      "Apple Logic Pro",
+      "Steinberg Nuendo",
+      "Steinberg Cubase",
+      "Adobe Audition",
+      "Adobe Premiere Pro",
+      "Adobe After Effects",
+      "Blackmagic DaVinci Resolve",
+      "Avid Media Composer",
+      "Apple Final Cut Pro",
+      "PreSonus Studio One",
+      "Cockos REAPER",
+      "Image-Line FL Studio",
+      "Ableton Live"
+    ],
+    "Sync Tools": [
+      "Avid Pro Tools",
+      "Apple Logic Pro",
+      "Steinberg Nuendo",
+      "Steinberg Cubase",
+      "Adobe Audition",
+      "Adobe Premiere Pro",
+      "Adobe After Effects",
+      "Blackmagic DaVinci Resolve",
+      "Avid Media Composer",
+      "Apple Final Cut Pro",
+      "PreSonus Studio One",
+      "Cockos REAPER",
+      "Image-Line FL Studio",
+      "Ableton Live"
+    ],
+    "Dialogue Tools": [
+      "iZotope RX",
+      "iZotope RX Advanced",
+      "iZotope RX Elements",
+      "iZotope RX Dialogue Isolate",
+      "iZotope RX Voice Isolate",
+      "iZotope RX Voice De-Noise",
+      "Waves Z-Noise",
+      "Waves X-Noise",
+      "Waves X-Hum",
+      "Cedar DNS One",
+      "Cedar DNS 2000",
+      "Cedar Retouch",
+      "Accusonus ERA",
+      "Accusonus ERA-D",
+      "Zynaptiq UNVEIL"
+    ]
+  }
+}
+

@@ -5,15 +5,35 @@ import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 
 export default function RoomManagementModal({ room, equipment, setRoom, setEquipment, onClose, onSave, onDelete, isNew }) {
     
+    const [selectedItem, setSelectedItem] = useState(null);
+    const [quantity, setQuantity] = useState(1);
+
     // Handler for the new Autocomplete component
     const handleGearSelect = (item) => {
+        setSelectedItem(item);
+        setQuantity(1);
+    };
+
+    const handleAddEquipment = () => {
+        if (!selectedItem) return;
+        
         const newItem = {
-            category: item.category || 'Custom',
-            subCategory: item.subCategory || 'Other',
-            model: item.name,
-            brand: item.brand || 'Unknown'
+            category: selectedItem.category || 'Custom',
+            subCategory: selectedItem.subCategory || 'Other',
+            model: selectedItem.name,
+            brand: selectedItem.brand || 'Unknown',
+            quantity: quantity || 1
         };
         setEquipment([...equipment, newItem]);
+        setSelectedItem(null);
+        setQuantity(1);
+    };
+
+    const handleUpdateQuantity = (index, newQuantity) => {
+        const updated = equipment.map((item, i) => 
+            i === index ? { ...item, quantity: Math.max(1, parseInt(newQuantity) || 1) } : item
+        );
+        setEquipment(updated);
     };
     
     const removeEquipment = (index) => {
@@ -54,10 +74,33 @@ export default function RoomManagementModal({ room, equipment, setRoom, setEquip
                     {/* NEW: Reusable Component */}
                     <div className="relative">
                         <label className="text-xs text-gray-500 mb-1 block uppercase font-bold">Add Equipment</label>
-                        <EquipmentAutocomplete 
-                            placeholder="Type gear name to add to inventory..."
-                            onSelect={handleGearSelect}
-                        />
+                        <div className="flex gap-2">
+                            <div className="flex-1">
+                                <EquipmentAutocomplete 
+                                    placeholder="Type gear name to add to inventory..."
+                                    onSelect={handleGearSelect}
+                                />
+                            </div>
+                            {selectedItem && (
+                                <>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        value={quantity}
+                                        onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                                        className="w-20 p-2 border rounded-lg dark:bg-[#1f2128] dark:border-gray-600 dark:text-white text-sm"
+                                        placeholder="Qty"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleAddEquipment}
+                                        className="px-3 py-2 bg-brand-blue text-white rounded-lg font-medium hover:bg-blue-600 transition flex items-center gap-1"
+                                    >
+                                        <Plus size={14} /> Add
+                                    </button>
+                                </>
+                            )}
+                        </div>
                     </div>
                     
                     <div className="bg-gray-50 dark:bg-[#1f2128] rounded-lg p-4 border dark:border-gray-700 min-h-[100px]">
@@ -72,6 +115,9 @@ export default function RoomManagementModal({ room, equipment, setRoom, setEquip
                                            return (
                                                <span key={i} className="flex items-center gap-1 bg-white dark:bg-dark-card border dark:border-gray-600 px-2 py-1 rounded text-xs dark:text-white shadow-sm">
                                                    <span className="text-gray-500 font-semibold">{item.brand !== 'Unknown' ? item.brand : ''}</span> {item.model}
+                                                   {(item.quantity && item.quantity > 1) && (
+                                                       <span className="text-blue-600 dark:text-blue-400 font-medium">×{item.quantity}</span>
+                                                   )}
                                                    <X size={12} className="cursor-pointer hover:text-red-500 ml-1" onClick={() => removeEquipment(origIndex)} />
                                                </span>
                                            );

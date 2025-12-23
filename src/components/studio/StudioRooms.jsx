@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { 
     Plus, Edit2, Trash2, Users, DollarSign, Mic, 
     LayoutGrid, Save, Loader2, ChevronDown, ChevronUp,
-    Copy, Map, List
+    Copy, Map, List, X
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
@@ -32,7 +32,7 @@ export default function StudioRooms({ user, userData, onUpdate }) {
         description: '',
         rate: 50,
         capacity: 4,
-        equipment: '',
+        equipment: [], // Array of {name, brand, model, quantity}
         amenities: [],
         minBookingHours: 1,
         active: true,
@@ -314,7 +314,9 @@ export default function StudioRooms({ user, userData, onUpdate }) {
                                             {room.equipment && (
                                                 <span className="flex items-center gap-1">
                                                     <Mic size={14} />
-                                                    {room.equipment.split(',').length} items
+                                                    {Array.isArray(room.equipment) 
+                                                        ? room.equipment.reduce((sum, item) => sum + (item.quantity || 1), 0)
+                                                        : room.equipment.split(',').length} items
                                                 </span>
                                             )}
                                         </div>
@@ -370,11 +372,19 @@ export default function StudioRooms({ user, userData, onUpdate }) {
                                     )}
                                     {room.equipment && (
                                         <div className="flex flex-wrap gap-2">
-                                            {room.equipment.split(',').map((item, i) => (
-                                                <span key={i} className="text-xs bg-white dark:bg-gray-800 border dark:border-gray-700 px-2 py-1 rounded">
-                                                    {item.trim()}
-                                                </span>
-                                            ))}
+                                            {Array.isArray(room.equipment) 
+                                                ? room.equipment.map((item, i) => (
+                                                    <span key={i} className="text-xs bg-white dark:bg-gray-800 border dark:border-gray-700 px-2 py-1 rounded">
+                                                        {item.brand && `${item.brand} `}{item.name || item.model}
+                                                        {(item.quantity && item.quantity > 1) && ` (×${item.quantity})`}
+                                                    </span>
+                                                ))
+                                                : room.equipment.split(',').map((item, i) => (
+                                                    <span key={i} className="text-xs bg-white dark:bg-gray-800 border dark:border-gray-700 px-2 py-1 rounded">
+                                                        {item.trim()}
+                                                    </span>
+                                                ))
+                                            }
                                         </div>
                                     )}
                                 </div>
@@ -537,11 +547,14 @@ function RoomEditor({ room, setRoom, onSave, onCancel, saving, isNew, roomAmenit
 
             <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Equipment</label>
-                <EquipmentAutocomplete
-                    value={room.equipment || ''}
-                    onChange={val => setRoom({ ...room, equipment: val })}
-                    placeholder="Search and add equipment..."
-                    multi={true}
+                <RoomEquipmentManager
+                    equipment={Array.isArray(room.equipment) ? room.equipment : (room.equipment ? room.equipment.split(',').map(item => ({
+                        name: item.trim(),
+                        brand: '',
+                        model: '',
+                        quantity: 1
+                    })) : [])}
+                    onChange={(equipment) => setRoom({ ...room, equipment })}
                 />
             </div>
 
@@ -639,6 +652,105 @@ function RoomEditor({ room, setRoom, onSave, onCancel, saving, isNew, roomAmenit
                     {isNew ? 'Add Room' : 'Save Changes'}
                 </button>
             </div>
+        </div>
+    );
+}
+
+/**
+ * RoomEquipmentManager - Component for managing room equipment with quantity
+ */
+function RoomEquipmentManager({ equipment, onChange }) {
+    const [selectedItem, setSelectedItem] = useState(null);
+    const [quantity, setQuantity] = useState(1);
+
+    const handleAddEquipment = (item) => {
+        if (!item || !item.name) return;
+        
+        const newEquipment = {
+            name: item.name,
+            brand: item.brand || '',
+            model: item.model || item.name,
+            quantity: quantity || 1
+        };
+        
+        onChange([...(equipment || []), newEquipment]);
+        setSelectedItem(null);
+        setQuantity(1);
+    };
+
+    const handleRemoveEquipment = (index) => {
+        const updated = equipment.filter((_, i) => i !== index);
+        onChange(updated);
+    };
+
+    const handleUpdateQuantity = (index, newQuantity) => {
+        const updated = equipment.map((item, i) => 
+            i === index ? { ...item, quantity: Math.max(1, parseInt(newQuantity) || 1) } : item
+        );
+        onChange(updated);
+    };
+
+    return (
+        <div className="space-y-3">
+            <div className="flex gap-2">
+                <div className="flex-1">
+                    <EquipmentAutocomplete
+                        onSelect={(item) => {
+                            setSelectedItem(item);
+                            setQuantity(1);
+                        }}
+                        placeholder="Search and add equipment..."
+                    />
+                </div>
+                {selectedItem && (
+                    <>
+                        <input
+                            type="number"
+                            min="1"
+                            value={quantity}
+                            onChange={(e) => setQuantity(parseInt(e.target.value) || 1)}
+                            className="w-20 p-2 border rounded-xl dark:bg-[#2c2e36] dark:border-gray-600 dark:text-white text-sm"
+                            placeholder="Qty"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => handleAddEquipment(selectedItem)}
+                            className="px-4 py-2 bg-brand-blue text-white rounded-xl font-medium hover:bg-blue-600 transition flex items-center gap-1"
+                        >
+                            <Plus size={16} /> Add
+                        </button>
+                    </>
+                )}
+            </div>
+            
+            {equipment && equipment.length > 0 && (
+                <div className="space-y-2">
+                    {equipment.map((item, index) => (
+                        <div key={index} className="flex items-center gap-2 p-2 bg-gray-50 dark:bg-[#1f2128] rounded-lg border dark:border-gray-700">
+                            <div className="flex-1 min-w-0">
+                                <div className="font-medium text-sm dark:text-white">
+                                    {item.brand && <span className="text-gray-500">{item.brand} </span>}
+                                    {item.name || item.model}
+                                </div>
+                            </div>
+                            <input
+                                type="number"
+                                min="1"
+                                value={item.quantity || 1}
+                                onChange={(e) => handleUpdateQuantity(index, e.target.value)}
+                                className="w-16 p-1.5 border rounded-lg dark:bg-[#2c2e36] dark:border-gray-600 dark:text-white text-sm text-center"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => handleRemoveEquipment(index)}
+                                className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition"
+                            >
+                                <X size={16} />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

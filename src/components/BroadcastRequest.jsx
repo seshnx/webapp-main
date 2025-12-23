@@ -4,11 +4,10 @@ import { supabase } from '../config/supabase';
 import { GENRE_DATA, INSTRUMENT_DATA, ACCOUNT_TYPES } from '../config/constants';
 import StudioMap from './shared/StudioMap';
 import LocationPicker from './shared/LocationPicker'; 
-import { useEquipmentDatabase } from '../hooks/useEquipmentDatabase';
 import { fetchZipLocation } from '../utils/geocode';
+import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
 
 export default function BroadcastRequest({ user, userData, onBack, onSuccess }) {
-  const { loading: equipLoading, data: equipData, categories: equipCats } = useEquipmentDatabase();
 
   // --- MAP & LOCATION STATE ---
   const [broadcastRangeIndex, setBroadcastRangeIndex] = useState(2); 
@@ -331,30 +330,20 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }) 
                               </div>
 
                               <div className="flex-1 flex gap-2">
-                                  {need.type === 'Gear' && !equipLoading ? (
-                                      <div className="flex flex-col gap-2 w-full">
-                                          <select className="w-full p-2 text-xs border rounded bg-white dark:bg-[#2c2e36] dark:border-gray-600 dark:text-white" value={need.gearSelection?.category || ''} onChange={(e) => updateGearSelection(need.id, 'category', e.target.value)}>
-                                              <option value="">Select Category...</option>
-                                              {equipCats.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                          </select>
-                                          {need.gearSelection?.category && equipData[need.gearSelection.category] && (
-                                                  <select className="w-full p-2 text-xs border rounded bg-white dark:bg-[#2c2e36] dark:border-gray-600 dark:text-white" value={need.gearSelection?.subCategory || ''} onChange={(e) => updateGearSelection(need.id, 'subCategory', e.target.value)}>
-                                                      <option value="">Select Type...</option>
-                                                      {Object.keys(equipData[need.gearSelection.category]).map(key => <option key={key} value={key}>{key.replace(/_/g, ' ')}</option>)}
-                                                  </select>
-                                              )}
-                                              {need.gearSelection?.subCategory && (
-                                                  <select className="w-full p-2 text-xs border rounded bg-white dark:bg-[#2c2e36] dark:border-gray-600 dark:text-white" value={need.gearSelection?.type || ''} onChange={(e) => updateGearSelection(need.id, 'type', e.target.value)}>
-                                                      <option value="">Select Subtype...</option>
-                                                      {Object.keys(equipData[need.gearSelection.category][need.gearSelection.subCategory]).map(key => <option key={key} value={key}>{key.replace(/_/g, ' ')}</option>)}
-                                                  </select>
-                                              )}
-                                              {need.gearSelection?.type && (
-                                                  <select className="w-full p-2 text-sm font-bold border-l-4 border-brand-blue rounded bg-white dark:bg-[#2c2e36] dark:border-gray-600 dark:text-white shadow-sm" value={need.gearSelection?.item || ''} onChange={(e) => updateGearSelection(need.id, 'item', e.target.value)}>
-                                                      <option value="">Select Specific Item...</option>
-                                                      {equipData[need.gearSelection.category][need.gearSelection.subCategory][need.gearSelection.type].map(item => <option key={item} value={item}>{item}</option>)}
-                                                  </select>
-                                              )}
+                                  {need.type === 'Gear' ? (
+                                      <div className="w-full">
+                                          <EquipmentAutocomplete
+                                              placeholder="Search for gear (e.g. U87, SSL, Fender Twin)..."
+                                              value={need.value || ''}
+                                              onChange={(value) => updateNeed(need.id, 'value', value)}
+                                              onSelect={(item) => {
+                                                  const fullName = item.brand !== 'Various' && item.brand !== 'Unknown' 
+                                                      ? `${item.brand} ${item.name}` 
+                                                      : item.name;
+                                                  updateNeed(need.id, 'value', fullName);
+                                              }}
+                                              className="w-full"
+                                          />
                                       </div>
                                   ) : (
                                       <input className="w-full p-2 text-sm border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-[#2c2e36] dark:text-white placeholder-gray-400 focus:ring-2 focus:ring-brand-blue" placeholder="Describe requirement..." value={need.value} onChange={(e) => updateNeed(need.id, 'value', e.target.value)} />

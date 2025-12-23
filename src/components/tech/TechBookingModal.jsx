@@ -3,6 +3,7 @@ import { X, Wrench, Calendar, DollarSign, Loader2, Video } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { SERVICE_CATALOGUE } from '../../config/constants';
+import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 
 export default function TechBookingModal({ user, userData, target, onClose }) {
     const [submitting, setSubmitting] = useState(false);
@@ -68,7 +69,20 @@ export default function TechBookingModal({ user, userData, target, onClose }) {
                         <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Service Type</label><select className="w-full p-2.5 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white text-sm" value={form.serviceCategory} onChange={e => setForm({...form, serviceCategory: e.target.value})}>{SERVICE_CATALOGUE.map(s => <option key={s.id} value={s.label}>{s.label}</option>)}</select></div>
                         <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Logistics</label><select className="w-full p-2.5 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white text-sm" value={form.logistics} onChange={e => setForm({...form, logistics: e.target.value})}><option value="Drop-off">I will drop it off</option><option value="On-site">Tech comes to me</option><option value="Ship">I will ship it</option></select></div>
                     </div>
-                    <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Equipment</label><input className="w-full p-3 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white font-bold" placeholder="e.g. Fender Twin Reverb" value={form.equipmentName} onChange={e => setForm({...form, equipmentName: e.target.value})}/></div>
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Equipment</label>
+                        <EquipmentAutocomplete
+                            placeholder="Search for equipment (e.g. Fender Twin Reverb, U87)..."
+                            value={form.equipmentName}
+                            onChange={(value) => setForm({...form, equipmentName: value})}
+                            onSelect={(item) => {
+                                const fullName = item.brand !== 'Various' && item.brand !== 'Unknown' 
+                                    ? `${item.brand} ${item.name}` 
+                                    : item.name;
+                                setForm({...form, equipmentName: fullName});
+                            }}
+                        />
+                    </div>
                     <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Issue Description</label><textarea className="w-full p-3 border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white min-h-[100px] text-sm" placeholder="Describe symptoms..." value={form.issueDescription} onChange={e => setForm({...form, issueDescription: e.target.value})}/></div>
                     <div className="pt-4 border-t dark:border-gray-700">
                         <label className="flex items-center gap-2 cursor-pointer text-brand-blue hover:text-blue-600 font-bold mb-3"><Video size={16}/> Add Video/Photo <input type="file" className="hidden" accept="image/*,video/*" onChange={handleFileUpload} disabled={uploading}/></label>

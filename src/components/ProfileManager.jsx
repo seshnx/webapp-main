@@ -12,6 +12,7 @@ import SettingsTab from './SettingsTab';
 import { PROFILE_SCHEMAS, GENRE_DATA, INSTRUMENT_DATA } from '../config/constants';
 import { MultiSelect, NestedSelect } from './shared/Inputs';
 import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
+import SoftwareAutocomplete from './shared/SoftwareAutocomplete';
 
 // --- Validation Schemas ---
 const mainProfileSchema = z.object({
@@ -482,6 +483,20 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
                                     value={formData[field.key] || ''} 
                                     onChange={(val) => handleChange(field.key, val)}
                                     placeholder="Add gear..." 
+                                />
+                        ) : field.key === 'daw' ? (
+                                <SoftwareAutocomplete 
+                                    multi={field.type === 'multi_select'} 
+                                    value={formData[field.key] || ''} 
+                                    onChange={(val) => handleChange(field.key, val)}
+                                    placeholder="Search for DAW or software..." 
+                                />
+                        ) : field.key === 'software' || field.key === 'softwareList' ? (
+                                <SoftwareAutocomplete 
+                                    multi={true} 
+                                    value={formData[field.key] || ''} 
+                                    onChange={(val) => handleChange(field.key, val)}
+                                    placeholder="Add software..." 
                                 />
                         ) : (
                             <input type={field.type === 'number' ? 'number' : 'text'} className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-brand-blue outline-none" value={formData[field.key] || ''} onChange={e => handleChange(field.key, e.target.value)} />
