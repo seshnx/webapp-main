@@ -1563,6 +1563,7 @@ export default function FloorplanEditor({ rooms, walls: propWalls, structures: p
                         })()}
                     </g>
                 </svg>
+                </div>
                 
                 {/* 360° Viewer Modal */}
                 {viewing360Room && (
