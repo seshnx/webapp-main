@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
     Plus, Edit2, Trash2, Users, DollarSign, Mic, 
     LayoutGrid, Save, Loader2, ChevronDown, ChevronUp,
@@ -393,8 +393,8 @@ export default function StudioRooms({ user, userData, onUpdate }) {
  */
 function RoomEditor({ room, setRoom, onSave, onCancel, saving, isNew, roomAmenities, user }) {
     const { uploadImage, uploading } = useImageUpload();
-    const [show360Viewer, setShow360Viewer] = React.useState(false);
-    const fileInputRef = React.useRef(null);
+    const [show360Viewer, setShow360Viewer] = useState(false);
+    const fileInputRef = useRef(null);
 
     const handleAmenityToggle = (amenity) => {
         const current = room.amenities || [];
