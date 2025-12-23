@@ -33,27 +33,31 @@ export default function BusinessCenter({ user, userData }) {
         { 
             id: 'overview', 
             label: 'Overview', 
-            icon: <Briefcase size={18} />,
+            icon: Briefcase,
+            iconSize: 18,
             available: true
         },
         { 
             id: 'studio', 
             label: 'Studio Ops', 
-            icon: <Home size={18} />,
+            icon: Home,
+            iconSize: 18,
             available: isStudio,
             description: 'Manage rooms, rates & amenities'
         },
         { 
             id: 'distribution', 
             label: 'Distribution', 
-            icon: <Globe size={18} />,
+            icon: Globe,
+            iconSize: 18,
             available: hasDistribution,
             description: 'Release music to streaming platforms'
         },
         { 
             id: 'roster', 
             label: 'Artist Roster', 
-            icon: <Users size={18} />,
+            icon: Users,
+            iconSize: 18,
             available: isLabel,
             description: 'Manage your signed artists'
         },
@@ -61,10 +65,10 @@ export default function BusinessCenter({ user, userData }) {
 
     // Stats for overview
     const stats = [
-        { label: 'Account Type', value: userData?.accountTypes?.join(', ') || 'User', icon: <Building2 size={16} /> },
-        { label: 'Studio Rooms', value: userData?.rooms?.length || 0, icon: <Home size={16} />, show: isStudio },
-        { label: 'Releases', value: '—', icon: <Music2 size={16} />, show: hasDistribution },
-        { label: 'Roster Artists', value: '—', icon: <Users size={16} />, show: isLabel },
+        { label: 'Account Type', value: userData?.accountTypes?.join(', ') || 'User', icon: Building2, iconSize: 16 },
+        { label: 'Studio Rooms', value: userData?.rooms?.length || 0, icon: Home, iconSize: 16, show: isStudio },
+        { label: 'Releases', value: '—', icon: Music2, iconSize: 16, show: hasDistribution },
+        { label: 'Roster Artists', value: '—', icon: Users, iconSize: 16, show: isLabel },
     ].filter(s => s.show !== false);
 
     // Quick actions based on roles
@@ -73,7 +77,8 @@ export default function BusinessCenter({ user, userData }) {
             id: 'studio', 
             title: 'Studio Settings', 
             description: 'Configure your studio rooms, rates, and amenities',
-            icon: <Home className="text-blue-500" />,
+            icon: Home,
+            iconClassName: 'text-blue-500',
             color: 'blue',
             show: isStudio
         },
@@ -81,7 +86,8 @@ export default function BusinessCenter({ user, userData }) {
             id: 'distribution', 
             title: 'New Release', 
             description: 'Distribute your music to 150+ streaming platforms',
-            icon: <Globe className="text-green-500" />,
+            icon: Globe,
+            iconClassName: 'text-green-500',
             color: 'green',
             show: hasDistribution
         },
@@ -89,7 +95,8 @@ export default function BusinessCenter({ user, userData }) {
             id: 'roster', 
             title: 'Manage Roster', 
             description: 'Sign artists and manage your label roster',
-            icon: <Users className="text-purple-500" />,
+            icon: Users,
+            iconClassName: 'text-purple-500',
             color: 'purple',
             show: isLabel
         },
