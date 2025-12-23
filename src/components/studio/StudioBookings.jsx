@@ -17,6 +17,7 @@ import {
 import { scheduleBookingReminder } from '../../utils/bookingReminders';
 import RecurringBookingModal from './RecurringBookingModal';
 import MultiRoomBookingModal from './MultiRoomBookingModal';
+import UnifiedCalendar from '../shared/UnifiedCalendar';
 
 const STATUS_CONFIG = {
     pending: { 
@@ -57,7 +58,8 @@ export default function StudioBookings({ user, onNavigateToChat }) {
     const [selectedBooking, setSelectedBooking] = useState(null);
     const [updating, setUpdating] = useState(null);
     const [viewMode, setViewMode] = useState('list'); // 'list' or 'calendar'
-    const [currentMonth, setCurrentMonth] = useState(new Date());
+    const [calendarView, setCalendarView] = useState('month'); // 'month', 'week', 'day'
+    const [currentDate, setCurrentDate] = useState(new Date());
     const [showBlockModal, setShowBlockModal] = useState(false);
     const [selectedDate, setSelectedDate] = useState(null);
     const [blockReason, setBlockReason] = useState('');
@@ -562,141 +564,30 @@ export default function StudioBookings({ user, onNavigateToChat }) {
 
             {/* Calendar View */}
             {viewMode === 'calendar' && (
-                <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden">
-                    {/* Calendar Header */}
-                    <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-[#23262f] flex justify-between items-center">
-                        <button 
-                            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))}
-                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition"
-                        >
-                            <ChevronLeft size={20} className="text-gray-600 dark:text-gray-300" />
-                        </button>
-                        <h3 className="font-bold dark:text-white text-lg">
-                            {currentMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                        </h3>
-                        <button 
-                            onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))}
-                            className="p-2 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition"
-                        >
-                            <ChevronRight size={20} className="text-gray-600 dark:text-gray-300" />
-                        </button>
-                    </div>
-                    
-                    {/* Calendar Grid */}
-                    <div className="p-4">
-                        {/* Day Headers */}
-                        <div className="grid grid-cols-7 gap-2 mb-2">
-                            {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                                <div key={day} className="text-center text-sm font-bold text-gray-500 py-2">
-                                    {day}
-                                </div>
-                            ))}
-                        </div>
-                        
-                        {/* Calendar Days */}
-                        <div className="grid grid-cols-7 gap-2">
-                            {(() => {
-                                const year = currentMonth.getFullYear();
-                                const month = currentMonth.getMonth();
-                                const firstDay = new Date(year, month, 1).getDay();
-                                const daysInMonth = new Date(year, month + 1, 0).getDate();
-                                const today = new Date();
-                                
-                                const days = [];
-                                for (let i = 0; i < firstDay; i++) {
-                                    days.push(<div key={`empty-${i}`} className="aspect-square"></div>);
-                                }
-                                
-                                for (let day = 1; day <= daysInMonth; day++) {
-                                    const date = new Date(year, month, day);
-                                    const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-                                    const isToday = date.toDateString() === today.toDateString();
-                                    
-                                    // Get bookings for this day
-                                    const dayBookings = bookings.filter(b => {
-                                        if (!b.date) return false;
-                                        const bookingDate = b.date instanceof Date ? b.date : new Date(b.date);
-                                        if (isNaN(bookingDate.getTime())) return false;
-                                        return bookingDate.toDateString() === date.toDateString();
-                                    });
-                                    
-                                    // Get blocks for this day
-                                    const dayBlocks = blockedDates.filter(b => {
-                                        if (!b.date) return false;
-                                        const blockDate = b.date instanceof Date ? b.date : new Date(b.date);
-                                        if (isNaN(blockDate.getTime())) return false;
-                                        return blockDate.toDateString() === date.toDateString();
-                                    });
-                                    
-                                    const hasConfirmed = dayBookings.some(b => (b.status || '').toLowerCase() === 'confirmed');
-                                    const hasPending = dayBookings.some(b => (b.status || '').toLowerCase() === 'pending');
-                                    const isBlocked = dayBlocks.length > 0;
-                                    
-                                    days.push(
-                                        <button
-                                            key={day}
-                                            onClick={() => !isPast && openBlockModal(date)}
-                                            disabled={isPast}
-                                            className={`aspect-square p-1 rounded-xl flex flex-col items-center justify-center relative transition ${
-                                                isPast ? 'opacity-40 cursor-not-allowed' :
-                                                isBlocked ? 'bg-red-100 dark:bg-red-900/30 border-2 border-red-300 dark:border-red-700 hover:bg-red-200 dark:hover:bg-red-900/40' :
-                                                isToday ? 'bg-brand-blue text-white' :
-                                                hasConfirmed || hasPending ? 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30' :
-                                                'hover:bg-gray-100 dark:hover:bg-gray-700'
-                                            }`}
-                                        >
-                                            <span className={`text-sm font-medium ${
-                                                isToday ? 'text-white' : 
-                                                isBlocked ? 'text-red-700 dark:text-red-400' :
-                                                'dark:text-white'
-                                            }`}>
-                                                {day}
-                                            </span>
-                                            
-                                            {/* Indicators */}
-                                            <div className="flex gap-0.5 mt-0.5">
-                                                {hasConfirmed && <span className="w-1.5 h-1.5 bg-green-500 rounded-full"></span>}
-                                                {hasPending && <span className="w-1.5 h-1.5 bg-amber-500 rounded-full"></span>}
-                                                {isBlocked && <Ban size={10} className="text-red-600 dark:text-red-400" />}
-                                            </div>
-                                            
-                                            {/* Booking count badge */}
-                                            {dayBookings.length > 0 && !isToday && (
-                                                <span className="absolute -top-1 -right-1 w-4 h-4 bg-brand-blue text-white text-[10px] rounded-full flex items-center justify-center font-bold">
-                                                    {dayBookings.length}
-                                                </span>
-                                            )}
-                                        </button>
-                                    );
-                                }
-                                
-                                return days;
-                            })()}
-                        </div>
-                        
-                        {/* Legend */}
-                        <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t dark:border-gray-700 text-xs text-gray-500">
-                            <div className="flex items-center gap-1">
-                                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
-                                Confirmed
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
-                                Pending
-                            </div>
-                            <div className="flex items-center gap-1">
-                                <Ban size={12} className="text-red-500" />
-                                Blocked
-                            </div>
-                            <div className="ml-auto text-gray-400">
-                                Click a date to block off-platform bookings
-                            </div>
-                        </div>
-                    </div>
+                <div className="space-y-4">
+                    <UnifiedCalendar
+                        currentDate={currentDate}
+                        onDateChange={setCurrentDate}
+                        view={calendarView}
+                        onViewChange={setCalendarView}
+                        bookings={bookings}
+                        blockedDates={blockedDates}
+                        onDateClick={(date) => {
+                            const today = new Date();
+                            const isPast = date < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+                            if (!isPast) {
+                                openBlockModal(date);
+                            }
+                        }}
+                        onBookingClick={(booking, date) => {
+                            setSelectedBooking(booking);
+                        }}
+                        showControls={true}
+                    />
                     
                     {/* Blocked Dates List */}
                     {blockedDates.length > 0 && (
-                        <div className="p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-[#23262f]">
+                        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-4">
                             <h4 className="font-bold text-sm dark:text-white mb-3 flex items-center gap-2">
                                 <Ban size={14} className="text-red-500" />
                                 Blocked Time Slots
@@ -705,7 +596,7 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                                 {blockedDates.map(block => (
                                     <div 
                                         key={block.id}
-                                        className="flex items-center justify-between p-3 bg-white dark:bg-[#2c2e36] rounded-lg border dark:border-gray-700"
+                                        className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[#1f2128] rounded-lg border dark:border-gray-700"
                                     >
                                         <div>
                                             <div className="font-medium dark:text-white text-sm">
@@ -714,11 +605,11 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                                                     month: 'short', 
                                                     day: 'numeric' 
                                                 })}
-                                                {block.timeSlot !== 'full' && (
+                                                {block.time_slot && block.time_slot !== 'full' && (
                                                     <span className="ml-2 text-xs text-gray-500">
-                                                        ({block.timeSlot === 'custom' 
-                                                            ? `${block.startTime} - ${block.endTime}` 
-                                                            : block.timeSlot})
+                                                        ({block.time_slot === 'custom' 
+                                                            ? `${block.start_time || ''} - ${block.end_time || ''}` 
+                                                            : block.time_slot})
                                                     </span>
                                                 )}
                                             </div>
