@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
     Home, LayoutGrid, Image, Clock, FileText, Calendar, 
     Package, Settings, ChevronRight, Briefcase
