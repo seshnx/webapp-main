@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    Move, Square, Circle, Triangle, Type, Ruler, DoorOpen, Window,
+    Move, Square, Circle, Triangle, Type, Ruler, DoorOpen, RectangleHorizontal,
     Box, RotateCw, FlipHorizontal, FlipVertical, ZoomIn, ZoomOut,
     Maximize2, Download, FileText, Image as ImageIcon, Layers,
     Grid, Lock, Unlock, AlignLeft, AlignCenter, AlignRight
@@ -37,7 +37,7 @@ export default function FloorplanTools({
         { id: 'room', icon: Square, label: 'Room', group: 'basic' },
         { id: 'structure', icon: Box, label: 'Area', group: 'basic' },
         { id: 'door', icon: DoorOpen, label: 'Door', group: 'elements' },
-        { id: 'window', icon: Window, label: 'Window', group: 'elements' },
+        { id: 'window', icon: RectangleHorizontal, label: 'Window', group: 'elements' },
         { id: 'furniture', icon: Box, label: 'Furniture', group: 'elements' },
         { id: 'measure', icon: Ruler, label: 'Measure', group: 'tools' },
         { id: 'text', icon: Type, label: 'Text', group: 'tools' },
