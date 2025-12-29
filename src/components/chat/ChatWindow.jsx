@@ -4,21 +4,21 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { isConvexAvailable } from '../../config/convex';
 import ChatInput from './ChatInput';
-import SeshNxEmbedModal from '../SeshNxEmbedModal'; 
+import SeshNxEmbedModal from '../SeshNxEmbedModal';
 import MessageBubble from './message/MessageBubble';
 import ForwardMessageModal from './message/ForwardMessageModal';
 import PresenceIndicator, { StatusBadge } from './PresenceIndicator';
 import { useUserPresence } from '../../hooks/usePresence';
 import { useReadReceipts } from '../../hooks/useReadReceipts';
 import { useTypingIndicator, formatTypingUsers } from '../../hooks/useTypingIndicator';
-import getLinkPreview from '../../utils/linkPreview'; 
+import getLinkPreview from '../../utils/linkPreview';
 import UserAvatar from '../shared/UserAvatar';
 import { useLanguage } from '../../contexts/LanguageContext';
 
 export default function ChatWindow({ user, userData, activeChat, conversations, onBack, toggleDetails, openPublicProfile }) {
     const { t } = useLanguage();
     const [linkPreviewData, setLinkPreviewData] = useState({});
-    const [embedModal, setEmbedModal] = useState({ isOpen: false, url: '', previewData: null }); 
+    const [embedModal, setEmbedModal] = useState({ isOpen: false, url: '', previewData: null });
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessage, setEditingMessage] = useState(null);
     const [forwardingMessage, setForwardingMessage] = useState(null);
@@ -27,32 +27,35 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
     const chatId = activeChat?.id;
     const chatName = activeChat?.name || activeChat?.n || t('unknownUser');
 
+    // Normalize user ID - Supabase uses 'id', Firebase uses 'uid'
+    const userId = user?.id || user?.uid;
+
     // Get other user's UID for direct chats (for presence and read receipts)
     const otherUserId = useMemo(() => {
         if (activeChat?.type === 'group') return null;
         if (activeChat?.uid) return activeChat.uid;
         if (chatId && chatId.includes('_')) {
             const parts = chatId.split('_');
-            return parts.find(id => id !== user?.uid);
+            return parts.find(id => id !== userId);
         }
         return null;
-    }, [activeChat, chatId, user?.uid]);
+    }, [activeChat, chatId, userId]);
 
     // Presence tracking
     const { online, lastSeen, loading: presenceLoading } = useUserPresence(otherUserId);
 
     // Read receipts tracking
-    const { 
-        markAsRead, 
-        hasCurrentUserRead, 
+    const {
+        markAsRead,
+        hasCurrentUserRead,
         isMessageRead,
-        myLastRead 
-    } = useReadReceipts(chatId, user?.uid);
+        myLastRead
+    } = useReadReceipts(chatId, userId);
 
     // Typing indicator tracking
     const { typingUsers, setTyping, clearTyping } = useTypingIndicator(
-        chatId, 
-        user?.uid, 
+        chatId,
+        userId,
         userData?.firstName || 'User'
     );
 
@@ -90,7 +93,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
     // Transform Convex messages to match existing format
     const messages = useMemo(() => {
         if (!messagesData) return [];
-        
+
         return messagesData.map(msg => ({
             id: msg._id,
             b: msg.content || '',
@@ -118,7 +121,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
     const updateUnreadCountMutation = useMutation(api.conversations.updateUnreadCount);
 
     // Auto-scroll to bottom and mark messages as read
-    useEffect(() => { 
+    useEffect(() => {
         if (messagesEndRef.current && messages.length > 0) {
             messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
         }
@@ -127,20 +130,20 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
     // Mark messages as read when viewing
     // Use a ref to track the last message count to prevent infinite loops
     const lastMarkedCountRef = useRef(0);
-    
+
     useEffect(() => {
-        if (chatId && user?.uid && messages.length > 0) {
+        if (chatId && userId && messages.length > 0) {
             // Only mark as read if the message count actually changed
             // This prevents infinite loops from markAsRead triggering re-renders
             const currentMessageIds = messages.map(m => m.id);
             const currentCount = currentMessageIds.length;
-            
+
             if (currentCount !== lastMarkedCountRef.current) {
                 lastMarkedCountRef.current = currentCount;
                 markAsRead(currentMessageIds);
             }
         }
-    }, [chatId, user?.uid, messages.length, markAsRead]);
+    }, [chatId, userId, messages.length, markAsRead]);
 
     // Fetch link previews for messages
     useEffect(() => {
@@ -161,19 +164,19 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
     // --- REACTION HANDLER ---
     const handleReaction = async (messageId, emoji) => {
-        if (!chatId || !user?.uid || !isConvexAvailable()) return;
+        if (!chatId || !userId || !isConvexAvailable()) return;
 
         try {
             // Check if user already has this reaction
             const message = messages.find(m => m.id === messageId);
             if (!message) return;
 
-            const hasReaction = message.reactions?.[emoji]?.includes(user.uid);
-            
+            const hasReaction = message.reactions?.[emoji]?.includes(userId);
+
             if (hasReaction) {
-                await removeReactionMutation({ messageId, userId: user.uid, emoji });
+                await removeReactionMutation({ messageId, userId: userId, emoji });
             } else {
-                await addReactionMutation({ messageId, userId: user.uid, emoji });
+                await addReactionMutation({ messageId, userId: userId, emoji });
             }
         } catch (error) {
             console.error('Reaction error:', error);
@@ -195,7 +198,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 // GUARD: Ensure no nulls are passed to optional fields
                 await sendMessageMutation({
                     chatId: targetChatId,
-                    senderId: user.uid,
+                    senderId: userId,
                     senderName: userData.firstName || 'User',
                     senderPhoto: userData.photoURL || undefined, // Strict undefined
                     content: `竊ｪ Forwarded: ${forwardText}`,
@@ -205,13 +208,13 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 // Update conversation
                 const targetConvo = conversations?.find(c => c.id === targetChatId);
                 const summary = forwardText || (forwardMedia ? `Forwarded ${forwardMedia.type}` : 'Forwarded message');
-                
+
                 await updateConversationMutation({
-                    userId: user.uid,
+                    userId: userId,
                     chatId: targetChatId,
-                    lastMessage: `竊ｪ ${summary}`,
+                    lastMessage: `↪ ${summary}`,
                     lastMessageTime: Date.now(),
-                    lastSenderId: user.uid,
+                    lastSenderId: userId,
                     chatName: targetConvo?.name || targetConvo?.n,
                     chatPhoto: targetConvo?.photo || '',
                     chatType: targetConvo?.type || 'direct',
@@ -226,12 +229,12 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
     // --- SEND LOGIC ---
     const sendMessage = async (text, mediaData) => {
         if (!chatId || (!text?.trim() && !mediaData) || !isConvexAvailable() || !sendMessageMutation || !editMessageMutation || !updateConversationMutation || !updateUnreadCountMutation) return;
-        
+
         let msgText = text ? text.trim() : '';
         if (msgText.length === 0 && mediaData) {
-            msgText = mediaData.type === 'image' ? '📷 Image' : 
-                      mediaData.type === 'video' ? '🎥 Video' : 
-                      mediaData.type === 'audio' ? '🎵 Audio' : '📎 File';
+            msgText = mediaData.type === 'image' ? '📷 Image' :
+                mediaData.type === 'video' ? '🎥 Video' :
+                    mediaData.type === 'audio' ? '🎵 Audio' : '📎 File';
         }
 
         // Handle edit mode
@@ -240,7 +243,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 await editMessageMutation({
                     messageId: editingMessage.id,
                     content: msgText,
-                    senderId: user.uid,
+                    senderId: userId,
                 });
                 setEditingMessage(null);
                 return;
@@ -255,7 +258,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
             // GUARD: Ensure strictly undefined for null/empty optional fields
             await sendMessageMutation({
                 chatId,
-                senderId: user.uid,
+                senderId: userId,
                 senderName: userData.firstName || 'User',
                 senderPhoto: userData.photoURL || undefined, // undefined if null
                 content: msgText || undefined,               // undefined if empty
@@ -271,22 +274,22 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
             const summary = msgText || (mediaData ? `Sent ${mediaData.type}` : 'Message');
             let recipientIds = [];
             let otherUid = activeChat.uid;
-            
+
             if (!otherUid && activeChat.type !== 'group' && chatId && chatId.includes('_')) {
                 const parts = chatId.split('_');
-                otherUid = parts.find(id => id !== user.uid);
+                otherUid = parts.find(id => id !== userId);
             }
-            
+
             if (activeChat.type === 'group') {
                 // For group chats, use the queried members from chatMembers table
                 // Include current user if not already in the list
-                recipientIds = groupMemberIds.length > 0 
-                    ? [...new Set([user.uid, ...groupMemberIds])] 
-                    : [user.uid];
+                recipientIds = groupMemberIds.length > 0
+                    ? [...new Set([userId, ...groupMemberIds])]
+                    : [userId];
             } else if (otherUid) {
-                recipientIds = [user.uid, otherUid];
+                recipientIds = [userId, otherUid];
             } else {
-                recipientIds = [user.uid];
+                recipientIds = [userId];
             }
 
             // Update conversations for all recipients
@@ -296,15 +299,15 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                     chatId,
                     lastMessage: summary,
                     lastMessageTime: Date.now(),
-                    lastSenderId: user.uid,
+                    lastSenderId: userId,
                     chatName: activeChat.type === 'group' ? chatName : (activeChat.name || activeChat.n),
                     chatPhoto: activeChat.photo || '',
                     chatType: activeChat.type || 'direct',
-                    otherUserId: activeChat.type === 'direct' ? (recipientUid === user.uid ? otherUid : user.uid) : undefined,
+                    otherUserId: activeChat.type === 'direct' ? (recipientUid === userId ? otherUid : userId) : undefined,
                 });
 
                 // Update unread count (increment for others, reset for sender)
-                if (recipientUid === user.uid) {
+                if (recipientUid === userId) {
                     await updateUnreadCountMutation({
                         userId: recipientUid,
                         chatId,
@@ -327,12 +330,12 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
     // --- DELETE HANDLER ---
     const handleDelete = async (messageId, forEveryone = false) => {
-        if (!chatId || !user?.uid || !isConvexAvailable() || !deleteMessageMutation) return;
+        if (!chatId || !userId || !isConvexAvailable() || !deleteMessageMutation) return;
 
         try {
             await deleteMessageMutation({
                 messageId,
-                senderId: user.uid,
+                senderId: userId,
                 forEveryone,
             });
         } catch (error) {
@@ -350,13 +353,13 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 >
                     <ArrowLeft className="w-5 h-5" />
                 </button>
-                
-                <div 
+
+                <div
                     className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
                     onClick={() => openPublicProfile?.(otherUserId ? { uid: otherUserId } : null)}
                 >
-                    <UserAvatar 
-                        src={activeChat?.photo || activeChat?.n?.photo || ''} 
+                    <UserAvatar
+                        src={activeChat?.photo || activeChat?.n?.photo || ''}
                         name={chatName}
                         size="md"
                     />
@@ -366,9 +369,9 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                                 {chatName}
                             </h3>
                             {activeChat?.type !== 'group' && (
-                                <PresenceIndicator 
-                                    online={online} 
-                                    lastSeen={lastSeen} 
+                                <PresenceIndicator
+                                    online={online}
+                                    lastSeen={lastSeen}
                                     loading={presenceLoading}
                                 />
                             )}
@@ -433,7 +436,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 ) : (
                     messages.map((message, index) => {
                         const previousMessage = index > 0 ? messages[index - 1] : null;
-                        const isCurrentUser = message.s === user?.uid;
+                        const isCurrentUser = message.s === userId;
                         const isRead = isMessageRead(message.id);
                         const hasRead = hasCurrentUserRead(message.id);
 
@@ -443,7 +446,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                                 message={message}
                                 isCurrentUser={isCurrentUser}
                                 previousMessage={previousMessage}
-                                currentUserId={user?.uid}
+                                currentUserId={userId}
                                 chatId={chatId}
                                 linkPreviewData={linkPreviewData[message.id]}
                                 messageStatus={isRead ? 'read' : hasRead ? 'delivered' : 'sent'}
@@ -464,7 +467,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
             {/* Chat Input */}
             <ChatInput
                 activeChatId={chatId}
-                uid={user?.uid}
+                uid={userId}
                 onSend={sendMessage}
                 replyingTo={replyingTo}
                 editingMessage={editingMessage}
