@@ -26,7 +26,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
     const [feedMode, setFeedMode] = useState(FEED_MODES.FOR_YOU);
     const [suggestedUsers, setSuggestedUsers] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
-    
+
     // Get feed algorithm from settings
     const { t } = useLanguage();
     const feedAlgorithm = userData?.settings?.social?.feedAlgorithm || 'recommended';
@@ -35,13 +35,13 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
 
     // Use the follow system hook
     const userId = user?.id || user?.uid;
-    const { 
-        following, 
-        stats, 
-        loading: followLoading, 
-        isFollowing, 
+    const {
+        following,
+        stats,
+        loading: followLoading,
+        isFollowing,
         toggleFollow,
-        getFollowingIds 
+        getFollowingIds
     } = useFollowSystem(userId, userData);
 
     // Memoize following IDs for feed filtering
@@ -59,9 +59,9 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
         setLoadingSuggestions(true);
         try {
             if (!supabase || !user?.id && !user?.uid) return;
-            
+
             const userId = user.id || user.uid;
-            
+
             // Get recent posters as suggestions (excluding current user)
             const { data: posts, error } = await supabase
                 .from('posts')
@@ -69,9 +69,9 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                 .neq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(20);
-            
+
             if (error) throw error;
-            
+
             // Extract unique users from posts
             const usersMap = new Map();
             (posts || []).forEach(post => {
@@ -84,7 +84,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     });
                 }
             });
-            
+
             setSuggestedUsers(Array.from(usersMap.values()).slice(0, 5));
         } catch (error) {
             console.error('Error loading suggestions:', error);
@@ -123,11 +123,6 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
         );
     };
 
-    // Render loading skeletons while feed loads
-    if (loading) {
-        return renderSkeleton();
-    }
-
     // Main feed listener
     useEffect(() => {
         if (!supabase) {
@@ -136,12 +131,12 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
         }
 
         setLoading(true);
-        
+
         let query = supabase
             .from('posts')
             .select('*')
             .order('created_at', { ascending: false });
-        
+
         // Set limit based on feed mode
         const limitCount = (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) ? 50 : 20;
         query = query.limit(limitCount);
@@ -165,7 +160,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                 reactionCount: post.reaction_count || 0,
                 saveCount: post.save_count || 0
             }));
-            
+
             // Apply feed algorithm based on settings (only for "For You" feed)
             if (feedMode === FEED_MODES.FOR_YOU) {
                 if (feedAlgorithm === 'following') {
@@ -186,15 +181,15 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     });
                 }
             }
-            
+
             // Client-side filtering for Following feed
             if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
                 const userId = user?.id || user?.uid;
-                newPosts = newPosts.filter(post => 
+                newPosts = newPosts.filter(post =>
                     followingIds.includes(post.userId) || post.userId === userId
                 );
             }
-            
+
             setPosts(newPosts);
             setLoading(false);
         });
@@ -216,7 +211,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                         .select('*')
                         .order('created_at', { ascending: false })
                         .limit(limitCount);
-                    
+
                     if (!error && posts) {
                         let newPosts = posts.map(post => ({
                             id: post.id,
@@ -229,14 +224,14 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                             reactionCount: post.reaction_count || 0,
                             saveCount: post.save_count || 0
                         }));
-                        
+
                         if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
                             const userId = user?.id || user?.uid;
-                            newPosts = newPosts.filter(post => 
+                            newPosts = newPosts.filter(post =>
                                 followingIds.includes(post.userId) || post.userId === userId
                             );
                         }
-                        
+
                         setPosts(newPosts);
                     }
                 }
@@ -270,7 +265,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     save_count: 0,
                     visibility: 'public' // Must be lowercase to match CHECK constraint
                 });
-            
+
             if (error) throw error;
         } catch (e) {
             console.error("Failed to post:", e);
@@ -293,11 +288,11 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
             animate={{ opacity: 1, y: 0 }}
             className="flex items-center justify-between p-3 bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 hover:border-brand-blue/30 transition-all"
         >
-            <div 
+            <div
                 className="flex items-center gap-3 cursor-pointer flex-1 min-w-0"
                 onClick={() => openPublicProfile?.(suggestedUser.userId)}
             >
-                <UserAvatar 
+                <UserAvatar
                     src={suggestedUser.photoURL}
                     name={suggestedUser.displayName}
                     size="md"
@@ -321,52 +316,48 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
     return (
         <div className="max-w-2xl mx-auto pb-20">
             {/* Create Post Widget */}
-            <CreatePostWidget 
-                user={user} 
-                userData={userData} 
-                onPost={handlePost} 
+            <CreatePostWidget
+                user={user}
+                userData={userData}
+                onPost={handlePost}
             />
 
             {/* Feed Mode Toggle */}
             <div className="flex items-center gap-2 mb-4 bg-white dark:bg-dark-card p-1.5 rounded-xl border dark:border-gray-700 shadow-sm">
                 <button
                     onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                        feedMode === FEED_MODES.FOR_YOU
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${feedMode === FEED_MODES.FOR_YOU
                             ? 'bg-brand-blue text-white shadow-md'
                             : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
+                        }`}
                 >
                     <Compass size={16} />
                     <span>{t('forYou')}</span>
                 </button>
                 <button
                     onClick={() => setFeedMode(FEED_MODES.FOLLOWING)}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                        feedMode === FEED_MODES.FOLLOWING
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${feedMode === FEED_MODES.FOLLOWING
                             ? 'bg-brand-blue text-white shadow-md'
                             : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
+                        }`}
                 >
                     <Users size={16} />
                     <span>{t('following')}</span>
                     {stats.followingCount > 0 && (
-                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-                            feedMode === FEED_MODES.FOLLOWING
+                        <span className={`text-xs px-1.5 py-0.5 rounded-full ${feedMode === FEED_MODES.FOLLOWING
                                 ? 'bg-white/20'
                                 : 'bg-gray-200 dark:bg-gray-700'
-                        }`}>
+                            }`}>
                             {stats.followingCount}
                         </span>
                     )}
                 </button>
                 <button
                     onClick={() => setFeedMode(FEED_MODES.DISCOVER)}
-                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-                        feedMode === FEED_MODES.DISCOVER
+                    className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${feedMode === FEED_MODES.DISCOVER
                             ? 'bg-brand-blue text-white shadow-md'
                             : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                    }`}
+                        }`}
                 >
                     <Search size={16} />
                     <span>{t('discover')}</span>
@@ -375,20 +366,18 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
 
             {/* Feed Content */}
             {feedMode === FEED_MODES.DISCOVER ? (
-                <Discover 
-                    user={user} 
-                    userData={userData} 
+                <Discover
+                    user={user}
+                    userData={userData}
                     openPublicProfile={openPublicProfile}
                 />
             ) : loading || followLoading ? (
-                <div className="flex justify-center py-10">
-                    <Loader2 className="animate-spin text-brand-blue" size={32} />
-                </div>
+                renderSkeleton()
             ) : (
                 <>
                     {/* Following tab empty state with suggestions */}
                     {feedMode === FEED_MODES.FOLLOWING && followingIds.length === 0 && (
-                        <motion.div 
+                        <motion.div
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl p-6 mb-6 border border-blue-100 dark:border-blue-800/30"
@@ -432,9 +421,9 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                                                 Suggested for you
                                             </h4>
                                             {suggestedUsers.map(suggestedUser => (
-                                                <SuggestedUserCard 
-                                                    key={suggestedUser.userId} 
-                                                    suggestedUser={suggestedUser} 
+                                                <SuggestedUserCard
+                                                    key={suggestedUser.userId}
+                                                    suggestedUser={suggestedUser}
                                                 />
                                             ))}
                                         </div>
@@ -445,7 +434,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     )}
 
                     {/* Posts */}
-                    <motion.div 
+                    <motion.div
                         variants={containerVariants}
                         initial="hidden"
                         animate="show"
@@ -453,12 +442,12 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     >
                         <AnimatePresence mode='popLayout'>
                             {posts.map(post => (
-                                <PostCard 
-                                    key={post.id} 
-                                    post={post} 
+                                <PostCard
+                                    key={post.id}
+                                    post={post}
                                     currentUser={user}
                                     currentUserData={userData}
-                                    openPublicProfile={openPublicProfile || (() => {})}
+                                    openPublicProfile={openPublicProfile || (() => { })}
                                     onReport={() => setReportTarget(post)}
                                     isFollowingAuthor={isFollowing(post.userId)}
                                     onToggleFollow={() => toggleFollow(post.userId, {
@@ -470,27 +459,27 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                                 />
                             ))}
                         </AnimatePresence>
-                        
+
                         {posts.length === 0 && feedMode === FEED_MODES.FOR_YOU && (
-                            <motion.div 
-                                initial={{ opacity: 0 }} 
+                            <motion.div
+                                initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 className="text-center py-10 text-gray-500"
                             >
-                                <RefreshCw className="mx-auto mb-2 opacity-50" size={32}/>
+                                <RefreshCw className="mx-auto mb-2 opacity-50" size={32} />
                                 <p>{t('noPosts')}. {t('beFirst')}</p>
                             </motion.div>
                         )}
 
                         {posts.length === 0 && feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0 && (
-                            <motion.div 
-                                initial={{ opacity: 0 }} 
+                            <motion.div
+                                initial={{ opacity: 0 }}
                                 animate={{ opacity: 1 }}
                                 className="text-center py-10 text-gray-500"
                             >
-                                <Users className="mx-auto mb-2 opacity-50" size={32}/>
+                                <Users className="mx-auto mb-2 opacity-50" size={32} />
                                 <p>{t('noPostsFollowing')}.</p>
-                                <button 
+                                <button
                                     onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
                                     className="mt-3 text-brand-blue hover:underline text-sm font-medium"
                                 >
@@ -504,14 +493,14 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
 
             {/* Report Modal */}
             {reportTarget && (
-                <ReportModal 
+                <ReportModal
                     user={user}
                     target={{
                         id: reportTarget.id,
                         type: 'Post',
                         summary: reportTarget.text ? reportTarget.text.substring(0, 50) : 'Media Post'
                     }}
-                    onClose={() => setReportTarget(null)} 
+                    onClose={() => setReportTarget(null)}
                 />
             )}
         </div>
