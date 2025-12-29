@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createNotification } from '../../hooks/useNotifications';
 import FollowButton, { FollowButtonCompact } from './FollowButton';
 import toast from 'react-hot-toast';
+import UserAvatar from '../shared/UserAvatar';
 
 const REACTION_SET = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -293,24 +294,17 @@ export default function PostCard({
             <div className="p-4 flex justify-between items-start">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                     <div
-                        className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden cursor-pointer shrink-0"
+                        className="cursor-pointer shrink-0"
                         onClick={() => post.userId && openPublicProfile(post.userId)}
                         role="button"
                         tabIndex={0}
                         aria-label={`View ${post.displayName || 'user'}'s profile`}
                     >
-                        {post.authorPhoto ? (
-                            <img
-                                src={post.authorPhoto}
-                                className="h-full w-full object-cover"
-                                alt={`${post.displayName || 'User'}'s avatar`}
-                                onError={(e) => { e.target.style.display = 'none'; }}
-                            />
-                        ) : (
-                            <div className="h-full w-full bg-gradient-to-tr from-brand-blue to-purple-500 flex items-center justify-center text-white font-bold">
-                                {post.displayName?.[0]?.toUpperCase() || <User size={16} aria-hidden="true" />}
-                            </div>
-                        )}
+                        <UserAvatar
+                            src={post.authorPhoto}
+                            name={post.displayName}
+                            size="md"
+                        />
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">

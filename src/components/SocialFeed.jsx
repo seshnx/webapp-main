@@ -66,21 +66,37 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
             // Get recent posters as suggestions (excluding current user)
             const { data: posts, error } = await supabase
                 .from('posts')
-                .select('user_id, display_name, author_photo, role')
+                .select('user_id, display_name, role')
                 .neq('user_id', userId)
                 .order('created_at', { ascending: false })
                 .limit(20);
 
             if (error) throw error;
 
-            // Extract unique users from posts
+            // Extract unique user IDs from posts
+            const uniqueUserIds = [...new Set((posts || []).map(p => p.user_id))];
+
+            // Fetch fresh profile photos for these users
+            let profilePhotos = {};
+            if (uniqueUserIds.length > 0) {
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('id, avatar_url')
+                    .in('id', uniqueUserIds);
+
+                (profiles || []).forEach(p => {
+                    profilePhotos[p.id] = p.avatar_url;
+                });
+            }
+
+            // Build unique users map with fresh photos
             const usersMap = new Map();
             (posts || []).forEach(post => {
                 if (!usersMap.has(post.user_id)) {
                     usersMap.set(post.user_id, {
                         userId: post.user_id,
                         displayName: post.display_name,
-                        photoURL: post.author_photo,
+                        photoURL: profilePhotos[post.user_id] || null,
                         role: post.role
                     });
                 }
