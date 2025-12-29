@@ -1,59 +1,81 @@
 // src/hooks/useMediaUpload.js
 
 import { useState } from 'react';
-// Firebase Storage imports are removed as the upload is handled by the new API/MinIO
+import { supabase } from '../config/supabase';
 
-// Define the API endpoint from environment variables
-// Replace this with the actual environment variable access method for your framework (e.g., import.meta.env, process.env)
-const API_ENDPOINT = import.meta.env.VITE_API_ENDPOINT || "http://localhost:3000";
+// Use configured storage bucket or default to 'public'
+const DEFAULT_BUCKET = import.meta.env.VITE_SUPABASE_STORAGE_BUCKET || 'public';
 
 export const useMediaUpload = () => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
 
   /**
-   * Uploads media file to the backend API for processing (watermarking, MinIO storage).
+   * Uploads media file directly to Supabase Storage.
    * @param {File} file - The file to upload.
-   * @param {string} uploadType - The type of upload (e.g., 'beat', 'post', 'profile').
+   * @param {string} uploadPath - The path/folder within the bucket (e.g., 'posts/user123', 'chat_media/conv456').
    * @returns {Promise<object|null>} Object containing media URL/reference and type.
    */
-  const uploadMedia = async (file, uploadType = 'general') => {
+  const uploadMedia = async (file, uploadPath = 'general') => {
     if (!file) return null;
-    
+
+    if (!supabase) {
+      setError('Supabase is not configured. Please set environment variables.');
+      console.error('Supabase Storage is not available.');
+      return null;
+    }
+
     setUploading(true);
     setError(null);
-    
+
     try {
-      // 1. Prepare data for the API
-      const formData = new FormData();
-      formData.append('mediaFile', file);
-      formData.append('uploadType', uploadType); // Pass context for server-side path logic
+      // Create a unique filename to prevent collisions
+      const timestamp = Date.now();
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const uniqueName = `${timestamp}_${sanitizedName}`;
+      const fullPath = `${uploadPath}/${uniqueName}`;
 
-      // 2. Call the new self-hosted backend API
-      const response = await fetch(`${API_ENDPOINT}/api/v1/upload-asset`, {
-        method: 'POST',
-        // The API service running on HP ProDesk handles the MinIO credentials and FFmpeg
-        body: formData, 
-      });
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from(DEFAULT_BUCKET)
+        .upload(fullPath, file, {
+          upsert: true,
+          cacheControl: '3600',
+          contentType: file.type,
+        });
 
-      // Handle HTTP errors from the API
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `Upload failed with status ${response.status}`);
+      if (uploadError) {
+        throw uploadError;
       }
 
-      // 3. Parse the secure response from the backend
-      const result = await response.json();
-      
+      // Get public URL for the uploaded file
+      const { data: urlData } = supabase.storage
+        .from(DEFAULT_BUCKET)
+        .getPublicUrl(fullPath);
+
+      const publicUrl = urlData.publicUrl;
+
+      // Determine media type
+      let mediaType = 'file';
+      if (file.type.startsWith('video/')) {
+        mediaType = 'video';
+      } else if (file.type.startsWith('audio/')) {
+        mediaType = 'audio';
+      } else if (file.type.startsWith('image/')) {
+        mediaType = 'image';
+      }
+
       setUploading(false);
-      
-      // The API returns the necessary MinIO storage references and URLs
+
+      // Return object compatible with existing code that uses this hook
       return {
-          url: result.url,
-          previewUrl: result.previewUrl, // New: Public URL for streaming from MinIO 'seshnx-previews' bucket
-          storageRef: result.storageRef, // New: Private reference to the raw file in MinIO 'seshnx-raw-audio' bucket
-          type: file.type.startsWith('video/') ? 'video' : (file.type.startsWith('audio/') ? 'audio' : 'image'),
-          name: file.name
+        url: publicUrl,
+        previewUrl: publicUrl, // For Supabase, same as main URL
+        storageRef: fullPath, // Path in storage bucket
+        type: mediaType,
+        name: file.name,
+        size: file.size,
+        mimeType: file.type,
       };
     } catch (err) {
       console.error("Upload failed:", err);
