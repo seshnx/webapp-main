@@ -26,6 +26,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
     const [feedMode, setFeedMode] = useState(FEED_MODES.FOR_YOU);
     const [suggestedUsers, setSuggestedUsers] = useState([]);
     const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+    const [hasNewPosts, setHasNewPosts] = useState(false);
 
     // Get feed algorithm from settings
     const { t } = useLanguage();
@@ -194,45 +195,29 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
             setLoading(false);
         });
 
-        // Subscribe to realtime changes
+        // Subscribe to realtime changes - only show banner for NEW posts
+        // Don't auto-update to avoid posts jumping around while reading
         const channel = supabase
             .channel('posts-feed')
             .on(
                 'postgres_changes',
                 {
-                    event: '*',
+                    event: 'INSERT',
                     schema: 'public',
                     table: 'posts'
                 },
-                async () => {
-                    // Refetch on changes
-                    const { data: posts, error } = await supabase
-                        .from('posts')
-                        .select('*')
-                        .order('created_at', { ascending: false })
-                        .limit(limitCount);
-
-                    if (!error && posts) {
-                        let newPosts = posts.map(post => ({
-                            id: post.id,
-                            ...post,
-                            userId: post.user_id,
-                            displayName: post.display_name,
-                            authorPhoto: post.author_photo,
-                            timestamp: post.created_at,
-                            commentCount: post.comment_count || 0,
-                            reactionCount: post.reaction_count || 0,
-                            saveCount: post.save_count || 0
-                        }));
-
+                (payload) => {
+                    // Check if the new post is from someone else (not current user)
+                    const currentUserId = user?.id || user?.uid;
+                    if (payload.new && payload.new.user_id !== currentUserId) {
+                        // For Following feed, only show banner if post is from someone we follow
                         if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
-                            const userId = user?.id || user?.uid;
-                            newPosts = newPosts.filter(post =>
-                                followingIds.includes(post.userId) || post.userId === userId
-                            );
+                            if (followingIds.includes(payload.new.user_id)) {
+                                setHasNewPosts(true);
+                            }
+                        } else if (feedMode === FEED_MODES.FOR_YOU) {
+                            setHasNewPosts(true);
                         }
-
-                        setPosts(newPosts);
                     }
                 }
             )
@@ -327,8 +312,8 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                 <button
                     onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${feedMode === FEED_MODES.FOR_YOU
-                            ? 'bg-brand-blue text-white shadow-md'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        ? 'bg-brand-blue text-white shadow-md'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                         }`}
                 >
                     <Compass size={16} />
@@ -337,16 +322,16 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                 <button
                     onClick={() => setFeedMode(FEED_MODES.FOLLOWING)}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${feedMode === FEED_MODES.FOLLOWING
-                            ? 'bg-brand-blue text-white shadow-md'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        ? 'bg-brand-blue text-white shadow-md'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                         }`}
                 >
                     <Users size={16} />
                     <span>{t('following')}</span>
                     {stats.followingCount > 0 && (
                         <span className={`text-xs px-1.5 py-0.5 rounded-full ${feedMode === FEED_MODES.FOLLOWING
-                                ? 'bg-white/20'
-                                : 'bg-gray-200 dark:bg-gray-700'
+                            ? 'bg-white/20'
+                            : 'bg-gray-200 dark:bg-gray-700'
                             }`}>
                             {stats.followingCount}
                         </span>
@@ -355,14 +340,35 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                 <button
                     onClick={() => setFeedMode(FEED_MODES.DISCOVER)}
                     className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${feedMode === FEED_MODES.DISCOVER
-                            ? 'bg-brand-blue text-white shadow-md'
-                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        ? 'bg-brand-blue text-white shadow-md'
+                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                         }`}
                 >
                     <Search size={16} />
                     <span>{t('discover')}</span>
                 </button>
             </div>
+
+            {/* New Posts Banner */}
+            <AnimatePresence>
+                {hasNewPosts && feedMode !== FEED_MODES.DISCOVER && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -20 }}
+                        className="mb-4"
+                    >
+                        <button
+                            onClick={() => window.location.reload()}
+                            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-brand-blue to-blue-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
+                        >
+                            <RefreshCw size={18} />
+                            <span>There Are New Posts.</span>
+                            <span className="underline underline-offset-2">Refresh?</span>
+                        </button>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Feed Content */}
             {feedMode === FEED_MODES.DISCOVER ? (
@@ -449,6 +455,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                                     currentUserData={userData}
                                     openPublicProfile={openPublicProfile || (() => { })}
                                     onReport={() => setReportTarget(post)}
+                                    onDelete={(postId) => setPosts(prev => prev.filter(p => p.id !== postId))}
                                     isFollowingAuthor={isFollowing(post.userId)}
                                     onToggleFollow={() => toggleFollow(post.userId, {
                                         displayName: post.displayName,

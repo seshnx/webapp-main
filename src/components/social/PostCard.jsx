@@ -3,7 +3,7 @@ import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus,
 import { supabase } from '../../config/supabase';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import CommentSection from './CommentSection';
-import { motion, AnimatePresence } from 'framer-motion'; 
+import { motion, AnimatePresence } from 'framer-motion';
 import { createNotification } from '../../hooks/useNotifications';
 import FollowButton, { FollowButtonCompact } from './FollowButton';
 import toast from 'react-hot-toast';
@@ -25,18 +25,19 @@ const cardVariants = {
     exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } }
 };
 
-export default function PostCard({ 
-    post, 
-    currentUser, 
+export default function PostCard({
+    post,
+    currentUser,
     currentUserData,
-    openPublicProfile, 
+    openPublicProfile,
     onReport,
+    onDelete,
     isFollowingAuthor,
     onToggleFollow,
     autoPlayVideos = false
 }) {
     const [showComments, setShowComments] = useState(false);
-    const [commentCount, setCommentCount] = useState(post.commentCount || 0); 
+    const [commentCount, setCommentCount] = useState(post.commentCount || 0);
     const [isSaved, setIsSaved] = useState(false);
     const [showReactionMenu, setShowReactionMenu] = useState(false);
     const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -57,7 +58,7 @@ export default function PostCard({
     // Check if post is saved on mount
     useEffect(() => {
         if (!userId || !supabase) return;
-        
+
         const checkSaved = async () => {
             try {
                 const { data, error } = await supabase
@@ -66,7 +67,7 @@ export default function PostCard({
                     .eq('user_id', userId)
                     .eq('post_id', post.id)
                     .maybeSingle(); // Use maybeSingle() to handle case when no record exists
-                
+
                 setIsSaved(!!data && !error);
             } catch (e) {
                 console.error('Error checking saved status:', e);
@@ -97,12 +98,12 @@ export default function PostCard({
         try {
             const wasReacted = !!myReaction;
             const currentReactions = post.reactions || {};
-            
+
             if (myReaction === emoji) {
                 // Remove reaction
                 const newReactions = { ...currentReactions };
                 delete newReactions[userId];
-                
+
                 const { error } = await supabase
                     .from('posts')
                     .update({
@@ -110,13 +111,13 @@ export default function PostCard({
                         reaction_count: (post.reactionCount || 0) - 1
                     })
                     .eq('id', post.id);
-                
+
                 if (error) throw error;
             } else {
                 // Add/change reaction
                 const newReactions = { ...currentReactions, [userId]: emoji };
                 const increment = !myReaction ? 1 : 0;
-                
+
                 const { error } = await supabase
                     .from('posts')
                     .update({
@@ -124,9 +125,9 @@ export default function PostCard({
                         reaction_count: (post.reactionCount || 0) + increment
                     })
                     .eq('id', post.id);
-                
+
                 if (error) throw error;
-                
+
                 // Send notification (only for new reactions, not changes)
                 if (!wasReacted && !isOwnPost) {
                     createNotification({
@@ -159,16 +160,16 @@ export default function PostCard({
                     .delete()
                     .eq('user_id', userId)
                     .eq('post_id', post.id);
-                
+
                 if (deleteError) throw deleteError;
-                
+
                 const { error: updateError } = await supabase
                     .from('posts')
                     .update({ save_count: (post.saveCount || 0) - 1 })
                     .eq('id', post.id);
-                
+
                 if (updateError) throw updateError;
-                
+
                 setIsSaved(false);
                 toast.success('Removed from saved');
             } else {
@@ -184,16 +185,16 @@ export default function PostCard({
                         saved_at: new Date().toISOString(),
                         has_media: !!(post.attachments?.length || post.imageUrl || post.audioUrl)
                     });
-                
+
                 if (insertError) throw insertError;
-                
+
                 const { error: updateError } = await supabase
                     .from('posts')
                     .update({ save_count: (post.saveCount || 0) + 1 })
                     .eq('id', post.id);
-                
+
                 if (updateError) throw updateError;
-                
+
                 setIsSaved(true);
                 toast.success('Post saved!');
 
@@ -220,7 +221,7 @@ export default function PostCard({
 
     const handleShare = async () => {
         const shareUrl = `${window.location.origin}/post/${post.id}`;
-        
+
         if (navigator.share) {
             try {
                 await navigator.share({
@@ -248,16 +249,31 @@ export default function PostCard({
     const handleDeletePost = async () => {
         if (!isOwnPost || !supabase) return;
         if (!window.confirm('Are you sure you want to delete this post?')) return;
-        
+
         try {
-            const { error } = await supabase
+            // Include user_id in query for RLS policy compatibility
+            const { data, error, count } = await supabase
                 .from('posts')
-                .delete()
-                .eq('id', post.id);
-            
-            if (error) throw error;
-            
+                .delete({ count: 'exact' })
+                .eq('id', post.id)
+                .eq('user_id', userId)
+                .select();
+
+            if (error) {
+                console.error('Delete error:', error);
+                throw error;
+            }
+
+            // Verify that a row was actually deleted
+            if (!data || data.length === 0) {
+                console.error('Delete returned no data - post may not have been deleted');
+                toast.error("Couldn't delete post - permission denied");
+                return;
+            }
+
             toast.success('Post deleted');
+            // Notify parent to remove post from UI
+            if (onDelete) onDelete(post.id);
         } catch (e) {
             console.error('Delete failed:', e);
             toast.error("Couldn't delete post");
@@ -265,7 +281,7 @@ export default function PostCard({
     };
 
     return (
-        <motion.div 
+        <motion.div
             variants={cardVariants}
             initial="hidden"
             animate="show"
@@ -276,7 +292,7 @@ export default function PostCard({
             {/* Header */}
             <div className="p-4 flex justify-between items-start">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div 
+                    <div
                         className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden cursor-pointer shrink-0"
                         onClick={() => post.userId && openPublicProfile(post.userId)}
                         role="button"
@@ -284,9 +300,9 @@ export default function PostCard({
                         aria-label={`View ${post.displayName || 'user'}'s profile`}
                     >
                         {post.authorPhoto ? (
-                            <img 
-                                src={post.authorPhoto} 
-                                className="h-full w-full object-cover" 
+                            <img
+                                src={post.authorPhoto}
+                                className="h-full w-full object-cover"
                                 alt={`${post.displayName || 'User'}'s avatar`}
                                 onError={(e) => { e.target.style.display = 'none'; }}
                             />
@@ -298,7 +314,7 @@ export default function PostCard({
                     </div>
                     <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
-                            <h4 
+                            <h4
                                 className="font-bold dark:text-white text-sm hover:underline decoration-brand-blue cursor-pointer truncate"
                                 onClick={() => post.userId && openPublicProfile(post.userId)}
                             >
@@ -319,21 +335,21 @@ export default function PostCard({
                             <span>•</span>
                             <span className="shrink-0">
                                 {post.timestamp || post.created_at
-                                    ? new Date(post.timestamp || post.created_at).toLocaleDateString() 
+                                    ? new Date(post.timestamp || post.created_at).toLocaleDateString()
                                     : 'Just now'
                                 }
                             </span>
                         </div>
                     </div>
                 </div>
-                
+
                 {/* More menu */}
                 <div className="relative" ref={moreMenuRef}>
-                    <button 
+                    <button
                         className="text-gray-400 hover:text-gray-600 dark:hover:text-white transition p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
                         onClick={() => setShowMoreMenu(!showMoreMenu)}
                     >
-                        <MoreHorizontal size={20}/>
+                        <MoreHorizontal size={20} />
                     </button>
 
                     <AnimatePresence>
@@ -344,18 +360,18 @@ export default function PostCard({
                                 exit={{ opacity: 0, scale: 0.95, y: -5 }}
                                 className="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-gray-800 rounded-xl shadow-xl border dark:border-gray-700 overflow-hidden z-50"
                             >
-                                <button 
+                                <button
                                     onClick={() => { copyLink(`${window.location.origin}/post/${post.id}`); setShowMoreMenu(false); }}
                                     className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                                 >
                                     <Link2 size={16} className="text-gray-400" />
                                     <span className="dark:text-gray-200">Copy link</span>
                                 </button>
-                                
+
                                 {!isOwnPost && (
                                     <>
                                         {onToggleFollow && (
-                                            <button 
+                                            <button
                                                 onClick={() => { onToggleFollow(); setShowMoreMenu(false); }}
                                                 className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition"
                                             >
@@ -365,7 +381,7 @@ export default function PostCard({
                                                 </span>
                                             </button>
                                         )}
-                                        <button 
+                                        <button
                                             onClick={() => { onReport(); setShowMoreMenu(false); }}
                                             className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-red-500"
                                         >
@@ -376,7 +392,7 @@ export default function PostCard({
                                 )}
 
                                 {isOwnPost && (
-                                    <button 
+                                    <button
                                         onClick={() => { handleDeletePost(); setShowMoreMenu(false); }}
                                         className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-red-500"
                                     >
@@ -403,18 +419,18 @@ export default function PostCard({
                     <div className={`grid gap-2 mb-3 ${post.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         {post.attachments.map((att, i) => (
                             <div key={i} className="rounded-lg overflow-hidden bg-transparent relative">
-                                {att.type === 'image' && <img src={att.url} className="w-full h-full object-cover max-h-96" alt="content"/>}
+                                {att.type === 'image' && <img src={att.url} className="w-full h-full object-cover max-h-96" alt="content" />}
                                 {att.type === 'video' && (
-                                    <video 
-                                        src={att.url} 
-                                        controls 
+                                    <video
+                                        src={att.url}
+                                        controls
                                         className="w-full h-full max-h-96 bg-black"
                                         autoPlay={autoPlayVideos}
                                         playsInline
                                         muted={autoPlayVideos}
                                         preload="metadata"
                                     />
-                                )} 
+                                )}
                                 {att.type === 'audio' && (
                                     <div className="w-full">
                                         <StarFieldVisualizer audioUrl={att.url} fileName={att.name || 'Audio Track'} />
@@ -424,14 +440,14 @@ export default function PostCard({
                         ))}
                     </div>
                 )}
-                
+
                 {/* Fallbacks for legacy posts */}
                 {post.audioUrl && !post.attachments && (
                     <div className="rounded-lg overflow-hidden bg-transparent mb-3">
                         <StarFieldVisualizer audioUrl={post.audioUrl} fileName={post.audioName || 'Track'} />
                     </div>
                 )}
-                {post.imageUrl && !post.attachments && <img src={post.imageUrl} className="rounded-lg w-full mb-3 border dark:border-gray-700" alt="legacy content"/>}
+                {post.imageUrl && !post.attachments && <img src={post.imageUrl} className="rounded-lg w-full mb-3 border dark:border-gray-700" alt="legacy content" />}
             </div>
 
             {/* Engagement Stats */}
@@ -439,7 +455,7 @@ export default function PostCard({
                 <div className="px-4 py-2 flex items-center justify-between">
                     <div className="flex gap-1">
                         {Object.entries(reactionCounts).map(([emoji, count]) => (
-                            <motion.div 
+                            <motion.div
                                 key={emoji}
                                 initial={{ scale: 0 }} animate={{ scale: 1 }}
                                 className={`text-xs px-2 py-1 rounded-full border flex items-center gap-1 ${myReaction === emoji ? 'bg-blue-50 border-blue-200 dark:bg-blue-900/30 dark:border-blue-800' : 'bg-gray-50 border-gray-100 dark:bg-gray-800 dark:border-gray-700'} dark:text-gray-300`}
@@ -462,7 +478,7 @@ export default function PostCard({
                 <div className="flex gap-2 sm:gap-4">
                     {/* Reaction Button */}
                     <div className="relative">
-                        <motion.button 
+                        <motion.button
                             whileTap={{ scale: 0.9 }}
                             onClick={() => setShowReactionMenu(!showReactionMenu)}
                             className={`flex items-center gap-1.5 sm:gap-2 text-sm font-medium transition px-2 py-1 rounded-lg ${myReaction ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20' : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800'}`}
@@ -473,7 +489,7 @@ export default function PostCard({
 
                         <AnimatePresence>
                             {showReactionMenu && (
-                                <motion.div 
+                                <motion.div
                                     ref={menuRef}
                                     initial={{ opacity: 0, scale: 0.8, y: 10 }}
                                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -481,11 +497,11 @@ export default function PostCard({
                                     className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 shadow-xl rounded-full p-2 flex gap-1 sm:gap-2 z-50 border dark:border-gray-600 origin-bottom-left"
                                 >
                                     {REACTION_SET.map(emoji => (
-                                        <motion.button 
-                                            key={emoji} 
+                                        <motion.button
+                                            key={emoji}
                                             whileHover={{ scale: 1.2 }}
                                             whileTap={{ scale: 0.9 }}
-                                            onClick={(e) => { e.stopPropagation(); handleReaction(emoji); }} 
+                                            onClick={(e) => { e.stopPropagation(); handleReaction(emoji); }}
                                             className={`text-xl p-1 sm:p-1.5 rounded-full ${myReaction === emoji ? 'bg-blue-100 dark:bg-blue-900' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}
                                         >
                                             {emoji}
@@ -497,19 +513,19 @@ export default function PostCard({
                     </div>
 
                     {/* Comment Button */}
-                    <motion.button 
-                        whileTap={{ scale: 0.95 }} 
-                        onClick={() => setShowComments(!showComments)} 
+                    <motion.button
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => setShowComments(!showComments)}
                         className="flex items-center gap-1.5 sm:gap-2 text-sm font-medium text-gray-500 hover:text-brand-blue transition px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
                     >
                         <MessageCircle size={18} />
                         <span className="hidden sm:inline">{commentCount > 0 ? commentCount : 'Comment'}</span>
                         {commentCount > 0 && <span className="sm:hidden">{commentCount}</span>}
                     </motion.button>
-                    
+
                     {/* Share Button */}
-                    <motion.button 
-                        whileTap={{ scale: 0.95 }} 
+                    <motion.button
+                        whileTap={{ scale: 0.95 }}
                         onClick={handleShare}
                         className={`flex items-center gap-1.5 sm:gap-2 text-sm font-medium transition px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 ${linkCopied ? 'text-green-500' : 'text-gray-500 hover:text-green-500'}`}
                     >
@@ -517,16 +533,16 @@ export default function PostCard({
                         <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Share'}</span>
                     </motion.button>
                 </div>
-                
+
                 {/* Save Button */}
-                <motion.button 
-                    whileTap={{ scale: 0.8 }} 
+                <motion.button
+                    whileTap={{ scale: 0.8 }}
                     onClick={handleSavePost}
                     disabled={savingPost}
                     className={`${isSaved ? 'text-brand-blue' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'} transition p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full disabled:opacity-50`}
                     title={isSaved ? 'Remove from saved' : 'Save post'}
                 >
-                    <Bookmark size={18} fill={isSaved ? "currentColor" : "none"}/>
+                    <Bookmark size={18} fill={isSaved ? "currentColor" : "none"} />
                 </motion.button>
             </div>
 
@@ -539,8 +555,8 @@ export default function PostCard({
                         exit={{ height: 0, opacity: 0 }}
                         className="overflow-hidden"
                     >
-                        <CommentSection 
-                            post={post} 
+                        <CommentSection
+                            post={post}
                             currentUser={currentUser}
                             currentUserData={currentUserData}
                             blockedUsers={[]}
