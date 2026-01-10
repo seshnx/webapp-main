@@ -4,7 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { createRequire } from 'module'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import sentryVitePlugin from "@sentry/vite-plugin"
+import * as SentryVitePlugin from "@sentry/vite-plugin"
 
 // Derive __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -119,7 +119,7 @@ export default defineConfig({
   plugins: [
     react(),
     // Sentry for error tracking and performance monitoring
-    sentryVitePlugin({
+    SentryVitePlugin.sentryVitePlugin({
       org: "amalia-media",
       project: "seshnx-main",
       // Auth token should be set via SENTRY_AUTH_TOKEN env variable
