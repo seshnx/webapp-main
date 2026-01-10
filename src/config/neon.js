@@ -98,36 +98,6 @@ export async function query(sql, params = []) {
 }
 
 /**
- * Execute a transaction (multiple queries as a single unit)
- *
- * @param {Function} callback - Function that receives query function and performs operations
- * @returns {Promise<any>} Result of the callback function
- *
- * @example
- * const result = await transaction(async (tx) => {
- *   await tx('INSERT INTO posts (user_id, content) VALUES ($1, $2)', [userId, content]);
- *   await tx('UPDATE profiles SET posts_count = posts_count + 1 WHERE user_id = $1', [userId]);
- *   return { success: true };
- * });
- */
-export async function transaction(callback) {
-  if (!neonClient) {
-    throw new Error('Neon client is not configured.');
-  }
-
-  try {
-    // Neon serverless driver doesn't support transactions directly
-    // For transactions, you'll need to use a regular PostgreSQL client
-    // or use the @neondatabase/serverless package's transaction features
-    console.warn('Transactions require a regular PostgreSQL client. Using neon() directly.');
-    return callback(query);
-  } catch (error) {
-    console.error('Neon transaction error:', error);
-    throw error;
-  }
-}
-
-/**
  * Common queries with predefined SQL
  */
 export const queries = {
