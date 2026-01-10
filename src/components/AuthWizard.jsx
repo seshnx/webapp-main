@@ -332,7 +332,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             {step === 1 && (
               <div className="space-y-4">
                 <h3 className="text-xl font-bold dark:text-white text-center mb-4">
-                  Welcome! Let's finish setting up your account.
+                  Welcome! Let&apos;s finish setting up your account.
                 </h3>
                 <div className="flex gap-3">
                   <input

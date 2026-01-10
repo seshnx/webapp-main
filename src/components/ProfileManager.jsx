@@ -388,7 +388,7 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
             <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600 space-y-3">
                 <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Identity Settings</label>
                 <div className="flex items-center justify-between">
-                    <div><div className="text-sm font-bold dark:text-white">Follow Main Profile Name</div><div className="text-xs text-gray-500">Use "{userData.effectiveDisplayName || `${userData.firstName} ${userData.lastName}`}"</div></div>
+                    <div><div className="text-sm font-bold dark:text-white">Follow Main Profile Name</div><div className="text-xs text-gray-500">Use &quot;{userData.effectiveDisplayName || `${userData.firstName} ${userData.lastName}`}&quot;</div></div>
                     <button type="button" onClick={() => setFollowMainProfile(!followMainProfile)} className="text-brand-blue">{followMainProfile ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button>
                 </div>
                 {!followMainProfile && (
@@ -399,7 +399,7 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
                             <div className="mt-2">
                                 <label className="text-xs font-bold text-brand-blue uppercase mb-1 block">{role} Name</label>
                                 <input type="text" className="w-full p-3 border rounded-lg dark:bg-[#1f2128] dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-brand-blue outline-none font-bold" placeholder={`e.g. ${role === 'Studio' ? 'Sound City' : 'The Weeknd'}`} value={formData.profileName || ''} onChange={e => handleChange('profileName', e.target.value)} />
-                                {role === 'Studio' && (<div className="flex items-center gap-2 mt-2"><input type="checkbox" checked={syncStudioOps} onChange={(e) => setSyncStudioOps(e.target.checked)} className="rounded text-brand-blue focus:ring-brand-blue"/><span className="text-xs text-gray-500 dark:text-gray-400">Force "Studio Ops" to use this name</span></div>)}
+                                {role === 'Studio' && (<div className="flex items-center gap-2 mt-2"><input type="checkbox" checked={syncStudioOps} onChange={(e) => setSyncStudioOps(e.target.checked)} className="rounded text-brand-blue focus:ring-brand-blue"/><span className="text-xs text-gray-500 dark:text-gray-400">Force &quot;Studio Ops&quot; to use this name</span></div>)}
                             </div>
                         )}
                          <div className="text-xs text-gray-500 italic mt-2 border-t dark:border-gray-700 pt-2">Preview: <strong className="text-brand-blue">{useLegalNameOnly ? `${userData.firstName} ${userData.lastName}` : useUserNameOnly ? (userData.displayName || 'Not Set') : (formData.profileName || 'Not Set')}</strong></div>
