@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Send, Image as ImageIcon, Music, Video, X, Sliders, Paperclip, Loader2 } from 'lucide-react';
-import { useVercelUpload } from '../../hooks/useVercelUpload';
+import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { POPULAR_PLUGINS_LIST } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -14,7 +14,7 @@ export default function CreatePostWidget({ user, userData, onPost }) {
     const [isPosting, setIsPosting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, percent: 0 });
 
-    const { uploadMedia } = useVercelUpload('post-media');
+    const { uploadMedia } = useMediaUpload();
 
     const handleFileSelect = (e, type) => {
         if (e.target.files && e.target.files[0]) {
@@ -54,13 +54,15 @@ export default function CreatePostWidget({ user, userData, onPost }) {
             // Upload all media assets one by one to track progress
             const uploadedMedia = [];
             for (const m of media) {
-                // Vercel Blob automatically handles storage organization
-                const result = await uploadMedia(m.file);
+                const pathKey = m.type === 'video' ? 'postVideos' : (m.type === 'audio' ? 'postAudio' : 'postImages');
+                const path = `artifacts/${user.uid}/${pathKey}`;
+
+                const result = await uploadMedia(m.file, path);
 
                 // CRITICAL FIX: Ensure we enforce the type selected by the user (m.type)
                 if (result) {
                     uploadedMedia.push({
-                        url: result.url, // Vercel Blob returns { url } object
+                        ...result,
                         type: m.type // Override with explicit type (audio, video, image)
                     });
                 }
@@ -69,7 +71,7 @@ export default function CreatePostWidget({ user, userData, onPost }) {
 
             let presetUrl = null;
             if (presetFile) {
-                const res = await uploadMedia(presetFile);
+                const res = await uploadMedia(presetFile, `artifacts/${user.uid}/postPresets`);
                 presetUrl = res?.url;
                 updateProgress();
             }
