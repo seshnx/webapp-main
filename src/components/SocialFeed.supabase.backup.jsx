@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { supabase } from '../config/supabase';
 import { Loader2, RefreshCw, Users, Compass, UserPlus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getPosts, createPost, getProfilesByIds } from '../config/neonQueries';
 
 import PostCard from './social/PostCard';
 import CreatePostWidget from './social/CreatePostWidget';
@@ -59,31 +59,39 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
     const loadSuggestedUsers = async () => {
         setLoadingSuggestions(true);
         try {
-            if (!user?.id && !user?.uid) return;
+            if (!supabase || !user?.id && !user?.uid) return;
 
             const userId = user.id || user.uid;
 
-            // Get recent posts as suggestions (excluding current user)
-            const posts = await getPosts({ limit: 20 });
+            // Get recent posters as suggestions (excluding current user)
+            const { data: posts, error } = await supabase
+                .from('posts')
+                .select('user_id, display_name, role')
+                .neq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(20);
 
-            // Filter out current user's posts
-            const otherUsersPosts = posts.filter(p => p.user_id !== userId);
+            if (error) throw error;
 
             // Extract unique user IDs from posts
-            const uniqueUserIds = [...new Set(otherUsersPosts.map(p => p.user_id))];
+            const uniqueUserIds = [...new Set((posts || []).map(p => p.user_id))];
 
-            // Fetch profiles for these users
+            // Fetch fresh profile photos for these users
             let profilePhotos = {};
             if (uniqueUserIds.length > 0) {
-                const profiles = await getProfilesByIds(uniqueUserIds);
-                profiles.forEach(p => {
-                    profilePhotos[p.user_id] = p.avatar_url || p.photo_url;
+                const { data: profiles } = await supabase
+                    .from('profiles')
+                    .select('id, avatar_url')
+                    .in('id', uniqueUserIds);
+
+                (profiles || []).forEach(p => {
+                    profilePhotos[p.id] = p.avatar_url;
                 });
             }
 
             // Build unique users map with fresh photos
             const usersMap = new Map();
-            otherUsersPosts.forEach(post => {
+            (posts || []).forEach(post => {
                 if (!usersMap.has(post.user_id)) {
                     usersMap.set(post.user_id, {
                         userId: post.user_id,
@@ -132,126 +140,134 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
         );
     };
 
-    // Main feed loader
+    // Main feed listener
     useEffect(() => {
+        if (!supabase) {
+            setLoading(false);
+            return;
+        }
+
         setLoading(true);
 
-        const loadFeed = async () => {
-            try {
-                // Set limit based on feed mode
-                const limitCount = (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) ? 50 : 20;
+        let query = supabase
+            .from('posts')
+            .select('*')
+            .order('created_at', { ascending: false });
 
-                // Fetch posts from Neon
-                const posts = await getPosts({ limit: limitCount });
+        // Set limit based on feed mode
+        const limitCount = (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) ? 50 : 20;
+        query = query.limit(limitCount);
 
-                let newPosts = posts.map(post => ({
-                    id: post.id,
-                    ...post,
-                    userId: post.user_id,
-                    displayName: post.display_name,
-                    authorPhoto: post.author_photo,
-                    timestamp: post.created_at,
-                    commentCount: post.comment_count || 0,
-                    reactionCount: post.reaction_count || 0,
-                    saveCount: post.save_count || 0
-                }));
-
-                // Apply feed algorithm based on settings (only for "For You" feed)
-                if (feedMode === FEED_MODES.FOR_YOU) {
-                    if (feedAlgorithm === 'following') {
-                        // Show only following posts
-                        if (followingIds.length > 0) {
-                            newPosts = newPosts.filter(p => followingIds.includes(p.userId));
-                        } else {
-                            newPosts = [];
-                        }
-                    } else if (feedAlgorithm === 'chronological') {
-                        // Already sorted by created_at desc, no changes needed
-                    } else {
-                        // Recommended algorithm (default) - prioritize posts with more engagement
-                        newPosts.sort((a, b) => {
-                            const aScore = (a.reactionCount || 0) * 2 + (a.commentCount || 0) * 3 + (a.saveCount || 0);
-                            const bScore = (b.reactionCount || 0) * 2 + (b.commentCount || 0) * 3 + (b.saveCount || 0);
-                            return bScore - aScore;
-                        });
-                    }
-                }
-
-                // Client-side filtering for Following feed
-                if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
-                    const userId = user?.id || user?.uid;
-                    newPosts = newPosts.filter(post =>
-                        followingIds.includes(post.userId) || post.userId === userId
-                    );
-                }
-
-                setPosts(newPosts);
-                setLoading(false);
-            } catch (error) {
+        // Initial fetch
+        query.then(({ data: posts, error }) => {
+            if (error) {
                 console.error("Feed error:", error);
                 setLoading(false);
+                return;
             }
-        };
 
-        loadFeed();
+            let newPosts = (posts || []).map(post => ({
+                id: post.id,
+                ...post,
+                userId: post.user_id,
+                displayName: post.display_name,
+                authorPhoto: post.author_photo,
+                timestamp: post.created_at,
+                commentCount: post.comment_count || 0,
+                reactionCount: post.reaction_count || 0,
+                saveCount: post.save_count || 0
+            }));
 
-        // Set up polling to check for new posts (every 30 seconds)
-        const pollInterval = setInterval(async () => {
-            try {
-                const posts = await getPosts({ limit: 10 });
-                const currentUserId = user?.id || user?.uid;
-
-                // Check if there are new posts from other users
-                const newPostsFromOthers = posts.some(p => {
-                    const isNew = !posts.find(existingPost => existingPost.id === p.id);
-                    const isFromOther = p.user_id !== currentUserId;
-
-                    if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
-                        return isNew && isFromOther && followingIds.includes(p.user_id);
-                    } else if (feedMode === FEED_MODES.FOR_YOU) {
-                        return isNew && isFromOther;
+            // Apply feed algorithm based on settings (only for "For You" feed)
+            if (feedMode === FEED_MODES.FOR_YOU) {
+                if (feedAlgorithm === 'following') {
+                    // Show only following posts
+                    if (followingIds.length > 0) {
+                        newPosts = newPosts.filter(p => followingIds.includes(p.userId));
+                    } else {
+                        newPosts = [];
                     }
-                    return false;
-                });
-
-                if (newPostsFromOthers) {
-                    setHasNewPosts(true);
+                } else if (feedAlgorithm === 'chronological') {
+                    // Already sorted by created_at desc, no changes needed
+                } else {
+                    // Recommended algorithm (default) - prioritize posts with more engagement
+                    newPosts.sort((a, b) => {
+                        const aScore = (a.reactionCount || 0) * 2 + (a.commentCount || 0) * 3 + (a.saveCount || 0);
+                        const bScore = (b.reactionCount || 0) * 2 + (b.commentCount || 0) * 3 + (b.saveCount || 0);
+                        return bScore - aScore;
+                    });
                 }
-            } catch (error) {
-                console.error("Polling error:", error);
             }
-        }, 30000);
+
+            // Client-side filtering for Following feed
+            if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
+                const userId = user?.id || user?.uid;
+                newPosts = newPosts.filter(post =>
+                    followingIds.includes(post.userId) || post.userId === userId
+                );
+            }
+
+            setPosts(newPosts);
+            setLoading(false);
+        });
+
+        // Subscribe to realtime changes - only show banner for NEW posts
+        // Don't auto-update to avoid posts jumping around while reading
+        const channel = supabase
+            .channel('posts-feed')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'posts'
+                },
+                (payload) => {
+                    // Check if the new post is from someone else (not current user)
+                    const currentUserId = user?.id || user?.uid;
+                    if (payload.new && payload.new.user_id !== currentUserId) {
+                        // For Following feed, only show banner if post is from someone we follow
+                        if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
+                            if (followingIds.includes(payload.new.user_id)) {
+                                setHasNewPosts(true);
+                            }
+                        } else if (feedMode === FEED_MODES.FOR_YOU) {
+                            setHasNewPosts(true);
+                        }
+                    }
+                }
+            )
+            .subscribe();
 
         return () => {
-            clearInterval(pollInterval);
+            supabase.removeChannel(channel);
         };
-    }, [feedMode, followingIds, feedAlgorithm, user?.id, user?.uid]);
+    }, [feedMode, followingIds, user?.id, user?.uid]);
 
     const handlePost = async (postPayload) => {
-        if (!user) return;
+        if (!user || !supabase) return;
         try {
             const userId = user.id || user.uid;
+            const { error } = await supabase
+                .from('posts')
+                .insert({
+                    user_id: userId,
+                    display_name: userData?.effectiveDisplayName || `${userData?.firstName || 'User'} ${userData?.lastName || ''}`.trim(),
+                    author_photo: userData?.photoURL || null,
+                    role: userData?.activeProfileRole || 'User',
+                    text: postPayload.text || null,
+                    content: postPayload.text || null, // Also set content for compatibility
+                    media_urls: postPayload.mediaUrls || [],
+                    media_type: postPayload.mediaType || null,
+                    created_at: new Date().toISOString(),
+                    reactions: {},
+                    reaction_count: 0,
+                    comment_count: 0,
+                    save_count: 0,
+                    visibility: 'public' // Must be lowercase to match CHECK constraint
+                });
 
-            // Process attachments from postPayload
-            const attachments = postPayload.attachments || [];
-
-            await createPost({
-                user_id: userId,
-                display_name: userData?.effectiveDisplayName || `${userData?.firstName || 'User'} ${userData?.lastName || ''}`.trim(),
-                author_photo: userData?.photoURL || null,
-                role: userData?.activeProfileRole || 'User',
-                text: postPayload.text || null,
-                content: postPayload.text || null, // Also set content for compatibility
-                attachments: attachments,
-                media_urls: attachments.map(a => a.url), // For backward compatibility
-                media_type: attachments.length > 0 ? attachments[0].type : null,
-                seshfx: postPayload.seshFx || null,
-                reactions: {},
-                reaction_count: 0,
-                comment_count: 0,
-                save_count: 0,
-                visibility: 'public'
-            });
+            if (error) throw error;
         } catch (e) {
             console.error("Failed to post:", e);
             alert("Could not post update. Please try again.");

@@ -125,6 +125,20 @@ export async function getProfile(userId) {
 }
 
 /**
+ * Get multiple profiles by user IDs
+ *
+ * @param {Array<string>} userIds - Array of user IDs
+ * @returns {Promise<Array>} Array of profiles
+ */
+export async function getProfilesByIds(userIds) {
+  if (!userIds || userIds.length === 0) return [];
+
+  const sql = 'SELECT * FROM profiles WHERE user_id = ANY($1)';
+  const result = await executeQuery(sql, [userIds], 'getProfilesByIds');
+  return result;
+}
+
+/**
  * Get user with profile
  *
  * @param {string} userId - User ID
