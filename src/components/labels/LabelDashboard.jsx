@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { executeQuery } from '../config/neon';
+import { executeQuery } from '../../config/neon';
 import {
   Users,
   Disc,
