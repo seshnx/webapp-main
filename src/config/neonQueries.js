@@ -508,6 +508,44 @@ export async function createComment(commentData) {
   return result[0];
 }
 
+/**
+ * Delete comment
+ *
+ * @param {string} commentId - Comment ID
+ * @returns {Promise<boolean>} True if deleted
+ */
+export async function deleteComment(commentId) {
+  const sql = `
+    UPDATE comments
+    SET deleted_at = NOW()
+    WHERE id = $1
+    RETURNING id
+  `;
+
+  const result = await executeQuery(sql, [commentId], 'deleteComment');
+  return result.length > 0;
+}
+
+/**
+ * Update post comment count
+ *
+ * @param {string} postId - Post ID
+ * @param {number} increment - Amount to increment (can be negative)
+ * @returns {Promise<object>} Updated post
+ */
+export async function updatePostCommentCount(postId, increment) {
+  const sql = `
+    UPDATE posts
+    SET comment_count = GREATEST(comment_count + $1, 0),
+        updated_at = NOW()
+    WHERE id = $2
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [increment, postId], 'updatePostCommentCount');
+  return result[0];
+}
+
 // =====================================================
 // BOOKING QUERIES
 // =====================================================
@@ -1256,6 +1294,8 @@ export default {
   deletePost,
   getComments,
   createComment,
+  deleteComment,
+  updatePostCommentCount,
 
   // Booking queries
   getBookings,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Trash2, CornerDownRight } from 'lucide-react';
-import { getComments, createComment, deleteComment, updatePostCommentCount } from '../../config/neonQueries';
+import { supabase } from '../../config/supabase';
 import { createNotification } from '../../hooks/useNotifications';
 import UserAvatar from '../shared/UserAvatar';
 
@@ -10,45 +10,87 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-        if (!post.id) return;
+        if (!supabase || !post.id) return;
 
         // Initial fetch
-        loadComments();
-
-        // Set up polling to replace real-time subscription (every 30 seconds)
-        const interval = setInterval(loadComments, 30000);
-
-        return () => {
-            clearInterval(interval);
-        };
-    }, [post.id, blockedUsers]);
-
-    const loadComments = async () => {
-        try {
-            const data = await getComments(post.id);
-
-            if (data) {
+        supabase
+            .from('comments')
+            .select('*')
+            .eq('post_id', post.id)
+            .order('created_at', { ascending: true })
+            .then(({ data, error }) => {
+                if (error) {
+                    console.error('Comments fetch error:', error);
+                    return;
+                }
+                
+                const comments = (data || []).map(c => ({
+                    id: c.id,
+                    ...c,
+                    userId: c.user_id,
+                    displayName: c.display_name,
+                    userPhoto: c.user_photo,
+                    timestamp: c.created_at
+                }));
+                
                 // Client-side block filtering
-                const filtered = data.filter(c => !blockedUsers?.includes(c.user_id));
+                const filtered = comments.filter(c => !blockedUsers?.includes(c.userId));
                 setComments(filtered);
                 onCountChange(filtered.length);
-            }
-        } catch (error) {
-            console.error('Comments fetch error:', error);
-        }
-    };
+            });
+
+        // Subscribe to realtime changes
+        const channel = supabase
+            .channel(`comments-${post.id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'comments',
+                    filter: `post_id=eq.${post.id}`
+                },
+                async () => {
+                    const { data } = await supabase
+                        .from('comments')
+                        .select('*')
+                        .eq('post_id', post.id)
+                        .order('created_at', { ascending: true });
+                    
+                    if (data) {
+                        const comments = data.map(c => ({
+                            id: c.id,
+                            ...c,
+                            userId: c.user_id,
+                            displayName: c.display_name,
+                            userPhoto: c.user_photo,
+                            timestamp: c.created_at
+                        }));
+                        
+                        const filtered = comments.filter(c => !blockedUsers?.includes(c.userId));
+                        setComments(filtered);
+                        onCountChange(filtered.length);
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [post.id, blockedUsers]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         const userId = currentUser?.id || currentUser?.uid;
-        if (!text.trim() || !userId) return;
+        if (!text.trim() || !userId || !supabase) return;
         setLoading(true);
-
-        const displayName = currentUserData?.effectiveDisplayName ||
-            currentUserData?.firstName ||
-            currentUser?.displayName ||
+        
+        const displayName = currentUserData?.effectiveDisplayName || 
+            currentUserData?.firstName || 
+            currentUser?.displayName || 
             'User';
-
+        
         try {
             // Ensure content is not empty (required by schema)
             const commentContent = text.trim();
@@ -57,20 +99,66 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
                 setLoading(false);
                 return;
             }
-
-            // Create comment using Neon
-            await createComment({
-                post_id: post.id,
-                user_id: userId,
-                content: commentContent,
-            });
-
+            
+            const { error } = await supabase
+                .from('comments')
+                .insert({
+                    post_id: post.id,
+                    user_id: userId,
+                    text: commentContent,
+                    content: commentContent, // Required by schema - NOT NULL
+                    display_name: displayName,
+                    author_photo: currentUserData?.photoURL || null,
+                    user_photo: currentUserData?.photoURL || null,
+                    created_at: new Date().toISOString()
+                });
+            
+            if (error) {
+                console.error('Comment insert error:', error);
+                alert(`Failed to post comment: ${error.message || 'Unknown error'}`);
+                setLoading(false);
+                return;
+            }
+            
             // Update post comment count
-            await updatePostCommentCount(post.id, 1);
-
-            // Reload comments to show the new one
-            await loadComments();
-
+            // Try RPC first, fallback to direct update if RPC doesn't exist
+            try {
+                const rpcResult = supabase.rpc('increment', {
+                    table_name: 'posts',
+                    id_column: 'id',
+                    id_value: post.id,
+                    count_column: 'comment_count'
+                });
+                
+                // Check if rpc returns a promise-like object
+                if (rpcResult && typeof rpcResult.then === 'function') {
+                    const { error: rpcError } = await rpcResult;
+                    if (rpcError) {
+                        // RPC exists but failed, use fallback
+                        throw rpcError;
+                    }
+                } else {
+                    // RPC doesn't exist or doesn't return a promise, use fallback
+                    throw new Error('RPC not available');
+                }
+            } catch (rpcErr) {
+                // Fallback: Direct update if RPC doesn't exist or fails
+                // This is non-critical, so we don't throw - just log
+                try {
+                    const { error: updateError } = await supabase
+                        .from('posts')
+                        .update({ comment_count: (post.commentCount || 0) + 1 })
+                        .eq('id', post.id);
+                    
+                    if (updateError) {
+                        console.warn('Failed to update comment count:', updateError);
+                    }
+                } catch (updateErr) {
+                    console.warn('Comment count update failed:', updateErr);
+                    // Don't fail the comment submission if count update fails
+                }
+            }
+            
             // Send notification to post author (if not commenting on own post)
             if (post.userId !== userId) {
                 createNotification({
@@ -84,10 +172,10 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
                     message: 'commented on your post'
                 });
             }
-
+            
             setText('');
             setLoading(false);
-        } catch (e) {
+        } catch (e) { 
             console.error('Comment submission error:', e);
             alert(`Failed to post comment: ${e.message || 'Unknown error'}`);
             setLoading(false);
@@ -95,11 +183,18 @@ export default function CommentSection({ post, currentUser, currentUserData, blo
     };
 
     const handleDelete = async (commentId) => {
-        if (!window.confirm("Delete comment?")) return;
+        if (!window.confirm("Delete comment?") || !supabase) return;
         try {
-            await deleteComment(commentId);
-            await updatePostCommentCount(post.id, -1);
-            await loadComments();
+            await supabase
+                .from('comments')
+                .delete()
+                .eq('id', commentId);
+            
+            // Decrement comment count
+            await supabase
+                .from('posts')
+                .update({ comment_count: Math.max((post.commentCount || 0) - 1, 0) })
+                .eq('id', post.id);
         } catch (e) {
             console.error('Delete comment error:', e);
         }
