@@ -111,7 +111,7 @@ export default function LabelDashboard({ user }) {
       setRosterData(rosterResult || []);
 
       // Fetch upcoming releases
-      const releasesResult = await executeQuery(`
+      const upcomingReleasesResult = await executeQuery(`
         SELECT
           r.id,
           r.title,
@@ -127,7 +127,7 @@ export default function LabelDashboard({ user }) {
         LIMIT 5
       `, [userId]);
 
-      setUpcomingReleases(releasesResult || []);
+      setUpcomingReleases(upcomingReleasesResult || []);
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
