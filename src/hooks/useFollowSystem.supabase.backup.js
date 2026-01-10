@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getFollowing, getFollowers, followUser as followUserQuery, unfollowUser as unfollowUserQuery, getFollowingCount, getFollowersCount, getProfilesByIds } from '../config/neonQueries';
+import { supabase } from '../config/supabase';
 
 /**
- * Hook for managing the social follow system (Neon Version)
+ * Hook for managing the social follow system (Supabase Version)
  * @param {string} currentUserId - The authenticated user's ID
  */
 export function useFollowSystem(currentUserId) {
@@ -14,34 +14,45 @@ export function useFollowSystem(currentUserId) {
     // Fetch Helper: Get detailed profiles for a list of IDs
     const fetchProfiles = async (userIds) => {
         if (!userIds || userIds.length === 0) return [];
-
-        try {
-            const profiles = await getProfilesByIds(userIds);
-
-            return profiles.map(p => ({
-                odId: p.user_id || p.id, // Keeping odId for compatibility
-                userId: p.user_id || p.id,
-                displayName: p.display_name || `${p.first_name || ''} ${p.last_name || ''}`.trim(),
-                photoURL: p.avatar_url || p.photo_url,
-                role: p.active_role || p.role
-            }));
-        } catch (error) {
+        const { data, error } = await supabase
+            .from('profiles')
+            .select('id, first_name, last_name, avatar_url, active_role')
+            .in('id', userIds);
+        
+        if (error) {
             console.error("Error fetching profiles:", error);
             return [];
         }
+        
+        return data.map(p => ({
+            odId: p.id, // Keeping odId for compatibility with existing components
+            displayName: `${p.first_name || ''} ${p.last_name || ''}`.trim(),
+            photoURL: p.avatar_url,
+            role: p.active_role
+        }));
     };
 
     const loadData = useCallback(async () => {
-        if (!currentUserId) return;
+        if (!currentUserId || !supabase) return;
 
         try {
             // 1. Get IDs of who I follow
-            const followingIds = await getFollowing(currentUserId);
+            const { data: followingData } = await supabase
+                .from('follows')
+                .select('following_id')
+                .eq('follower_id', currentUserId);
+            
+            const followingIds = followingData?.map(f => f.following_id) || [];
             const followingProfiles = await fetchProfiles(followingIds);
             setFollowing(followingProfiles);
 
             // 2. Get IDs of who follows me
-            const followerIds = await getFollowers(currentUserId);
+            const { data: followersData } = await supabase
+                .from('follows')
+                .select('follower_id')
+                .eq('following_id', currentUserId);
+            
+            const followerIds = followersData?.map(f => f.follower_id) || [];
             const followerProfiles = await fetchProfiles(followerIds);
             setFollowers(followerProfiles);
 
@@ -50,7 +61,7 @@ export function useFollowSystem(currentUserId) {
                 followingCount: followingIds.length,
                 followersCount: followerIds.length
             });
-
+            
             setLoading(false);
         } catch (err) {
             console.error("Error loading follow data:", err);
@@ -58,19 +69,31 @@ export function useFollowSystem(currentUserId) {
         }
     }, [currentUserId]);
 
-    // Initial Load & Polling
+    // Initial Load & Realtime Subscription
     useEffect(() => {
         loadData();
 
-        if (!currentUserId) return;
+        if (!currentUserId || !supabase) return;
 
-        // Set up polling to check for follow changes (every 30 seconds)
-        const pollInterval = setInterval(() => {
-            loadData();
-        }, 30000);
+        // Subscribe to changes in the 'follows' table that involve this user
+        const channel = supabase
+            .channel('public:follows')
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'follows',
+                filter: `follower_id=eq.${currentUserId}` 
+            }, () => loadData())
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'follows',
+                filter: `following_id=eq.${currentUserId}` 
+            }, () => loadData())
+            .subscribe();
 
         return () => {
-            clearInterval(pollInterval);
+            supabase.removeChannel(channel);
         };
     }, [currentUserId, loadData]);
 
@@ -80,32 +103,37 @@ export function useFollowSystem(currentUserId) {
 
     const followUser = useCallback(async (targetUserId) => {
         if (!currentUserId || !targetUserId || currentUserId === targetUserId) return;
+        
+        const { error } = await supabase
+            .from('follows')
+            .insert([{ follower_id: currentUserId, following_id: targetUserId }]);
 
-        try {
-            await followUserQuery(currentUserId, targetUserId);
-
-            // Optimistic update
-            loadData();
-            return { success: true };
-        } catch (error) {
+        if (error) {
             console.error('Follow error:', error);
             return { success: false, error };
         }
+        
+        // Optimistic update
+        loadData();
+        return { success: true };
     }, [currentUserId, loadData]);
 
     const unfollowUser = useCallback(async (targetUserId) => {
         if (!currentUserId || !targetUserId) return;
 
-        try {
-            await unfollowUserQuery(currentUserId, targetUserId);
+        const { error } = await supabase
+            .from('follows')
+            .delete()
+            .match({ follower_id: currentUserId, following_id: targetUserId });
 
-            // Optimistic update
-            loadData();
-            return { success: true };
-        } catch (error) {
+        if (error) {
             console.error('Unfollow error:', error);
             return { success: false, error };
         }
+
+        // Optimistic update
+        loadData();
+        return { success: true };
     }, [currentUserId, loadData]);
 
     const toggleFollow = useCallback(async (targetUserId) => {
@@ -141,27 +169,27 @@ export function useUserSocialStats(userId) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!userId) {
+        if (!userId || !supabase) {
             setLoading(false);
             return;
         }
 
         const fetchStats = async () => {
-            try {
-                const [followers, following] = await Promise.all([
-                    getFollowersCount(userId),
-                    getFollowingCount(userId)
-                ]);
+            const { count: followers } = await supabase
+                .from('follows')
+                .select('*', { count: 'exact', head: true })
+                .eq('following_id', userId);
 
-                setStats({
-                    followersCount: followers,
-                    followingCount: following
-                });
-                setLoading(false);
-            } catch (error) {
-                console.error("Error fetching social stats:", error);
-                setLoading(false);
-            }
+            const { count: following } = await supabase
+                .from('follows')
+                .select('*', { count: 'exact', head: true })
+                .eq('follower_id', userId);
+
+            setStats({
+                followersCount: followers || 0,
+                followingCount: following || 0
+            });
+            setLoading(false);
         };
 
         fetchStats();

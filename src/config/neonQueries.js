@@ -649,6 +649,114 @@ export async function unsavePost(userId, postId) {
 }
 
 // =====================================================
+// FOLLOW QUERIES
+// =====================================================
+
+/**
+ * Get users that the current user follows
+ *
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of following IDs
+ */
+export async function getFollowing(userId) {
+  const sql = `
+    SELECT following_id
+    FROM follows
+    WHERE follower_id = $1
+  `;
+
+  const result = await executeQuery(sql, [userId], 'getFollowing');
+  return result.map(f => f.following_id);
+}
+
+/**
+ * Get users that follow the current user
+ *
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of follower IDs
+ */
+export async function getFollowers(userId) {
+  const sql = `
+    SELECT follower_id
+    FROM follows
+    WHERE following_id = $1
+  `;
+
+  const result = await executeQuery(sql, [userId], 'getFollowers');
+  return result.map(f => f.follower_id);
+}
+
+/**
+ * Follow a user
+ *
+ * @param {string} followerId - User ID of the follower
+ * @param {string} followingId - User ID to follow
+ * @returns {Promise<object>} Created follow record
+ */
+export async function followUser(followerId, followingId) {
+  const sql = `
+    INSERT INTO follows (follower_id, following_id, created_at)
+    VALUES ($1, $2, NOW())
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [followerId, followingId], 'followUser');
+  return result[0];
+}
+
+/**
+ * Unfollow a user
+ *
+ * @param {string} followerId - User ID of the follower
+ * @param {string} followingId - User ID to unfollow
+ * @returns {Promise<boolean>} True if unfollowed
+ */
+export async function unfollowUser(followerId, followingId) {
+  const sql = `
+    DELETE FROM follows
+    WHERE follower_id = $1 AND following_id = $2
+    RETURNING id
+  `;
+
+  const result = await executeQuery(sql, [followerId, followingId], 'unfollowUser');
+  return result.length > 0;
+}
+
+/**
+ * Get following count for a user
+ *
+ * @param {string} userId - User ID
+ * @returns {Promise<number>} Count of users following
+ */
+export async function getFollowingCount(userId) {
+  const sql = `
+    SELECT COUNT(*) as count
+    FROM follows
+    WHERE follower_id = $1
+  `;
+
+  const result = await executeQuery(sql, [userId], 'getFollowingCount');
+  return result[0]?.count || 0;
+}
+
+/**
+ * Get followers count for a user
+ *
+ * @param {string} userId - User ID
+ * @returns {Promise<number>} Count of followers
+ */
+export async function getFollowersCount(userId) {
+  const sql = `
+    SELECT COUNT(*) as count
+    FROM follows
+    WHERE following_id = $1
+  `;
+
+  const result = await executeQuery(sql, [userId], 'getFollowersCount');
+  return result[0]?.count || 0;
+}
+
+// =====================================================
 // BOOKING QUERIES
 // =====================================================
 
