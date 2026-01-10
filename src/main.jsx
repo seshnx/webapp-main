@@ -2,9 +2,11 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ConvexProvider } from "convex/react"
+import { ClerkProvider } from '@clerk/clerk-react'
 import * as Sentry from '@sentry/react'
 import App from './App.jsx'
 import { convex } from './config/convex'
+import { clerkConfig, clerkPubKey } from './config/clerk'
 import ErrorBoundary from './components/shared/ErrorBoundary'
 import { LanguageProvider } from './contexts/LanguageContext'
 import './index.css'
@@ -85,14 +87,25 @@ const AppWrapper = ({ children }) => {
   return <>{children}</>;
 };
 
+// Check if Clerk is configured before rendering
+if (!clerkPubKey) {
+  console.error(
+    '❌ Clerk: VITE_CLERK_PUBLISHABLE_KEY is not set. ' +
+    'Get your key from https://dashboard.clerk.com/ ' +
+    'and add it to your .env.local file.'
+  );
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <AppWrapper>
     <ErrorBoundary name="Root">
-      <ConvexProvider client={convex}>
-        <BrowserRouter>
-          <App />
-        </BrowserRouter>
-      </ConvexProvider>
+      <ClerkProvider {...clerkConfig}>
+        <ConvexProvider client={convex}>
+          <BrowserRouter>
+            <App />
+          </BrowserRouter>
+        </ConvexProvider>
+      </ClerkProvider>
     </ErrorBoundary>
   </AppWrapper>
 )

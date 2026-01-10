@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, MapPin, Briefcase, Music, Save, Loader2, DollarSign, Settings, Users, ChevronRight, Check, ToggleLeft, ToggleRight, Camera, Eye, ExternalLink, Image as ImageIcon } from 'lucide-react';
-import { supabase } from '../config/supabase';
-import { useForm, Controller } from 'react-hook-form'; 
+import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { useImageUpload } from '../hooks/useImageUpload';
+import { useVercelImageUpload } from '../hooks/useVercelUpload';
 import toast from 'react-hot-toast';
 import SettingsTab from './SettingsTab';
 import { PROFILE_SCHEMAS, GENRE_DATA, INSTRUMENT_DATA } from '../config/constants';
 import { MultiSelect, NestedSelect } from './shared/Inputs';
 import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
 import SoftwareAutocomplete from './shared/SoftwareAutocomplete';
+import { updateProfile, upsertSubProfile, getProfile } from '../config/neonQueries';
 
 // --- Validation Schemas ---
 const mainProfileSchema = z.object({
@@ -35,7 +35,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
     const [activeSubTab, setActiveSubTab] = useState('details');
     const [selectedRole, setSelectedRole] = useState('Main');
     const [saving, setSaving] = useState(false);
-    const { uploadImage, uploading } = useImageUpload();
+    const { uploadImage, uploading } = useVercelImageUpload();
     const [bannerUploading, setBannerUploading] = useState(false); // New state for banner
 
     // Toggle States
@@ -86,44 +86,28 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
             else if (data.displayName) effectiveName = `${data.firstName} "${data.displayName}" ${data.lastName}`;
 
             const searchTerms = [
-                data.firstName.toLowerCase(), 
-                data.lastName.toLowerCase(), 
-                (data.displayName || '').toLowerCase(), 
+                data.firstName.toLowerCase(),
+                data.lastName.toLowerCase(),
+                (data.displayName || '').toLowerCase(),
                 effectiveName.toLowerCase()
             ].filter(Boolean);
 
             const userId = user?.id || user?.uid;
-            
-            if (!supabase) {
-                throw new Error('Database unavailable');
-            }
 
-            // Update main profile
-            const { error: updateError } = await supabase
-                .from('profiles')
-                .update({
-                    first_name: data.firstName,
-                    last_name: data.lastName,
-                    display_name: data.displayName || null,
-                    bio: data.bio || null,
-                    zip: data.zip || null,
-                    hourly_rate: data.hourlyRate || null,
-                    website: data.website || null,
-                    use_legal_name_only: useLegalNameOnly,
-                    use_user_name_only: useUserNameOnly,
-                    effective_display_name: effectiveName,
-                    search_terms: searchTerms,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', userId);
-
-            if (updateError) {
-                throw updateError;
-            }
-
-            // Sync to public profile (if separate table exists, otherwise handled by triggers)
-            // Note: In Supabase, you might use database triggers or views for this
-            // For now, we'll update the profiles table which serves both purposes
+            // Update main profile using Neon
+            await updateProfile(userId, {
+                first_name: data.firstName,
+                last_name: data.lastName,
+                display_name: data.displayName || null,
+                bio: data.bio || null,
+                zip: data.zip || null,
+                hourly_rate: data.hourlyRate || null,
+                website: data.website || null,
+                use_legal_name_only: useLegalNameOnly,
+                use_user_name_only: useUserNameOnly,
+                effective_display_name: effectiveName,
+                search_terms: searchTerms,
+            });
 
             toast.success('Profile Updated & Synced!', { id: toastId });
         } catch (error) {
@@ -137,21 +121,18 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
 
     const handlePhotoUpload = async (e) => {
         const file = e.target.files[0];
-        if (!file || !supabase) return;
+        if (!file) return;
         const userId = user?.id || user?.uid;
         const toastId = toast.loading('Uploading photo...');
         try {
-            const url = await uploadImage(file, `users/${userId}/avatars`);
-            
-            const { error: updateError } = await supabase
-                .from('profiles')
-                .update({ avatar_url: url, updated_at: new Date().toISOString() })
-                .eq('id', userId);
-            
-            if (updateError) {
-                throw updateError;
-            }
-            
+            const url = await uploadImage(file, 'profile-photos');
+
+            // Update profile using Neon
+            await updateProfile(userId, {
+                avatar_url: url,
+                photo_url: url, // Update both fields for compatibility
+            });
+
             toast.success('Photo updated!', { id: toastId });
         } catch (err) {
             console.error(err);
@@ -163,22 +144,18 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
     // --- NEW: Handle Banner Upload ---
     const handleBannerUpload = async (e) => {
         const file = e.target.files[0];
-        if (!file || !supabase) return;
+        if (!file) return;
         const userId = user?.id || user?.uid;
         setBannerUploading(true);
         const toastId = toast.loading('Uploading cover banner...');
         try {
-            // Use same path structure as PublicProfileModal
-            const url = await uploadImage(file, `users/${userId}/images/banners`);
-            
-            const { error: updateError } = await supabase
-                .from('profiles')
-                .update({ banner_url: url, updated_at: new Date().toISOString() })
-                .eq('id', userId);
+            // Upload to Vercel Blob
+            const url = await uploadImage(file, 'profile-banners');
 
-            if (updateError) {
-                throw updateError;
-            }
+            // Update profile using Neon
+            await updateProfile(userId, {
+                banner_url: url,
+            });
 
             toast.success('Cover banner updated!', { id: toastId });
         } catch (err) {
@@ -191,18 +168,13 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
     };
 
     const handleSettingsUpdate = async (newSettings) => {
-        if (!supabase) return;
         const userId = user?.id || user?.uid;
         try {
-            const { error: updateError } = await supabase
-                .from('profiles')
-                .update({ settings: newSettings, updated_at: new Date().toISOString() })
-                .eq('id', userId);
-            
-            if (updateError) {
-                throw updateError;
-            }
-            
+            // Update settings using Neon
+            await updateProfile(userId, {
+                settings: newSettings,
+            });
+
             toast.success("Settings saved.");
         } catch (error) {
             console.error("Settings save failed", error);
@@ -361,69 +333,40 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
             if (followMainProfile) effectiveName = userData?.effectiveDisplayName || (userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : '');
             else {
                 if (useLegalNameOnly) effectiveName = userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : '';
-                else if (useUserNameOnly) effectiveName = userData?.displayName || (userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : ''); 
+                else if (useUserNameOnly) effectiveName = userData?.displayName || (userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : '');
                 else effectiveName = formData.profileName || `${userData.firstName} ${userData.lastName}`;
             }
 
             const userId = user?.id || user?.uid;
-            
-            if (!supabase) {
-                throw new Error('Database unavailable');
+
+            // Save sub-profile data using Neon
+            const dataToSave = { ...formData, followMainProfile, useLegalNameOnly, useUserNameOnly, syncStudioOps, displayName: effectiveName };
+
+            // Upsert sub-profile
+            await upsertSubProfile(userId, role, dataToSave);
+
+            // Update main profile if this is the active role
+            if (userData.activeProfileRole === role) {
+                await updateProfile(userId, {
+                    display_name: effectiveName,
+                    effective_display_name: effectiveName,
+                    search_terms: [effectiveName.toLowerCase()],
+                });
             }
 
-            // Save sub-profile data (assuming sub_profiles table or JSONB column)
-            // Note: This depends on your Supabase schema - you may need to adjust
-            const dataToSave = { ...formData, followMainProfile, useLegalNameOnly, useUserNameOnly, syncStudioOps, displayName: effectiveName };
-            
-            // Update sub-profiles (assuming a sub_profiles table or profiles.sub_profiles JSONB)
-            const { error: upsertError } = await supabase
-                .from('sub_profiles')
-                .upsert({
-                    user_id: userId,
-                    role: role,
-                    ...dataToSave
-                }, {
-                    onConflict: 'user_id,role'
-                });
-            
-            if (upsertError) {
-                throw upsertError;
-            }
-            
-            if (userData.activeProfileRole === role) {
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    .update({ 
-                        display_name: effectiveName,
-                        effective_display_name: effectiveName,
-                        search_terms: [effectiveName.toLowerCase()],
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', userId);
-                
-                if (profileError) {
-                    throw profileError;
-                }
-            }
+            // Update studio name if applicable
             if (role === 'Studio' && syncStudioOps) {
-                const { error: studioError } = await supabase
-                    .from('profiles')
-                    .update({ 
-                        studio_name: effectiveName,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', userId);
-                
-                if (studioError) {
-                    throw studioError;
-                }
+                await updateProfile(userId, {
+                    studio_name: effectiveName,
+                });
             }
+
             toast.success(`${role} Profile Saved!`, { id: toastId });
-        } catch (err) { 
-            console.error(err); 
+        } catch (err) {
+            console.error(err);
             const errorMessage = err?.message || "Failed to save.";
-            toast.error(errorMessage, { id: toastId }); 
-        } 
+            toast.error(errorMessage, { id: toastId });
+        }
         finally { setIsSaving(false); }
     };
 

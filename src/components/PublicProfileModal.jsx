@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    X, MapPin, MessageCircle, Shield, User, 
-    Briefcase, Music, Award, AlertTriangle, CheckCircle, 
-    DollarSign, Camera, Loader2 
+import {
+    X, MapPin, MessageCircle, Shield, User,
+    Briefcase, Music, Award, AlertTriangle, CheckCircle,
+    DollarSign, Camera, Loader2
 } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import StarRating from './shared/StarRating';
-import { useImageUpload } from '../hooks/useImageUpload';
+import { useVercelImageUpload } from '../hooks/useVercelUpload';
 import { useFollowSystem, useUserSocialStats } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import FollowersListModal, { FollowStats } from './social/FollowersListModal';
+import { getProfile, updateProfile } from '../config/neonQueries';
 
 export default function PublicProfileModal({ userId, currentUser, currentUserData, onClose, onMessage }) {
   const [profile, setProfile] = useState(null);
@@ -23,7 +23,7 @@ export default function PublicProfileModal({ userId, currentUser, currentUserDat
   const currentUserId = currentUser?.id || currentUser?.uid;
   const isOwner = currentUserId === userId;
 
-  const { uploadImage } = useImageUpload();
+  const { uploadImage } = useVercelImageUpload();
 
   // Follow system hooks
   const { isFollowing, toggleFollow } = useFollowSystem(currentUserId, currentUserData);
@@ -35,40 +35,27 @@ export default function PublicProfileModal({ userId, currentUser, currentUserDat
   };
 
   const refreshProfile = async () => {
-      if (!supabase) {
-          setError("Database unavailable.");
-          setLoading(false);
-          return;
-      }
-
       try {
-        const { data: profileData, error } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single();
-        
-        if (error) {
+        // Fetch profile using Neon
+        const profileData = await getProfile(userId);
+
+        if (!profileData) {
             setError("Profile not found or is private.");
             setLoading(false);
             return;
         }
-        
-        if (profileData) {
-            // Normalize data structure
-            setProfile({
-                ...profileData,
-                firstName: profileData.first_name,
-                lastName: profileData.last_name,
-                displayName: profileData.display_name || profileData.effective_display_name,
-                photoURL: profileData.avatar_url,
-                bannerURL: profileData.banner_url,
-                hourlyRate: profileData.hourly_rate,
-                zip: profileData.zip
-            });
-        } else {
-            setError("Profile not found or is private.");
-        }
+
+        // Normalize data structure
+        setProfile({
+            ...profileData,
+            firstName: profileData.first_name,
+            lastName: profileData.last_name,
+            displayName: profileData.display_name || profileData.effective_display_name,
+            photoURL: profileData.avatar_url || profileData.photo_url,
+            bannerURL: profileData.banner_url,
+            hourlyRate: profileData.hourly_rate,
+            zip: profileData.zip
+        });
       } catch (e) {
         console.error("Failed to load profile:", e);
         setError("Unable to load profile. Please try again later.");
@@ -87,17 +74,14 @@ export default function PublicProfileModal({ userId, currentUser, currentUserDat
 
       setBannerUploading(true);
       try {
-          if (!supabase) throw new Error('Database unavailable');
-          
-          // Upload to a dedicated banners path
-          const url = await uploadImage(file, `users/${userId}/images/banners`);
+          // Upload to Vercel Blob
+          const url = await uploadImage(file, 'profile-banners');
           if (url) {
-              // Update Profile
-              await supabase
-                  .from('profiles')
-                  .update({ banner_url: url })
-                  .eq('id', userId);
-              
+              // Update Profile using Neon
+              await updateProfile(userId, {
+                  banner_url: url,
+              });
+
               // Optimistic update
               setProfile(prev => ({ ...prev, bannerURL: url, banner_url: url }));
           }
