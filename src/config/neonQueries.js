@@ -593,8 +593,8 @@ export async function createBooking(bookingData) {
       bookingData.budget_cap || null,
       bookingData.agreed_price || null,
       bookingData.logistics || null,
-      bookingData.attachments ? JSON.stringify(bookingData.attachments) : '[]'::jsonb,
-      bookingData.metadata ? JSON.stringify(bookingData.metadata) : '{}'::jsonb,
+      bookingData.attachments ? JSON.stringify(bookingData.attachments) : '[]',
+      bookingData.metadata ? JSON.stringify(bookingData.metadata) : '{}',
     ],
     'createBooking'
   );
@@ -724,11 +724,11 @@ export async function createMarketplaceItem(itemData) {
       itemData.subcategory || null,
       itemData.price,
       itemData.condition || null,
-      itemData.images ? JSON.stringify(itemData.images) : '[]'::jsonb,
+      itemData.images ? JSON.stringify(itemData.images) : '[]',
       itemData.location ? JSON.stringify(itemData.location) : null,
       itemData.shipping_available !== false,
       itemData.local_pickup_available !== false,
-      itemData.metadata ? JSON.stringify(itemData.metadata) : '{}'::jsonb,
+      itemData.metadata ? JSON.stringify(itemData.metadata) : '{}',
     ],
     'createMarketplaceItem'
   );
@@ -851,7 +851,7 @@ export async function createTransaction(transactionData) {
       transactionData.reference_type || null,
       transactionData.reference_id || null,
       transactionData.payment_method || null,
-      transactionData.metadata ? JSON.stringify(transactionData.metadata) : '{}'::jsonb,
+      transactionData.metadata ? JSON.stringify(transactionData.metadata) : '{}',
     ],
     'createTransaction'
   );
@@ -955,7 +955,7 @@ export async function createNotification(notificationData) {
       notificationData.message || '',
       notificationData.reference_type || null,
       notificationData.reference_id || null,
-      notificationData.metadata ? JSON.stringify(notificationData.metadata) : '{}'::jsonb,
+      notificationData.metadata ? JSON.stringify(notificationData.metadata) : '{}',
     ],
     'createNotification'
   );
