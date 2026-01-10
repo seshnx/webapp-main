@@ -23,7 +23,16 @@ export const PERMISSIONS = {
     
     // Admin
     CAN_MANAGE_USERS: 'can_manage_users',
-    CAN_EXPORT_DATA: 'can_export_data'
+    CAN_EXPORT_DATA: 'can_export_data',
+
+    // Label / Business
+    CAN_VIEW_DASHBOARD: 'can_view_dashboard',
+    CAN_MANAGE_ROSTER: 'can_manage_roster',
+    CAN_DISTRIBUTE_MUSIC: 'can_distribute_music',
+    CAN_VIEW_ANALYTICS: 'can_view_analytics',
+    CAN_MANAGE_CONTRACTS: 'can_manage_contracts',
+    CAN_CREATE_CAMPAIGNS: 'can_create_campaigns',
+    CAN_PROCESS_ROYALTIES: 'can_process_royalties'
 };
 
 // Map Roles to Permissions
@@ -71,6 +80,19 @@ const ROLE_CONFIG = {
         PERMISSIONS.CAN_POST,
         PERMISSIONS.CAN_COMMENT
         // Fans generally initiate bookings, not approve them.
+    ],
+    // --- LABEL ROLE ---
+    'Label': [
+        PERMISSIONS.CAN_POST,
+        PERMISSIONS.CAN_COMMENT,
+        PERMISSIONS.CAN_VIEW_DASHBOARD,
+        PERMISSIONS.CAN_MANAGE_ROSTER,
+        PERMISSIONS.CAN_DISTRIBUTE_MUSIC,
+        PERMISSIONS.CAN_VIEW_ANALYTICS,
+        PERMISSIONS.CAN_MANAGE_CONTRACTS,
+        PERMISSIONS.CAN_CREATE_CAMPAIGNS,
+        PERMISSIONS.CAN_PROCESS_ROYALTIES,
+        PERMISSIONS.CAN_APPROVE_BOOKINGS // Labels can approve bookings for their artists
     ]
 };
 

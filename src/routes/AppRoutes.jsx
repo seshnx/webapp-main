@@ -129,7 +129,8 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
       <Route path="/edu-overview/*" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-admin/*" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
       <Route path="/studio-ops/*" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
-      
+      <Route path="/labels/*" element={<ProtectedRoute user={user} loading={loading}><div /></ProtectedRoute>} />
+
       {/* Debug Report Route - Test login destination */}
       <Route 
         path="/debug-report" 

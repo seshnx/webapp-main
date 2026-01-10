@@ -67,6 +67,8 @@ const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboar
 const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
 const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
 const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
+const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
+const ContractManager = retryLazyLoad(() => import('./labels/ContractManager'));
 
 // Shared loading fallback component
 const LoadingFallback = () => (
@@ -100,6 +102,7 @@ export default function MainLayout({
     if (path.startsWith('/business-center')) return 'business-center';
     if (path === '/legal') return 'legal';
     if (path.startsWith('/studio-ops')) return 'studio-ops';
+    if (path.startsWith('/labels')) return 'labels';
     if (path.startsWith('/edu-')) return path.substring(1).split('/')[0]; // Handle nested edu routes
     return 'dashboard'; // default
   };
@@ -408,6 +411,29 @@ export default function MainLayout({
         return (
           <Suspense fallback={<LoadingFallback />}>
             <BusinessCenter
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
+        );
+
+      case 'labels':
+        // Handle nested routes for labels (dashboard, contracts, campaigns)
+        const labelsPath = location.pathname.split('/')[2];
+        if (labelsPath === 'contracts') {
+          return (
+            <Suspense fallback={<LoadingFallback />}>
+              <ContractManager
+                user={user}
+                userData={userData}
+              />
+            </Suspense>
+          );
+        }
+        // Default to label dashboard
+        return (
+          <Suspense fallback={<LoadingFallback />}>
+            <LabelDashboard
               user={user}
               userData={userData}
             />
