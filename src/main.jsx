@@ -17,11 +17,20 @@ if (sentryDsn) {
   Sentry.init({
     dsn: sentryDsn,
     environment: import.meta.env.MODE || 'development',
+    // Release tracking for better error grouping
+    release: import.meta.env.VERCEL_GIT_COMMIT_SHA || 'local-dev',
     integrations: [
-      Sentry.browserTracingIntegration(),
+      Sentry.browserTracingIntegration({
+        // Track navigation performance
+        tracePropagationTargets: ['localhost', /^https:\/\/(app\.seshnx\.com|webapp-main-.*\.vercel\.app)/],
+      }),
       Sentry.replayIntegration({
         maskAllText: false,
         blockAllMedia: false,
+      }),
+      Sentry.extraErrorDataIntegration(),
+      Sentry.captureConsoleIntegration({
+        levels: ['error'],
       }),
     ],
     // Performance Monitoring
@@ -36,10 +45,25 @@ if (sentryDsn) {
           event.exception?.values?.[0]?.value?.includes('QuotaExceededError')) {
         return null; // Don't send these errors
       }
+      // Add custom context for all errors
+      event.contexts = {
+        ...event.contexts,
+        app: {
+          name: 'SeshNx Webapp',
+          environment: import.meta.env.MODE,
+        },
+      };
       return event;
     },
+    // Set user ID when available
+    initialScope: {
+      tags: {
+        framework: 'react',
+        runtime: 'vite',
+      },
+    },
   });
-  
+
   if (import.meta.env.DEV) {
     console.log('✓ Sentry initialized for error monitoring');
   }

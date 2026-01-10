@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 import { createRequire } from 'module'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import sentryVitePlugin from "@sentry/vite-plugin"
 
 // Derive __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -117,6 +118,28 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    // Sentry for error tracking and performance monitoring
+    sentryVitePlugin({
+      org: "amalia-media",
+      project: "seshnx-main",
+      // Auth token should be set via SENTRY_AUTH_TOKEN env variable
+      // Only upload source maps in production
+      authToken: process.env.SENTRY_AUTH_TOKEN,
+      telemetry: false,
+      // Enable source maps for better error debugging
+      sourcemaps: {
+        assets: ['./dist/assets/**'],
+        ignore: ['./dist/assets/*.html', './dist/manifest.webmanifest'],
+      },
+      // Release tracking
+      release: {
+        name: process.env.VERCEL_GIT_COMMIT_SHA || process.env.CI_COMMIT_SHA || 'local',
+        setCommits: {
+          auto: true,
+          ignore: ['vercel-cli', 'vercel'],
+        },
+      },
+    }),
     // Bundle analyzer (only in analysis mode) - conditionally loaded
     ...(() => {
       const plugin = getVisualizerPlugin();

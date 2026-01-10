@@ -10,7 +10,12 @@
       "Bash(git commit:*)",
       "Bash(git push:*)",
       "Bash(npm install:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(vercel env ls:*)",
+      "Bash(vercel link:*)",
+      "Bash(vercel env pull:*)",
+      "Bash(vercel env add:*)",
+      "Bash(vercel --prod:*)"
     ]
   }
 }
