@@ -546,6 +546,94 @@ export async function updatePostCommentCount(postId, increment) {
   return result[0];
 }
 
+/**
+ * Update post save count
+ *
+ * @param {string} postId - Post ID
+ * @param {number} increment - Amount to increment (can be negative)
+ * @returns {Promise<object>} Updated post
+ */
+export async function updatePostSaveCount(postId, increment) {
+  const sql = `
+    UPDATE posts
+    SET save_count = GREATEST(save_count + $1, 0),
+        updated_at = NOW()
+    WHERE id = $2
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [increment, postId], 'updatePostSaveCount');
+  return result[0];
+}
+
+/**
+ * Check if post is saved by user
+ *
+ * @param {string} userId - User ID
+ * @param {string} postId - Post ID
+ * @returns {Promise<boolean>} True if post is saved
+ */
+export async function checkIsSaved(userId, postId) {
+  const sql = `
+    SELECT id FROM saved_posts
+    WHERE user_id = $1 AND post_id = $2
+    LIMIT 1
+  `;
+
+  const result = await executeQuery(sql, [userId, postId], 'checkIsSaved');
+  return result.length > 0;
+}
+
+/**
+ * Save a post
+ *
+ * @param {string} userId - User ID
+ * @param {string} postId - Post ID
+ * @param {object} saveData - Save data (author_id, author_name, preview, has_media)
+ * @returns {Promise<object>} Created save record
+ */
+export async function savePost(userId, postId, saveData) {
+  const {
+    author_id,
+    author_name,
+    preview,
+    has_media = false
+  } = saveData;
+
+  const sql = `
+    INSERT INTO saved_posts (
+      user_id, post_id, author_id, author_name, preview, has_media, saved_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+    RETURNING *
+  `;
+
+  const result = await executeQuery(
+    sql,
+    [userId, postId, author_id, author_name, preview, has_media],
+    'savePost'
+  );
+
+  return result[0];
+}
+
+/**
+ * Unsave a post
+ *
+ * @param {string} userId - User ID
+ * @param {string} postId - Post ID
+ * @returns {Promise<boolean>} True if unsaved
+ */
+export async function unsavePost(userId, postId) {
+  const sql = `
+    DELETE FROM saved_posts
+    WHERE user_id = $1 AND post_id = $2
+    RETURNING id
+  `;
+
+  const result = await executeQuery(sql, [userId, postId], 'unsavePost');
+  return result.length > 0;
+}
+
 // =====================================================
 // BOOKING QUERIES
 // =====================================================

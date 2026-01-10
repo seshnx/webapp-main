@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check } from 'lucide-react';
-import { updatePost, deletePost, checkIsSaved, savePost, unsavePost, updatePostSaveCount } from '../../config/neonQueries';
+import { supabase } from '../../config/supabase';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import CommentSection from './CommentSection';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -58,12 +58,18 @@ export default function PostCard({
 
     // Check if post is saved on mount
     useEffect(() => {
-        if (!userId) return;
+        if (!userId || !supabase) return;
 
         const checkSaved = async () => {
             try {
-                const isSaved = await checkIsSaved(userId, post.id);
-                setIsSaved(isSaved);
+                const { data, error } = await supabase
+                    .from('saved_posts')
+                    .select('id')
+                    .eq('user_id', userId)
+                    .eq('post_id', post.id)
+                    .maybeSingle(); // Use maybeSingle() to handle case when no record exists
+
+                setIsSaved(!!data && !error);
             } catch (e) {
                 console.error('Error checking saved status:', e);
                 setIsSaved(false); // Default to false on error
@@ -88,7 +94,7 @@ export default function PostCard({
 
     const handleReaction = async (emoji) => {
         setShowReactionMenu(false);
-        if (!userId) return;
+        if (!userId || !supabase) return;
 
         try {
             const wasReacted = !!myReaction;
@@ -99,19 +105,29 @@ export default function PostCard({
                 const newReactions = { ...currentReactions };
                 delete newReactions[userId];
 
-                await updatePost(post.id, {
-                    reactions: newReactions,
-                    reaction_count: Math.max((post.reactionCount || 0) - 1, 0)
-                });
+                const { error } = await supabase
+                    .from('posts')
+                    .update({
+                        reactions: newReactions,
+                        reaction_count: (post.reactionCount || 0) - 1
+                    })
+                    .eq('id', post.id);
+
+                if (error) throw error;
             } else {
                 // Add/change reaction
                 const newReactions = { ...currentReactions, [userId]: emoji };
                 const increment = !myReaction ? 1 : 0;
 
-                await updatePost(post.id, {
-                    reactions: newReactions,
-                    reaction_count: (post.reactionCount || 0) + increment
-                });
+                const { error } = await supabase
+                    .from('posts')
+                    .update({
+                        reactions: newReactions,
+                        reaction_count: (post.reactionCount || 0) + increment
+                    })
+                    .eq('id', post.id);
+
+                if (error) throw error;
 
                 // Send notification (only for new reactions, not changes)
                 if (!wasReacted && !isOwnPost) {
@@ -134,26 +150,51 @@ export default function PostCard({
     };
 
     const handleSavePost = async () => {
-        if (!userId || savingPost) return;
+        if (!userId || savingPost || !supabase) return;
         setSavingPost(true);
 
         try {
             if (isSaved) {
                 // Unsave
-                await unsavePost(userId, post.id);
-                await updatePostSaveCount(post.id, -1);
+                const { error: deleteError } = await supabase
+                    .from('saved_posts')
+                    .delete()
+                    .eq('user_id', userId)
+                    .eq('post_id', post.id);
+
+                if (deleteError) throw deleteError;
+
+                const { error: updateError } = await supabase
+                    .from('posts')
+                    .update({ save_count: (post.saveCount || 0) - 1 })
+                    .eq('id', post.id);
+
+                if (updateError) throw updateError;
 
                 setIsSaved(false);
                 toast.success('Removed from saved');
             } else {
                 // Save
-                await savePost(userId, post.id, {
-                    author_id: post.userId,
-                    author_name: post.displayName,
-                    preview: post.text?.substring(0, 100) || 'Media post',
-                    has_media: !!(post.attachments?.length || post.imageUrl || post.audioUrl)
-                });
-                await updatePostSaveCount(post.id, 1);
+                const { error: insertError } = await supabase
+                    .from('saved_posts')
+                    .insert({
+                        user_id: userId,
+                        post_id: post.id,
+                        author_id: post.userId,
+                        author_name: post.displayName,
+                        preview: post.text?.substring(0, 100) || 'Media post',
+                        saved_at: new Date().toISOString(),
+                        has_media: !!(post.attachments?.length || post.imageUrl || post.audioUrl)
+                    });
+
+                if (insertError) throw insertError;
+
+                const { error: updateError } = await supabase
+                    .from('posts')
+                    .update({ save_count: (post.saveCount || 0) + 1 })
+                    .eq('id', post.id);
+
+                if (updateError) throw updateError;
 
                 setIsSaved(true);
                 toast.success('Post saved!');
@@ -207,13 +248,26 @@ export default function PostCard({
     };
 
     const handleDeletePost = async () => {
-        if (!isOwnPost) return;
+        if (!isOwnPost || !supabase) return;
         if (!window.confirm('Are you sure you want to delete this post?')) return;
 
         try {
-            const success = await deletePost(post.id);
+            // Include user_id in query for RLS policy compatibility
+            const { data, error, count } = await supabase
+                .from('posts')
+                .delete({ count: 'exact' })
+                .eq('id', post.id)
+                .eq('user_id', userId)
+                .select();
 
-            if (!success) {
+            if (error) {
+                console.error('Delete error:', error);
+                throw error;
+            }
+
+            // Verify that a row was actually deleted
+            if (!data || data.length === 0) {
+                console.error('Delete returned no data - post may not have been deleted');
                 toast.error("Couldn't delete post - permission denied");
                 return;
             }
