@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { 
-    Bell, 
-    UserPlus, 
-    Heart, 
-    MessageCircle, 
-    AtSign, 
-    CornerDownRight, 
+import {
+    Bell,
+    UserPlus,
+    Heart,
+    MessageCircle,
+    AtSign,
+    CornerDownRight,
     Bookmark,
     Check,
     CheckCheck,
@@ -17,7 +17,6 @@ import {
     Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { supabase } from '../../config/supabase';
 import UserAvatar from '../shared/UserAvatar';
 import toast from 'react-hot-toast';
 

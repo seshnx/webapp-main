@@ -1,5 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../config/supabase';
+import {
+    getNotifications,
+    markNotificationAsRead,
+    markAllNotificationsAsRead,
+    deleteNotification as deleteNotificationQuery,
+    clearAllNotifications as clearAllNotificationsQuery,
+    createNotification as createNotificationQuery
+} from '../config/neonQueries';
 
 /**
  * Notification types:
@@ -23,27 +30,16 @@ export function useNotifications(userId, fetchLimit = 50) {
 
     // Subscribe to notifications
     useEffect(() => {
-        if (!userId || !supabase) {
+        if (!userId) {
             setLoading(false);
             return;
         }
 
-        // Initial fetch
-        supabase
-            .from('notifications')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('deleted', false)
-            .order('created_at', { ascending: false })
-            .limit(fetchLimit)
-            .then(({ data, error }) => {
-                if (error) {
-                    console.error('Notifications fetch error:', error);
-                    setLoading(false);
-                    return;
-                }
-                
-                const notifList = (data || []).map(notif => ({
+        const loadNotifications = async () => {
+            try {
+                const data = await getNotifications(userId, { limit: fetchLimit, deleted: false });
+
+                const notifList = data.map(notif => ({
                     id: notif.id,
                     ...notif,
                     timestamp: notif.created_at,
@@ -52,44 +48,21 @@ export function useNotifications(userId, fetchLimit = 50) {
                 setNotifications(notifList);
                 setUnreadCount(notifList.filter(n => !n.read).length);
                 setLoading(false);
-            });
+            } catch (error) {
+                console.error('Notifications fetch error:', error);
+                setLoading(false);
+            }
+        };
 
-        // Subscribe to realtime changes
-        const channel = supabase
-            .channel(`notifications-${userId}`)
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'notifications',
-                    filter: `user_id=eq.${userId}`
-                },
-                async () => {
-                    const { data } = await supabase
-                        .from('notifications')
-                        .select('*')
-                        .eq('user_id', userId)
-                        .eq('deleted', false)
-                        .order('created_at', { ascending: false })
-                        .limit(fetchLimit);
-                    
-                    if (data) {
-                        const notifList = data.map(notif => ({
-                            id: notif.id,
-                            ...notif,
-                            timestamp: notif.created_at,
-                            read: notif.read || false
-                        }));
-                        setNotifications(notifList);
-                        setUnreadCount(notifList.filter(n => !n.read).length);
-                    }
-                }
-            )
-            .subscribe();
+        loadNotifications();
+
+        // Set up polling (every 30 seconds)
+        const pollInterval = setInterval(() => {
+            loadNotifications();
+        }, 30000);
 
         return () => {
-            supabase.removeChannel(channel);
+            clearInterval(pollInterval);
         };
     }, [userId, fetchLimit]);
 
@@ -97,14 +70,10 @@ export function useNotifications(userId, fetchLimit = 50) {
      * Mark a single notification as read
      */
     const markAsRead = useCallback(async (notificationId) => {
-        if (!userId || !supabase) return;
-        
+        if (!userId) return;
+
         try {
-            await supabase
-                .from('notifications')
-                .update({ read: true })
-                .eq('id', notificationId)
-                .eq('user_id', userId);
+            await markNotificationAsRead(notificationId);
         } catch (error) {
             console.error('Mark as read error:', error);
         }
@@ -114,36 +83,23 @@ export function useNotifications(userId, fetchLimit = 50) {
      * Mark all notifications as read
      */
     const markAllAsRead = useCallback(async () => {
-        if (!userId || unreadCount === 0 || !supabase) return;
+        if (!userId || unreadCount === 0) return;
 
         try {
-            const unreadNotifs = notifications.filter(n => !n.read);
-            const notifIds = unreadNotifs.map(n => n.id);
-            
-            if (notifIds.length > 0) {
-                await supabase
-                    .from('notifications')
-                    .update({ read: true })
-                    .in('id', notifIds)
-                    .eq('user_id', userId);
-            }
+            await markAllNotificationsAsRead(userId);
         } catch (error) {
             console.error('Mark all as read error:', error);
         }
-    }, [userId, notifications, unreadCount]);
+    }, [userId, unreadCount]);
 
     /**
      * Delete a notification
      */
     const deleteNotification = useCallback(async (notificationId) => {
-        if (!userId || !supabase) return;
+        if (!userId) return;
 
         try {
-            await supabase
-                .from('notifications')
-                .update({ deleted: true })
-                .eq('id', notificationId)
-                .eq('user_id', userId);
+            await deleteNotificationQuery(notificationId);
         } catch (error) {
             console.error('Delete notification error:', error);
         }
@@ -153,21 +109,14 @@ export function useNotifications(userId, fetchLimit = 50) {
      * Clear all notifications (soft delete)
      */
     const clearAll = useCallback(async () => {
-        if (!userId || !supabase) return;
+        if (!userId) return;
 
         try {
-            const notifIds = notifications.map(n => n.id);
-            if (notifIds.length > 0) {
-                await supabase
-                    .from('notifications')
-                    .update({ deleted: true })
-                    .in('id', notifIds)
-                    .eq('user_id', userId);
-            }
+            await clearAllNotificationsQuery(userId);
         } catch (error) {
             console.error('Clear all error:', error);
         }
-    }, [userId, notifications]);
+    }, [userId]);
 
     return {
         notifications: notifications.filter(n => !n.deleted),
@@ -195,25 +144,27 @@ export async function createNotification({
     commentId = null,
     message
 }) {
-    if (!targetUserId || targetUserId === fromUserId || !supabase) return; // Don't notify yourself
+    if (!targetUserId || targetUserId === fromUserId) return; // Don't notify yourself
 
     try {
-        await supabase
-            .from('notifications')
-            .insert({
-                user_id: targetUserId,
-                type,
-                from_user_id: fromUserId,
-                from_user_name: fromUserName,
-                from_user_photo: fromUserPhoto || null,
-                post_id: postId,
-                post_preview: postPreview,
-                comment_id: commentId,
-                message,
-                read: false,
-                deleted: false,
-                created_at: new Date().toISOString()
-            });
+        await createNotificationQuery({
+            user_id: targetUserId,
+            type,
+            from_user_id: fromUserId,
+            from_user_name: fromUserName,
+            from_user_photo: fromUserPhoto || null,
+            post_id: postId,
+            post_preview: postPreview,
+            comment_id: commentId,
+            message,
+            metadata: {
+                postId,
+                postPreview,
+                commentId,
+                fromUserName,
+                fromUserPhoto
+            }
+        });
     } catch (error) {
         console.error('Create notification error:', error);
     }

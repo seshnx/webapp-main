@@ -1241,6 +1241,36 @@ export async function markAllNotificationsAsRead(userId) {
   return result.length;
 }
 
+/**
+ * Delete notification (soft delete)
+ *
+ * @param {string} notificationId - Notification ID
+ * @returns {Promise<boolean>} True if deleted
+ */
+export async function deleteNotification(notificationId) {
+  const result = await executeQuery(
+    'UPDATE notifications SET deleted = true WHERE id = $1 RETURNING id',
+    [notificationId],
+    'deleteNotification'
+  );
+  return result.length > 0;
+}
+
+/**
+ * Clear all notifications for user (soft delete)
+ *
+ * @param {string} userId - User ID
+ * @returns {Promise<number>} Number of notifications cleared
+ */
+export async function clearAllNotifications(userId) {
+  const result = await executeQuery(
+    'UPDATE notifications SET deleted = true WHERE user_id = $1 AND deleted = false RETURNING id',
+    [userId],
+    'clearAllNotifications'
+  );
+  return result.length;
+}
+
 // =====================================================
 // LABEL & BUSINESS QUERIES
 // =====================================================
@@ -1531,6 +1561,8 @@ export default {
   createNotification,
   markNotificationAsRead,
   markAllNotificationsAsRead,
+  deleteNotification,
+  clearAllNotifications,
 
   // Label queries
   getLabelRoster,
