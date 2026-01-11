@@ -1,37 +1,33 @@
 -- =====================================================
--- NEON UNIFIED DATABASE SCHEMA
+-- FIX CLERK_USERS ID TYPE FROM UUID TO TEXT
 -- =====================================================
--- SeshNx Application - Complete PostgreSQL Schema for Neon
+-- This script fixes the clerk_users table and all foreign key references
+-- to use TEXT instead of UUID for Clerk user IDs.
 --
--- This schema combines all modules into a single unified database:
--- - User Profiles & Authentication
--- - Social Feed (posts, comments, reactions)
--- - Bookings & Sessions
--- - Marketplace (gear, SeshFx store)
--- - Education (schools, students, staff)
--- - Business Center (distribution, royalties)
--- - Legal Documents
--- - Tech Services
--- - Notifications
+-- Clerk user IDs are strings like 'user_abc123', not valid UUIDs.
 --
--- Key differences from Supabase version:
--- - No auth.users references (uses clerk_users table instead)
--- - Clerk manages authentication, we sync user data via webhooks
--- - Uses standard PostgreSQL features compatible with Neon
---
--- Run this in your Neon SQL Editor: https://console.neon.tech/
+-- Run this in your Neon SQL Editor to fix the schema.
 -- =====================================================
 
--- Enable required extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_trgm";  -- For text search
-CREATE EXTENSION IF NOT EXISTS "btree_gin"; -- For JSONB GIN indexes
+-- Step 1: Drop existing tables that reference clerk_users (cascade will handle this)
+-- Note: This will delete all existing data. If you have important data, export it first!
 
--- =====================================================
--- CLERK USERS TABLE (Synced from Clerk)
--- =====================================================
--- This table stores user data synced from Clerk via webhooks
-CREATE TABLE IF NOT EXISTS clerk_users (
+DROP TABLE IF EXISTS saved_posts CASCADE;
+DROP TABLE IF EXISTS follows CASCADE;
+DROP TABLE IF EXISTS reactions CASCADE;
+DROP TABLE IF EXISTS comments CASCADE;
+DROP TABLE IF EXISTS posts CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
+DROP TABLE IF EXISTS bookings CASCADE;
+DROP TABLE IF EXISTS sessions CASCADE;
+DROP TABLE IF EXISTS market_items CASCADE;
+DROP TABLE IF EXISTS students CASCADE;
+DROP TABLE IF EXISTS sub_profiles CASCADE;
+DROP TABLE IF EXISTS profiles CASCADE;
+DROP TABLE IF EXISTS clerk_users CASCADE;
+
+-- Step 2: Recreate clerk_users with TEXT id
+CREATE TABLE clerk_users (
     id TEXT PRIMARY KEY, -- Clerk user ID (string format like 'user_abc123')
     email TEXT UNIQUE NOT NULL,
     phone TEXT,
@@ -63,16 +59,14 @@ CREATE TABLE IF NOT EXISTS clerk_users (
 );
 
 -- Indexes for clerk_users
-CREATE INDEX IF NOT EXISTS idx_clerk_users_email ON clerk_users(email);
-CREATE INDEX IF NOT EXISTS idx_clerk_users_username ON clerk_users(username);
-CREATE INDEX IF NOT EXISTS idx_clerk_users_active_role ON clerk_users(active_role);
-CREATE INDEX IF NOT EXISTS idx_clerk_users_account_types ON clerk_users USING GIN(account_types);
-CREATE INDEX IF NOT EXISTS idx_clerk_users_location ON clerk_users USING GIN(zip_code);
+CREATE INDEX idx_clerk_users_email ON clerk_users(email);
+CREATE INDEX idx_clerk_users_username ON clerk_users(username);
+CREATE INDEX idx_clerk_users_active_role ON clerk_users(active_role);
+CREATE INDEX idx_clerk_users_account_types ON clerk_users USING GIN(account_types);
+CREATE INDEX idx_clerk_users_location ON clerk_users USING GIN(zip_code);
 
--- =====================================================
--- PROFILES TABLE (Extended profile data)
--- =====================================================
-CREATE TABLE IF NOT EXISTS profiles (
+-- Step 3: Recreate profiles with TEXT user_id
+CREATE TABLE profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
 
@@ -111,17 +105,15 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 -- Indexes for profiles
-CREATE INDEX IF NOT EXISTS idx_profiles_user_id ON profiles(user_id);
-CREATE INDEX IF NOT EXISTS idx_profiles_display_name ON profiles USING GIN(display_name gin_trgm_ops); -- Text search
-CREATE INDEX IF NOT EXISTS idx_profiles_location ON profiles USING GIN(location);
-CREATE INDEX IF NOT EXISTS idx_profiles_talent_info ON profiles USING GIN(talent_info);
-CREATE INDEX IF NOT EXISTS idx_profiles_engineer_info ON profiles USING GIN(engineer_info);
-CREATE INDEX IF NOT EXISTS idx_profiles_producer_info ON profiles USING GIN(producer_info);
+CREATE INDEX idx_profiles_user_id ON profiles(user_id);
+CREATE INDEX idx_profiles_display_name ON profiles USING GIN(display_name gin_trgm_ops); -- Text search
+CREATE INDEX idx_profiles_location ON profiles USING GIN(location);
+CREATE INDEX idx_profiles_talent_info ON profiles USING GIN(talent_info);
+CREATE INDEX idx_profiles_engineer_info ON profiles USING GIN(engineer_info);
+CREATE INDEX idx_profiles_producer_info ON profiles USING GIN(producer_info);
 
--- =====================================================
--- SUB-PROFILES TABLE (Multiple account types per user)
--- =====================================================
-CREATE TABLE IF NOT EXISTS sub_profiles (
+-- Step 4: Recreate sub_profiles with TEXT user_id
+CREATE TABLE sub_profiles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
 
@@ -152,15 +144,12 @@ CREATE TABLE IF NOT EXISTS sub_profiles (
 );
 
 -- Indexes for sub_profiles
-CREATE INDEX IF NOT EXISTS idx_sub_profiles_user_id ON sub_profiles(user_id);
-CREATE INDEX IF NOT EXISTS idx_sub_profiles_account_type ON sub_profiles(account_type);
-CREATE INDEX IF NOT EXISTS idx_sub_profiles_is_active ON sub_profiles(is_active);
+CREATE INDEX idx_sub_profiles_user_id ON sub_profiles(user_id);
+CREATE INDEX idx_sub_profiles_account_type ON sub_profiles(account_type);
+CREATE INDEX idx_sub_profiles_is_active ON sub_profiles(is_active);
 
--- =====================================================
--- SOCIAL FEED MODULE
--- =====================================================
-
-CREATE TABLE IF NOT EXISTS posts (
+-- Step 5: Recreate posts table with TEXT user_id
+CREATE TABLE posts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     display_name TEXT,
@@ -193,14 +182,15 @@ CREATE TABLE IF NOT EXISTS posts (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
-CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_posts_parent_post_id ON posts(parent_post_id);
-CREATE INDEX IF NOT EXISTS idx_posts_hashtags ON posts USING GIN(hashtags);
-CREATE INDEX IF NOT EXISTS idx_posts_visibility ON posts(visibility);
-CREATE INDEX IF NOT EXISTS idx_posts_user_created ON posts(user_id, created_at DESC);
+CREATE INDEX idx_posts_user_id ON posts(user_id);
+CREATE INDEX idx_posts_created_at ON posts(created_at DESC);
+CREATE INDEX idx_posts_parent_post_id ON posts(parent_post_id);
+CREATE INDEX idx_posts_hashtags ON posts USING GIN(hashtags);
+CREATE INDEX idx_posts_visibility ON posts(visibility);
+CREATE INDEX idx_posts_user_created ON posts(user_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS comments (
+-- Step 6: Recreate comments table with TEXT user_id
+CREATE TABLE comments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
     user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
@@ -215,13 +205,14 @@ CREATE TABLE IF NOT EXISTS comments (
     deleted_at TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);
-CREATE INDEX IF NOT EXISTS idx_comments_user_id ON comments(user_id);
-CREATE INDEX IF NOT EXISTS idx_comments_created_at ON comments(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_comments_parent_comment_id ON comments(parent_comment_id);
-CREATE INDEX IF NOT EXISTS idx_comments_post_created ON comments(post_id, created_at DESC);
+CREATE INDEX idx_comments_post_id ON comments(post_id);
+CREATE INDEX idx_comments_user_id ON comments(user_id);
+CREATE INDEX idx_comments_created_at ON comments(created_at DESC);
+CREATE INDEX idx_comments_parent_comment_id ON comments(parent_comment_id);
+CREATE INDEX idx_comments_post_created ON comments(post_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS reactions (
+-- Step 7: Recreate reactions table with TEXT user_id
+CREATE TABLE reactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     target_type TEXT NOT NULL CHECK (target_type IN ('post', 'comment')),
@@ -231,11 +222,12 @@ CREATE TABLE IF NOT EXISTS reactions (
     UNIQUE(user_id, target_type, target_id, emoji)
 );
 
-CREATE INDEX IF NOT EXISTS idx_reactions_user_id ON reactions(user_id);
-CREATE INDEX IF NOT EXISTS idx_reactions_created_at ON reactions(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_reactions_target ON reactions(target_type, target_id);
+CREATE INDEX idx_reactions_user_id ON reactions(user_id);
+CREATE INDEX idx_reactions_created_at ON reactions(created_at DESC);
+CREATE INDEX idx_reactions_target ON reactions(target_type, target_id);
 
-CREATE TABLE IF NOT EXISTS follows (
+-- Step 8: Recreate follows table with TEXT user_ids
+CREATE TABLE follows (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     follower_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     following_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
@@ -244,11 +236,12 @@ CREATE TABLE IF NOT EXISTS follows (
     CHECK (follower_id != following_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_follows_follower_id ON follows(follower_id);
-CREATE INDEX IF NOT EXISTS idx_follows_following_id ON follows(following_id);
-CREATE INDEX IF NOT EXISTS idx_follows_created_at ON follows(created_at DESC);
+CREATE INDEX idx_follows_follower_id ON follows(follower_id);
+CREATE INDEX idx_follows_following_id ON follows(following_id);
+CREATE INDEX idx_follows_created_at ON follows(created_at DESC);
 
-CREATE TABLE IF NOT EXISTS saved_posts (
+-- Step 9: Recreate saved_posts table with TEXT user_id
+CREATE TABLE saved_posts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
@@ -256,14 +249,12 @@ CREATE TABLE IF NOT EXISTS saved_posts (
     UNIQUE(user_id, post_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_saved_posts_user_id ON saved_posts(user_id);
-CREATE INDEX IF NOT EXISTS idx_saved_posts_post_id ON saved_posts(post_id);
-CREATE INDEX IF NOT EXISTS idx_saved_posts_created_at ON saved_posts(created_at DESC);
+CREATE INDEX idx_saved_posts_user_id ON saved_posts(user_id);
+CREATE INDEX idx_saved_posts_post_id ON saved_posts(post_id);
+CREATE INDEX idx_saved_posts_created_at ON saved_posts(created_at DESC);
 
--- =====================================================
--- NOTIFICATIONS TABLE
--- =====================================================
-CREATE TABLE IF NOT EXISTS notifications (
+-- Step 10: Recreate notifications table with TEXT user_id
+CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     type TEXT NOT NULL CHECK (type IN ('like', 'comment', 'follow', 'mention', 'booking', 'message', 'system')),
@@ -291,17 +282,14 @@ CREATE TABLE IF NOT EXISTS notifications (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON notifications(user_id, read);
-CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type);
-CREATE INDEX IF NOT EXISTS idx_notifications_target ON notifications(target_type, target_id);
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX idx_notifications_user_read ON notifications(user_id, read);
+CREATE INDEX idx_notifications_type ON notifications(type);
+CREATE INDEX idx_notifications_target ON notifications(target_type, target_id);
 
--- =====================================================
--- BOOKINGS MODULE
--- =====================================================
-
-CREATE TABLE IF NOT EXISTS bookings (
+-- Step 11: Recreate bookings table with TEXT user_ids
+CREATE TABLE bookings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sender_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     sender_name TEXT,
@@ -355,17 +343,18 @@ CREATE TABLE IF NOT EXISTS bookings (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_bookings_sender_id ON bookings(sender_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_target_id ON bookings(target_id);
-CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
-CREATE INDEX IF NOT EXISTS idx_bookings_type ON bookings(type);
-CREATE INDEX IF NOT EXISTS idx_bookings_start_time ON bookings(start_time);
-CREATE INDEX IF NOT EXISTS idx_bookings_created_at ON bookings(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_bookings_sender_status ON bookings(sender_id, status);
-CREATE INDEX IF NOT EXISTS idx_bookings_target_status ON bookings(target_id, status);
-CREATE INDEX IF NOT EXISTS idx_bookings_venue_id ON bookings(venue_id);
+CREATE INDEX idx_bookings_sender_id ON bookings(sender_id);
+CREATE INDEX idx_bookings_target_id ON bookings(target_id);
+CREATE INDEX idx_bookings_status ON bookings(status);
+CREATE INDEX idx_bookings_type ON bookings(type);
+CREATE INDEX idx_bookings_start_time ON bookings(start_time);
+CREATE INDEX idx_bookings_created_at ON bookings(created_at DESC);
+CREATE INDEX idx_bookings_sender_status ON bookings(sender_id, status);
+CREATE INDEX idx_bookings_target_status ON bookings(target_id, status);
+CREATE INDEX idx_bookings_venue_id ON bookings(venue_id);
 
-CREATE TABLE IF NOT EXISTS sessions (
+-- Step 12: Recreate sessions table with TEXT user_id
+CREATE TABLE sessions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
     creator_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
@@ -383,16 +372,13 @@ CREATE TABLE IF NOT EXISTS sessions (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_sessions_booking_id ON sessions(booking_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_creator_id ON sessions(creator_id);
-CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
-CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions(status);
+CREATE INDEX idx_sessions_booking_id ON sessions(booking_id);
+CREATE INDEX idx_sessions_creator_id ON sessions(creator_id);
+CREATE INDEX idx_sessions_date ON sessions(date);
+CREATE INDEX idx_sessions_status ON sessions(status);
 
--- =====================================================
--- MARKETPLACE MODULE
--- =====================================================
-
-CREATE TABLE IF NOT EXISTS market_items (
+-- Step 13: Recreate market_items table with TEXT seller_id
+CREATE TABLE market_items (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     seller_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
@@ -414,18 +400,15 @@ CREATE TABLE IF NOT EXISTS market_items (
     sold_at TIMESTAMPTZ
 );
 
-CREATE INDEX IF NOT EXISTS idx_market_items_seller_id ON market_items(seller_id);
-CREATE INDEX IF NOT EXISTS idx_market_items_category ON market_items(category);
-CREATE INDEX IF NOT EXISTS idx_market_items_category_status ON market_items(category, status);
-CREATE INDEX IF NOT EXISTS idx_market_items_status ON market_items(status);
-CREATE INDEX IF NOT EXISTS idx_market_items_created_at ON market_items(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_market_items_price ON market_items(price);
+CREATE INDEX idx_market_items_seller_id ON market_items(seller_id);
+CREATE INDEX idx_market_items_category ON market_items(category);
+CREATE INDEX idx_market_items_category_status ON market_items(category, status);
+CREATE INDEX idx_market_items_status ON market_items(status);
+CREATE INDEX idx_market_items_created_at ON market_items(created_at DESC);
+CREATE INDEX idx_market_items_price ON market_items(price);
 
--- =====================================================
--- EDUCATION MODULE
--- =====================================================
-
-CREATE TABLE IF NOT EXISTS schools (
+-- Step 14: Recreate schools table
+CREATE TABLE schools (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name TEXT NOT NULL,
     short_name TEXT,
@@ -444,10 +427,11 @@ CREATE TABLE IF NOT EXISTS schools (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_schools_name ON schools(name);
-CREATE INDEX IF NOT EXISTS idx_schools_is_active ON schools(is_active);
+CREATE INDEX idx_schools_name ON schools(name);
+CREATE INDEX idx_schools_is_active ON schools(is_active);
 
-CREATE TABLE IF NOT EXISTS students (
+-- Step 15: Recreate students table with TEXT user_id
+CREATE TABLE students (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     school_id UUID REFERENCES schools(id) ON DELETE CASCADE,
@@ -466,16 +450,14 @@ CREATE TABLE IF NOT EXISTS students (
     UNIQUE(user_id, school_id)
 );
 
-CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
-CREATE INDEX IF NOT EXISTS idx_students_school_id ON students(school_id);
-CREATE INDEX IF NOT EXISTS idx_students_status ON students(status);
-CREATE INDEX IF NOT EXISTS idx_students_cohort ON students(cohort);
+CREATE INDEX idx_students_user_id ON students(user_id);
+CREATE INDEX idx_students_school_id ON students(school_id);
+CREATE INDEX idx_students_status ON students(status);
+CREATE INDEX idx_students_cohort ON students(cohort);
 
--- =====================================================
--- TRIGGERS FOR AUTOMATIC COUNTS
--- =====================================================
+-- Step 16: Recreate triggers
+DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
 
--- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -485,51 +467,41 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Apply updated_at triggers to all relevant tables
-DROP TRIGGER IF EXISTS trigger_clerk_users_updated_at ON clerk_users;
 CREATE TRIGGER trigger_clerk_users_updated_at
     BEFORE UPDATE ON clerk_users
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS trigger_profiles_updated_at ON profiles;
 CREATE TRIGGER trigger_profiles_updated_at
     BEFORE UPDATE ON profiles
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS trigger_posts_updated_at ON posts;
 CREATE TRIGGER trigger_posts_updated_at
     BEFORE UPDATE ON posts
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS trigger_comments_updated_at ON comments;
 CREATE TRIGGER trigger_comments_updated_at
     BEFORE UPDATE ON comments
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS trigger_notifications_updated_at ON notifications;
 CREATE TRIGGER trigger_notifications_updated_at
     BEFORE UPDATE ON notifications
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS trigger_bookings_updated_at ON bookings;
 CREATE TRIGGER trigger_bookings_updated_at
     BEFORE UPDATE ON bookings
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS trigger_sessions_updated_at ON sessions;
 CREATE TRIGGER trigger_sessions_updated_at
     BEFORE UPDATE ON sessions
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-DROP TRIGGER IF EXISTS trigger_market_items_updated_at ON market_items;
 CREATE TRIGGER trigger_market_items_updated_at
     BEFORE UPDATE ON market_items
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- =====================================================
--- HELPER FUNCTIONS
--- =====================================================
+-- Step 17: Update helper functions
+DROP FUNCTION IF EXISTS get_active_profile(p_user_id TEXT) CASCADE;
 
--- Function to get user's active profile
 CREATE OR REPLACE FUNCTION get_active_profile(p_user_id TEXT)
 RETURNS TABLE (
     id UUID,
@@ -553,11 +525,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- =====================================================
--- VIEWS FOR COMMON QUERIES
--- =====================================================
+-- Step 18: Update views
+DROP VIEW IF EXISTS posts_with_authors CASCADE;
+DROP VIEW IF EXISTS bookings_with_details CASCADE;
 
--- View for posts with author info
 CREATE OR REPLACE VIEW posts_with_authors AS
 SELECT
     p.*,
@@ -570,7 +541,6 @@ FROM posts p
 JOIN clerk_users cu ON p.user_id = cu.id
 LEFT JOIN profiles sp ON sp.user_id = cu.id;
 
--- View for bookings with participant info
 CREATE OR REPLACE VIEW bookings_with_details AS
 SELECT
     b.*,
@@ -583,20 +553,8 @@ JOIN clerk_users sender ON b.sender_id = sender.id
 JOIN clerk_users target ON b.target_id = target.id;
 
 -- =====================================================
--- COMMENTS
+-- DONE!
 -- =====================================================
-
-COMMENT ON TABLE clerk_users IS 'User data synced from Clerk authentication';
-COMMENT ON TABLE profiles IS 'Extended user profile information';
-COMMENT ON TABLE sub_profiles IS 'Multiple account type profiles per user';
-COMMENT ON TABLE posts IS 'Social media posts in the feed';
-COMMENT ON TABLE comments IS 'Comments on posts';
-COMMENT ON TABLE reactions IS 'User reactions (likes, emojis) to posts and comments';
-COMMENT ON TABLE follows IS 'User follow relationships';
-COMMENT ON TABLE saved_posts IS 'Bookmarked/saved posts by users';
-COMMENT ON TABLE notifications IS 'User notifications for social interactions';
-COMMENT ON TABLE bookings IS 'Booking requests for sessions, studio rentals, and talent services';
-COMMENT ON TABLE sessions IS 'Extended session information with participants';
-COMMENT ON TABLE market_items IS 'Marketplace items (gear, services, SeshFx)';
-COMMENT ON TABLE schools IS 'Educational institutions';
-COMMENT ON TABLE students IS 'Student enrollment records';
+-- Your schema is now fixed to use TEXT for Clerk user IDs.
+-- The webhook handler should now work correctly.
+-- =====================================================
