@@ -116,16 +116,42 @@ async function handleUserCreated(clerkUser) {
     updated_at,
   } = clerkUser;
 
-  // Get primary email
-  const primaryEmail = email_addresses.find(e => e.id === clerkUser.primary_email_address_id)?.email_address;
+  // Get primary email - try multiple strategies
+  let primaryEmail = null;
+
+  if (email_addresses && Array.isArray(email_addresses) && email_addresses.length > 0) {
+    // Strategy 1: Find by primary_email_address_id
+    if (clerkUser.primary_email_address_id) {
+      primaryEmail = email_addresses.find(e => e.id === clerkUser.primary_email_address_id)?.email_address;
+    }
+
+    // Strategy 2: Find first verified email
+    if (!primaryEmail) {
+      primaryEmail = email_addresses.find(e => e.verified)?.email_address;
+    }
+
+    // Strategy 3: Use first email
+    if (!primaryEmail) {
+      primaryEmail = email_addresses[0]?.email_address;
+    }
+  }
+
+  // Log if no email found (might be test data)
+  if (!primaryEmail) {
+    console.warn('⚠️  No email found for user:', id);
+  }
+
   // Get primary phone
-  const primaryPhone = phone_numbers?.find(p => p.id === clerkUser.primary_phone_number_id)?.phone_number;
+  const primaryPhone = phone_numbers?.find(p => p.id === clerkUser.primary_phone_number_id)?.phone_number || null;
 
   // Extract metadata
   const accountTypes = public_metadata?.account_types || ['Fan'];
   const activeRole = public_metadata?.active_role || 'Fan';
   const bio = public_metadata?.bio || null;
   const zipCode = public_metadata?.zip_code || null;
+
+  // For test users without email, use a placeholder
+  const finalEmail = primaryEmail || `${id}@clerk.test`;
 
   try {
     const result = await sql`
@@ -145,12 +171,12 @@ async function handleUserCreated(clerkUser) {
         updated_at
       ) VALUES (
         ${id},
-        ${primaryEmail},
+        ${finalEmail},
         ${primaryPhone},
-        ${first_name},
-        ${last_name},
-        ${username},
-        ${image_url},
+        ${first_name || null},
+        ${last_name || null},
+        ${username || null},
+        ${image_url || null},
         ${accountTypes},
         ${activeRole},
         ${bio},
@@ -191,10 +217,28 @@ async function handleUserUpdated(clerkUser) {
     updated_at,
   } = clerkUser;
 
-  // Get primary email
-  const primaryEmail = email_addresses.find(e => e.id === clerkUser.primary_email_address_id)?.email_address;
+  // Get primary email - try multiple strategies
+  let primaryEmail = null;
+
+  if (email_addresses && Array.isArray(email_addresses) && email_addresses.length > 0) {
+    // Strategy 1: Find by primary_email_address_id
+    if (clerkUser.primary_email_address_id) {
+      primaryEmail = email_addresses.find(e => e.id === clerkUser.primary_email_address_id)?.email_address;
+    }
+
+    // Strategy 2: Find first verified email
+    if (!primaryEmail) {
+      primaryEmail = email_addresses.find(e => e.verified)?.email_address;
+    }
+
+    // Strategy 3: Use first email
+    if (!primaryEmail) {
+      primaryEmail = email_addresses[0]?.email_address;
+    }
+  }
+
   // Get primary phone
-  const primaryPhone = phone_numbers?.find(p => p.id === clerkUser.primary_phone_number_id)?.phone_number;
+  const primaryPhone = phone_numbers?.find(p => p.id === clerkUser.primary_phone_number_id)?.phone_number || null;
 
   // Extract metadata
   const accountTypes = public_metadata?.account_types || ['Fan'];
@@ -202,16 +246,19 @@ async function handleUserUpdated(clerkUser) {
   const bio = public_metadata?.bio || null;
   const zipCode = public_metadata?.zip_code || null;
 
+  // For test users without email, use a placeholder
+  const finalEmail = primaryEmail || `${id}@clerk.test`;
+
   try {
     const result = await sql`
       UPDATE clerk_users
       SET
-        email = ${primaryEmail},
+        email = ${finalEmail},
         phone = ${primaryPhone},
-        first_name = ${first_name},
-        last_name = ${last_name},
-        username = ${username},
-        profile_photo_url = ${image_url},
+        first_name = ${first_name || null},
+        last_name = ${last_name || null},
+        username = ${username || null},
+        profile_photo_url = ${image_url || null},
         account_types = ${accountTypes},
         active_role = ${activeRole},
         bio = ${bio},
