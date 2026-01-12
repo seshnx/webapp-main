@@ -187,6 +187,52 @@ export async function getUserWithProfile(userId) {
 }
 
 /**
+ * Create clerk user
+ *
+ * @param {object} userData - User data from Clerk
+ * @returns {Promise<object>} Created user
+ */
+export async function createClerkUser(userData) {
+  const {
+    id,
+    email,
+    phone = null,
+    first_name = null,
+    last_name = null,
+    username = null,
+    profile_photo_url = null,
+    account_types = ['Fan'],
+    active_role = 'Fan',
+    bio = null,
+    zip_code = null,
+  } = userData;
+
+  const sql = `
+    INSERT INTO clerk_users (
+      id, email, phone, first_name, last_name, username,
+      profile_photo_url, account_types, active_role, bio, zip_code
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    ON CONFLICT (id) DO UPDATE SET
+      email = EXCLUDED.email,
+      phone = EXCLUDED.phone,
+      first_name = EXCLUDED.first_name,
+      last_name = EXCLUDED.last_name,
+      username = EXCLUDED.username,
+      profile_photo_url = EXCLUDED.profile_photo_url,
+      updated_at = NOW()
+    RETURNING *
+  `;
+
+  const result = await executeQuery(
+    sql,
+    [id, email, phone, first_name, last_name, username, profile_photo_url, account_types, active_role, bio, zip_code],
+    'createClerkUser'
+  );
+
+  return result[0];
+}
+
+/**
  * Update profile
  *
  * @param {string} userId - User ID
@@ -1591,6 +1637,7 @@ export default {
   getUserByUsername,
   getProfile,
   getUserWithProfile,
+  createClerkUser,
   updateProfile,
   upsertSubProfile,
   getSubProfile,

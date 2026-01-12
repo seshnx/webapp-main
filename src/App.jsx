@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useUser } from '@clerk/clerk-react';
+import { useAuth, useUser, useClerk } from '@clerk/clerk-react';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { getUserWithProfile, updateProfile } from './config/neonQueries';
+import { getUserWithProfile, updateProfile, createClerkUser } from './config/neonQueries';
 
 // Lazy load components to avoid initialization order issues
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
@@ -16,6 +16,7 @@ export default function App() {
   // Clerk authentication hooks
   const { isLoaded: clerkLoaded, isSignedIn, userId } = useAuth();
   const { user } = useUser();
+  const clerk = useClerk();
 
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -198,18 +199,35 @@ export default function App() {
             setUserData(minimalUserData);
           }
 
-          // Try to create profile in background
+          // Create user in Neon database if they don't exist
           try {
-            await updateProfile(userId, {
+            console.log('📝 Creating user in Neon database...');
+
+            const metadata = user?.publicMetadata || {};
+
+            // First, create the clerk user record
+            await createClerkUser({
+              id: userId,
               email: user?.primaryEmailAddress?.emailAddress || '',
-              first_name: user?.firstName || '',
-              last_name: user?.lastName || '',
+              phone: user?.primaryPhoneNumber?.phoneNumber || null,
+              first_name: user?.firstName || metadata.first_name || null,
+              last_name: user?.lastName || metadata.last_name || null,
+              username: user?.username || metadata.username || null,
+              profile_photo_url: user?.imageUrl || null,
               account_types: metadata.account_types || ['Fan'],
               active_role: metadata.active_role || 'Fan',
-              effective_display_name: user?.fullName || user?.firstName || 'User',
+              bio: metadata.bio || null,
+              zip_code: metadata.zip_code || null,
             });
+
+            console.log('✅ User created in Neon database');
+
+            // Then, try to create the extended profile (if needed)
+            // Note: This is optional and will only create the profiles table record
+            // The clerk_users table is the critical one that was just created
           } catch (err) {
-            console.error("Profile creation failed:", err);
+            console.error("❌ Failed to create user in Neon:", err);
+            // Don't block the app - user can still function with Clerk data
           }
         }
 
@@ -245,19 +263,28 @@ export default function App() {
 
   const handleLogout = useCallback(async () => {
     try {
-      // Clear state immediately for responsive UI
-      setUserData(null);
+      console.log('=== APP LOGOUT ===');
 
-      // Sign out from Clerk - the useAuth hook will handle the actual sign out
-      // We just need to navigate to login
+      // Sign out from Clerk - this clears the session
+      if (clerk) {
+        await clerk.signOut();
+        console.log('✅ Clerk signOut successful');
+      }
+
+      // Clear local state
+      setUserData(null);
+      console.log('✅ Local state cleared');
+
+      // Navigate to login
       navigate('/login', { replace: true });
+      console.log('✅ Navigated to login');
     } catch (err) {
       console.error("Logout error:", err);
       // Even if signOut fails, clear state and redirect
       setUserData(null);
       navigate('/login', { replace: true });
     }
-  }, [navigate]);
+  }, [navigate, clerk]);
 
   // Show loading spinner while Clerk loads or userData is being fetched
   if (!clerkLoaded || loading) {
