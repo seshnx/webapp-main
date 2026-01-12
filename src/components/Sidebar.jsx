@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Briefcase as BriefcaseIcon, Zap } from 'lucide-react';
+import { useClerk } from '@clerk/clerk-react';
 import { supabase } from '../config/supabase';
 import { useSchool } from '../contexts/SchoolContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -7,6 +8,7 @@ import { useLanguage } from '../contexts/LanguageContext';
 export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen, setSidebarOpen, handleLogout }) {
   // Always call hook (React rules), but handle case where context might not be ready
   const schoolContext = useSchool();
+  const clerk = useClerk();
   const { t } = useLanguage();
   const [isMobile, setIsMobile] = useState(false);
   
@@ -90,14 +92,26 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
 
   const onLogout = handleLogout || (async () => {
     try {
-      if (supabase) {
-        const { error } = await supabase.auth.signOut();
-        if (error) console.error("Logout error:", error);
+      console.log('=== SIDEBAR LOGOUT ===');
+
+      // Use Clerk to sign out
+      if (clerk) {
+        await clerk.signOut();
+        console.log('✅ Clerk signOut successful');
       }
+
+      // Also clear Supabase session if it exists (for migration)
+      if (supabase) {
+        await supabase.auth.signOut();
+      }
+
+      console.log('✅ Logout complete, redirecting to home');
+
       // Navigate to home after logout
       window.location.href = '/';
     } catch (err) {
       console.error("Logout failed:", err);
+      // Force redirect even on error
       window.location.href = '/';
     }
   });

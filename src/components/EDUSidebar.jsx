@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Users, Clock, UserPlus, Key, Lock, Megaphone, 
-    Briefcase, GraduationCap, Users as CohortIcon, 
+import {
+    Users, Clock, UserPlus, Key, Lock, Megaphone,
+    Briefcase, GraduationCap, Users as CohortIcon,
     Activity, Settings, LogOut, ArrowLeft, LayoutDashboard,
     BookOpen, Target
 } from 'lucide-react';
+import { useClerk } from '@clerk/clerk-react';
 import { supabase } from '../config/supabase';
 
 export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, isGlobalAdmin }) {
+    const clerk = useClerk();
     const [isMobile, setIsMobile] = useState(false);
 
     // Track mobile viewport
@@ -89,10 +91,21 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
                     </div>
                     <button onClick={async () => {
                         try {
-                            if (supabase) {
-                                const { error } = await supabase.auth.signOut();
-                                if (error) console.error("Logout error:", error);
+                            console.log('=== EDU SIDEBAR LOGOUT ===');
+
+                            // Use Clerk to sign out
+                            if (clerk) {
+                                await clerk.signOut();
+                                console.log('✅ Clerk signOut successful');
                             }
+
+                            // Also clear Supabase session if it exists
+                            if (supabase) {
+                                await supabase.auth.signOut();
+                            }
+
+                            console.log('✅ Logout complete, redirecting to home');
+
                             // Navigate to home after logout
                             window.location.href = '/';
                         } catch (err) {

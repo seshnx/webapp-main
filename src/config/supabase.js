@@ -45,25 +45,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 /**
- * Create Supabase client with optimized configuration
- * 
- * Key improvements:
- * - Graceful storage handling (Supabase handles errors internally)
- * - PKCE flow for better security
- * - Auto token refresh
- * - Session detection from URL (OAuth callbacks)
+ * Create Supabase client with auth DISABLED
+ *
+ * IMPORTANT: This app now uses Clerk for authentication.
+ * Supabase auth is completely disabled to prevent token refresh errors.
+ * The client is only used for database queries during migration.
+ *
+ * Once migration is complete, this file can be removed entirely.
  */
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
-        persistSession: true, // Supabase handles storage errors gracefully internally
-        autoRefreshToken: true, // Automatically refresh tokens to maintain sessions
-        detectSessionInUrl: true, // Detect OAuth callbacks from URL
-        flowType: 'pkce', // Use PKCE flow for enhanced security (recommended)
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        storageKey: 'sb-auth-token',
-        // Enhanced error handling - Supabase will handle storage errors gracefully
-        // No need for manual storage availability checks
+        persistSession: false, // Disable session persistence
+        autoRefreshToken: false, // Disable automatic token refresh
+        detectSessionInUrl: false, // Disable OAuth callback detection
+        storage: undefined, // No storage needed
       },
       // Global error handling
       global: {

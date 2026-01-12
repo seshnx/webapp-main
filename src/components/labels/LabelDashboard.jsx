@@ -12,8 +12,10 @@ import {
   Upload,
   BarChart3,
   ArrowRight,
-  Activity
+  Activity,
+  UserPlus
 } from 'lucide-react';
+import ExternalArtistManager from './ExternalArtistManager';
 
 /**
  * LabelDashboard - Professional label management dashboard
@@ -37,6 +39,7 @@ export default function LabelDashboard({ user }) {
   });
   const [rosterData, setRosterData] = useState([]);
   const [upcomingReleases, setUpcomingReleases] = useState([]);
+  const [artistView, setArtistView] = useState('platform'); // 'platform' or 'external'
 
   const userId = user?.id || user?.uid || user?.userId;
 
@@ -275,18 +278,49 @@ export default function LabelDashboard({ user }) {
       <div className="bg-white rounded-lg shadow mb-8">
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Roster Performance</h2>
-            <button
-              onClick={() => navigate('/labels/roster')}
-              className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center"
-            >
-              View All
-              <ArrowRight className="h-4 w-4 ml-1" />
-            </button>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Artist Management</h2>
+              <p className="text-sm text-gray-500 mt-1">Manage your signed artists</p>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* View Toggle */}
+              <div className="flex bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setArtistView('platform')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
+                    artistView === 'platform'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  Platform Artists
+                </button>
+                <button
+                  onClick={() => setArtistView('external')}
+                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1 ${
+                    artistView === 'external'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  <UserPlus size={14} />
+                  External Artists
+                </button>
+              </div>
+              <button
+                onClick={() => navigate('/labels/roster')}
+                className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center"
+              >
+                View All
+                <ArrowRight className="h-4 w-4 ml-1" />
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Platform Artists Table */}
+        {artistView === 'platform' ? (
+          <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
@@ -365,7 +399,12 @@ export default function LabelDashboard({ user }) {
               )}
             </tbody>
           </table>
-        </div>
+          </div>
+        ) : (
+          <div className="p-6">
+            <ExternalArtistManager user={user} />
+          </div>
+        )}
       </div>
 
       {/* Upcoming Releases */}

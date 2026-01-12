@@ -1743,6 +1743,281 @@ export async function searchArtists(query, limit = 20) {
 }
 
 // =====================================================
+// EXTERNAL ARTIST QUERIES
+// =====================================================
+
+/**
+ * Get external artists for a label
+ *
+ * @param {string} labelId - Label ID
+ * @returns {Promise<Array>} Array of external artists
+ */
+export async function getExternalArtists(labelId) {
+  const sql = `
+    SELECT * FROM external_artists
+    WHERE label_id = $1
+    ORDER BY created_at DESC
+  `;
+  return executeQuery(sql, [labelId], 'getExternalArtists');
+}
+
+/**
+ * Create external artist
+ *
+ * @param {string} labelId - Label ID
+ * @param {object} artistData - Artist data (name, email, stage_name, genre, primary_role, contract_type, signed_date)
+ * @returns {Promise<object>} Created external artist
+ */
+export async function createExternalArtist(labelId, artistData) {
+  const {
+    name,
+    email,
+    phone,
+    stage_name,
+    genre = [],
+    primary_role,
+    social_links = {},
+    contract_type,
+    signed_date
+  } = artistData;
+
+  const sql = `
+    INSERT INTO external_artists (
+      label_id, name, email, phone, stage_name, genre, primary_role,
+      social_links, contract_type, signed_date, status
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'invited')
+    RETURNING *
+  `;
+
+  return executeQuery(
+    sql,
+    [
+      labelId,
+      name,
+      email || null,
+      phone || null,
+      stage_name || null,
+      JSON.stringify(genre),
+      primary_role || null,
+      JSON.stringify(social_links),
+      contract_type || null,
+      signed_date || null
+    ],
+    'createExternalArtist'
+  );
+}
+
+/**
+ * Update external artist
+ *
+ * @param {string} artistId - External artist ID
+ * @param {object} updates - Fields to update
+ * @returns {Promise<object>} Updated external artist
+ */
+export async function updateExternalArtist(artistId, updates) {
+  const fields = [];
+  const values = [];
+  let paramIndex = 1;
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (['social_links', 'metadata', 'genre'].includes(key)) {
+      fields.push(`${key} = $${paramIndex}::jsonb`);
+      values.push(JSON.stringify(value));
+    } else {
+      fields.push(`${key} = $${paramIndex}`);
+      values.push(value);
+    }
+    paramIndex++;
+  }
+
+  values.push(artistId);
+  const sql = `
+    UPDATE external_artists
+    SET ${fields.join(', ')}, updated_at = NOW()
+    WHERE id = $${paramIndex}
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, values, 'updateExternalArtist');
+  return result[0];
+}
+
+/**
+ * Invite external artist (generate invitation token)
+ *
+ * @param {string} artistId - External artist ID
+ * @returns {Promise<object>} Updated external artist with token
+ */
+export async function inviteExternalArtist(artistId) {
+  // Generate random token
+  const token = Math.random().toString(36).substring(2, 15) +
+               Math.random().toString(36).substring(2, 15);
+  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+  const sql = `
+    UPDATE external_artists
+    SET
+      invitation_token = $1,
+      invitation_sent_at = NOW(),
+      invitation_expires_at = $2,
+      status = 'invited',
+      updated_at = NOW()
+    WHERE id = $3
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [token, expiresAt, artistId], 'inviteExternalArtist');
+  return result[0];
+}
+
+/**
+ * Link external artist to clerk user (when they join platform)
+ *
+ * @param {string} artistId - External artist ID
+ * @param {string} clerkUserId - Clerk user ID
+ * @returns {Promise<object>} Updated external artist
+ */
+export async function linkExternalArtistToClerk(artistId, clerkUserId) {
+  const sql = `
+    UPDATE external_artists
+    SET
+      clerk_user_id = $1,
+      status = 'platform',
+      updated_at = NOW()
+    WHERE id = $2
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [clerkUserId, artistId], 'linkExternalArtistToClerk');
+  return result[0];
+}
+
+/**
+ * Get unified roster (platform + external artists)
+ *
+ * @param {string} labelId - Label ID
+ * @returns {Promise<Array>} Combined roster
+ */
+export async function getUnifiedRoster(labelId) {
+  const sql = `
+    SELECT
+      lr.id,
+      lr.artist_id,
+      lr.name,
+      lr.email,
+      lr.photo_url,
+      lr.status,
+      lr.signed_date,
+      'platform'::text as artist_type,
+      cu.username,
+      p.display_name
+    FROM label_roster lr
+    JOIN clerk_users cu ON cu.id = lr.artist_id
+    LEFT JOIN profiles p ON p.user_id = cu.id
+    WHERE lr.label_id = $1
+
+    UNION ALL
+
+    SELECT
+      ea.id,
+      NULL::text as artist_id,
+      ea.name,
+      ea.email,
+      NULL::text as photo_url,
+      ea.status,
+      ea.signed_date,
+      'external'::text as artist_type,
+      NULL::text as username,
+      ea.stage_name as display_name
+    FROM external_artists ea
+    WHERE ea.label_id = $1
+
+    ORDER BY signed_date DESC
+  `;
+
+  return executeQuery(sql, [labelId], 'getUnifiedRoster');
+}
+
+// =====================================================
+// BUSINESS OVERVIEW METRICS
+// =====================================================
+
+/**
+ * Get label metrics for business overview
+ *
+ * @param {string} labelId - Label ID
+ * @returns {Promise<object>} Label metrics (total_artists, active_releases, total_revenue, total_streams)
+ */
+export async function getLabelMetrics(labelId) {
+  const sql = `
+    WITH artist_counts AS (
+      SELECT COUNT(*) as total_artists
+      FROM label_roster
+      WHERE label_id = $1 AND status = 'active'
+    ),
+    release_counts AS (
+      SELECT COUNT(*) as active_releases
+      FROM releases
+      WHERE label_id = $1 AND status IN ('distributed', 'submitted')
+    ),
+    revenue_data AS (
+      SELECT COALESCE(SUM(lifetime_earnings), 0) as total_revenue,
+             COALESCE(SUM(lifetime_streams), 0) as total_streams
+      FROM distribution_stats
+      WHERE user_id IN (SELECT artist_id FROM label_roster WHERE label_id = $1)
+    )
+    SELECT * FROM artist_counts, release_counts, revenue_data
+  `;
+  const result = await executeQuery(sql, [labelId], 'getLabelMetrics');
+  return result;
+}
+
+/**
+ * Get studio metrics for business overview
+ *
+ * @param {string} studioId - Studio ID
+ * @returns {Promise<object>} Studio metrics (total_rooms, pending_bookings, completed_bookings)
+ */
+export async function getStudioMetrics(studioId) {
+  const sql = `
+    WITH room_stats AS (
+      SELECT COUNT(*) as total_rooms
+      FROM studio_rooms
+      WHERE studio_id = $1
+    ),
+    booking_stats AS (
+      SELECT
+        COUNT(*) FILTER (WHERE status = 'Pending') as pending_bookings,
+        COUNT(*) FILTER (WHERE status = 'Completed') as completed_bookings
+      FROM bookings
+      WHERE studio_owner_id = $1
+    )
+    SELECT * FROM room_stats, booking_stats
+  `;
+  const result = await executeQuery(sql, [studioId], 'getStudioMetrics');
+  return result;
+}
+
+/**
+ * Get distribution metrics for business overview
+ *
+ * @param {string} userId - User ID
+ * @returns {Promise<object>} Distribution metrics (total_releases, live_releases, draft_releases)
+ */
+export async function getDistributionMetrics(userId) {
+  const sql = `
+    SELECT
+      COUNT(*) as total_releases,
+      COUNT(*) FILTER (WHERE status = 'Live' OR status = 'distributed') as live_releases,
+      COUNT(*) FILTER (WHERE status = 'Draft' OR status = 'draft') as draft_releases
+    FROM releases
+    WHERE artist_id = $1 OR label_id = $1
+  `;
+  const result = await executeQuery(sql, [userId], 'getDistributionMetrics');
+  return result;
+}
+
+// =====================================================
 // EDUCATION QUERIES
 // =====================================================
 
@@ -1944,6 +2219,19 @@ export default {
   getArtistCount,
   getUpcomingReleases,
   searchArtists,
+
+  // External artist queries
+  getExternalArtists,
+  createExternalArtist,
+  updateExternalArtist,
+  inviteExternalArtist,
+  linkExternalArtistToClerk,
+  getUnifiedRoster,
+
+  // Business overview metrics
+  getLabelMetrics,
+  getStudioMetrics,
+  getDistributionMetrics,
 
   // Education queries
   getStudent,

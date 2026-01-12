@@ -16,7 +16,8 @@
       "Bash(vercel env pull:*)",
       "Bash(vercel env add:*)",
       "Bash(vercel --prod:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(cat:*)"
     ]
   }
 }
