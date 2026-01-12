@@ -21,8 +21,8 @@
 -- =====================================================
 CREATE TABLE IF NOT EXISTS label_roster (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    label_id UUID NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
-    artist_id UUID NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
+    label_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
+    artist_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
 
     -- Artist info (denormalized for quick access)
     name TEXT NOT NULL,
@@ -60,8 +60,8 @@ CREATE INDEX IF NOT EXISTS idx_label_roster_status ON label_roster(status);
 -- =====================================================
 CREATE TABLE IF NOT EXISTS releases (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    artist_id UUID NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
-    label_id UUID REFERENCES clerk_users(id) ON DELETE SET NULL,
+    artist_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
+    label_id TEXT REFERENCES clerk_users(id) ON DELETE SET NULL,
 
     -- Release details
     title TEXT NOT NULL,
@@ -111,7 +111,7 @@ CREATE INDEX IF NOT EXISTS idx_releases_type ON releases(type);
 -- =====================================================
 CREATE TABLE IF NOT EXISTS distribution_stats (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
+    user_id TEXT NOT NULL REFERENCES clerk_users(id) ON DELETE CASCADE,
     release_id UUID REFERENCES releases(id) ON DELETE SET NULL,
 
     -- Platform-specific stats
