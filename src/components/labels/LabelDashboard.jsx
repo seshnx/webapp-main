@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { executeQuery } from '../../config/neon';
+import { query } from '../../config/neon';
 import {
   Users,
   Disc,
@@ -32,6 +32,7 @@ import ExternalArtistManager from './ExternalArtistManager';
 export default function LabelDashboard({ user, userData }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [metrics, setMetrics] = useState({
     totalArtists: 0,
     activeReleases: 0,
@@ -53,25 +54,32 @@ export default function LabelDashboard({ user, userData }) {
 
   const fetchDashboardData = async () => {
     setLoading(true);
+    setError(null);
     try {
       // Fetch all data in parallel
       const [artistsResult, releasesResult, revenueResult] = await Promise.all([
         // Get label roster count
-        executeQuery(`
+        query(`
           SELECT COUNT(*) as count
           FROM label_roster
           WHERE label_id = $1 AND status = 'active'
-        `, [userId]),
+        `, [userId]).catch(e => {
+          console.warn('label_roster table not available:', e.message);
+          return [{ count: 0 }];
+        }),
 
         // Get active releases
-        executeQuery(`
+        query(`
           SELECT COUNT(*) as count
           FROM releases
           WHERE label_id = $1 AND status IN ('distributed', 'submitted')
-        `, [userId]),
+        `, [userId]).catch(e => {
+          console.warn('releases table not available:', e.message);
+          return [{ count: 0 }];
+        }),
 
-        // Get revenue data
-        executeQuery(`
+        // Get revenue data - using columns that exist in schema
+        query(`
           SELECT
             COALESCE(SUM(lifetime_earnings), 0) as total_revenue,
             COALESCE(SUM(lifetime_streams), 0) as total_streams
@@ -79,21 +87,24 @@ export default function LabelDashboard({ user, userData }) {
           WHERE user_id IN (
             SELECT artist_id FROM label_roster WHERE label_id = $1
           )
-        `, [userId])
+        `, [userId]).catch(e => {
+          console.warn('distribution_stats table not available:', e.message);
+          return [{ total_revenue: '0', total_streams: '0' }];
+        })
       ]);
 
       // Set metrics
       setMetrics({
-        totalArtists: artistsResult[0]?.count || 0,
-        activeReleases: releasesResult[0]?.count || 0,
-        monthlyRevenue: revenueResult[0]?.total_revenue || 0,
-        upcomingReleases: releasesResult[0]?.count || 0, // Simplified for now
+        totalArtists: parseInt(artistsResult[0]?.count || 0),
+        activeReleases: parseInt(releasesResult[0]?.count || 0),
+        monthlyRevenue: parseFloat(revenueResult[0]?.total_revenue || 0),
+        upcomingReleases: parseInt(releasesResult[0]?.count || 0),
         revenueGrowth: 12.5, // Placeholder - would need historical data
-        totalStreams: revenueResult[0]?.total_streams || 0
+        totalStreams: parseInt(revenueResult[0]?.total_streams || 0)
       });
 
       // Fetch roster with performance data
-      const rosterResult = await executeQuery(`
+      const rosterResult = await query(`
         SELECT
           lr.id,
           lr.artist_id,
@@ -102,22 +113,25 @@ export default function LabelDashboard({ user, userData }) {
           lr.photo_url,
           lr.status,
           lr.signed_date,
-          COALESCE(ds.lifetime_streams, 0) as streams,
-          COALESCE(ds.lifetime_earnings, 0) as earnings,
+          COALESCE(SUM(ds.lifetime_streams), 0) as streams,
+          COALESCE(SUM(ds.lifetime_earnings), 0) as earnings,
           MAX(r.created_at) as last_release
         FROM label_roster lr
         LEFT JOIN distribution_stats ds ON ds.user_id = lr.artist_id
         LEFT JOIN releases r ON r.artist_id = lr.artist_id
         WHERE lr.label_id = $1
-        GROUP BY lr.id, lr.artist_id, lr.name, lr.email, lr.photo_url, lr.status, lr.signed_date, ds.lifetime_streams, ds.lifetime_earnings
-        ORDER BY ds.lifetime_earnings DESC
+        GROUP BY lr.id, lr.artist_id, lr.name, lr.email, lr.photo_url, lr.status, lr.signed_date
+        ORDER BY lr.signed_date DESC
         LIMIT 10
-      `, [userId]);
+      `, [userId]).catch(e => {
+        console.warn('Could not fetch roster details:', e.message);
+        return [];
+      });
 
       setRosterData(rosterResult || []);
 
       // Fetch upcoming releases
-      const upcomingReleasesResult = await executeQuery(`
+      const upcomingReleasesResult = await query(`
         SELECT
           r.id,
           r.title,
@@ -131,12 +145,16 @@ export default function LabelDashboard({ user, userData }) {
           AND r.release_date >= CURRENT_DATE
         ORDER BY r.release_date ASC
         LIMIT 5
-      `, [userId]);
+      `, [userId]).catch(e => {
+        console.warn('Could not fetch upcoming releases:', e.message);
+        return [];
+      });
 
       setUpcomingReleases(upcomingReleasesResult || []);
 
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }
@@ -160,8 +178,22 @@ export default function LabelDashboard({ user, userData }) {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-[50vh]">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-6">
+          <h2 className="text-lg font-semibold text-red-900 dark:text-red-400 mb-2">Database Error</h2>
+          <p className="text-red-700 dark:text-red-300">{error}</p>
+          <p className="text-sm text-red-600 dark:text-red-400 mt-2">
+            The Label dashboard requires Neon database tables. Please run the SQL migration scripts.
+          </p>
+        </div>
       </div>
     );
   }
