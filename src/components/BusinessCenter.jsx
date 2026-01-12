@@ -57,7 +57,7 @@ export default function BusinessCenter({ user, userData }) {
         },
         {
             id: 'roster',
-            label: 'Artist Roster',
+            label: 'Label Manager',
             icon: Users,
             iconSize: 18,
             available: isLabel,

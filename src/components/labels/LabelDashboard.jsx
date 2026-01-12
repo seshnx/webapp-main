@@ -13,7 +13,10 @@ import {
   BarChart3,
   ArrowRight,
   Activity,
-  UserPlus
+  UserPlus,
+  Briefcase,
+  ChevronRight,
+  Building2
 } from 'lucide-react';
 import ExternalArtistManager from './ExternalArtistManager';
 
@@ -26,7 +29,7 @@ import ExternalArtistManager from './ExternalArtistManager';
  * - Release calendar
  * - Quick action buttons
  */
-export default function LabelDashboard({ user }) {
+export default function LabelDashboard({ user, userData }) {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({
@@ -164,133 +167,143 @@ export default function LabelDashboard({ user }) {
   }
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Label Dashboard</h1>
-        <p className="mt-2 text-gray-600">Manage your roster, releases, and campaigns</p>
+    <div className="max-w-7xl mx-auto pb-20">
+      {/* Breadcrumb */}
+      <div className="mb-6">
+        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
+          <Briefcase size={14} />
+          <span>Business Center</span>
+          <ChevronRight size={14} />
+          <span className="text-gray-700 dark:text-gray-200">Label Manager</span>
+        </div>
+        <h1 className="text-3xl font-bold dark:text-white flex items-center gap-3">
+          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center text-white">
+            <Building2 size={24} />
+          </div>
+          {userData?.labelName || userData?.profileName || 'Label Manager'}
+        </h1>
       </div>
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         {/* Total Artists */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Artists</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{metrics.totalArtists}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Artists</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{metrics.totalArtists}</p>
             </div>
-            <div className="bg-blue-100 p-3 rounded-full">
-              <Users className="h-6 w-6 text-blue-600" />
+            <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded-full">
+              <Users className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             </div>
           </div>
         </div>
 
         {/* Active Releases */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Active Releases</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">{metrics.activeReleases}</p>
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Active Releases</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">{metrics.activeReleases}</p>
             </div>
-            <div className="bg-purple-100 p-3 rounded-full">
-              <Disc className="h-6 w-6 text-purple-600" />
+            <div className="bg-purple-100 dark:bg-purple-900/30 p-3 rounded-full">
+              <Disc className="h-6 w-6 text-purple-600 dark:text-purple-400" />
             </div>
           </div>
         </div>
 
         {/* Monthly Revenue */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Revenue</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
                 {formatCurrency(metrics.monthlyRevenue)}
               </p>
               {metrics.revenueGrowth > 0 && (
-                <p className="text-sm text-green-600 mt-1 flex items-center">
+                <p className="text-sm text-green-600 dark:text-green-400 mt-1 flex items-center">
                   <TrendingUp className="h-4 w-4 mr-1" />
                   +{metrics.revenueGrowth}%
                 </p>
               )}
             </div>
-            <div className="bg-green-100 p-3 rounded-full">
-              <DollarSign className="h-6 w-6 text-green-600" />
+            <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded-full">
+              <DollarSign className="h-6 w-6 text-green-600 dark:text-green-400" />
             </div>
           </div>
         </div>
 
         {/* Total Streams */}
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 p-6">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium text-gray-600">Total Streams</p>
-              <p className="text-3xl font-bold text-gray-900 mt-2">
+              <p className="text-sm font-medium text-gray-600 dark:text-gray-400">Total Streams</p>
+              <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
                 {formatNumber(metrics.totalStreams)}
               </p>
             </div>
-            <div className="bg-orange-100 p-3 rounded-full">
-              <Activity className="h-6 w-6 text-orange-600" />
+            <div className="bg-orange-100 dark:bg-orange-900/30 p-3 rounded-full">
+              <Activity className="h-6 w-6 text-orange-600 dark:text-orange-400" />
             </div>
           </div>
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+      <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 p-6 mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <button
             onClick={() => navigate('/labels/roster')}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
-            <UserPlus className="h-5 w-5 mr-2 text-blue-600" />
-            <span className="font-medium text-gray-700">Add Artist</span>
+            <UserPlus className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
+            <span className="font-medium text-gray-700 dark:text-gray-200">Add Artist</span>
           </button>
 
           <button
             onClick={() => navigate('/labels/releases')}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
-            <Plus className="h-5 w-5 mr-2 text-purple-600" />
-            <span className="font-medium text-gray-700">New Release</span>
+            <Plus className="h-5 w-5 mr-2 text-purple-600 dark:text-purple-400" />
+            <span className="font-medium text-gray-700 dark:text-gray-200">New Release</span>
           </button>
 
           <button
             onClick={() => navigate('/labels/royalties')}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
-            <Upload className="h-5 w-5 mr-2 text-green-600" />
-            <span className="font-medium text-gray-700">Upload Royalties</span>
+            <Upload className="h-5 w-5 mr-2 text-green-600 dark:text-green-400" />
+            <span className="font-medium text-gray-700 dark:text-gray-200">Upload Royalties</span>
           </button>
 
           <button
             onClick={() => navigate('/labels/campaigns')}
-            className="flex items-center justify-center px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
           >
-            <BarChart3 className="h-5 w-5 mr-2 text-orange-600" />
-            <span className="font-medium text-gray-700">New Campaign</span>
+            <BarChart3 className="h-5 w-5 mr-2 text-orange-600 dark:text-orange-400" />
+            <span className="font-medium text-gray-700 dark:text-gray-200">New Campaign</span>
           </button>
         </div>
       </div>
 
       {/* Roster Performance */}
-      <div className="bg-white rounded-lg shadow mb-8">
-        <div className="p-6 border-b border-gray-200">
+      <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 mb-8">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">Artist Management</h2>
-              <p className="text-sm text-gray-500 mt-1">Manage your signed artists</p>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Artist Management</h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Manage your signed artists</p>
             </div>
             <div className="flex items-center gap-3">
               {/* View Toggle */}
-              <div className="flex bg-gray-100 rounded-lg p-1">
+              <div className="flex bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
                 <button
                   onClick={() => setArtistView('platform')}
                   className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
                     artistView === 'platform'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-gray-900 dark:bg-gray-700 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                   }`}
                 >
                   Platform Artists
@@ -299,8 +312,8 @@ export default function LabelDashboard({ user }) {
                   onClick={() => setArtistView('external')}
                   className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all flex items-center gap-1 ${
                     artistView === 'external'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-600 hover:text-gray-900'
+                      ? 'bg-white text-gray-900 dark:bg-gray-700 dark:text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
                   }`}
                 >
                   <UserPlus size={14} />
@@ -309,7 +322,7 @@ export default function LabelDashboard({ user }) {
               </div>
               <button
                 onClick={() => navigate('/labels/roster')}
-                className="text-blue-600 hover:text-blue-700 font-medium text-sm flex items-center"
+                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-sm flex items-center"
               >
                 View All
                 <ArrowRight className="h-4 w-4 ml-1" />
@@ -321,38 +334,38 @@ export default function LabelDashboard({ user }) {
         {/* Platform Artists Table */}
         {artistView === 'platform' ? (
           <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Artist
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Monthly Streams
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Revenue
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                   Last Release
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody className="bg-white dark:bg-[#2c2e36] divide-y divide-gray-200 dark:divide-gray-700">
               {rosterData.length === 0 ? (
                 <tr>
-                  <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan="5" className="px-6 py-12 text-center text-gray-500 dark:text-gray-400">
                     <Users className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                    <p className="text-lg font-medium">No artists on roster</p>
+                    <p className="text-lg font-medium dark:text-white">No artists on roster</p>
                     <p className="text-sm mt-1">Add your first artist to get started</p>
                   </td>
                 </tr>
               ) : (
                 rosterData.map((artist) => (
-                  <tr key={artist.id} className="hover:bg-gray-50">
+                  <tr key={artist.id} className="hover:bg-gray-50 dark:hover:bg-white/5">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
@@ -363,33 +376,33 @@ export default function LabelDashboard({ user }) {
                               alt={artist.name}
                             />
                           ) : (
-                            <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                              <User className="h-6 w-6 text-gray-500" />
+                            <div className="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-700 flex items-center justify-center">
+                              <Users className="h-6 w-6 text-gray-500 dark:text-gray-400" />
                             </div>
                           )}
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">{artist.name}</div>
-                          <div className="text-sm text-gray-500">{artist.email}</div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-white">{artist.name}</div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">{artist.email}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         artist.status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
+                          ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400'
+                          : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
                       }`}>
                         {artist.status || 'Active'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {formatNumber(artist.streams)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                       {formatCurrency(artist.earnings)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                       {artist.last_release
                         ? new Date(artist.last_release).toLocaleDateString()
                         : 'N/A'}
@@ -408,11 +421,11 @@ export default function LabelDashboard({ user }) {
       </div>
 
       {/* Upcoming Releases */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b border-gray-200">
+      <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700">
+        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">Upcoming Releases</h2>
-            <div className="flex items-center text-gray-500">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Upcoming Releases</h2>
+            <div className="flex items-center text-gray-500 dark:text-gray-400">
               <Calendar className="h-5 w-5 mr-2" />
               <span className="text-sm">Release Calendar</span>
             </div>
@@ -423,18 +436,18 @@ export default function LabelDashboard({ user }) {
           {upcomingReleases.length === 0 ? (
             <div className="text-center py-12">
               <Music className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-              <p className="text-lg font-medium text-gray-900">No upcoming releases</p>
-              <p className="text-sm text-gray-500 mt-1">Schedule your next release</p>
+              <p className="text-lg font-medium text-gray-900 dark:text-white">No upcoming releases</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Schedule your next release</p>
             </div>
           ) : (
             <div className="space-y-4">
               {upcomingReleases.map((release) => (
                 <div
                   key={release.id}
-                  className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 >
                   <div className="flex items-center">
-                    <div className="flex-shrink-0 h-16 w-16 bg-gray-300 rounded">
+                    <div className="flex-shrink-0 h-16 w-16 bg-gray-300 dark:bg-gray-700 rounded">
                       {release.cover_art_url ? (
                         <img
                           className="h-16 w-16 rounded object-cover"
@@ -443,21 +456,21 @@ export default function LabelDashboard({ user }) {
                         />
                       ) : (
                         <div className="h-16 w-16 rounded flex items-center justify-center">
-                          <Disc className="h-8 w-8 text-gray-500" />
+                          <Disc className="h-8 w-8 text-gray-500 dark:text-gray-400" />
                         </div>
                       )}
                     </div>
                     <div className="ml-4">
-                      <p className="text-sm font-medium text-gray-900">{release.title}</p>
-                      <p className="text-sm text-gray-500">{release.artist_name}</p>
-                      <p className="text-xs text-gray-400 mt-1">{release.type}</p>
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">{release.title}</p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{release.artist_name}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">{release.type}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
                       {new Date(release.release_date).toLocaleDateString()}
                     </p>
-                    <p className="text-xs text-gray-500">Release Date</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Release Date</p>
                   </div>
                 </div>
               ))}
