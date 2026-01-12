@@ -1492,6 +1492,256 @@ export async function getDistributionStats(userId) {
   return executeQuery(sql, [userId], 'getDistributionStats');
 }
 
+/**
+ * Add artist to label roster
+ *
+ * @param {string} labelId - Label user ID
+ * @param {object} artistData - Artist data
+ * @returns {Promise<object>} Created roster entry
+ */
+export async function addArtistToRoster(labelId, artistData) {
+  const {
+    artist_id,
+    name,
+    email,
+    photo_url,
+    role,
+    contract_type,
+    signed_date,
+    contract_end_date,
+    status = 'active',
+    notes,
+    metadata = {}
+  } = artistData;
+
+  const sql = `
+    INSERT INTO label_roster (
+      label_id, artist_id, name, email, photo_url,
+      role, contract_type, signed_date, contract_end_date,
+      status, notes, metadata
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb)
+    ON CONFLICT (label_id, artist_id) DO UPDATE SET
+      name = EXCLUDED.name,
+      email = EXCLUDED.email,
+      photo_url = EXCLUDED.photo_url,
+      role = EXCLUDED.role,
+      contract_type = EXCLUDED.contract_type,
+      signed_date = EXCLUDED.signed_date,
+      contract_end_date = EXCLUDED.contract_end_date,
+      status = EXCLUDED.status,
+      notes = EXCLUDED.notes,
+      metadata = EXCLUDED.metadata,
+      updated_at = NOW()
+    RETURNING *
+  `;
+
+  const result = await executeQuery(
+    sql,
+    [labelId, artist_id, name, email, photo_url, role, contract_type, signed_date, contract_end_date, status, notes, JSON.stringify(metadata)],
+    'addArtistToRoster'
+  );
+
+  return result[0];
+}
+
+/**
+ * Update roster entry
+ *
+ * @param {string} rosterId - Roster entry ID
+ * @param {object} updates - Fields to update
+ * @returns {Promise<object>} Updated roster entry
+ */
+export async function updateRosterEntry(rosterId, updates) {
+  const fields = [];
+  const values = [];
+  let paramIndex = 1;
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (key === 'metadata') {
+      fields.push(`${key} = $${paramIndex}::jsonb`);
+      values.push(JSON.stringify(value));
+    } else {
+      fields.push(`${key} = $${paramIndex}`);
+      values.push(value);
+    }
+    paramIndex++;
+  }
+
+  if (fields.length === 0) {
+    throw new Error('No updates provided');
+  }
+
+  values.push(rosterId);
+  const sql = `
+    UPDATE label_roster
+    SET ${fields.join(', ')}, updated_at = NOW()
+    WHERE id = $${paramIndex}
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, values, 'updateRosterEntry');
+  return result[0];
+}
+
+/**
+ * Create release
+ *
+ * @param {object} releaseData - Release data
+ * @returns {Promise<object>} Created release
+ */
+export async function createRelease(releaseData) {
+  const {
+    artist_id,
+    label_id,
+    title,
+    type,
+    genre,
+    release_date,
+    cover_art_url,
+    isrc,
+    upc,
+    platforms = {},
+    tracks = [],
+    status = 'draft',
+    distributor,
+    catalog_number
+  } = releaseData;
+
+  const sql = `
+    INSERT INTO releases (
+      artist_id, label_id, title, type, genre, release_date,
+      cover_art_url, isrc, upc, platforms, tracks, status,
+      distributor, catalog_number
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12, $13, $14)
+    RETURNING *
+  `;
+
+  const result = await executeQuery(
+    sql,
+    [artist_id, label_id, title, type, genre, release_date, cover_art_url, isrc, upc, JSON.stringify(platforms), JSON.stringify(tracks), status, distributor, catalog_number],
+    'createRelease'
+  );
+
+  return result[0];
+}
+
+/**
+ * Update release
+ *
+ * @param {string} releaseId - Release ID
+ * @param {object} updates - Fields to update
+ * @returns {Promise<object>} Updated release
+ */
+export async function updateRelease(releaseId, updates) {
+  const fields = [];
+  const values = [];
+  let paramIndex = 1;
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (['platforms', 'tracks', 'metadata'].includes(key)) {
+      fields.push(`${key} = $${paramIndex}::jsonb`);
+      values.push(JSON.stringify(value));
+    } else {
+      fields.push(`${key} = $${paramIndex}`);
+      values.push(value);
+    }
+    paramIndex++;
+  }
+
+  if (fields.length === 0) {
+    throw new Error('No updates provided');
+  }
+
+  values.push(releaseId);
+  const sql = `
+    UPDATE releases
+    SET ${fields.join(', ')}, updated_at = NOW()
+    WHERE id = $${paramIndex}
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, values, 'updateRelease');
+  return result[0];
+}
+
+/**
+ * Get artist roster count
+ *
+ * @param {string} labelId - Label user ID
+ * @returns {Promise<number>} Count of active artists
+ */
+export async function getArtistCount(labelId) {
+  const result = await executeQuery(
+    'SELECT COUNT(*) as count FROM label_roster WHERE label_id = $1 AND status = $2',
+    [labelId, 'active'],
+    'getArtistCount'
+  );
+  return parseInt(result[0]?.count || 0);
+}
+
+/**
+ * Get upcoming releases
+ *
+ * @param {string} labelId - Label user ID
+ * @param {number} limit - Number of releases to return
+ * @returns {Promise<Array>} Array of upcoming releases
+ */
+export async function getUpcomingReleases(labelId, limit = 10) {
+  const sql = `
+    SELECT
+      r.*,
+      cu.username as artist_username,
+      prof.display_name as artist_display_name,
+      prof.photo_url as artist_photo_url
+    FROM releases r
+    JOIN clerk_users cu ON cu.id = r.artist_id
+    LEFT JOIN profiles prof ON prof.user_id = cu.id
+    WHERE r.label_id = $1
+      AND r.release_date >= CURRENT_DATE
+      AND r.status IN ('draft', 'submitted')
+    ORDER BY r.release_date ASC
+    LIMIT $2
+  `;
+
+  return executeQuery(sql, [labelId, limit], 'getUpcomingReleases');
+}
+
+/**
+ * Search artists by name or email
+ *
+ * @param {string} query - Search query
+ * @param {number} limit - Result limit
+ * @returns {Promise<Array>} Array of artists
+ */
+export async function searchArtists(query, limit = 20) {
+  const sql = `
+    SELECT
+      cu.id,
+      cu.email,
+      cu.username,
+      cu.first_name,
+      cu.last_name,
+      cu.profile_photo_url,
+      cu.account_types,
+      p.display_name,
+      p.photo_url as profile_photo
+    FROM clerk_users cu
+    LEFT JOIN profiles p ON p.user_id = cu.id
+    WHERE (
+      cu.username ILIKE $1 OR
+      cu.email ILIKE $1 OR
+      p.display_name ILIKE $1 OR
+      (cu.first_name || ' ' || cu.last_name) ILIKE $1
+    )
+    AND cu.deleted_at IS NULL
+    AND cu.account_types @> ARRAY['Talent']::text[]
+    ORDER BY cu.created_at DESC
+    LIMIT $2
+  `;
+
+  return executeQuery(sql, [`%${query}%`, limit], 'searchArtists');
+}
+
 // =====================================================
 // EDUCATION QUERIES
 // =====================================================
@@ -1687,6 +1937,13 @@ export default {
   getLabelReleases,
   getLabelDashboardMetrics,
   getDistributionStats,
+  addArtistToRoster,
+  updateRosterEntry,
+  createRelease,
+  updateRelease,
+  getArtistCount,
+  getUpcomingReleases,
+  searchArtists,
 
   // Education queries
   getStudent,

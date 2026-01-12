@@ -95,7 +95,7 @@ export default function LabelDashboard({ user }) {
           lr.email,
           lr.photo_url,
           lr.status,
-          lr.signed_at,
+          lr.signed_date,
           COALESCE(ds.lifetime_streams, 0) as streams,
           COALESCE(ds.lifetime_earnings, 0) as earnings,
           MAX(r.created_at) as last_release
@@ -103,7 +103,7 @@ export default function LabelDashboard({ user }) {
         LEFT JOIN distribution_stats ds ON ds.user_id = lr.artist_id
         LEFT JOIN releases r ON r.artist_id = lr.artist_id
         WHERE lr.label_id = $1
-        GROUP BY lr.id, lr.artist_id, lr.name, lr.email, lr.photo_url, lr.status, lr.signed_at, ds.lifetime_streams, ds.lifetime_earnings
+        GROUP BY lr.id, lr.artist_id, lr.name, lr.email, lr.photo_url, lr.status, lr.signed_date, ds.lifetime_streams, ds.lifetime_earnings
         ORDER BY ds.lifetime_earnings DESC
         LIMIT 10
       `, [userId]);
