@@ -147,15 +147,36 @@ export async function getProfilesByIds(userIds) {
 export async function getUserWithProfile(userId) {
   const result = await executeQuery(
     `SELECT
-      cu.*,
-      p.user_id as profile_user_id,
-      p.username as profile_username,
+      cu.id,
+      cu.email,
+      cu.phone,
+      cu.first_name,
+      cu.last_name,
+      cu.username,
+      cu.profile_photo_url,
+      cu.account_types,
+      cu.active_role,
+      cu.bio as clerk_bio,
+      cu.zip_code,
+      cu.created_at,
+      cu.updated_at,
+      p.id as profile_id,
       p.display_name,
-      p.photo_url,
-      p.bio,
+      p.photo_url as profile_photo_url,
+      p.bio as profile_bio,
       p.location,
-      p.account_types,
-      p.active_role
+      p.website,
+      p.social_links,
+      p.talent_info,
+      p.engineer_info,
+      p.producer_info,
+      p.studio_info,
+      p.education_info,
+      p.label_info,
+      p.followers_count,
+      p.following_count,
+      p.posts_count,
+      p.reputation_score
     FROM clerk_users cu
     LEFT JOIN profiles p ON p.user_id = cu.id
     WHERE cu.id = $1`,
@@ -170,33 +191,82 @@ export async function getUserWithProfile(userId) {
  *
  * @param {string} userId - User ID
  * @param {object} updates - Profile updates
- * @returns {Promise<object>} Updated profile
+ * @returns {Promise<object>} Updated profile data
  */
 export async function updateProfile(userId, updates) {
-  const fields = [];
-  const values = [];
-  let paramIndex = 1;
+  // Fields that go in clerk_users table
+  const clerkUserFields = ['first_name', 'last_name', 'username', 'profile_photo_url', 'bio', 'zip_code', 'account_types', 'active_role'];
+
+  // Fields that go in profiles table
+  const profileFields = ['display_name', 'location', 'website', 'social_links', 'photo_url', 'cover_photo_url',
+                        'talent_info', 'engineer_info', 'producer_info', 'studio_info', 'education_info', 'label_info',
+                        'profile_visibility', 'messaging_permission'];
+
+  const clerkUpdates = {};
+  const profileUpdates = {};
 
   for (const [key, value] of Object.entries(updates)) {
-    fields.push(`${key} = $${paramIndex}`);
-    values.push(value);
-    paramIndex++;
+    if (clerkUserFields.includes(key)) {
+      clerkUpdates[key] = value;
+    } else if (profileFields.includes(key)) {
+      profileUpdates[key] = value;
+    }
   }
 
-  if (fields.length === 0) {
-    throw new Error('No updates provided');
+  // Update clerk_users if needed
+  if (Object.keys(clerkUpdates).length > 0) {
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    for (const [key, value] of Object.entries(clerkUpdates)) {
+      fields.push(`${key} = $${paramIndex}`);
+      values.push(value);
+      paramIndex++;
+    }
+
+    values.push(userId);
+    const sql = `
+      UPDATE clerk_users
+      SET ${fields.join(', ')}, updated_at = NOW()
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `;
+
+    await executeQuery(sql, values, 'updateClerkUser');
   }
 
-  values.push(userId);
-  const sql = `
-    UPDATE profiles
-    SET ${fields.join(', ')}, updated_at = NOW()
-    WHERE user_id = $${paramIndex}
-    RETURNING *
-  `;
+  // Update profiles if needed
+  if (Object.keys(profileUpdates).length > 0) {
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
 
-  const result = await executeQuery(sql, values, 'updateProfile');
-  return result[0];
+    for (const [key, value] of Object.entries(profileUpdates)) {
+      if (typeof value === 'object' && value !== null) {
+        fields.push(`${key} = $${paramIndex}::jsonb`);
+        values.push(JSON.stringify(value));
+      } else {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+      }
+      paramIndex++;
+    }
+
+    values.push(userId);
+    const sql = `
+      UPDATE profiles
+      SET ${fields.join(', ')}, updated_at = NOW()
+      WHERE user_id = $${paramIndex}
+      RETURNING *
+    `;
+
+    const result = await executeQuery(sql, values, 'updateProfile');
+    return result[0];
+  }
+
+  // If only clerk_users was updated, fetch the updated profile
+  return await getProfile(userId);
 }
 
 /**
@@ -272,10 +342,11 @@ export async function searchUsers({ query, limit = 20, offset = 0 } = {}) {
       cu.id,
       cu.username,
       cu.email,
+      cu.account_types,
+      cu.active_role,
       p.display_name,
       p.photo_url,
-      p.bio,
-      p.account_types
+      p.bio
     FROM clerk_users cu
     LEFT JOIN profiles p ON p.user_id = cu.id
     WHERE (
@@ -284,7 +355,7 @@ export async function searchUsers({ query, limit = 20, offset = 0 } = {}) {
       p.display_name ILIKE $1
     )
     AND cu.deleted_at IS NULL
-    ORDER BY p.created_at DESC
+    ORDER BY cu.created_at DESC
     LIMIT $2 OFFSET $3
   `;
 
