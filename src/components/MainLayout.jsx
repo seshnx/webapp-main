@@ -202,7 +202,7 @@ export default function MainLayout({
     }
   }, [activeTab, navigate, location.pathname]);
 
-  // Load sub-profiles
+  // Load sub-profiles (optional - doesn't block the app if it fails)
   useEffect(() => {
     if (!user?.id || !supabase) return;
 
@@ -214,40 +214,53 @@ export default function MainLayout({
           .eq('user_id', user.id);
 
         if (error) {
-          console.warn('Error loading sub-profiles:', error);
+          // Table might not exist in Supabase anymore - that's okay during migration
+          console.warn('Sub-profiles table not available (migration in progress):', error.message);
+          setSubProfiles({});
           return;
         }
 
         const profiles = {};
         data?.forEach(profile => {
-          profiles[profile.role] = profile;
+          profiles[profile.account_type] = profile;
         });
         setSubProfiles(profiles);
       } catch (err) {
-        console.error('Failed to load sub-profiles:', err);
+        // Network error or other issue - don't block the app
+        console.warn('Failed to load sub-profiles (non-critical):', err?.message || err);
+        setSubProfiles({});
       }
     };
 
     loadSubProfiles();
   }, [user?.id]);
 
-  // Load token balance
+  // Load token balance (optional - doesn't block the app if it fails)
   useEffect(() => {
     if (!user?.id || !supabase) return;
 
     const loadBalance = async () => {
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('wallets')
           .select('balance')
           .eq('user_id', user.id)
           .maybeSingle();
 
+        if (error) {
+          // Table might not exist in Supabase anymore - that's okay during migration
+          console.warn('Wallets table not available (migration in progress):', error.message);
+          setTokenBalance(0);
+          return;
+        }
+
         if (data) {
           setTokenBalance(data.balance || 0);
         }
       } catch (err) {
-        console.warn('Failed to load token balance:', err);
+        // Network error or other issue - don't block the app
+        console.warn('Failed to load token balance (non-critical):', err?.message || err);
+        setTokenBalance(0);
       }
     };
 
