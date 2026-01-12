@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SchoolProvider } from '../contexts/SchoolContext';
 import { supabase } from '../config/supabase';
+import { updateProfile } from '../config/neonQueries';
 import { Loader2 } from 'lucide-react';
 import ErrorBoundary from './shared/ErrorBoundary';
 import MobileBottomNav from './MobileBottomNav';
@@ -268,16 +269,21 @@ export default function MainLayout({
   }, [user?.id]);
 
   const handleRoleSwitch = async (newRole) => {
-    if (!user || !supabase) return;
-    
-    // Optimistic update
-    const updatedUserData = { ...userData, activeProfileRole: newRole };
-    
+    if (!user?.id) return;
+
     try {
-      await supabase
-        .from('profiles')
-        .update({ active_role: newRole, updated_at: new Date().toISOString() })
-        .eq('id', user.id);
+      // Update active_role in Neon database
+      await updateProfile(user.id, {
+        active_role: newRole
+      });
+
+      // Update local state
+      setUserData(prev => ({
+        ...prev,
+        activeProfileRole: newRole
+      }));
+
+      console.log(`✅ Role switched to: ${newRole}`);
     } catch (e) {
       console.error("Role switch failed:", e);
     }

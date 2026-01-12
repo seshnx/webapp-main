@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    X, Loader2, Settings, Bell, Shield, Moon, Users, RefreshCw, Star, 
-    Filter, Lock, AlertTriangle, Key, Mail, CheckCircle, Eye, MapPin, 
-    MessageSquare, UserX, Download, Globe, Calendar, ShoppingBag, 
+import {
+    X, Loader2, Settings, Bell, Shield, Moon, Users, RefreshCw, Star,
+    Filter, Lock, AlertTriangle, Key, Mail, CheckCircle, Eye, MapPin,
+    MessageSquare, UserX, Download, Globe, Calendar, ShoppingBag,
     Image, Accessibility, Zap, Clock, Volume2, VolumeX, Monitor,
     Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
     FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save
 } from 'lucide-react';
 import { supabase } from '../config/supabase';
+import { updateProfile } from '../config/neonQueries';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { useSettings } from '../hooks/useSettings';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -329,26 +330,24 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     };
 
     const updateAccountTypes = async () => {
-        if (roles.length === 0 || !supabase) return alert("You must have at least one role.");
+        if (roles.length === 0 || !user?.id) return alert("You must have at least one role.");
         setSaving(true);
         try {
-            await supabase
-                .from('profiles')
-                .update({ 
-                    account_types: roles,
-                    preferred_role: preferredRole,
-                    active_role: activeRole,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', user.id);
-            
+            // Update both clerk_users and profiles tables in Neon
+            await updateProfile(user.id, {
+                account_types: roles,
+                active_role: activeRole,
+            });
+
+            // Call onRoleSwitch callback if role changed
             if (userData && activeRole !== userData.activeProfileRole && onRoleSwitch) {
                 onRoleSwitch(activeRole);
             }
+
             alert("Roles & Preferences updated!");
         } catch (e) {
-            console.error(e);
-            alert("Failed to update.");
+            console.error("Failed to update roles:", e);
+            alert("Failed to update: " + (e.message || "Unknown error"));
         }
         setSaving(false);
     };
