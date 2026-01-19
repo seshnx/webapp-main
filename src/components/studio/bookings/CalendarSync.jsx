@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Link, Unlink, RefreshCw, Check, AlertCircle, Settings, Clock, Sync } from 'lucide-react';
+import { Calendar, Link, Unlink, RefreshCw, Check, AlertCircle, Settings, Clock, RotateCw } from 'lucide-react';
 
 /**
  * CalendarSync - Google Calendar two-way sync management
@@ -265,7 +265,7 @@ export default function CalendarSync({ user, userData }) {
                                 {syncing ? (
                                     <RefreshCw className="animate-spin" size={18} />
                                 ) : (
-                                    <Sync size={18} />
+                                    <RotateCw size={18} />
                                 )}
                                 {syncing ? 'Syncing...' : 'Sync Now'}
                             </button>
