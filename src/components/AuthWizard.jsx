@@ -711,22 +711,27 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                   Select your role(s)
                 </h3>
                 <div className="grid grid-cols-2 gap-2.5">
-                  {publicRoles.map(role => (
-                    <div
-                      key={role}
-                      onClick={() => {
-                        const newRoles = form.roles.includes(role) ? form.roles.filter(r => r !== role) : [...form.roles, role];
-                        setForm(prev => ({ ...prev, roles: newRoles }));
-                      }}
-                      className={`p-3 border-2 rounded-xl cursor-pointer text-center font-bold text-sm transition ${
-                        form.roles.includes(role)
-                          ? 'border-brand-blue bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:border-blue-500'
-                          : 'border-gray-100 dark:border-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      {role}
-                    </div>
-                  ))}
+                  {publicRoles.map(role => {
+                    const isSelected = form.roles.includes(role);
+                    return (
+                      <button
+                        key={role}
+                        type="button"
+                        onClick={() => {
+                          const newRoles = isSelected ? form.roles.filter(r => r !== role) : [...form.roles, role];
+                          setForm(prev => ({ ...prev, roles: newRoles }));
+                        }}
+                        className={`p-3 border-2 rounded-xl cursor-pointer text-center font-bold text-sm transition-all duration-200 transform active:scale-95 ${
+                          isSelected
+                            ? 'border-brand-blue bg-blue-50 text-brand-blue dark:bg-blue-900/30 dark:border-blue-400 shadow-md'
+                            : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-[#1f2128] hover:border-brand-blue hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:text-gray-200'
+                        }`}
+                      >
+                        {isSelected && <Check className="inline-block mr-1" size={14} />}
+                        {role}
+                      </button>
+                    );
+                  })}
                 </div>
                 {form.roles.includes('Talent') && (
                   <select
