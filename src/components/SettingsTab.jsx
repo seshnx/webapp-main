@@ -7,7 +7,6 @@ import {
     Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
     FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save
 } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import { updateProfile } from '../config/neonQueries';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { useSettings } from '../hooks/useSettings';

@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../../config/supabase';
 import { hasEduAccess } from '../../utils/eduPermissions';
 import { Loader2, GraduationCap, ArrowLeft } from 'lucide-react';
 import { motion } from 'framer-motion';

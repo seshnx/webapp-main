@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Wrench, CheckCircle, MessageSquare, Image as ImageIcon, Send, FileText } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import InspectionEditor from './InspectionEditor';
 

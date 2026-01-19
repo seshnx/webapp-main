@@ -3,7 +3,6 @@ import {
     School, Camera, Save, Globe, Mail, GraduationCap, 
     Settings, ToggleLeft, ToggleRight, MapPin 
 } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import { useImageUpload } from '../../../hooks/useImageUpload';
 
 export default function EduSettings({ schoolId, initialData, logAction, refreshMeta }) {

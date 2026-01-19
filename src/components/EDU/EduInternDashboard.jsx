@@ -3,8 +3,6 @@ import { useSchool } from '../../contexts/SchoolContext';
 import { MapPin, Clock, Briefcase, CheckCircle, AlertCircle, School, BookOpen, Award, Target } from 'lucide-react';
 import { formatHours } from '../../utils/eduTime';
 import { useEduAuth } from '../../contexts/EduAuthContext';
-import { supabase } from '../../config/supabase';
-
 export default function EduInternDashboard({ user: propUser, userData: propUserData }) {
     // Use EduAuth hook if available, otherwise fall back to props (backward compatibility)
     let eduAuth;

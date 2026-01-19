@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Plus, X, Save } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 
 /**

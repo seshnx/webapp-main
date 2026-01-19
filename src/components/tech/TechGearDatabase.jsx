@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
     Database, CheckCircle, Loader2, User, ThumbsUp, ThumbsDown, Copy 
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { EQUIP_CATEGORIES } from '../../config/constants';
 
 export default function TechGearDatabase({ user, isTech }) {

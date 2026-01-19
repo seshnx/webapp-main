@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { Users, Upload, Archive, AlertTriangle, FileText } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
-
 export default function EduCohorts({ schoolId, logAction }) {
     const [csvInput, setCsvInput] = useState('');
     const [processing, setProcessing] = useState(false);

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart2, TrendingUp, DollarSign, Music, Globe, ArrowUpRight } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import StatCard from '../shared/StatCard';
 
 export default function AnalyticsDashboard({ user }) {

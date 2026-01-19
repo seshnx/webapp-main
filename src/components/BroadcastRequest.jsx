@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Settings, Zap, Music, PenTool, Clock, ChevronDown, Loader2, MapPin, Link as LinkIcon, DollarSign, Calendar } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import { GENRE_DATA, INSTRUMENT_DATA, ACCOUNT_TYPES } from '../config/constants';
 import StudioMap from './shared/StudioMap';
 import LocationPicker from './shared/LocationPicker'; 

@@ -3,7 +3,6 @@ import {
     ChevronRight, ChevronLeft, Upload, Music, Image as ImageIcon, 
     CheckCircle, AlertCircle, Loader2, Info, X, Calendar 
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { DDEX_GENRES, DISTRIBUTION_STORES, RELEASE_TYPES } from '../../config/constants';
 

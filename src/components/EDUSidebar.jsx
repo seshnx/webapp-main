@@ -6,8 +6,6 @@ import {
     BookOpen, Target
 } from 'lucide-react';
 import { useClerk } from '@clerk/clerk-react';
-import { supabase } from '../config/supabase';
-
 export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, isGlobalAdmin }) {
     const clerk = useClerk();
     const [isMobile, setIsMobile] = useState(false);

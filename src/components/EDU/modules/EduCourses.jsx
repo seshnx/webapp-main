@@ -5,7 +5,6 @@ import {
     BookOpen, Plus, Search, Edit2, Trash2, Users, Clock, 
     Play, FileText, Award, X, Save, Upload 
 } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import EduCourseBuilder from './EduCourseBuilder';
 
 export default function EduCourses({ schoolId, logAction }) {

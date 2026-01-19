@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, Wrench, Calendar, DollarSign, Loader2, Video } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import { SERVICE_CATALOGUE } from '../../config/constants';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';

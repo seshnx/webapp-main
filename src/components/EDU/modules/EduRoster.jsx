@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Search, UserPlus, Briefcase, Link, Edit2, Trash2, X, Save } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import { exportToCSV } from '../../../utils/dataExport';
 
 export default function EduRoster({ schoolId, logAction }) {

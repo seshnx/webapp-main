@@ -4,7 +4,6 @@ import {
     MapPin, Clock, DollarSign, Award, Zap, X, SlidersHorizontal, BadgeCheck,
     Music, Mic, Headphones, Radio, Guitar, Piano, Sparkles, TrendingUp, Disc
 } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import { 
     VOCAL_RANGES, VOCAL_STYLES, TALENT_SUBROLES, 
     DJ_STYLES, PRODUCTION_STYLES, ENGINEERING_SPECIALTIES,

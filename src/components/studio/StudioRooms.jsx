@@ -4,7 +4,6 @@ import {
     LayoutGrid, Save, Loader2, ChevronDown, ChevronUp,
     Copy, Map, List
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 import { useLanguage } from '../../contexts/LanguageContext';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';

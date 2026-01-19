@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../config/supabase';
 import { CheckCircle, XCircle, AlertCircle, Copy, RefreshCw, Download } from 'lucide-react';
 
 export default function DebugReport({ user, userData }) {

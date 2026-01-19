@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { X, DollarSign, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '../config/supabase';
-
 export default function BidModal({ user, userData, broadcast, onClose }) {
     const [bidRate, setBidRate] = useState(Math.floor((broadcast.offer_amount || broadcast.offerAmount) / (broadcast.duration || 1)));
     const [message, setMessage] = useState('');

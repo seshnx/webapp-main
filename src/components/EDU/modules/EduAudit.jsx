@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Activity, Shield, FileText, Clock } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import { exportToCSV } from '../../../utils/dataExport';
 
 export default function EduAudit({ schoolId }) {

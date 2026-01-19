@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Briefcase, MapPin, Phone, Plus, Trash2, ExternalLink } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import AddressAutocomplete from '../../shared/AddressAutocomplete';
 
 export default function EduPartners({ schoolId, logAction }) {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Loader2, User, Briefcase, Wrench } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { TECH_SPECIALTIES } from '../../config/constants';
 import TechBookingModal from './TechBookingModal';
 

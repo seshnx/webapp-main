@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { supabase } from '../config/supabase';
 import { Users, Search, UserPlus, Trash2, Shield, User } from 'lucide-react';
 
 export default function LabelManager({ user }) {

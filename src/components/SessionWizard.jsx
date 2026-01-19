@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, MapPin, AlertCircle, ChevronRight, Search, Loader2 } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import LocationPicker from './shared/LocationPicker';
 // Distance calculation is handled by inline calcDist function
 import StudioMap from './shared/StudioMap';

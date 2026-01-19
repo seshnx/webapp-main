@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, Plus, Trash2 } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
-
 export default function EduResources({ schoolId, logAction }) {
     const [rules, setRules] = useState([]);
     const [loading, setLoading] = useState(true);

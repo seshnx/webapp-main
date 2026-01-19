@@ -1,7 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Calendar, Clock, User, MapPin, DollarSign, MessageSquare, CheckCircle, XCircle, AlertCircle, Loader2, Filter, Search, Plus, Zap, ChevronDown, MoreHorizontal } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import BookingCalendar from './shared/BookingCalendar';
 import SessionDetailsModal from './SessionDetailsModal';
 import UserAvatar from './shared/UserAvatar';

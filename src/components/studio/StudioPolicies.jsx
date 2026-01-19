@@ -3,7 +3,6 @@ import {
     FileText, Save, Loader2, DollarSign, Clock, AlertTriangle,
     Shield, ChevronDown, ChevronUp
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 
 /**

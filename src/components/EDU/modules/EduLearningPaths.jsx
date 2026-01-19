@@ -5,8 +5,6 @@ import {
     GraduationCap, Plus, Search, Edit2, Trash2, Users, 
     Award, Target, BookOpen, X, Save 
 } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
-
 export default function EduLearningPaths({ schoolId, logAction }) {
     const [paths, setPaths] = useState([]);
     const [loading, setLoading] = useState(true);

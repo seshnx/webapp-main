@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Briefcase as BriefcaseIcon, Zap } from 'lucide-react';
 import { useClerk } from '@clerk/clerk-react';
-import { supabase } from '../config/supabase';
 import { useSchool } from '../contexts/SchoolContext';
 import { useLanguage } from '../contexts/LanguageContext';
 

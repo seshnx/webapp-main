@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
     GraduationCap, Search, ChevronRight, Star, User, Plus, History, Save 
 } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import { formatHours } from '../../../utils/eduTime';
 
 export default function EduEvaluations({ schoolId, logAction, graderName }) {

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, DollarSign, Users, Trash2, Zap, CheckCircle, Loader2 } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Zap, ChevronDown, Loader2, Video, Image as ImageIcon, X } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { SERVICE_CATALOGUE } from '../../config/constants';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 

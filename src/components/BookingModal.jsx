@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, DollarSign, MessageSquare, Loader2, Music, AlertCircle, User, Briefcase, FileText } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import { SERVICE_TYPES, GENRE_DATA } from '../config/constants';
 
 export default function BookingModal({ user, userData, target, onClose }) {

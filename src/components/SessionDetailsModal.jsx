@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, Calendar, Clock, MapPin, DollarSign, CheckCircle, Play, Mic2, Car, FileText, User, ChevronRight } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import { motion } from 'framer-motion';
 import toast from 'react-hot-toast';
 

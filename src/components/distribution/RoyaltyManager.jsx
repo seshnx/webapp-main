@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Upload, FileText, CheckCircle, AlertCircle, Download, DollarSign, PieChart } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { parseRoyaltyCSV, generateSampleCSV } from '../../utils/csvParser';
 
 export default function RoyaltyManager({ user, userData }) {

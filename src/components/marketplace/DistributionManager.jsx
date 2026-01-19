@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Disc, Globe, AlertCircle, CheckCircle, Clock, Edit2, Trash2, X, Music } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import ReleaseBuilder from '../distribution/ReleaseBuilder';
 
 export default function DistributionManager({ user, userData }) {

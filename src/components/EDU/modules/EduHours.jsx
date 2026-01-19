@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, Clock, Filter, Download } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import { formatHours, calculateDurationMinutes } from '../../../utils/eduTime';
 import { exportToCSV } from '../../../utils/dataExport';
 

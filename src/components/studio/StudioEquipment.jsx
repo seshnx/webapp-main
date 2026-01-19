@@ -4,7 +4,6 @@ import {
     Trash2, Edit2, Save, Loader2, X, 
     Package
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import { EQUIP_CATEGORIES } from '../../config/constants';

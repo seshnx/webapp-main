@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useSchool } from '../../contexts/SchoolContext';
-import { supabase } from '../../config/supabase';
 import { MapPin, Search, CheckCircle, Clock, School, BookOpen, Award, Users, Calendar, Play } from 'lucide-react';
 import { useEduAuth } from '../../contexts/EduAuthContext';
 

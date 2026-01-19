@@ -5,8 +5,6 @@ import {
     X, Save, Plus, Trash2, GripVertical, Upload, 
     Play, FileText, Clock, BookOpen 
 } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
-
 export default function EduCourseBuilder({ schoolId, course, onSave, onCancel, logAction }) {
     const [formData, setFormData] = useState({
         title: '',

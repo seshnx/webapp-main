@@ -6,7 +6,6 @@ import {
     DollarSign, Lock, Unlock, ArrowRight, Package, Loader2,
     Calendar, CreditCard, Map, Check, XCircle
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { 
     SAFE_EXCHANGE_STATUS, 
     SAFE_EXCHANGE_STEPS,

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Briefcase, Clock, Activity, School, Globe } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import StatCard from '../../shared/StatCard';
 
 export default function EduOverview({ schoolId, schoolData }) {

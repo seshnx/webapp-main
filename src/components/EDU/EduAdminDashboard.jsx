@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { 
     Shield, Plus, MapPin, School, Activity, Users, Briefcase, Clock 
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { useSchool } from '../../contexts/SchoolContext';
 import { exportToCSV } from '../../utils/dataExport';
 import { SCHOOL_PERMISSIONS } from '../../config/constants';

@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Calendar, Repeat, X, Save } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 
 /**

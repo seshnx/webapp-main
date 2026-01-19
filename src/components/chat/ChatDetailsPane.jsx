@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { X, User, Bell, Flag, Lock, Users, Briefcase, FileText, Clock, Video, Image as ImageIcon, Loader2, Images } from 'lucide-react';
 import StatCard from '../shared/StatCard';
 import MediaGallery from './media/MediaGallery';
-import { supabase } from '../../config/supabase';
-
 export default function ChatDetailsPane({ activeChat, onClose, currentUser }) {
     const [media, setMedia] = useState([]);
     const [stats, setStats] = useState({ sessions: 0, rating: 0, responseTime: 'N/A' });

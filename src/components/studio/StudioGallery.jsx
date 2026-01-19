@@ -3,7 +3,6 @@ import {
     Image, Upload, Trash2, Star, 
     Loader2, X, Plus, Eye, Move
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import toast from 'react-hot-toast';
 

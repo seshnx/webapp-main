@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Loader2 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { TECH_SPECIALTIES } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
 

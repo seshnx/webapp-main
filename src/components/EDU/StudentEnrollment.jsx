@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
-import { supabase } from '../../config/supabase';
-
 export default function StudentEnrollment({ user, onComplete, onSkip }) {
     const [schoolSearchTerm, setSchoolSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState([]);

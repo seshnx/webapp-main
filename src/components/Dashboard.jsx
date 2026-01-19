@@ -10,7 +10,6 @@ import {
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
-import { supabase } from '../config/supabase'; 
 import { useNotifications } from '../hooks/useNotifications';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedNumber from './shared/AnimatedNumber';

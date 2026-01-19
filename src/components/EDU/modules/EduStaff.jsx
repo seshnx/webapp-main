@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { UserPlus, Shield, X, Mail } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
-
 export default function EduStaff({ schoolId, logAction }) {
     const [staff, setStaff] = useState([]);
     const [roles, setRoles] = useState([]);

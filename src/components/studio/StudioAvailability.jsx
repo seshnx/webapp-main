@@ -3,7 +3,6 @@ import {
     Clock, Calendar, Save, Loader2, Plus, Trash2, 
     Moon, Sun, AlertCircle, X, Copy
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
 
 const DAYS_OF_WEEK = [

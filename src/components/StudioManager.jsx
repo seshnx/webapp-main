@@ -3,8 +3,6 @@ import {
     Home, LayoutGrid, Image, Clock, FileText, Calendar,
     Package, Settings, ChevronRight, Briefcase, Users, TrendingUp
 } from 'lucide-react';
-import { supabase } from '../config/supabase';
-
 // Import sub-components
 import StudioOverview from './studio/StudioOverview';
 import StudioRooms from './studio/StudioRooms';

@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Megaphone, Send, Trash2, Users, User, Shield } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
-
 export default function EduAnnouncements({ schoolId, logAction, user, userData }) {
     const [announcements, setAnnouncements] = useState([]);
     const [loading, setLoading] = useState(true);

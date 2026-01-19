@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import StarRating from './shared/StarRating';
 
 export default function ReviewModal({ user, targetId, targetName, onClose, bookingId }) {

@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Disc, Sliders, Download, ShoppingCart, CheckCircle, Zap, Plus, X, Upload, Loader2, FileAudio, Image as ImageIcon, Play, Pause, Volume2, Info, Music, Tag } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import { useMediaUpload } from '../hooks/useMediaUpload';
 import StarFieldVisualizer from './shared/StarFieldVisualizer';
 

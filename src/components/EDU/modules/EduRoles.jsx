@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Key, Save, Check } from 'lucide-react';
-import { supabase } from '../../../config/supabase';
 import { SCHOOL_PERMISSIONS } from '../../../config/constants';
 
 export default function EduRoles({ schoolId, logAction }) {

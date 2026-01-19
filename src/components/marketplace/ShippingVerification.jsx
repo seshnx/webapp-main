@@ -5,7 +5,6 @@ import {
     X, Upload, ChevronRight, ChevronLeft, Loader2, Box, Scissors,
     Image as ImageIcon, Check, XCircle, ExternalLink, Copy
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { SHIPPING_VERIFICATION_STATUS, SHIPPING_VERIFICATION_STEPS } from '../../config/constants';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import UserAvatar from '../shared/UserAvatar';

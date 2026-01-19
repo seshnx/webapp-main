@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { Users, Plus, X, Search, Trash2, ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { isConvexAvailable } from '../../config/convex';

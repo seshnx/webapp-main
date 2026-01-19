@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Clock, DollarSign, User, ChevronRight, Zap, Filter, Trash2 } from 'lucide-react';
-import { supabase } from '../config/supabase';
 import BidModal from './BidModal';
 import { fetchZipLocation } from '../utils/geocode';
 

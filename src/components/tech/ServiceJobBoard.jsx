@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { User, MessageCircle } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import { SERVICE_CATALOGUE } from '../../config/constants';
 
 export default function ServiceJobBoard({ user }) {
