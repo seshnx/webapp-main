@@ -52,6 +52,7 @@ const retryLazyLoad = (importFn, retries = 3, delay = 100) => {
 const DebugReport = retryLazyLoad(() => import('../components/DebugReport'));
 const ProfileManager = retryLazyLoad(() => import('../components/ProfileManager'));
 const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
+const ClientPortal = retryLazyLoad(() => import('../components/studio/portal/ClientPortal'));
 
 /**
  * Protected Route Wrapper
@@ -189,6 +190,21 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
                 }
               }}
             />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Client Portal Route - Self-service client portal */}
+      <Route
+        path="/studio/:studioId/portal"
+        element={
+          <ProtectedRoute loading={loading}>
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+              <ClientPortal
+                user={user}
+                userData={userData}
+              />
             </Suspense>
           </ProtectedRoute>
         }
