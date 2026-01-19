@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
-import { 
-    Calendar, User, Check, X, MessageSquare, 
+import {
+    Calendar, User, Check, X, MessageSquare,
     Search, RefreshCw, ChevronLeft, ChevronRight,
-    CheckCircle, XCircle, Clock3, Eye, Ban, Trash2
+    CheckCircle, XCircle, Clock3, Eye, Ban, Trash2,
+    Sparkles, Users, CreditCard, CalendarSync
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
-import { 
-    notifyBookingStatusChange, 
-    checkBookingConflicts, 
+import {
+    notifyBookingStatusChange,
+    checkBookingConflicts,
     validateStatusTransition,
     trackBookingHistory,
     calculateCancellationFee,
@@ -18,6 +19,10 @@ import { scheduleBookingReminder } from '../../utils/bookingReminders';
 import RecurringBookingModal from './RecurringBookingModal';
 import MultiRoomBookingModal from './MultiRoomBookingModal';
 import UnifiedCalendar from '../shared/UnifiedCalendar';
+import BookingTemplates from './bookings/BookingTemplates';
+import BookingWaitlist from './bookings/BookingWaitlist';
+import BookingPayments from './bookings/BookingPayments';
+import CalendarSync from './bookings/CalendarSync';
 
 const STATUS_CONFIG = {
     pending: { 
@@ -48,8 +53,10 @@ const STATUS_CONFIG = {
 
 /**
  * StudioBookings - Manage incoming bookings for the studio
+ * Phase 2: Includes templates, waitlist, payments, and calendar sync
  */
-export default function StudioBookings({ user, onNavigateToChat }) {
+export default function StudioBookings({ user, userData, onNavigateToChat }) {
+    const [activeTab, setActiveTab] = useState('bookings'); // 'bookings', 'templates', 'waitlist', 'payments', 'calendar-sync'
     const [bookings, setBookings] = useState([]);
     const [blockedDates, setBlockedDates] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -484,33 +491,98 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                         {bookings.length} total bookings • {blockedDates.length} blocked slots
                     </p>
                 </div>
-                
-                {/* View Mode Toggle */}
-                <div className="flex items-center gap-2">
-                    <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex">
-                        <button
-                            onClick={() => setViewMode('list')}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
-                                viewMode === 'list' 
-                                    ? 'bg-white dark:bg-gray-700 text-brand-blue shadow-sm' 
-                                    : 'text-gray-500'
-                            }`}
-                        >
-                            List
-                        </button>
-                        <button
-                            onClick={() => setViewMode('calendar')}
-                            className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
-                                viewMode === 'calendar' 
-                                    ? 'bg-white dark:bg-gray-700 text-brand-blue shadow-sm' 
-                                    : 'text-gray-500'
-                            }`}
-                        >
-                            Calendar
-                        </button>
+
+                {/* View Mode Toggle - Only show on bookings tab */}
+                {activeTab === 'bookings' && (
+                    <div className="flex items-center gap-2">
+                        <div className="bg-gray-100 dark:bg-gray-800 p-1 rounded-lg flex">
+                            <button
+                                onClick={() => setViewMode('list')}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
+                                    viewMode === 'list'
+                                        ? 'bg-white dark:bg-gray-700 text-brand-blue shadow-sm'
+                                        : 'text-gray-500'
+                                }`}
+                            >
+                                List
+                            </button>
+                            <button
+                                onClick={() => setViewMode('calendar')}
+                                className={`px-3 py-1.5 text-sm font-medium rounded-md transition ${
+                                    viewMode === 'calendar'
+                                        ? 'bg-white dark:bg-gray-700 text-brand-blue shadow-sm'
+                                        : 'text-gray-500'
+                                }`}
+                            >
+                                Calendar
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
+
+            {/* Phase 2 Feature Tabs */}
+            <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-2 flex flex-wrap gap-2">
+                <button
+                    onClick={() => setActiveTab('bookings')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition ${
+                        activeTab === 'bookings'
+                            ? 'bg-brand-blue text-white'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                >
+                    <Calendar size={16} />
+                    Bookings
+                </button>
+                <button
+                    onClick={() => setActiveTab('templates')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition ${
+                        activeTab === 'templates'
+                            ? 'bg-orange-600 text-white'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                >
+                    <Sparkles size={16} />
+                    Templates
+                </button>
+                <button
+                    onClick={() => setActiveTab('waitlist')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition ${
+                        activeTab === 'waitlist'
+                            ? 'bg-blue-600 text-white'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                >
+                    <Users size={16} />
+                    Waitlist
+                </button>
+                <button
+                    onClick={() => setActiveTab('payments')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition ${
+                        activeTab === 'payments'
+                            ? 'bg-green-600 text-white'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                >
+                    <CreditCard size={16} />
+                    Payments
+                </button>
+                <button
+                    onClick={() => setActiveTab('calendar-sync')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition ${
+                        activeTab === 'calendar-sync'
+                            ? 'bg-indigo-600 text-white'
+                            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
+                >
+                    <CalendarSync size={16} />
+                    Calendar Sync
+                </button>
+            </div>
+
+            {/* Render Active Tab Content */}
+            {activeTab === 'bookings' && (
+                <>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-3 gap-4">
@@ -1004,6 +1076,28 @@ export default function StudioBookings({ user, onNavigateToChat }) {
                         loadBookings();
                     }}
                 />
+            )}
+                </>
+            )}
+
+            {/* Templates Tab */}
+            {activeTab === 'templates' && (
+                <BookingTemplates user={user} userData={userData} />
+            )}
+
+            {/* Waitlist Tab */}
+            {activeTab === 'waitlist' && (
+                <BookingWaitlist user={user} userData={userData} />
+            )}
+
+            {/* Payments Tab */}
+            {activeTab === 'payments' && (
+                <BookingPayments user={user} userData={userData} />
+            )}
+
+            {/* Calendar Sync Tab */}
+            {activeTab === 'calendar-sync' && (
+                <CalendarSync user={user} userData={userData} />
             )}
         </div>
     );
