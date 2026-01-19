@@ -3,7 +3,7 @@ import {
     Calendar, User, Check, X, MessageSquare,
     Search, RefreshCw, ChevronLeft, ChevronRight,
     CheckCircle, XCircle, Clock3, Eye, Ban, Trash2,
-    Sparkles, Users, CreditCard, CalendarSync
+    Sparkles, Users, CreditCard, Calendar as CalendarIcon
 } from 'lucide-react';
 import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
@@ -484,7 +484,7 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
-                        <Calendar className="text-brand-blue" size={24} />
+                        <CalendarIcon className="text-brand-blue" size={24} />
                         Booking Management
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
@@ -531,7 +531,7 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
                             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                 >
-                    <Calendar size={16} />
+                    <CalendarIcon size={16} />
                     Bookings
                 </button>
                 <button
@@ -575,7 +575,7 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
                             : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
                     }`}
                 >
-                    <CalendarSync size={16} />
+                    <CalendarIcon size={16} />
                     Calendar Sync
                 </button>
             </div>
