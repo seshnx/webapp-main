@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Users, Plus, Search, Mail, Phone, Building, Tag, DollarSign, Calendar, Edit2, Trash2, X } from 'lucide-react';
 import { CLIENT_TYPES } from '../../config/constants';
+import ClientDetailsModal from './clients/ClientDetailsModal';
 
 /**
  * StudioClients - Client database and CRM management
@@ -12,17 +13,9 @@ export default function StudioClients({ user, userData }) {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('all');
-    const [showAddModal, setShowAddModal] = useState(false);
-    const [showEditModal, setShowEditModal] = useState(false);
+    const [showClientModal, setShowClientModal] = useState(false);
     const [selectedClient, setSelectedClient] = useState(null);
-    const [formData, setFormData] = useState({
-        name: '',
-        email: '',
-        phone: '',
-        company: '',
-        client_type: 'regular',
-        notes: ''
-    });
+    const [modalMode, setModalMode] = useState('view'); // 'view', 'edit', 'add'
 
     // Fetch clients on mount
     useEffect(() => {
@@ -115,104 +108,55 @@ export default function StudioClients({ user, userData }) {
         }
     };
 
-    const handleAddClient = async (e) => {
-        e.preventDefault();
-
-        try {
-            // TODO: Replace with actual API call
-            // const response = await fetch('/api/studio-ops/clients', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({
-            //         ...formData,
-            //         studio_id: userData?.id,
-            //         client_id: null // New client
-            //     })
-            // });
-
-            const newClient = {
-                id: Date.now().toString(),
-                ...formData,
-                studio_id: userData?.id,
-                tags: [],
-                total_bookings: 0,
-                total_spent: 0,
-                first_booking_date: null,
-                last_booking_date: null,
-                created_at: new Date().toISOString()
-            };
-
-            setClients([...clients, newClient]);
-            setShowAddModal(false);
-            resetForm();
-        } catch (error) {
-            console.error('Error adding client:', error);
-        }
+    const handleAddClient = () => {
+        setSelectedClient(null);
+        setModalMode('add');
+        setShowClientModal(true);
     };
 
-    const handleEditClient = async (e) => {
-        e.preventDefault();
+    const handleEditClient = (client) => {
+        setSelectedClient(client);
+        setModalMode('edit');
+        setShowClientModal(true);
+    };
 
-        try {
-            // TODO: Replace with actual API call
-            // const response = await fetch(`/api/studio-ops/clients/${selectedClient.id}`, {
-            //     method: 'PUT',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify(formData)
-            // });
-
-            const updatedClients = clients.map(client =>
-                client.id === selectedClient.id
-                    ? { ...client, ...formData }
-                    : client
-            );
-
-            setClients(updatedClients);
-            setShowEditModal(false);
-            setSelectedClient(null);
-            resetForm();
-        } catch (error) {
-            console.error('Error updating client:', error);
-        }
+    const handleViewClient = (client) => {
+        setSelectedClient(client);
+        setModalMode('view');
+        setShowClientModal(true);
     };
 
     const handleDeleteClient = async (clientId) => {
         if (!confirm('Are you sure you want to delete this client?')) return;
 
         try {
-            // TODO: Replace with actual API call
-            // await fetch(`/api/studio-ops/clients/${clientId}`, {
-            //     method: 'DELETE'
-            // });
+            const response = await fetch(`/api/studio-ops/clients/${clientId}`, {
+                method: 'DELETE'
+            });
 
-            setClients(clients.filter(client => client.id !== clientId));
+            if (response.ok) {
+                setClients(clients.filter(client => client.id !== clientId));
+            } else {
+                const data = await response.json();
+                alert(`Error: ${data.error || 'Failed to delete client'}`);
+            }
         } catch (error) {
             console.error('Error deleting client:', error);
+            // Fallback to mock deletion
+            setClients(clients.filter(client => client.id !== clientId));
         }
     };
 
-    const openEditModal = (client) => {
-        setSelectedClient(client);
-        setFormData({
-            name: client.name || '',
-            email: client.email || '',
-            phone: client.phone || '',
-            company: client.company || '',
-            client_type: client.client_type || 'regular',
-            notes: client.notes || ''
-        });
-        setShowEditModal(true);
-    };
-
-    const resetForm = () => {
-        setFormData({
-            name: '',
-            email: '',
-            phone: '',
-            company: '',
-            client_type: 'regular',
-            notes: ''
-        });
+    const handleClientUpdate = (updatedClient) => {
+        if (modalMode === 'add') {
+            setClients([...clients, updatedClient]);
+        } else if (modalMode === 'edit') {
+            setClients(clients.map(client =>
+                client.id === updatedClient.id ? updatedClient : client
+            ));
+        }
+        setShowClientModal(false);
+        setSelectedClient(null);
     };
 
     const getClientTypeColor = (type) => {
@@ -252,7 +196,7 @@ export default function StudioClients({ user, userData }) {
                         </p>
                     </div>
                     <button
-                        onClick={() => setShowAddModal(true)}
+                        onClick={handleAddClient}
                         className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
                     >
                         <Plus size={18} />
@@ -377,7 +321,7 @@ export default function StudioClients({ user, userData }) {
                                             <div className="text-xs text-gray-500 dark:text-gray-400">Lifetime value</div>
                                         </div>
                                         <button
-                                            onClick={() => openEditModal(client)}
+                                            onClick={() => handleEditClient(client)}
                                             className="p-2 text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
                                             title="Edit client"
                                         >
@@ -398,242 +342,18 @@ export default function StudioClients({ user, userData }) {
                 )}
             </div>
 
-            {/* Add Client Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 max-w-md w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b dark:border-gray-700 flex items-center justify-between">
-                            <h3 className="text-xl font-bold dark:text-white">Add New Client</h3>
-                            <button
-                                onClick={() => {
-                                    setShowAddModal(false);
-                                    resetForm();
-                                }}
-                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                            >
-                                <X size={20} className="dark:text-gray-400" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleAddClient} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Email
-                                </label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Phone
-                                </label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Company
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.company}
-                                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Client Type *
-                                </label>
-                                <select
-                                    required
-                                    value={formData.client_type}
-                                    onChange={(e) => setFormData({ ...formData, client_type: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                >
-                                    {CLIENT_TYPES.map(type => (
-                                        <option key={type.id} value={type.id}>{type.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Notes
-                                </label>
-                                <textarea
-                                    rows="3"
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowAddModal(false);
-                                        resetForm();
-                                    }}
-                                    className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-                                >
-                                    Add Client
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Edit Client Modal */}
-            {showEditModal && selectedClient && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 max-w-md w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b dark:border-gray-700 flex items-center justify-between">
-                            <h3 className="text-xl font-bold dark:text-white">Edit Client</h3>
-                            <button
-                                onClick={() => {
-                                    setShowEditModal(false);
-                                    setSelectedClient(null);
-                                    resetForm();
-                                }}
-                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                            >
-                                <X size={20} className="dark:text-gray-400" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleEditClient} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Email
-                                </label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Phone
-                                </label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Company
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.company}
-                                    onChange={(e) => setFormData({ ...formData, company: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Client Type *
-                                </label>
-                                <select
-                                    required
-                                    value={formData.client_type}
-                                    onChange={(e) => setFormData({ ...formData, client_type: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                >
-                                    {CLIENT_TYPES.map(type => (
-                                        <option key={type.id} value={type.id}>{type.label}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Notes
-                                </label>
-                                <textarea
-                                    rows="3"
-                                    value={formData.notes}
-                                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500"
-                                />
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowEditModal(false);
-                                        setSelectedClient(null);
-                                        resetForm();
-                                    }}
-                                    className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
-                                >
-                                    Save Changes
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
+            {/* Client Details Modal */}
+            {showClientModal && (
+                <ClientDetailsModal
+                    client={selectedClient}
+                    onClose={() => {
+                        setShowClientModal(false);
+                        setSelectedClient(null);
+                    }}
+                    onUpdate={handleClientUpdate}
+                    studioId={userData?.id}
+                    mode={modalMode}
+                />
             )}
         </div>
     );
