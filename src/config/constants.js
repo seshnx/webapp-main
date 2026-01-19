@@ -595,3 +595,254 @@ export const SAFE_ZONE_TYPES = [
     { id: 'library', label: 'Public Library', icon: 'book', priority: 6 },
     { id: 'mall_security', label: 'Mall Security Office', icon: 'store', priority: 7 }
 ];
+
+// =====================================================
+// STUDIO OPS CONSTANTS (Studio Operations Module)
+// =====================================================
+
+// Client types for CRM segmentation
+export const CLIENT_TYPES = [
+    { id: 'vip', label: 'VIP', description: 'High-value clients with frequent bookings', color: 'purple' },
+    { id: 'regular', label: 'Regular', description: 'Standard clients', color: 'blue' },
+    { id: 'prospect', label: 'Prospect', description: 'Potential clients not yet booked', color: 'yellow' },
+    { id: 'inactive', label: 'Inactive', description: 'Clients who haven\'t booked in 6+ months', color: 'gray' }
+];
+
+// Staff roles for studio operations
+export const STAFF_ROLES = [
+    { id: 'engineer', label: 'Engineer', description: 'Audio engineer for recording/mixing sessions' },
+    { id: 'assistant', label: 'Assistant', description: 'Studio assistant for setup and support' },
+    { id: 'manager', label: 'Manager', description: 'Studio manager with administrative duties' },
+    { id: 'intern', label: 'Intern', description: 'Intern learning studio operations' },
+    { id: 'technician', label: 'Technician', description: 'Equipment technician for maintenance' },
+    { id: 'producer', label: 'Producer', description: 'Music producer for creative direction' }
+];
+
+// Talent network roles
+export const TALENT_NETWORK_ROLES = [
+    { id: 'engineer', label: 'Engineer', description: 'Recording/mixing engineer' },
+    { id: 'producer', label: 'Producer', description: 'Music producer' },
+    { id: 'musician', label: 'Musician', description: 'Session musician' },
+    { id: 'technician', label: 'Technician', description: 'Equipment technician' },
+    { id: 'vocalist', label: 'Vocalist', description: 'Singer/vocalist' },
+    { id: 'dj', label: 'DJ', description: 'DJ' }
+];
+
+// Task priorities
+export const TASK_PRIORITIES = [
+    { id: 'low', label: 'Low', description: 'Nice to have, no urgency', color: 'gray' },
+    { id: 'normal', label: 'Normal', description: 'Standard priority', color: 'blue' },
+    { id: 'high', label: 'High', description: 'Important, should complete soon', color: 'orange' },
+    { id: 'urgent', label: 'Urgent', description: 'Critical, immediate attention needed', color: 'red' }
+];
+
+// Task statuses
+export const TASK_STATUSES = [
+    { id: 'todo', label: 'To Do', description: 'Not started', color: 'gray' },
+    { id: 'in_progress', label: 'In Progress', description: 'Currently being worked on', color: 'blue' },
+    { id: 'completed', label: 'Completed', description: 'Finished', color: 'green' },
+    { id: 'cancelled', label: 'Cancelled', description: 'Cancelled and won\'t be completed', color: 'red' }
+];
+
+// Task types
+export const TASK_TYPES = [
+    { id: 'one_time', label: 'One-Time', description: 'Single occurrence task' },
+    { id: 'recurring', label: 'Recurring', description: 'Repeats on a schedule' },
+    { id: 'template', label: 'Template', description: 'Reusable task template' }
+];
+
+// Staff shift statuses
+export const SHIFT_STATUSES = [
+    { id: 'scheduled', label: 'Scheduled', description: 'Upcoming shift' },
+    { id: 'in_progress', label: 'In Progress', description: 'Currently working' },
+    { id: 'completed', label: 'Completed', description: 'Finished shift' },
+    { id: 'missed', label: 'Missed', description: 'Staff didn\'t show up' },
+    { id: 'cancelled', label: 'Cancelled', description: 'Shift cancelled' }
+];
+
+// Equipment maintenance types
+export const MAINTENANCE_TYPES = [
+    { id: 'calibration', label: 'Calibration', description: 'Equipment calibration and tuning' },
+    { id: 'repair', label: 'Repair', description: 'Fixing broken equipment' },
+    { id: 'inspection', label: 'Inspection', description: 'Routine inspection check' },
+    { id: 'cleaning', label: 'Cleaning', description: 'Cleaning and maintenance' },
+    { id: 'upgrade', label: 'Upgrade', description: 'Equipment upgrade or modification' },
+    { id: 'replacement', label: 'Replacement', description: 'Replacing worn parts' }
+];
+
+// Equipment maintenance statuses
+export const MAINTENANCE_STATUSES = [
+    { id: 'scheduled', label: 'Scheduled', description: 'Upcoming maintenance' },
+    { id: 'in_progress', label: 'In Progress', description: 'Currently being serviced' },
+    { id: 'completed', label: 'Completed', description: 'Maintenance finished' },
+    { id: 'cancelled', label: 'Cancelled', description: 'Maintenance cancelled' },
+    { id: 'overdue', label: 'Overdue', description: 'Past due date, needs attention' }
+];
+
+// Inventory units
+export const INVENTORY_UNITS = [
+    { id: 'each', label: 'Each', description: 'Individual items' },
+    { id: 'box', label: 'Box', description: 'Boxed items' },
+    { id: 'pack', label: 'Pack', description: 'Packaged items' },
+    { id: 'set', label: 'Set', description: 'Item sets' },
+    { id: 'hours', label: 'Hours', description: 'Hour-based services' },
+    { id: 'sqft', label: 'Sq Ft', description: 'Square footage materials' },
+    { id: 'kg', label: 'Kg', description: 'Kilogram weight' },
+    { id: 'liters', label: 'Liters', description: 'Liquid volume' },
+    { id: 'roll', label: 'Roll', description: 'Rolls of tape, cable, etc.' }
+];
+
+// Inventory transaction types
+export const INVENTORY_TRANSACTION_TYPES = [
+    { id: 'add', label: 'Add', description: 'Adding stock (purchase, donation)' },
+    { id: 'remove', label: 'Remove', description: 'Removing stock (usage, loss)' },
+    { id: 'transfer', label: 'Transfer', description: 'Moving between locations' },
+    { id: 'adjust', label: 'Adjust', description: 'Manual correction' }
+];
+
+// Booking source tracking
+export const BOOKING_SOURCES = [
+    { id: 'web', label: 'Website', description: 'Booked through website' },
+    { id: 'app', label: 'Mobile App', description: 'Booked through mobile app' },
+    { id: 'phone', label: 'Phone', description: 'Called in' },
+    { id: 'email', label: 'Email', description: 'Emailed request' },
+    { id: 'walk_in', label: 'Walk-In', description: 'In-person request' },
+    { id: 'referral', label: 'Referral', description: 'Referred by another client' }
+];
+
+// Booking payment types
+export const BOOKING_PAYMENT_TYPES = [
+    { id: 'deposit', label: 'Deposit', description: 'Initial deposit to hold booking' },
+    { id: 'partial', label: 'Partial', description: 'Partial payment milestone' },
+    { id: 'full', label: 'Full', description: 'Full payment' },
+    { id: 'refund', label: 'Refund', description: 'Refund (full or partial)' }
+];
+
+// Booking payment statuses
+export const BOOKING_PAYMENT_STATUSES = [
+    { id: 'pending', label: 'Pending', description: 'Payment awaiting action' },
+    { id: 'processing', label: 'Processing', description: 'Payment being processed' },
+    { id: 'completed', label: 'Completed', description: 'Payment successful' },
+    { id: 'failed', label: 'Failed', description: 'Payment failed' },
+    { id: 'refunded', label: 'Refunded', description: 'Refund processed' }
+];
+
+// Facility maintenance areas
+export const FACILITY_AREAS = [
+    { id: 'live_room', label: 'Live Room', description: 'Main recording/performance space' },
+    { id: 'control_room', label: 'Control Room', description: 'Mixing/control room' },
+    { id: 'lounge', label: 'Lounge', description: 'Client waiting area' },
+    { id: 'restroom', label: 'Restroom', description: 'Bathroom facilities' },
+    { id: 'parking', label: 'Parking', description: 'Parking area' },
+    { id: 'exterior', label: 'Exterior', description: 'Building exterior' },
+    { id: 'other', label: 'Other', description: 'Other areas' }
+];
+
+// Facility maintenance task types
+export const FACILITY_TASK_TYPES = [
+    { id: 'cleaning', label: 'Cleaning', description: 'Routine cleaning tasks' },
+    { id: 'repair', label: 'Repair', description: 'Fixing broken items' },
+    { id: 'inspection', label: 'Inspection', description: 'Safety/quality inspections' },
+    { id: 'upgrade', label: 'Upgrade', description: 'Improvements and renovations' },
+    { id: 'replacement', label: 'Replacement', description: 'Replacing fixtures/equipment' },
+    { id: 'renovation', label: 'Renovation', description: 'Major remodeling work' }
+];
+
+// Waitlist statuses
+export const WAITLIST_STATUSES = [
+    { id: 'pending', label: 'Pending', description: 'Waiting for opening' },
+    { id: 'notified', label: 'Notified', description: 'Client was notified of availability' },
+    { id: 'accepted', label: 'Accepted', description: 'Client accepted the booking' },
+    { id: 'expired', label: 'Expired', description: 'Waitlist request expired' },
+    { id: 'cancelled', label: 'Cancelled', description: 'Cancelled by client or studio' }
+];
+
+// Studio staff availability status
+export const STAFF_AVAILABILITY_STATUS = [
+    { id: 'active', label: 'Active', description: 'Available for assignments' },
+    { id: 'inactive', label: 'Inactive', description: 'Not currently employed' },
+    { id: 'on_leave', label: 'On Leave', description: 'Temporarily unavailable' }
+];
+
+// Talent network availability
+export const TALENT_AVAILABILITY_STATUS = [
+    { id: 'available', label: 'Available', description: 'Available for bookings' },
+    { id: 'busy', label: 'Busy', description: 'Currently booked/working' },
+    { id: 'unavailable', label: 'Unavailable', description: 'Not available' },
+    { id: 'touring', label: 'On Tour', description: 'Currently touring' }
+];
+
+// Client engagement tiers (calculated from booking history)
+export const CLIENT_ENGAGEMENT_TIERS = [
+    { id: 'new', label: 'New', minBookings: 0, description: 'No bookings yet' },
+    { id: 'occasional', label: 'Occasional', minBookings: 1, maxBookings: 3, description: '1-3 bookings' },
+    { id: 'regular', label: 'Regular', minBookings: 4, maxBookings: 10, description: '4-10 bookings' },
+    { id: 'vip', label: 'VIP', minBookings: 11, description: '11+ bookings' }
+];
+
+// Common client tags for segmentation
+export const CLIENT_TAGS = [
+    'Recording Artist',
+    'Producer',
+    'Band',
+    'Solo Artist',
+    'Label',
+    'Podcaster',
+    'Voiceover',
+    'Film/TV',
+    'Corporate',
+    'Wedding/Events',
+    'Student',
+    'Hobbyist',
+    'Professional',
+    'Referral',
+    'Repeat Customer',
+    'High-Value'
+];
+
+// Communication types for client history
+export const COMMUNICATION_TYPES = [
+    { id: 'email', label: 'Email', icon: 'mail', description: 'Email correspondence' },
+    { id: 'message', label: 'Message', icon: 'message-square', description: 'In-app message' },
+    { id: 'note', label: 'Note', icon: 'file-text', description: 'Internal note' },
+    { id: 'call', label: 'Call', icon: 'phone', description: 'Phone call' },
+    { id: 'meeting', label: 'Meeting', icon: 'users', description: 'In-person meeting' }
+];
+
+// Pay rate types for staff
+export const PAY_RATE_TYPES = [
+    { id: 'hourly', label: 'Hourly', description: 'Paid by hour worked' },
+    { id: 'per_session', label: 'Per Session', description: 'Flat rate per session/booking' },
+    { id: 'percentage', label: 'Percentage', description: 'Percentage of booking revenue' },
+    { id: 'salary', label: 'Salary', description: 'Fixed salary (exempt)' }
+];
+
+// Recurring booking frequencies
+export const RECURRING_FREQUENCIES = [
+    { id: 'daily', label: 'Daily', description: 'Every day' },
+    { id: 'weekly', label: 'Weekly', description: 'Every week' },
+    { id: 'biweekly', label: 'Bi-Weekly', description: 'Every two weeks' },
+    { id: 'monthly', label: 'Monthly', description: 'Every month' },
+    { id: 'quarterly', label: 'Quarterly', description: 'Every three months' },
+    { id: 'yearly', label: 'Yearly', description: 'Every year' }
+];
+
+// Days of week for recurring bookings
+export const DAYS_OF_WEEK = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday'
+];
+
+// Time slot types for blocking
+export const TIME_SLOT_TYPES = [
+    { id: 'morning', label: 'Morning', hours: '6:00-12:00' },
+    { id: 'afternoon', label: 'Afternoon', hours: '12:00-18:00' },
+    { id: 'evening', label: 'Evening', hours: '18:00-24:00' },
+    { id: 'custom', label: 'Custom', description: 'Custom time range' },
+    { id: 'all_day', label: 'All Day', description: 'Entire day blocked' }
+];
