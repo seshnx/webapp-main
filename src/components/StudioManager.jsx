@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Home, LayoutGrid, Image, Clock, FileText, Calendar, 
-    Package, Settings, ChevronRight, Briefcase
+import {
+    Home, LayoutGrid, Image, Clock, FileText, Calendar,
+    Package, Settings, ChevronRight, Briefcase, Users, TrendingUp
 } from 'lucide-react';
 import { supabase } from '../config/supabase';
 
@@ -14,6 +14,9 @@ import StudioPolicies from './studio/StudioPolicies';
 import StudioBookings from './studio/StudioBookings';
 import StudioEquipment from './studio/StudioEquipment';
 import StudioSettings from './studio/StudioSettings';
+import StudioClients from './studio/StudioClients';
+import StudioStaff from './studio/StudioStaff';
+import StudioAnalytics from './studio/StudioAnalytics';
 
 const TABS = [
     { id: 'overview', label: 'Overview', icon: Home, description: 'Dashboard & quick stats' },
@@ -23,6 +26,9 @@ const TABS = [
     { id: 'availability', label: 'Hours', icon: Clock, description: 'Operating hours' },
     { id: 'policies', label: 'Policies', icon: FileText, description: 'Rules & pricing' },
     { id: 'bookings', label: 'Bookings', icon: Calendar, description: 'Manage bookings' },
+    { id: 'clients', label: 'Clients', icon: Users, description: 'Client database & CRM' },
+    { id: 'staff', label: 'Staff', icon: Briefcase, description: 'Staff management & scheduling' },
+    { id: 'analytics', label: 'Analytics', icon: TrendingUp, description: 'Business insights & reports' },
     { id: 'settings', label: 'Settings', icon: Settings, description: 'Studio info' },
 ];
 
@@ -111,6 +117,12 @@ export default function StudioManager({ user, userData }) {
                 return <StudioPolicies {...commonProps} />;
             case 'bookings':
                 return <StudioBookings {...commonProps} userData={localUserData} />;
+            case 'clients':
+                return <StudioClients {...commonProps} />;
+            case 'staff':
+                return <StudioStaff {...commonProps} />;
+            case 'analytics':
+                return <StudioAnalytics {...commonProps} />;
             case 'settings':
                 return <StudioSettings {...commonProps} />;
             default:
