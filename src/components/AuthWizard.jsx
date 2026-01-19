@@ -178,8 +178,32 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       console.log('Login result:', result);
 
       if (result.status === 'complete') {
-        // Success - notify parent component
-        // NO REDIRECT - parent handles navigation
+        // Wait for Clerk's auth state to update before calling onSuccess
+        console.log('✅ Login complete, waiting for auth state to update...');
+
+        // Wait for Clerk to have a loaded user
+        let retries = 0;
+        const maxRetries = 20; // 2 seconds max
+
+        while (retries < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+
+          // Check if Clerk now has a loaded user (indicates auth state updated)
+          if (clerk.loaded && clerk.user) {
+            console.log('✅ Auth state updated, user is signed in:', clerk.user.id);
+            // Success - notify parent component
+            // NO REDIRECT - parent handles navigation
+            if (onSuccess) onSuccess();
+            setIsLoading(false);
+            return;
+          }
+
+          retries++;
+          console.log(`Waiting for auth state... (${retries}/${maxRetries})`);
+        }
+
+        // If we've waited too long, log a warning but still call onSuccess
+        console.warn('⚠️ Auth state did not update in time, proceeding anyway...');
         if (onSuccess) onSuccess();
       } else if (result.status === 'needs_first_factor') {
         setError('Please check your email for verification.');
