@@ -5,17 +5,7 @@ import {
     CheckCircle, XCircle, Clock3, Eye, Ban, Trash2,
     Sparkles, Users, CreditCard, Calendar as CalendarIcon
 } from 'lucide-react';
-import { supabase } from '../../config/supabase';
 import toast from 'react-hot-toast';
-import {
-    notifyBookingStatusChange,
-    checkBookingConflicts,
-    validateStatusTransition,
-    trackBookingHistory,
-    calculateCancellationFee,
-    canCancelBooking
-} from '../../utils/bookingNotifications';
-import { scheduleBookingReminder } from '../../utils/bookingReminders';
 import RecurringBookingModal from './RecurringBookingModal';
 import MultiRoomBookingModal from './MultiRoomBookingModal';
 import UnifiedCalendar from '../shared/UnifiedCalendar';
@@ -78,29 +68,19 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
     const [selectedBookingForRecurring, setSelectedBookingForRecurring] = useState(null);
     const [selectedBookingForRooms, setSelectedBookingForRooms] = useState(null);
 
-    // Fetch bookings from Supabase
+    // Fetch bookings from Neon API
     useEffect(() => {
-        if (!user?.id && !user?.uid || !supabase) return;
-        const userId = user?.id || user?.uid;
-
-        const channel = supabase
-            .channel('studio-bookings')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'bookings',
-                filter: `studio_owner_id=eq.${userId}`
-            }, () => {
-                loadBookings();
-            })
-            .subscribe();
+        if (!userData?.id) return;
 
         loadBookings();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user?.id, user?.uid]);
+        // Poll for updates every 30 seconds (replace with Convex real-time later)
+        const interval = setInterval(() => {
+            loadBookings();
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [userData?.id]);
 
     // Helper function to safely parse booking dates
     const parseBookingDate = (dateValue) => {
@@ -114,37 +94,26 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
     };
 
     const loadBookings = async () => {
-        if (!supabase) return;
-        const userId = user?.id || user?.uid;
+        if (!userData?.id) return;
         setLoading(true);
         try {
-            // Fix: Check both studio_owner_id AND target_id to catch all studio bookings
-            const { data: bookingsData, error } = await supabase
-                .from('bookings')
-                .select('*')
-                .or(`studio_owner_id.eq.${userId},target_id.eq.${userId}`)
-                .order('created_at', { ascending: false });
-            
-            if (error) throw error;
-            
-            const bookingsList = (bookingsData || []).map(b => {
-                const parsedDate = parseBookingDate(b.date);
-                return {
-                    id: b.id,
-                    ...b,
-                    studioOwnerId: b.studio_owner_id,
-                    clientId: b.sender_id || b.client_id, // Fix: Use sender_id as fallback
-                    clientName: b.sender_name || b.client_name, // Fix: Use sender_name as fallback
-                    date: parsedDate || new Date(),
-                    createdAt: b.created_at ? new Date(b.created_at) : new Date(),
-                    // Ensure status is properly formatted
-                    status: b.status || 'Pending'
-                };
-            });
-            setBookings(bookingsList);
+            const response = await fetch(`/api/studio-ops/bookings?studioId=${userData?.id}`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch bookings');
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                setBookings(data.data || []);
+            } else {
+                throw new Error(data.error || 'Failed to load bookings');
+            }
         } catch (error) {
             console.error('Error fetching bookings:', error);
             toast.error('Failed to load bookings');
+            setBookings([]);
         } finally {
             setLoading(false);
         }
@@ -152,48 +121,34 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
 
     // Fetch blocked dates
     useEffect(() => {
-        if (!user?.id && !user?.uid || !supabase) return;
-        const userId = user?.id || user?.uid;
-
-        const channel = supabase
-            .channel('blocked-dates')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'blocked_dates',
-                filter: `studio_owner_id=eq.${userId}`
-            }, () => {
-                loadBlockedDates();
-            })
-            .subscribe();
+        if (!userData?.id) return;
 
         loadBlockedDates();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user?.id, user?.uid]);
+        // Poll for updates every 30 seconds
+        const interval = setInterval(() => {
+            loadBlockedDates();
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [userData?.id]);
 
     const loadBlockedDates = async () => {
-        if (!supabase) return;
-        const userId = user?.id || user?.uid;
+        if (!userData?.id) return;
         try {
-            const { data: blockedData, error } = await supabase
-                .from('blocked_dates')
-                .select('*')
-                .eq('studio_owner_id', userId);
-            
-            if (error) throw error;
-            
-            const blockedList = (blockedData || []).map(b => ({
-                id: b.id,
-                ...b,
-                studioOwnerId: b.studio_owner_id,
-                date: b.date ? new Date(b.date) : new Date()
-            }));
-            // Sort client-side
-            blockedList.sort((a, b) => new Date(a.date) - new Date(b.date));
-            setBlockedDates(blockedList);
+            const response = await fetch(`/api/studio-ops/blocked-dates?studioId=${userData?.id}`);
+
+            if (!response.ok) {
+                throw new Error('Failed to fetch blocked dates');
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                setBlockedDates(data.data || []);
+            } else {
+                throw new Error(data.error || 'Failed to load blocked dates');
+            }
         } catch (error) {
             console.error('Error fetching blocked dates:', error);
             toast.error('Failed to load blocked dates');
@@ -202,170 +157,23 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
     };
 
     const handleUpdateStatus = async (bookingId, newStatus) => {
-        if (!supabase) return;
         setUpdating(bookingId);
         const toastId = toast.loading(`Updating booking...`);
-        
+
         try {
-            // Get current booking to validate transition
-            const { data: currentBooking, error: fetchError } = await supabase
-                .from('bookings')
-                .select('*')
-                .eq('id', bookingId)
-                .single();
+            const response = await fetch(`/api/studio-ops/bookings/${bookingId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: newStatus })
+            });
 
-            if (fetchError) throw fetchError;
-            if (!currentBooking) throw new Error('Booking not found');
+            const data = await response.json();
 
-            const currentStatus = currentBooking.status || 'Pending';
-            
-            // Validate status transition using utility function
-            const validation = validateStatusTransition(currentStatus, newStatus);
-            if (!validation.isValid) {
-                throw new Error(
-                    `Invalid status transition: ${currentStatus} → ${newStatus}. ` +
-                    `Allowed transitions: ${validation.allowedStatuses.join(', ') || 'none'}`
-                );
-            }
-            
-            // Check for booking conflicts before confirming
-            if (newStatus === 'Confirmed') {
-                const userId = user?.id || user?.uid;
-                const conflictCheck = await checkBookingConflicts({ ...currentBooking, id: bookingId }, userId);
-                
-                if (conflictCheck.hasConflict) {
-                    const conflictNames = conflictCheck.conflicts.map(c => c.sender_name || 'Unknown').join(', ');
-                    throw new Error(
-                        `Time slot conflict detected. Conflicting bookings: ${conflictNames}. ` +
-                        `Please check calendar before confirming.`
-                    );
-                }
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to update booking');
             }
 
-            const now = new Date().toISOString();
-            
-            // Fix: Use validated status timestamp fields instead of dynamic property
-            const statusTimestampFields = {
-                Confirmed: 'confirmed_at',
-                Cancelled: 'cancelled_at',
-                Completed: 'completed_at',
-                Pending: 'pending_at'
-            };
-
-            const updateData = {
-                status: newStatus,
-                updated_at: now
-            };
-
-            // Only add timestamp field if it exists in our mapping
-            const timestampField = statusTimestampFields[newStatus];
-            if (timestampField) {
-                updateData[timestampField] = now;
-            }
-
-            // Handle payment processing for confirmed bookings
-            if (newStatus === 'Confirmed' && currentBooking.payment_intent_id) {
-                try {
-                    const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
-                    const captureResponse = await fetch(`${apiUrl}/stripe/capture-payment`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            paymentIntentId: currentBooking.payment_intent_id
-                        })
-                    });
-
-                    if (!captureResponse.ok) {
-                        const errorData = await captureResponse.json().catch(() => ({}));
-                        console.warn('Payment capture failed:', errorData);
-                        // Continue with booking confirmation even if payment capture fails
-                        // Payment may have already been captured or will be handled by webhook
-                    }
-                } catch (paymentError) {
-                    console.error('Payment capture error:', paymentError);
-                    // Continue with booking confirmation
-                }
-            }
-
-            // Handle refunds for cancelled confirmed bookings with cancellation policy
-            if ((newStatus === 'Cancelled' || newStatus === 'cancelled') && (currentStatus === 'Confirmed' || currentStatus === 'confirmed') && currentBooking.payment_intent_id) {
-                try {
-                    // Get cancellation policy (from studio settings or default)
-                    const { data: policyData } = await supabase
-                        .from('cancellation_policies')
-                        .select('*')
-                        .eq('studio_id', user?.id || user?.uid)
-                        .eq('is_default', true)
-                        .single();
-
-                    const cancellationPolicy = policyData || null;
-                    const feeCalculation = calculateCancellationFee(currentBooking, cancellationPolicy);
-
-                    const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
-                    
-                    // Refund amount (after fee deduction)
-                    const refundAmount = feeCalculation.refund;
-                    
-                    const refundResponse = await fetch(`${apiUrl}/stripe/refund-payment`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            paymentIntentId: currentBooking.payment_intent_id,
-                            amount: refundAmount, // Partial refund if fee applies
-                            reason: 'requested_by_customer'
-                        })
-                    });
-
-                    if (!refundResponse.ok) {
-                        const errorData = await refundResponse.json().catch(() => ({}));
-                        console.warn('Refund failed:', errorData);
-                        toast.error(
-                            feeCalculation.fee > 0 
-                                ? `Booking cancelled. Cancellation fee: $${feeCalculation.fee.toFixed(2)}. Refund failed - please contact support.`
-                                : 'Booking cancelled but refund failed. Please contact support.',
-                            { id: toastId }
-                        );
-                    } else {
-                        const message = feeCalculation.fee > 0
-                            ? `Booking cancelled. Cancellation fee: $${feeCalculation.fee.toFixed(2)}. Refunded: $${refundAmount.toFixed(2)}`
-                            : `Booking cancelled and refund processed`;
-                        toast.success(message, { id: toastId });
-                    }
-                } catch (refundError) {
-                    console.error('Refund error:', refundError);
-                    toast.error('Booking cancelled but refund failed. Please contact support.', { id: toastId });
-                }
-            }
-
-            // Track booking history before update
-            await trackBookingHistory(
-                bookingId,
-                currentStatus,
-                newStatus,
-                user?.id || user?.uid,
-                `Status changed from ${currentStatus} to ${newStatus}`
-            );
-
-            // Update booking status
-            const { error } = await supabase
-                .from('bookings')
-                .update(updateData)
-                .eq('id', bookingId);
-            
-            if (error) throw error;
-
-            // Send notification to client
-            await notifyBookingStatusChange(currentBooking, newStatus, user?.id || user?.uid);
-
-            // Schedule reminders for confirmed bookings
-            if (newStatus === 'Confirmed' || newStatus === 'confirmed') {
-                await scheduleBookingReminder({ ...currentBooking, status: newStatus }, [24, 2]);
-            }
-
-            // Only show success if we haven't already shown an error
-            if (newStatus !== 'Cancelled' || currentStatus !== 'Confirmed') {
-                toast.success(`Booking ${newStatus}!`, { id: toastId });
-            }
+            toast.success(`Booking ${newStatus}!`, { id: toastId });
 
             // Reload bookings to reflect changes
             await loadBookings();
@@ -379,32 +187,35 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
 
     // Handle blocking a date (off-platform booking)
     const handleBlockDate = async () => {
-        if (!selectedDate || (!user?.id && !user?.uid) || !supabase) return;
-        const userId = user?.id || user?.uid;
-        
+        if (!selectedDate || !userData?.id) return;
+
         const toastId = toast.loading('Blocking time slot...');
-        
+
         try {
-            const { error } = await supabase
-                .from('blocked_dates')
-                .insert({
-                    studio_owner_id: userId,
+            const response = await fetch('/api/studio-ops/blocked-dates', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    studioId: userData?.id,
                     date: selectedDate.toISOString(),
                     reason: blockReason || 'Off-platform booking',
-                    time_slot: blockTimeSlot,
-                    start_time: blockTimeSlot === 'custom' ? customStartTime : null,
-                    end_time: blockTimeSlot === 'custom' ? customEndTime : null,
-                    created_at: new Date().toISOString()
-                });
-            
-            if (error) throw error;
-            
+                    timeSlot: blockTimeSlot,
+                    startTime: blockTimeSlot === 'custom' ? customStartTime : null,
+                    endTime: blockTimeSlot === 'custom' ? customEndTime : null
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to block time slot');
+            }
+
             toast.success('Time slot blocked!', { id: toastId });
             setShowBlockModal(false);
             setBlockReason('');
             setBlockTimeSlot('full');
             setSelectedDate(null);
-            // Reload blocked dates to reflect changes
             await loadBlockedDates();
         } catch (error) {
             console.error('Error blocking date:', error);
@@ -414,16 +225,21 @@ export default function StudioBookings({ user, userData, onNavigateToChat }) {
 
     // Handle unblocking a date
     const handleUnblockDate = async (blockedId) => {
-        if (!supabase) return;
         const toastId = toast.loading('Removing block...');
-        
+
         try {
-            await supabase
-                .from('blocked_dates')
-                .delete()
-                .eq('id', blockedId);
-            
+            const response = await fetch(`/api/studio-ops/blocked-dates/${blockedId}`, {
+                method: 'DELETE'
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+                throw new Error(data.error || 'Failed to remove block');
+            }
+
             toast.success('Block removed!', { id: toastId });
+            await loadBlockedDates();
         } catch (error) {
             console.error('Error unblocking date:', error);
             toast.error('Failed to remove block', { id: toastId });
