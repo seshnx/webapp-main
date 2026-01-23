@@ -151,6 +151,8 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     displayName: post.display_name || post.username || 'Unknown User',
                     authorPhoto: post.photo_url,
                     username: post.username,
+                    text: post.content, // Map 'content' to 'text' for PostCard compatibility
+                    attachments: post.media, // Map 'media' to 'attachments' for PostCard compatibility
                     timestamp: post.created_at,
                     commentCount: post.comment_count || 0,
                     reactionCount: post.reaction_count || 0,

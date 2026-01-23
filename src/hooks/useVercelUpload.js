@@ -29,9 +29,10 @@ import { uploadFile, STORAGE_FOLDERS, isImageFile, isVideoFile, validateFileSize
  *
  * Drop-in replacement for useMediaUpload that uses Vercel Blob instead of Supabase Storage.
  *
+ * @param {string} defaultFolder - Default folder for uploads (e.g., 'post-media', 'profile-photos')
  * @returns {object} Upload functions and state
  */
-export const useVercelUpload = () => {
+export const useVercelUpload = (defaultFolder = 'general') => {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
@@ -40,15 +41,15 @@ export const useVercelUpload = () => {
    * Uploads media file to Vercel Blob Storage.
    *
    * @param {File} file - The file to upload
-   * @param {string} uploadPath - The folder/path for storage (e.g., 'posts/user123', 'profile-photos')
+   * @param {string} uploadPath - The folder/path for storage (optional, uses defaultFolder if not provided)
    * @param {object} options - Additional upload options
    * @returns {Promise<object|null>} Object containing media URL and metadata
    *
    * @example
-   * const result = await uploadMedia(file, 'post-media');
+   * const result = await uploadMedia(file);
    * console.log(result.url); // https://blob.../post-media/file.jpg
    */
-  const uploadMedia = async (file, uploadPath = 'general', options = {}) => {
+  const uploadMedia = async (file, uploadPath = null, options = {}) => {
     if (!file) return null;
 
     // Validate file size (default 10MB max)
@@ -91,13 +92,14 @@ export const useVercelUpload = () => {
       const randomSuffix = Math.random().toString(36).substring(2, 8);
       const customFileName = `${timestamp}_${randomSuffix}_${sanitizedName}`;
 
+      // Use provided uploadPath or default to defaultFolder
+      const targetFolder = uploadPath || defaultFolder;
+
       // Upload to Vercel Blob
       setProgress(20); // Uploading started
 
-      const blob = await uploadFile(file, uploadPath, {
+      const blob = await uploadFile(file, targetFolder, {
         customFileName,
-        addRandomSuffix: false, // We already added our own suffix
-        ...options,
       });
 
       setProgress(100); // Upload complete
@@ -132,15 +134,15 @@ export const useVercelUpload = () => {
    * Upload multiple files
    *
    * @param {FileList|File[]} files - Files to upload
-   * @param {string} uploadPath - The folder/path for storage
+   * @param {string} uploadPath - The folder/path for storage (optional, uses defaultFolder if not provided)
    * @param {object} options - Additional upload options
    * @returns {Promise<object[]>} Array of upload results
    *
    * @example
-   * const results = await uploadMultiple(fileList, 'post-media');
+   * const results = await uploadMultiple(fileList);
    * console.log(`Uploaded ${results.length} files`);
    */
-  const uploadMultiple = async (files, uploadPath = 'general', options = {}) => {
+  const uploadMultiple = async (files, uploadPath = null, options = {}) => {
     if (!files || files.length === 0) return [];
 
     setUploading(true);
@@ -152,9 +154,11 @@ export const useVercelUpload = () => {
       const results = [];
       const totalFiles = fileArray.length;
 
+      const targetFolder = uploadPath || defaultFolder;
+
       for (let i = 0; i < fileArray.length; i++) {
         setProgress(Math.round(((i + 1) / totalFiles) * 100));
-        const result = await uploadMedia(fileArray[i], uploadPath, options);
+        const result = await uploadMedia(fileArray[i], targetFolder, options);
         if (result) {
           results.push(result);
         }
