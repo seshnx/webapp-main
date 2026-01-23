@@ -122,11 +122,11 @@ export function getFolderForMediaType(mediaType) {
  */
 export async function uploadFile(file, folder = STORAGE_FOLDERS.POST_MEDIA, options = {}) {
   if (!blobToken) {
-    throw new Error('Vercel Blob is not configured. Set BLOB_READ_WRITE_TOKEN environment variable.');
+    throw new Error('Vercel Blob is not configured. Set VITE_BLOB_READ_WRITE_TOKEN environment variable.');
   }
 
   try {
-    // Generate unique filename
+    // Generate unique filename (we handle random suffix ourselves to avoid CORS issues)
     const timestamp = Date.now();
     const randomString = Math.random().toString(36).substring(2, 8);
     const extension = file.name?.split('.').pop() || 'jpg';
@@ -135,12 +135,12 @@ export async function uploadFile(file, folder = STORAGE_FOLDERS.POST_MEDIA, opti
     // Full path with folder
     const key = `${folder}/${filename}`;
 
-    // Upload to Vercel Blob
+    // Upload to Vercel Blob with safe options only
+    // Note: addRandomSuffix option causes CORS errors in browser, so we handle it ourselves
     const blob = await put(key, file, {
       access: 'public',
       token: blobToken,
-      addRandomSuffix: options.addRandomSuffix !== false, // Default: true
-      ...options,
+      contentType: file.type || 'application/octet-stream',
     });
 
     return {
