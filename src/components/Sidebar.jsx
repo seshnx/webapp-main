@@ -14,45 +14,6 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
 
-  // Tab to route mapping for URL navigation
-  const tabToRoute = useMemo(() => ({
-    'dashboard': '/dashboard',
-    'feed': '/feed',
-    'messages': '/messages',
-    'bookings': '/bookings',
-    'marketplace': '/marketplace',
-    'tech': '/tech',
-    'business-center': '/business-center',
-    'profile': '/profile',
-    'payments': '/payments',
-    'legal': '/legal',
-    'edu-student': '/edu-student',
-    'edu-intern': '/edu-intern',
-    'edu-overview': '/edu-overview',
-    'edu-admin': '/edu-admin',
-    'studio-ops': '/studio-ops',
-    'labels': '/labels',
-  }), []);
-
-  // Determine active tab from current pathname
-  const currentActiveTab = useMemo(() => {
-    const path = location.pathname;
-    if (path === '/dashboard' || path === '/') return 'dashboard';
-    if (path.startsWith('/feed')) return 'feed';
-    if (path.startsWith('/messages')) return 'messages';
-    if (path.startsWith('/bookings')) return 'bookings';
-    if (path.startsWith('/marketplace')) return 'marketplace';
-    if (path.startsWith('/tech')) return 'tech';
-    if (path.startsWith('/business-center')) return 'business-center';
-    if (path.startsWith('/profile')) return 'profile';
-    if (path.startsWith('/payments')) return 'payments';
-    if (path === '/legal') return 'legal';
-    if (path.startsWith('/edu-')) return path.substring(1).split('/')[0];
-    if (path.startsWith('/studio-ops')) return 'studio-ops';
-    if (path.startsWith('/labels')) return 'labels';
-    return 'dashboard';
-  }, [location.pathname]);
-
   // Safely extract values with fallbacks
   const isStudent = schoolContext?.isStudent ?? (userData?.accountTypes?.includes('Student') || false);
   const isStaff = schoolContext?.isStaff ?? (userData?.accountTypes?.includes('EDUStaff') || userData?.accountTypes?.includes('EDUAdmin') || false);
@@ -153,11 +114,8 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
   });
 
   const handleNavigation = (id) => {
-    // Use URL navigation instead of state
-    const route = tabToRoute[id];
-    if (route) {
-      navigate(route);
-    }
+    // Update activeTab state - MainLayout will sync URL
+    setActiveTab(id);
     // Always close sidebar after navigation (especially on mobile)
     // Check if we're on mobile screen size
     const isMobile = window.innerWidth < 1024;
@@ -204,7 +162,7 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
                           key={link.id}
                           onClick={() => handleNavigation(link.id)}
                           className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
-                          ${currentActiveTab === link.id
+                          ${activeTab === link.id
                               ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400'
                               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
                           ${link.highlight ? 'text-amber-600 dark:text-amber-500' : ''}
@@ -228,7 +186,7 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
                 Resources
               </span>
             </div>
-            <button onClick={() => handleNavigation('legal')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${currentActiveTab === 'legal' ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+            <button onClick={() => handleNavigation('legal')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${activeTab === 'legal' ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
                 <ShieldCheck size={18} />
                 Legal Center
             </button>
