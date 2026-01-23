@@ -33,13 +33,13 @@ import { put, del, list, head } from '@vercel/blob';
  * Vercel Blob Token
  *
  * In Vercel deployments, this is automatically set.
- * For local development, you need to set BLOB_READ_WRITE_TOKEN in .env.local
+ * For local development, you need to set VITE_BLOB_READ_WRITE_TOKEN in .env.local
  */
-const blobToken = import.meta.env.BLOB_READ_WRITE_TOKEN;
+const blobToken = import.meta.env.VITE_BLOB_READ_WRITE_TOKEN;
 
 if (!blobToken && import.meta.env.DEV) {
   console.warn(
-    '⚠️ Vercel Blob: BLOB_READ_WRITE_TOKEN is not set. ' +
+    '⚠️ Vercel Blob: VITE_BLOB_READ_WRITE_TOKEN is not set. ' +
     'File uploads will not work in development. ' +
     'Install Vercel CLI and run: vercel link'
   );
