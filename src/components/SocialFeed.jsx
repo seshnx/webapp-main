@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, RefreshCw, Users, Compass, UserPlus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getPosts, createPost, getProfilesByIds } from '../config/neonQueries';
+import { getPosts, createPost, getProfilesByIds, ensureUserInDatabase } from '../config/neonQueries';
 
 import PostCard from './social/PostCard';
 import CreatePostWidget from './social/CreatePostWidget';
@@ -232,6 +232,18 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
         if (!user) return;
         try {
             const userId = user.id || user.uid;
+
+            // Ensure user exists in database (fallback for webhook sync)
+            await ensureUserInDatabase(userId, {
+                id: userId,
+                email: user.primaryEmailAddress?.emailAddress || user.email,
+                first_name: user.firstName || null,
+                last_name: user.lastName || null,
+                username: user.username || null,
+                profile_photo_url: user.imageUrl || null,
+                account_types: user.publicMetadata?.account_types || ['Fan'],
+                active_role: user.publicMetadata?.active_role || 'Fan'
+            });
 
             // Process attachments from postPayload
             const attachments = postPayload.attachments || [];

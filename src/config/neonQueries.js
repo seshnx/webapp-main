@@ -233,6 +233,39 @@ export async function createClerkUser(userData) {
 }
 
 /**
+ * Ensure user exists in database (fallback for webhook sync)
+ *
+ * This function checks if a user exists in clerk_users table.
+ * If not, it creates the user with data from Clerk.
+ * This is a fallback in case the webhook hasn't run yet.
+ *
+ * @param {string} userId - Clerk user ID
+ * @param {object} userData - User data from Clerk (optional)
+ * @returns {Promise<object>} User object
+ */
+export async function ensureUserInDatabase(userId, userData = null) {
+  // First check if user exists
+  const existingUser = await getUser(userId);
+
+  if (existingUser) {
+    return existingUser;
+  }
+
+  // User doesn't exist, create them
+  console.log('User not found in database, creating:', userId);
+
+  // If no userData provided, create minimal user
+  const defaultUserData = userData || {
+    id: userId,
+    email: `${userId}@clerk.tmp`, // Temporary email
+    account_types: ['Fan'],
+    active_role: 'Fan'
+  };
+
+  return await createClerkUser(defaultUserData);
+}
+
+/**
  * Update profile
  *
  * @param {string} userId - User ID
