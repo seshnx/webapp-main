@@ -19,58 +19,48 @@ export default function PaymentsManager({ user, userData }) {
   );
 
   useEffect(() => {
-      if (!user?.id && !user?.uid || !supabase) return;
+      if (!user?.id && !user?.uid) return;
       const userId = user?.id || user?.uid;
-      
+
       const loadWallet = async () => {
           try {
-              const { data, error } = await supabase
-                  .from('wallets')
-                  .select('*')
-                  .eq('user_id', userId)
-                  .single();
-              
-              if (error && error.code !== 'PGRST116') {
-                  console.error('Error loading wallet:', error);
-                  return;
-              }
-              
-              if (data) {
-                  setWalletData({
-                      balance: data.balance || 0,
-                      escrowBalance: data.escrow_balance || 0,
-                      payoutBalance: data.payout_balance || 0 
-                  });
-              } else {
-                  // Wallet doesn't exist yet - set defaults
+              const response = await fetch(`/api/user/wallets/${userId}`);
+              const result = await response.json();
+
+              if (!response.ok) {
+                  console.error('Error loading wallet:', result.error);
+                  // Set defaults on error
                   setWalletData({
                       balance: 0,
                       escrowBalance: 0,
                       payoutBalance: 0
                   });
+                  return;
               }
+
+              const balance = result.data?.balance || 0;
+              setWalletData({
+                  balance,
+                  escrowBalance: 0, // Not yet implemented in schema
+                  payoutBalance: 0 // Not yet implemented in schema
+              });
           } catch (err) {
               console.error('Wallet load error:', err);
+              setWalletData({
+                  balance: 0,
+                  escrowBalance: 0,
+                  payoutBalance: 0
+              });
           }
       };
-      
+
       loadWallet();
-      
-      // Subscribe to wallet changes
-      const channel = supabase
-          .channel(`wallet-${userId}`)
-          .on('postgres_changes', {
-              event: '*',
-              schema: 'public',
-              table: 'wallets',
-              filter: `user_id=eq.${userId}`
-          }, () => {
-              loadWallet();
-          })
-          .subscribe();
-      
+
+      // Refresh wallet balance every 30 seconds
+      const interval = setInterval(loadWallet, 30000);
+
       return () => {
-          supabase.removeChannel(channel);
+          clearInterval(interval);
       };
   }, [user?.id, user?.uid]);
 

@@ -18,16 +18,19 @@ export default function StudioGallery({ user, userData, onUpdate }) {
     const userId = user?.id || user?.uid;
 
     const savePhotos = useCallback(async (updatedPhotos) => {
-        if (!supabase) return false;
         try {
-            await supabase
-                .from('profiles')
-                .update({ 
-                    studio_photos: updatedPhotos,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', userId);
-            
+            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ studioPhotos: updatedPhotos })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save');
+            }
+
             setPhotos(updatedPhotos);
             if (onUpdate) onUpdate({ studioPhotos: updatedPhotos });
             return true;

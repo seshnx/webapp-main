@@ -235,21 +235,25 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
             // Process attachments from postPayload
             const attachments = postPayload.attachments || [];
 
+            // Convert attachments to media format
+            const media = attachments.map(a => ({
+                type: a.type,
+                url: a.url,
+                thumbnail: a.thumbnail || null,
+                name: a.name || null,
+                isGif: a.isGif || false
+            }));
+
+            // Extract mentions and hashtags from text
+            const mentions = (postPayload.text?.match(/@(\w+)/g) || []).map(m => m.substring(1));
+            const hashtags = (postPayload.text?.match(/#(\w+)/g) || []).map(h => h.substring(1));
+
             await createPost({
                 user_id: userId,
-                display_name: userData?.effectiveDisplayName || `${userData?.firstName || 'User'} ${userData?.lastName || ''}`.trim(),
-                author_photo: userData?.photoURL || null,
-                role: userData?.activeProfileRole || 'User',
-                text: postPayload.text || null,
-                content: postPayload.text || null, // Also set content for compatibility
-                attachments: attachments,
-                media_urls: attachments.map(a => a.url), // For backward compatibility
-                media_type: attachments.length > 0 ? attachments[0].type : null,
-                seshfx: postPayload.seshFx || null,
-                reactions: {},
-                reaction_count: 0,
-                comment_count: 0,
-                save_count: 0,
+                content: postPayload.text || null,
+                media: media,
+                mentions: mentions,
+                hashtags: hashtags,
                 visibility: 'public'
             });
         } catch (e) {

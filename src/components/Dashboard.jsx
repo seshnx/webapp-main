@@ -251,69 +251,37 @@ export default function Dashboard({
     }, [conversationsData, user?.id, user?.uid]);
 
     useEffect(() => {
-        if (!supabase) return;
-        
-        // Initial fetch - use maybeSingle() to handle empty results gracefully
-        supabase
-            .from('market_items')
-            .select('*')
-            .eq('status', 'active') // Filter by active status to match RLS policy
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-            .then(({ data, error }) => {
-                if (error) {
-                    // Only log non-404/406 errors (404 means table doesn't exist, 406 might be RLS/format issue)
-                    if (error.code !== 'PGRST116' && error.code !== 'PGRST301' && !error.message?.includes('does not exist')) {
-                        console.warn('Error fetching trending item:', error.message, error.code);
-                    }
+        // Initial fetch of trending item
+        const fetchTrendingItem = async () => {
+            try {
+                const response = await fetch('/api/marketplace/items?limit=1');
+                const result = await response.json();
+
+                if (!response.ok) {
+                    // Silently handle errors (table might not exist)
                     return;
                 }
-                if (data) {
-                    setTrendingItem({ 
-                        id: data.id, 
+
+                if (result.data && result.data.length > 0) {
+                    const data = result.data[0];
+                    setTrendingItem({
+                        id: data.id,
                         ...data,
                         timestamp: data.created_at
                     });
                 }
-            });
-        
-        // Subscribe to changes (only if table exists)
-        const channel = supabase
-            .channel('trending-item')
-            .on(
-                'postgres_changes',
-                {
-                    event: '*',
-                    schema: 'public',
-                    table: 'market_items'
-                },
-                async () => {
-                    const { data, error } = await supabase
-                        .from('market_items')
-                        .select('*')
-                        .eq('status', 'active') // Filter by active status to match RLS policy
-                        .order('created_at', { ascending: false })
-                        .limit(1)
-                        .maybeSingle();
-                    
-                    if (error) {
-                        // Silently handle errors (table might not exist or RLS issue)
-                        return;
-                    }
-                    if (data) {
-                        setTrendingItem({ 
-                            id: data.id, 
-                            ...data,
-                            timestamp: data.created_at
-                        });
-                    }
-                }
-            )
-            .subscribe();
-        
+            } catch (error) {
+                // Silently handle errors
+            }
+        };
+
+        fetchTrendingItem();
+
+        // Poll for changes every 30 seconds
+        const interval = setInterval(fetchTrendingItem, 30000);
+
         return () => {
-            supabase.removeChannel(channel);
+            clearInterval(interval);
         };
     }, []);
 

@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../config/supabase';
+import { getEquipmentGrouped } from '../config/neonQueries';
 
 /**
- * Hook to fetch equipment database from Supabase
+ * Hook to fetch equipment database from Neon
  * Returns all equipment items grouped by category for use in autocomplete/search
  */
 export const useEquipmentDatabase = () => {
@@ -11,70 +11,46 @@ export const useEquipmentDatabase = () => {
 
     useEffect(() => {
         const fetchData = async () => {
-            if (!supabase) {
-                setLoading(false);
-                return;
-            }
-
             setLoading(true);
 
             try {
-                // Fetch all verified equipment items
-                const { data, error } = await supabase
-                    .from('equipment_database')
-                    .select('*')
-                    .eq('verified', true)
-                    .order('category')
-                    .order('subcategory')
-                    .order('brand')
-                    .order('name');
+                // Fetch all verified equipment items grouped by category
+                const grouped = await getEquipmentGrouped();
 
-                if (error) throw error;
+                // Transform data to match expected format
+                const transformed = {};
+                for (const [category, subcategories] of Object.entries(grouped)) {
+                    transformed[category] = {};
+                    for (const [subcategory, items] of Object.entries(subcategories)) {
+                        transformed[category][subcategory] = items.map(item => ({
+                            id: item.id,
+                            name: item.name,
+                            brand: item.brand || 'Unknown',
+                            model: item.model,
+                            category: category,
+                            subCategory: subcategory,
+                            description: item.description,
+                            specifications: item.specifications,
+                            searchTokens: [],
+                            original: item
+                        }));
+                    }
+                }
 
-                // Group by category and subcategory
-                const grouped = {};
-                
-                (data || []).forEach(item => {
-                    const category = item.category || 'Other';
-                    const subcategory = item.subcategory || 'General';
-                    
-                    if (!grouped[category]) {
-                        grouped[category] = {};
-                    }
-                    
-                    if (!grouped[category][subcategory]) {
-                        grouped[category][subcategory] = [];
-                    }
-                    
-                    // Format item for compatibility with existing search
-                    grouped[category][subcategory].push({
-                        id: item.id,
-                        name: item.name || item.model,
-                        brand: item.brand || 'Unknown',
-                        model: item.model,
-                        category: category,
-                        subCategory: subcategory,
-                        description: item.description,
-                        specifications: item.specifications,
-                        searchTokens: item.search_tokens || [],
-                        original: item
-                    });
-                });
-                
-                setDbData(grouped);
+                setDbData(transformed);
             } catch (error) {
                 console.error("Failed to load equipment database:", error);
                 setDbData({});
             }
-            
+
             setLoading(false);
         };
 
         fetchData();
     }, []);
 
-    return { 
-        loading, 
+    return {
+        loading,
         data: dbData
     };
 };

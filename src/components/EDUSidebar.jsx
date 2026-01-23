@@ -97,11 +97,6 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
                                 console.log('✅ Clerk signOut successful');
                             }
 
-                            // Also clear Supabase session if it exists
-                            if (supabase) {
-                                await supabase.auth.signOut();
-                            }
-
                             console.log('✅ Logout complete, redirecting to home');
 
                             // Navigate to home after logout

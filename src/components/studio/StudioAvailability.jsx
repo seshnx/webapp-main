@@ -36,21 +36,26 @@ export default function StudioAvailability({ user, userData, onUpdate }) {
     const [showAddBlackout, setShowAddBlackout] = useState(false);
 
     const handleSave = async () => {
-        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving availability...');
-        const userId = user?.id || user?.uid;
-        
+        const userId = userData?.id || user?.id || user?.uid;
+
         try {
-            await supabase
-                .from('profiles')
-                .update({ 
-                    operating_hours: hours,
-                    blackout_dates: blackoutDates,
-                    updated_at: new Date().toISOString()
+            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    operatingHours: hours,
+                    blackoutDates: blackoutDates
                 })
-                .eq('id', userId);
-            
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save');
+            }
+
             toast.success('Availability saved!', { id: toastId });
             if (onUpdate) onUpdate({ operatingHours: hours, blackoutDates });
         } catch (error) {

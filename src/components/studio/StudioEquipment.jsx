@@ -121,20 +121,23 @@ export default function StudioEquipment({ user, userData, onUpdate }) {
     const [editingItem, setEditingItem] = useState(null);
 
     const handleSave = async (updatedEquipment) => {
-        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving equipment...');
-        const userId = user?.id || user?.uid;
-        
+        const userId = userData?.id || user?.id || user?.uid;
+
         try {
-            await supabase
-                .from('profiles')
-                .update({ 
-                    studio_equipment: updatedEquipment,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', userId);
-            
+            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ studioEquipment: updatedEquipment })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save');
+            }
+
             setEquipment(updatedEquipment);
             toast.success('Equipment saved!', { id: toastId });
             if (onUpdate) onUpdate({ studioEquipment: updatedEquipment });

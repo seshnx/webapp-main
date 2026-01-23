@@ -82,30 +82,25 @@ export default function BookingModal({ user, userData, target, onClose }) {
 
     // Fetch Roster if Agent/Label
     useEffect(() => {
-        if (isAgentOrLabel && supabase) {
-            const userId = user?.id || user?.uid;
+        if (isAgentOrLabel) {
+            const userId = userData?.id || user?.id || user?.uid;
             const fetchRoster = async () => {
                 try {
-                    const { data: rosterData, error } = await supabase
-                        .from('label_roster')
-                        .select('*')
-                        .eq('label_id', userId);
-                    
-                    if (error) throw error;
-                    
-                    const artists = (rosterData || []).map(r => ({
-                        id: r.id,
-                        artistId: r.artist_id,
-                        name: r.name,
-                        photoURL: r.photo_url,
-                        ...r
-                    }));
-                    setRoster(artists);
-                } catch (e) { console.error("Roster fetch error", e); }
+                    const response = await fetch(`/api/studio-ops/roster/${userId}`);
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                        throw new Error(result.error || 'Failed to fetch roster');
+                    }
+
+                    setRoster(result.data || []);
+                } catch (e) {
+                    console.error("Roster fetch error", e);
+                }
             };
             fetchRoster();
         }
-    }, [isAgentOrLabel, user?.id, user?.uid]);
+    }, [isAgentOrLabel, userData?.id, user?.id, user?.uid]);
 
     const handleDurationChange = (e) => {
         const val = e.target.value;
@@ -124,10 +119,10 @@ export default function BookingModal({ user, userData, target, onClose }) {
         setLoading(true);
         try {
             const bookingDateTime = new Date(`${form.date}T${form.time}`);
-            
+
             // Determine Sender Info (Direct vs Proxy)
             let senderInfo = {
-                senderId: user.uid,
+                senderId: userData?.id || user?.id || user?.uid,
                 senderName: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
                 onBehalfOf: null
             };
@@ -144,33 +139,29 @@ export default function BookingModal({ user, userData, target, onClose }) {
                 }
             }
 
-            if (!supabase) throw new Error('Supabase not initialized');
-            
-            const userId = user?.id || user?.uid;
-            await supabase
-                .from('bookings')
-                .insert({
-                    sender_id: userId,
-                    sender_name: senderInfo.senderName,
-                    on_behalf_of: senderInfo.onBehalfOf,
-                    target_id: target.id,
-                    target_name: target.firstName ? `${target.firstName} ${target.lastName}` : target.name,
-                    service_type: form.serviceType,
+            const endTime = new Date(bookingDateTime.getTime() + (form.duration * 60 * 60 * 1000));
+            const timeString = endTime.toTimeString().slice(0, 5); // HH:MM format
+
+            const response = await fetch('/api/studio-ops/bookings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    studioId: target.id,
+                    senderId: senderInfo.senderId,
+                    type: form.serviceType,
                     date: form.date,
-                    time: form.time,
-                    duration: Number(form.duration),
-                    offer_amount: Number(form.offerAmount),
-                    message: form.message,
-                    project_details: {
-                        genre: form.projectGenre || null,
-                        project_type: form.projectType || null,
-                        reference_links: form.referenceLinks || null
-                    },
-                    status: 'Pending',
-                    timestamp: new Date().toISOString(),
-                    booking_start: bookingDateTime.toISOString(),
-                    type: 'Direct'
-                });
+                    startTime: form.time,
+                    endTime: timeString,
+                    offerAmount: Number(form.offerAmount),
+                    notes: form.message
+                })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to send booking request');
+            }
 
             alert("Booking request sent successfully!");
             onClose();

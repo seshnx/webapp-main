@@ -71,49 +71,12 @@ export default function SeshFxStore({ user, userData, tokenBalance, refreshWalle
 
   // 2. Fetch Owned Items
   useEffect(() => {
-      if (!user?.id && !user?.uid || !supabase) return;
+      if (!user?.id && !user?.uid) return;
       const userId = user.id || user.uid;
-      
-      // Initial fetch
-      supabase
-          .from('user_library')
-          .select('item_id')
-          .eq('user_id', userId)
-          .then(({ data, error }) => {
-              if (error) {
-                  console.error('Error fetching owned items:', error);
-                  return;
-              }
-              setOwnedItemIds(new Set((data || []).map(item => item.item_id)));
-          });
 
-      // Subscribe to realtime changes
-      const channel = supabase
-          .channel(`user-library-${userId}`)
-          .on(
-              'postgres_changes',
-              {
-                  event: '*',
-                  schema: 'public',
-                  table: 'user_library',
-                  filter: `user_id=eq.${userId}`
-              },
-              async () => {
-                  const { data } = await supabase
-                      .from('user_library')
-                      .select('item_id')
-                      .eq('user_id', userId);
-                  
-                  if (data) {
-                      setOwnedItemIds(new Set(data.map(item => item.item_id)));
-                  }
-              }
-          )
-          .subscribe();
-
-      return () => {
-          supabase.removeChannel(channel);
-      };
+      // TODO: Create API route for fetching user library
+      // For now, set empty owned items
+      setOwnedItemIds(new Set());
   }, [user?.id, user?.uid]);
 
   const handlePurchase = async (item) => {
@@ -121,50 +84,11 @@ export default function SeshFxStore({ user, userData, tokenBalance, refreshWalle
           alert("Insufficient tokens! Please top up.");
           return;
       }
-      
-      if(!window.confirm(`Purchase ${item.title} for ${item.price} Tokens?`)) return;
-      
-      if (!supabase) {
-          alert("Transaction failed. Database unavailable.");
-          return;
-      }
 
-      const userId = user?.id || user?.uid;
-      
-      try {
-          // Update wallet balance
-          const { data: wallet, error: walletError } = await supabase
-              .from('wallets')
-              .select('balance')
-              .eq('user_id', userId)
-              .single();
-          
-          if (walletError) throw walletError;
-          
-          await supabase
-              .from('wallets')
-              .update({ balance: (wallet.balance || 0) - item.price })
-              .eq('user_id', userId);
-          
-          // Add to user library
-          await supabase
-              .from('user_library')
-              .insert({
-                  user_id: userId,
-                  item_id: item.id,
-                  title: item.title,
-                  type: item.type,
-                  price_paid: item.price,
-                  purchase_date: new Date().toISOString(),
-                  download_url: item.download_url || item.downloadUrl
-              });
-          
-          if(refreshWallet) refreshWallet();
-          alert("Purchased successfully!");
-      } catch(e) { 
-          console.error(e); 
-          alert("Transaction failed."); 
-      }
+      if(!window.confirm(`Purchase ${item.title} for ${item.price} Tokens?`)) return;
+
+      // TODO: Create API route for marketplace purchase
+      alert("Purchase flow coming soon! Please contact support to complete this purchase.");
   };
 
   const filteredItems = items.filter(i => 

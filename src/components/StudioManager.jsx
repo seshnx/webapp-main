@@ -45,18 +45,19 @@ export default function StudioManager({ user, userData }) {
     // Fetch booking stats
     useEffect(() => {
         const fetchStats = async () => {
-            if (!user?.id && !user?.uid || !supabase) return;
-            const userId = user.id || user.uid;
-            
-            try {
-                // Fetch bookings where user is the target OR studio_owner_id (studio owner receiving bookings)
-                const { data: bookings, error } = await supabase
-                    .from('bookings')
-                    .select('*')
-                    .or(`target_id.eq.${userId},studio_owner_id.eq.${userId}`)
-                    .order('date', { ascending: true });
+            if (!user?.id && !user?.uid) return;
+            const userId = userData?.id || user?.id || user?.uid;
 
-                if (error) throw error;
+            try {
+                // Fetch bookings where user is the studio owner
+                const response = await fetch(`/api/studio-ops/bookings?studioId=${userId}`);
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Failed to fetch stats');
+                }
+
+                const bookings = result.data || [];
 
                 const pending = bookings.filter(b => b.status === 'Pending').length;
                 const recent = bookings
@@ -68,7 +69,7 @@ export default function StudioManager({ user, userData }) {
                     .slice(0, 5);
                 const revenue = bookings
                     .filter(b => b.status === 'Completed')
-                    .reduce((sum, b) => sum + (b.offer_amount || 0), 0);
+                    .reduce((sum, b) => sum + (b.totalPrice || b.offer_amount || 0), 0);
 
                 setStats({
                     pendingBookings: pending,
@@ -81,7 +82,11 @@ export default function StudioManager({ user, userData }) {
         };
 
         fetchStats();
-    }, [user?.id, user?.uid]);
+
+        // Refresh stats every 30 seconds
+        const interval = setInterval(fetchStats, 30000);
+        return () => clearInterval(interval);
+    }, [userData?.id, user?.id, user?.uid]);
 
     // Handle updates from child components
     const handleUpdate = (updates) => {

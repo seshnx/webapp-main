@@ -88,4 +88,48 @@ export default defineSchema({
   })
     .index("by_chat", ["chatId"])
     .index("by_chat_user", ["chatId", "userId"]),
+
+  // Bookings table - for real-time booking updates
+  bookings: defineTable({
+    id: v.string(), // Booking ID from Neon
+    senderId: v.string(),
+    senderName: v.optional(v.string()),
+    senderPhoto: v.optional(v.string()),
+    targetId: v.string(), // Studio owner or service provider
+    status: v.string(), // Pending, Confirmed, Completed, Cancelled
+    serviceType: v.optional(v.string()),
+    date: v.optional(v.string()), // ISO date string
+    time: v.optional(v.string()),
+    duration: v.optional(v.number()),
+    offerAmount: v.optional(v.number()),
+    message: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_target_status", ["targetId", "status"])
+    .index("by_sender", ["senderId"])
+    .index("by_id", ["id"]),
+
+  // Notifications table - for real-time notification updates
+  notifications: defineTable({
+    id: v.string(), // Notification ID from Neon
+    userId: v.string(),
+    type: v.string(), // booking, follow, like, comment, etc.
+    title: v.string(),
+    message: v.string(),
+    read: v.boolean(),
+    createdAt: v.number(),
+    metadata: v.optional(v.any()), // Flexible metadata for different notification types
+  })
+    .index("by_user_read", ["userId", "createdAt"])
+    .index("by_id", ["id"]),
+
+  // User profile updates - for real-time profile changes
+  profileUpdates: defineTable({
+    userId: v.string(),
+    updatedAt: v.number(),
+    field: v.optional(v.string()), // Which field was updated
+    metadata: v.optional(v.any()), // Additional update info
+  })
+    .index("by_user", ["userId", "updatedAt"]),
 });

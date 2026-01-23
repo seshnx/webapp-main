@@ -75,38 +75,40 @@ export default function StudioSettings({ user, userData, onUpdate }) {
     };
 
     const onSubmit = async (data) => {
-        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving settings...');
+        const userId = userData?.id || user?.id || user?.uid;
 
         try {
-            const userId = user?.id || user?.uid;
-            await supabase
-                .from('profiles')
-                .update({
-                    studio_name: data.studioName,
-                    profile_name: data.studioName,
+            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    studioName: data.studioName,
+                    profileName: data.studioName,
                     address: data.address,
                     city: data.city,
                     state: data.state,
                     zip: data.zip,
                     lat: data.lat,
                     lng: data.lng,
-                    studio_description: data.studioDescription,
+                    studioDescription: data.studioDescription,
                     email: data.email,
-                    phone_cell: data.phoneCell,
-                    phone_land: data.phoneLand,
+                    phoneCell: data.phoneCell,
+                    phoneLand: data.phoneLand,
                     website: data.website,
                     hours: data.hours,
                     amenities: data.amenities,
-                    hide_address: data.hideAddress,
-                    is_studio: true,
-                    updated_at: new Date().toISOString()
+                    hideAddress: data.hideAddress
                 })
-                .eq('id', userId);
-            
-            if (error) throw error;
-            
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save');
+            }
+
             toast.success("Settings saved!", { id: toastId });
             if (onUpdate) onUpdate(data);
         } catch (error) {

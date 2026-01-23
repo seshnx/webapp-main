@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Calendar, Repeat, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { query as neonQuery } from '../../config/neon.js';
 
 /**
  * RecurringBookingModal - Create recurring bookings
@@ -23,7 +24,7 @@ export default function RecurringBookingModal({ booking, onClose, onSuccess }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!booking || !supabase) return;
+        if (!booking) return;
 
         setLoading(true);
         const toastId = toast.loading('Creating recurring bookings...');
@@ -55,25 +56,31 @@ export default function RecurringBookingModal({ booking, onClose, onSuccess }) {
                 daysOfWeek: recurrenceType === 'weekly' ? daysOfWeek : null,
             };
 
-            // Create recurring booking record
-            const { data: recurringBooking, error } = await supabase
-                .from('recurring_bookings')
-                .insert({
-                    parent_booking_id: booking.id,
-                    studio_id: booking.studio_owner_id || booking.target_id,
-                    sender_id: booking.sender_id,
-                    recurrence_type: recurrenceType,
-                    recurrence_pattern: recurrencePattern,
-                    start_date: bookingDate.toISOString().split('T')[0],
-                    end_date: endDate || null,
-                    next_occurrence: nextOccurrence.toISOString().split('T')[0],
-                    max_occurrences: maxOccurrences ? parseInt(maxOccurrences) : null,
-                    is_active: true
-                })
-                .select()
-                .single();
+            // Create recurring booking record using Neon
+            const result = await neonQuery(`
+                INSERT INTO recurring_bookings (
+                    parent_booking_id, studio_id, sender_id,
+                    recurrence_type, recurrence_pattern,
+                    start_date, end_date, next_occurrence,
+                    max_occurrences, is_active
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                RETURNING *
+            `, [
+                booking.id,
+                booking.studio_owner_id || booking.target_id,
+                booking.sender_id,
+                recurrenceType,
+                JSON.stringify(recurrencePattern),
+                bookingDate.toISOString().split('T')[0],
+                endDate || null,
+                nextOccurrence.toISOString().split('T')[0],
+                maxOccurrences ? parseInt(maxOccurrences) : null,
+                true
+            ]);
 
-            if (error) throw error;
+            if (!result || result.length === 0) {
+                throw new Error('Failed to create recurring booking');
+            }
 
             toast.success('Recurring booking created!', { id: toastId });
             onSuccess?.();

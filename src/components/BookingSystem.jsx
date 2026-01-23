@@ -83,34 +83,31 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     // Fetch all bookings for the user
     useEffect(() => {
         if (!user?.id && !user?.uid) return;
-        
+
         const loadBookings = async () => {
             setLoading(true);
             try {
                 const userId = user?.id || user?.uid;
-                
+
                 // Fetch bookings where user is sender OR target
-                const { data: sentBookings, error: sentError } = await supabase
-                    .from('bookings')
-                    .select('*')
-                    .eq('sender_id', userId)
-                    .order('date', { ascending: false });
-                
-                const { data: receivedBookings, error: receivedError } = await supabase
-                    .from('bookings')
-                    .select('*')
-                    .eq('target_id', userId)
-                    .order('date', { ascending: false });
-                
-                if (sentError) throw sentError;
-                if (receivedError) throw receivedError;
-                
+                const [sentResponse, receivedResponse] = await Promise.all([
+                    fetch(`/api/studio-ops/bookings?senderId=${userId}`),
+                    fetch(`/api/studio-ops/bookings?targetId=${userId}`)
+                ]);
+
+                const sentResult = await sentResponse.json();
+                const receivedResult = await receivedResponse.json();
+
+                if (!sentResponse.ok || !receivedResponse.ok) {
+                    throw new Error('Failed to fetch bookings');
+                }
+
                 // Combine and deduplicate (in case of edge cases)
-                const allBookings = [...(sentBookings || []), ...(receivedBookings || [])];
+                const allBookings = [...(sentResult.data || []), ...(receivedResult.data || [])];
                 const uniqueBookings = Array.from(
                     new Map(allBookings.map(b => [b.id, b])).values()
                 );
-                
+
                 setBookings(uniqueBookings);
             } catch (error) {
                 console.error('Error loading bookings:', error);
@@ -118,22 +115,16 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                 setLoading(false);
             }
         };
-        
+
         loadBookings();
-        
-        // Set up real-time subscription
-        const subscription = supabase
-            .channel('bookings-changes')
-            .on('postgres_changes', 
-                { event: '*', schema: 'public', table: 'bookings' },
-                () => {
-                    loadBookings();
-                }
-            )
-            .subscribe();
-        
+
+        // Poll for changes instead of real-time subscription
+        const interval = setInterval(() => {
+            loadBookings();
+        }, 30000); // Poll every 30 seconds
+
         return () => {
-            subscription.unsubscribe();
+            clearInterval(interval);
         };
     }, [user?.id, user?.uid]);
     
@@ -207,16 +198,18 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     
     const handleBookingAction = async (bookingId, action) => {
         try {
-            const { error } = await supabase
-                .from('bookings')
-                .update({ 
-                    status: action === 'accept' ? 'Confirmed' : action === 'decline' ? 'Declined' : booking.status,
-                    responded_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', bookingId);
-            
-            if (error) throw error;
+            const status = action === 'accept' ? 'Confirmed' : action === 'decline' ? 'Declined' : 'Pending';
+
+            const response = await fetch(`/api/studio-ops/bookings/${bookingId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to update booking');
+            }
         } catch (error) {
             console.error('Error updating booking:', error);
             alert('Failed to update booking');

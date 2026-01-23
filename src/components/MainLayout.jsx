@@ -204,29 +204,25 @@ export default function MainLayout({
 
   // Load sub-profiles (optional - doesn't block the app if it fails)
   useEffect(() => {
-    if (!user?.id || !supabase) return;
+    if (!user?.id) return;
 
     const loadSubProfiles = async () => {
       try {
-        const { data, error } = await supabase
-          .from('sub_profiles')
-          .select('*')
-          .eq('user_id', user.id);
+        const response = await fetch(`/api/user/sub-profiles/${user.id}`);
+        const result = await response.json();
 
-        if (error) {
-          // Table might not exist in Supabase anymore - that's okay during migration
-          console.warn('Sub-profiles table not available (migration in progress):', error.message);
+        if (!response.ok) {
+          console.warn('Sub-profiles API not available:', result.error);
           setSubProfiles({});
           return;
         }
 
         const profiles = {};
-        data?.forEach(profile => {
+        result.data?.forEach(profile => {
           profiles[profile.account_type] = profile;
         });
         setSubProfiles(profiles);
       } catch (err) {
-        // Network error or other issue - don't block the app
         console.warn('Failed to load sub-profiles (non-critical):', err?.message || err);
         setSubProfiles({});
       }
@@ -237,28 +233,23 @@ export default function MainLayout({
 
   // Load token balance (optional - doesn't block the app if it fails)
   useEffect(() => {
-    if (!user?.id || !supabase) return;
+    if (!user?.id) return;
 
     const loadBalance = async () => {
       try {
-        const { data, error } = await supabase
-          .from('wallets')
-          .select('balance')
-          .eq('user_id', user.id)
-          .maybeSingle();
+        const response = await fetch(`/api/user/wallets/${user.id}`);
+        const result = await response.json();
 
-        if (error) {
-          // Table might not exist in Supabase anymore - that's okay during migration
-          console.warn('Wallets table not available (migration in progress):', error.message);
+        if (!response.ok) {
+          console.warn('Wallets API not available:', result.error);
           setTokenBalance(0);
           return;
         }
 
-        if (data) {
-          setTokenBalance(data.balance || 0);
+        if (result.data) {
+          setTokenBalance(result.data.balance || 0);
         }
       } catch (err) {
-        // Network error or other issue - don't block the app
         console.warn('Failed to load token balance (non-critical):', err?.message || err);
         setTokenBalance(0);
       }

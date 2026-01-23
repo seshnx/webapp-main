@@ -40,22 +40,27 @@ export default function StudioRooms({ user, userData, onUpdate }) {
     };
 
     const handleSave = async (updatedRooms, updatedWalls = walls, updatedStructures = structures) => {
-        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving rooms...');
-        const userId = user?.id || user?.uid;
-        
+        const userId = userData?.id || user?.id || user?.uid;
+
         try {
-            await supabase
-                .from('profiles')
-                .update({ 
+            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
                     rooms: updatedRooms,
-                    floorplan_walls: updatedWalls,
-                    floorplan_structures: updatedStructures,
-                    updated_at: new Date().toISOString()
+                    floorplanWalls: updatedWalls,
+                    floorplanStructures: updatedStructures
                 })
-                .eq('id', userId);
-            
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save');
+            }
+
             setRooms(updatedRooms);
             setWalls(updatedWalls);
             setStructures(updatedStructures);
@@ -78,30 +83,40 @@ export default function StudioRooms({ user, userData, onUpdate }) {
     };
 
     const handleWallsChange = async (newWalls) => {
-        if (!supabase) return;
         setWalls(newWalls);
-        const userId = user?.id || user?.uid;
+        const userId = userData?.id || user?.id || user?.uid;
         // Auto-save walls
         try {
-            await supabase
-                .from('profiles')
-                .update({ floorplan_walls: newWalls, updated_at: new Date().toISOString() })
-                .eq('id', userId);
+            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ floorplanWalls: newWalls })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save walls');
+            }
         } catch (error) {
             console.error('Error saving walls:', error);
         }
     };
 
     const handleStructuresChange = async (newStructures) => {
-        if (!supabase) return;
         setStructures(newStructures);
-        const userId = user?.id || user?.uid;
+        const userId = userData?.id || user?.id || user?.uid;
         // Auto-save structures
         try {
-            await supabase
-                .from('profiles')
-                .update({ floorplan_structures: newStructures, updated_at: new Date().toISOString() })
-                .eq('id', userId);
+            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ floorplanStructures: newStructures })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save structures');
+            }
         } catch (error) {
             console.error('Error saving structures:', error);
         }

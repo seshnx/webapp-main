@@ -99,11 +99,6 @@ export default function Sidebar({ userData, activeTab, setActiveTab, sidebarOpen
         console.log('✅ Clerk signOut successful');
       }
 
-      // Also clear Supabase session if it exists (for migration)
-      if (supabase) {
-        await supabase.auth.signOut();
-      }
-
       console.log('✅ Logout complete, redirecting to home');
 
       // Navigate to home after logout

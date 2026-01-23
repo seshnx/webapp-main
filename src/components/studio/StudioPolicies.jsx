@@ -46,20 +46,23 @@ export default function StudioPolicies({ user, userData, onUpdate }) {
     const [expandedSection, setExpandedSection] = useState('booking');
 
     const handleSave = async () => {
-        if (!supabase) return;
         setSaving(true);
         const toastId = toast.loading('Saving policies...');
-        const userId = user?.id || user?.uid;
-        
+        const userId = userData?.id || user?.id || user?.uid;
+
         try {
-            await supabase
-                .from('profiles')
-                .update({ 
-                    policies: policies,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', userId);
-            
+            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ policies })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to save');
+            }
+
             toast.success('Policies saved!', { id: toastId });
             if (onUpdate) onUpdate({ policies });
         } catch (error) {

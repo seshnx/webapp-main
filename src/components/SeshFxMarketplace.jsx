@@ -122,65 +122,18 @@ export default function SeshFxMarketplace({ user, userData, tokenBalance, refres
   }, [user?.id, user?.uid]);
 
   const handlePurchase = async (item) => {
-      if (!supabase) {
-          alert("Database unavailable.");
-          return;
-      }
-
       // Client-side check for UI feedback only (Server rules should also enforce this)
       if (tokenBalance < item.price) {
           alert("Insufficient tokens! Please top up in the Billing tab.");
           return;
       }
-      
+
       if(!confirm(`Purchase ${item.title} for ${item.price} Tokens?`)) return;
-      
+
       const userId = user?.id || user?.uid;
-      
-      try {
-          // Use Supabase RPC for atomic wallet update (if available) or direct update
-          // First, update wallet balance atomically
-          const { data: walletData, error: walletError } = await supabase
-              .from('wallets')
-              .select('balance')
-              .eq('user_id', userId)
-              .single();
 
-          if (walletError) throw walletError;
-
-          if (walletData.balance < item.price) {
-              alert("Insufficient tokens!");
-              return;
-          }
-
-          // Update wallet
-          const { error: updateError } = await supabase
-              .from('wallets')
-              .update({ balance: walletData.balance - item.price })
-              .eq('user_id', userId);
-
-          if (updateError) throw updateError;
-          
-          // Add to user library
-          const { error: libraryError } = await supabase
-              .from('user_library')
-              .insert({
-                  user_id: userId,
-                  item_id: item.id,
-                  title: item.title,
-                  type: item.type,
-                  price_paid: item.price,
-                  download_url: item.download_url
-              });
-
-          if (libraryError) throw libraryError;
-          
-          if(refreshWallet) refreshWallet();
-          alert("Purchase successful!");
-      } catch(e) { 
-          console.error(e); 
-          alert("Transaction failed: " + (e.message || "Unknown error"));
-      }
+      // TODO: Create API route for marketplace purchase
+      alert("Purchase flow coming soon! Please contact support to complete this purchase.");
   };
 
   const handleDownload = (item) => {
@@ -306,40 +259,13 @@ function SellItemModal({ user, userData, onClose }) {
     const { uploadMedia, uploading } = useMediaUpload();
 
     const handleSubmit = async () => {
-        if(!form.title || !form.price || !audioFile || !supabase) {
-            if (!form.title || !form.price || !audioFile) alert("Title, Price, and Audio File are required.");
+        if(!form.title || !form.price || !audioFile) {
+            alert("Title, Price, and Audio File are required.");
             return;
         }
-        
-        try {
-            const userId = user?.id || user?.uid;
-            
-            setStatus('Uploading Audio Asset...');
-            // Single file upload serves as both preview and product for now
-            const downloadUrl = await uploadMedia(audioFile, `market_assets/${userId}`);
 
-            setStatus('Listing Item...');
-            const { error } = await supabase
-                .from('marketplace_items')
-                .insert({
-                    seller_id: userId,
-                    title: form.title,
-                    description: form.description,
-                    type: form.type,
-                    price: parseInt(form.price),
-                    tags: form.tags ? form.tags.split(',').map(t => t.trim()) : [],
-                    download_url: downloadUrl,
-                    preview_url: downloadUrl // Same URL for preview and download
-                });
-
-            if (error) throw error;
-            
-            setStatus('Success!');
-            setTimeout(onClose, 1000);
-        } catch(e) { 
-            console.error(e); 
-            setStatus('Error: ' + (e.message || "Unknown error"));
-        }
+        // TODO: Create API route for marketplace listing
+        alert("Creator Studio coming soon! Please contact support to list items.");
     };
 
     return (

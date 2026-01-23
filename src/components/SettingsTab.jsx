@@ -7,7 +7,8 @@ import {
     Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
     FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save
 } from 'lucide-react';
-import { updateProfile } from '../config/neonQueries';
+import { updateProfile, getProfile, getSubProfile, upsertSubProfile } from '../config/neonQueries';
+import { query as neonQuery } from '../config/neon';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { useSettings } from '../hooks/useSettings';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -247,18 +248,9 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             }
             // Apply immediately and save
             onUpdate(updated);
-            // Auto-save to database
-            if (supabase && user?.id) {
-                supabase
-                    .from('profiles')
-                    .update({
-                        settings: updated,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', user.id)
-                    .then(() => {
-                        // Silently saved
-                    })
+            // Auto-save to database using Neon
+            if (user?.id) {
+                updateProfile(user.id, { settings: updated })
                     .catch(err => console.error('Auto-save failed:', err));
             }
             return updated;
@@ -286,18 +278,9 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             }
             // Apply immediately and save
             onUpdate(updated);
-            // Auto-save to database
-            if (supabase && user?.id) {
-                supabase
-                    .from('profiles')
-                    .update({
-                        settings: updated,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', user.id)
-                    .then(() => {
-                        // Silently saved
-                    })
+            // Auto-save to database using Neon
+            if (user?.id) {
+                updateProfile(user.id, { settings: updated })
                     .catch(err => console.error('Auto-save failed:', err));
             }
             return updated;
@@ -309,17 +292,14 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     };
 
     const saveSettings = async () => {
-        if (!supabase || !user) return;
+        if (!user) return;
         setSaving(true);
         try {
-            await supabase
-                .from('profiles')
-                .update({
-                    settings: localSettings,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', user.id);
-            
+            await updateProfile(user.id, {
+                settings: localSettings,
+                updated_at: new Date().toISOString()
+            });
+
             alert("Settings saved successfully!");
         } catch (e) {
             console.error(e);
@@ -363,43 +343,24 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     };
 
     const handleSecurityUpdate = async () => {
-        if (!securityForm.currentPassword || !supabase) {
-            if (!securityForm.currentPassword) alert("Current password is required to verify your identity.");
+        if (!securityForm.currentPassword) {
+            alert("Current password is required to verify your identity.");
             return;
         }
         setIsSecurityLoading(true);
 
         try {
-            const { error: verifyError } = await supabase.auth.signInWithPassword({
-                email: user.email,
-                password: securityForm.currentPassword
-            });
-            
-            if (verifyError) {
-                throw new Error("Incorrect current password.");
-            }
+            // Security operations are now handled through Clerk
+            // Password changes and email updates should be done through Clerk's user management
+            // For now, provide a message to use Clerk's account management features
 
             if (securityAction === 'email') {
                 if (!securityForm.newEmail) throw new Error("New email address is required.");
-                const { error: emailError } = await supabase.auth.updateUser({ 
-                    email: securityForm.newEmail 
-                });
-                if (emailError) throw emailError;
-                
-                await supabase
-                    .from('profiles')
-                    .update({ email: securityForm.newEmail, updated_at: new Date().toISOString() })
-                    .eq('id', user.id);
-                
-                alert("Email updated successfully.");
-            } 
+                alert("Email changes are managed through Clerk. Please use the account management link in your profile.");
+            }
             else if (securityAction === 'password') {
                 if (securityForm.newPassword.length < 6) throw new Error("Password must be at least 6 characters.");
-                const { error: passwordError } = await supabase.auth.updateUser({ 
-                    password: securityForm.newPassword 
-                });
-                if (passwordError) throw passwordError;
-                alert("Password updated successfully.");
+                alert("Password changes are managed through Clerk. Please use the account management link in your profile.");
             }
 
             setShowSecurityModal(false);
@@ -407,148 +368,88 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
 
         } catch (e) {
             console.error("Security Update Error:", e);
-            if (e.message?.includes('Incorrect current password') || e.message?.includes('Invalid')) {
-                alert("Incorrect current password.");
-            } else if (e.message?.includes('already registered') || e.message?.includes('already in use')) {
-                alert("This email is already associated with another account.");
-            } else {
-                alert("Failed to update: " + e.message);
-            }
+            alert("Failed to update: " + e.message);
         }
         setIsSecurityLoading(false);
     };
 
     const handleDataExport = async () => {
-        if (!supabase || !user) {
+        if (!user) {
             alert("Unable to export data. Please ensure you're logged in.");
             return;
         }
-        
+
         setExporting(true);
         try {
             const userId = user.id;
-            
-            const [profile, wallet, bookings, reviews, follows, notifications] = await Promise.all([
-                supabase.from('profiles').select('*').eq('id', userId).single(),
-                supabase.from('wallets').select('*').eq('user_id', userId).single(),
-                supabase.from('bookings').select('*').or(`sender_id.eq.${userId},target_id.eq.${userId}`).limit(1000),
-                supabase.from('reviews').select('*').or(`reviewer_id.eq.${userId},target_id.eq.${userId}`).limit(1000),
-                supabase.from('follows').select('*').or(`follower_id.eq.${userId},following_id.eq.${userId}`).limit(1000),
-                supabase.from('notifications').select('*').eq('user_id', userId).limit(1000)
+
+            // Export data using Neon queries
+            const [profile, bookings, follows, notifications] = await Promise.all([
+                getProfile(userId),
+                neonQuery(`SELECT * FROM bookings WHERE sender_id = $1 OR target_id = $1 LIMIT 1000`, [userId]),
+                neonQuery(`SELECT * FROM follows WHERE follower_id = $1 OR following_id = $1 LIMIT 1000`, [userId]),
+                neonQuery(`SELECT * FROM notifications WHERE user_id = $1 LIMIT 1000`, [userId])
             ]);
-            
-            const { data: subProfiles } = await supabase
-                .from('sub_profiles')
-                .select('*')
-                .eq('user_id', userId);
-            
+
             const exportData = {
+                profile: profile || null,
+                bookings: bookings || [],
+                follows: follows || [],
+                notifications: notifications || [],
                 exportDate: new Date().toISOString(),
-                userId: userId,
-                profile: profile.data || null,
-                wallet: wallet.data || null,
-                subProfiles: subProfiles || [],
-                bookings: bookings.data || [],
-                reviews: reviews.data || [],
-                follows: follows.data || [],
-                notifications: notifications.data || []
+                userId,
+                email: user.email
             };
-            
-            const jsonString = JSON.stringify(exportData, null, 2);
-            const blob = new Blob([jsonString], { type: 'application/json' });
+
+            // Create and download JSON file
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `seshnx_data_export_${new Date().toISOString().slice(0,10)}.json`;
+            link.download = `seshnx-export-${userId}-${Date.now()}.json`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            
-            alert("Your data has been downloaded successfully.");
-        } catch (e) {
-            console.error("Data export error:", e);
-            alert("Failed to export data: " + (e.message || "Unknown error"));
+
+            alert("Data exported successfully!");
+        } catch (error) {
+            console.error('Export error:', error);
+            alert("Failed to export data: " + error.message);
+        } finally {
+            setExporting(false);
         }
-        setExporting(false);
     };
 
     const handleDeleteAccount = async () => {
-        if (deleteConfirm !== 'DELETE' || !supabase || !user) return;
+        if (deleteConfirm !== 'DELETE' || !user) {
+            alert("Please type 'DELETE' to confirm.");
+            return;
+        }
         setIsDeleting(true);
         const userId = user.id;
-        
+
         try {
-            const relatedTables = [
-                'profiles', 'wallets', 'notifications', 'saved_posts',
-                'followers', 'following', 'posts', 'comments', 'bookings',
-                'marketplace_items', 'distribution_releases', 'equipment_submissions',
-                'safe_exchange_transactions', 'shipping_transactions'
-            ];
-            
-            for (const table of relatedTables) {
-                try {
-                    const deleteQueries = [];
-                    
-                    if (table === 'profiles' || table === 'wallets') {
-                        deleteQueries.push(supabase.from(table).delete().eq('id', userId));
-                    } else if (table === 'notifications' || table === 'saved_posts') {
-                        deleteQueries.push(supabase.from(table).delete().eq('user_id', userId));
-                    } else if (table === 'followers') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('follower_id', userId),
-                            supabase.from(table).delete().eq('following_id', userId)
-                        );
-                    } else if (table === 'following') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('user_id', userId),
-                            supabase.from(table).delete().eq('target_id', userId)
-                        );
-                    } else if (table === 'posts' || table === 'comments') {
-                        deleteQueries.push(supabase.from(table).delete().eq('user_id', userId));
-                    } else if (table === 'bookings') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('sender_id', userId),
-                            supabase.from(table).delete().eq('target_id', userId)
-                        );
-                    } else if (table === 'marketplace_items') {
-                        deleteQueries.push(supabase.from(table).delete().eq('seller_id', userId));
-                    } else if (table === 'distribution_releases') {
-                        deleteQueries.push(supabase.from(table).delete().eq('uploader_id', userId));
-                    } else if (table === 'equipment_submissions') {
-                        deleteQueries.push(supabase.from(table).delete().eq('submitted_by', userId));
-                    } else if (table === 'safe_exchange_transactions') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('buyer_id', userId),
-                            supabase.from(table).delete().eq('seller_id', userId)
-                        );
-                    } else if (table === 'shipping_transactions') {
-                        deleteQueries.push(
-                            supabase.from(table).delete().eq('buyer_id', userId),
-                            supabase.from(table).delete().eq('seller_id', userId)
-                        );
-                    }
-                    
-                    await Promise.all(deleteQueries);
-                } catch (tableError) {
-                    console.warn(`Could not delete from ${table}:`, tableError);
-                }
-            }
-            
-            const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
-            
-            if (deleteError) {
-                console.warn("Admin delete failed, using signOut:", deleteError);
-                await supabase.auth.signOut();
-                alert("Account data has been deleted. Please contact support to complete account deletion if needed.");
-            } else {
-                alert("Account successfully deleted.");
-            }
-            
+            // Delete from database tables using Neon
+            await neonQuery(`DELETE FROM profiles WHERE id = $1`, [userId]);
+            await neonQuery(`DELETE FROM notifications WHERE user_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM saved_posts WHERE user_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM follows WHERE follower_id = $1 OR following_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM bookings WHERE sender_id = $1 OR target_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM posts WHERE user_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM comments WHERE user_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM marketplace_items WHERE seller_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM distribution_releases WHERE uploader_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM equipment_submissions WHERE submitted_by = $1`, [userId]);
+
+            // Note: Clerk user deletion should be handled through Clerk Admin API or Dashboard
+            // For security, account deletion requires admin privileges
+            alert("Account data has been deleted. Please contact support to complete account deletion from Clerk.");
+
             setShowDeleteModal(false);
             setDeleteConfirm('');
             window.location.href = '/';
-            
+
         } catch (error) {
             console.error("Deletion Error:", error);
             alert("Failed to delete account: " + (error.message || "Unknown error. Please contact support."));

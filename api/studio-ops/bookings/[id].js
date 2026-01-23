@@ -1,4 +1,5 @@
 import { query } from '../../../src/config/neon.js';
+import { syncBookingToConvex, removeBookingFromConvex } from '../../../src/utils/convexSync.js';
 
 /**
  * Individual Booking API
@@ -137,6 +138,13 @@ async function updateBooking(req, res, bookingId) {
 
         const result = await query(sql, params);
 
+        // Sync to Convex for real-time updates
+        if (result && result[0]) {
+            syncBookingToConvex(result[0]).catch(err =>
+                console.error('Failed to sync booking to Convex:', err)
+            );
+        }
+
         return res.status(200).json({
             success: true,
             data: result[0],
@@ -171,6 +179,11 @@ async function deleteBooking(req, res, bookingId) {
 
         // Delete booking
         await query('DELETE FROM bookings WHERE id = $1', [bookingId]);
+
+        // Remove from Convex
+        removeBookingFromConvex(bookingId).catch(err =>
+            console.error('Failed to remove booking from Convex:', err)
+        );
 
         return res.status(200).json({
             success: true,

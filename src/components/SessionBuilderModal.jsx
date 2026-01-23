@@ -63,7 +63,7 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
         try {
             // Handle payment if total > 0
             let paymentIntentId = null;
-            
+
             if (finalTotal > 0) {
                 try {
                     const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
@@ -82,7 +82,7 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
                             }))
                         }),
                     });
-                    
+
                     if (!response.ok) {
                         console.warn("Payment initialization failed, continuing without payment");
                         // Continue without payment - session can still be created
@@ -98,36 +98,33 @@ export default function SessionBuilderModal({ user, userData, cart, onRemoveFrom
                 }
             }
 
-            if (!supabase) throw new Error('Supabase not initialized');
-            
-            const userId = user?.id || user?.uid;
+            const userId = userData?.id || user?.id || user?.uid;
             const groupId = `session_${Date.now()}`;
+            const endTime = data.time ? new Date(`2000-01-01T${data.time}`).getTime() + (data.duration * 60 * 60 * 1000) : null;
+            const endTimeString = endTime ? new Date(endTime).toTimeString().slice(0, 5) : null;
+
+            // Create bookings for each item in the cart
             const bookingPromises = lineItems.map(item => {
-                return supabase
-                    .from('bookings')
-                    .insert({
-                        group_id: groupId,
-                        session_name: data.sessionName,
-                        sender_id: userId,
-                        sender_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' : 'User',
-                        target_id: item.id,
-                        target_name: `${item.firstName} ${item.lastName}`,
-                        service_type: item.accountTypes?.[0] || 'Session',
+                return fetch('/api/studio-ops/bookings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        studioId: item.id,
+                        senderId: userId,
+                        type: item.accountTypes?.[0] || 'Session',
                         date: data.date || 'Flexible',
-                        time: data.time || 'Flexible',
-                        duration: data.duration,
-                        offer_amount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
-                        status: 'Pending',
-                        payment_intent_id: paymentIntentId,
-                        timestamp: new Date().toISOString(),
-                        type: 'GroupSession'
-                    });
+                        startTime: data.time || 'Flexible',
+                        endTime: endTimeString || 'Flexible',
+                        offerAmount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
+                        notes: `Group Session: ${data.sessionName}`
+                    })
+                });
             });
 
             await Promise.all(bookingPromises);
 
             toast.success(`Session Created!`, { id: toastId });
-            onComplete(); 
+            onComplete();
 
         } catch (error) {
             console.error("Booking Error:", error);

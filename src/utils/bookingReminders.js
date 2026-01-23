@@ -1,11 +1,10 @@
-import { supabase } from '../config/supabase';
+import { getUser } from '../config/neonQueries.js';
+import { query as neonQuery } from '../config/neon.js';
 
 /**
  * Schedule automated booking reminders
  */
 export const scheduleBookingReminder = async (booking, reminderHours = [24, 2]) => {
-    if (!supabase) return;
-
     try {
         const bookingDate = new Date(booking.date);
         if (isNaN(bookingDate.getTime()) || booking.date === 'Flexible') {
@@ -25,14 +24,26 @@ export const scheduleBookingReminder = async (booking, reminderHours = [24, 2]) 
             };
         });
 
-        // Insert reminders into booking_reminders table
-        const { error } = await supabase
-            .from('booking_reminders')
-            .insert(reminders);
+        // Insert reminders into booking_reminders table using Neon
+        await Promise.all(
+            reminders.map(reminder =>
+                neonQuery(`
+                    INSERT INTO booking_reminders (
+                        booking_id, user_id, reminder_type, reminder_hours,
+                        scheduled_for, sent, created_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                `, [
+                    reminder.booking_id,
+                    reminder.user_id,
+                    reminder.reminder_type,
+                    reminder.reminder_hours,
+                    reminder.scheduled_for,
+                    reminder.sent,
+                    reminder.created_at
+                ])
+            )
+        ).catch(err => console.log('Reminder scheduling error (non-critical):', err.message));
 
-        if (error) {
-            console.log('Reminder scheduling error (non-critical):', error.message);
-        }
     } catch (error) {
         console.log('Reminder scheduling error (non-critical):', error.message);
     }
@@ -42,17 +53,15 @@ export const scheduleBookingReminder = async (booking, reminderHours = [24, 2]) 
  * Send booking reminder
  */
 export const sendBookingReminder = async (reminder) => {
-    if (!supabase) return;
-
     try {
-        // Get booking details
-        const { data: booking, error: bookingError } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('id', reminder.booking_id)
-            .single();
+        // Get booking details using Neon
+        const bookings = await neonQuery(`
+            SELECT * FROM bookings WHERE id = $1
+        `, [reminder.booking_id]);
 
-        if (bookingError || !booking) {
+        const booking = bookings?.[0];
+
+        if (!booking) {
             console.log('Booking not found for reminder');
             return;
         }
@@ -60,33 +69,31 @@ export const sendBookingReminder = async (reminder) => {
         // Only send if booking is still confirmed
         if (booking.status !== 'Confirmed') {
             // Mark reminder as cancelled
-            await supabase
-                .from('booking_reminders')
-                .update({ sent: true, cancelled: true })
-                .eq('id', reminder.id);
+            await neonQuery(`
+                UPDATE booking_reminders
+                SET sent = true, cancelled = true
+                WHERE id = $1
+            `, [reminder.id]);
             return;
         }
 
         // Send notification
         const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
-        
-        // Email reminder
-        const { data: userData } = await supabase
-            .from('users')
-            .select('email')
-            .eq('id', reminder.user_id)
-            .single();
 
-        if (userData?.email) {
-            const hoursText = reminder.reminder_hours >= 24 
+        // Get user email from database using Neon
+        const userData = await getUser(reminder.user_id);
+        const userEmail = userData?.email;
+
+        if (userEmail) {
+            const hoursText = reminder.reminder_hours >= 24
                 ? `${Math.floor(reminder.reminder_hours / 24)} day(s)`
                 : `${reminder.reminder_hours} hour(s)`;
-            
+
             await fetch(`${apiUrl}/notifications/send-email`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    to: userData.email,
+                    to: userEmail,
                     subject: `Reminder: Booking in ${hoursText}`,
                     html: `
                         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -118,10 +125,11 @@ export const sendBookingReminder = async (reminder) => {
         }).catch(err => console.log('Reminder push error:', err));
 
         // Mark reminder as sent
-        await supabase
-            .from('booking_reminders')
-            .update({ sent: true, sent_at: new Date().toISOString() })
-            .eq('id', reminder.id);
+        await neonQuery(`
+            UPDATE booking_reminders
+            SET sent = true, sent_at = NOW()
+            WHERE id = $1
+        `, [reminder.id]);
 
     } catch (error) {
         console.error('Send reminder error:', error);

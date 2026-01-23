@@ -2,6 +2,11 @@
  * Push notification API endpoint
  * Supports Firebase Cloud Messaging (FCM) or Web Push API
  */
+import { neon } from '@neondatabase/serverless';
+
+const databaseUrl = process.env.VITE_NEON_DATABASE_URL || process.env.NEON_DATABASE_URL;
+const sql = neon(databaseUrl);
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -15,35 +20,24 @@ export default async function handler(req, res) {
     }
 
     // Get user's push subscription tokens from database
-    // This assumes a push_subscriptions table exists
-    const { createClient } = require('@supabase/supabase-js');
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL,
-      process.env.SUPABASE_SERVICE_ROLE_KEY
-    );
-
-    const { data: subscriptions, error } = await supabase
-      .from('push_subscriptions')
-      .select('endpoint, keys')
-      .eq('user_id', userId)
-      .eq('active', true);
-
-    if (error) {
-      console.error('Error fetching push subscriptions:', error);
-      return res.status(500).json({ error: 'Failed to fetch subscriptions' });
-    }
+    const subscriptions = await sql`
+      SELECT endpoint, keys
+      FROM push_subscriptions
+      WHERE user_id = ${userId}
+      AND active = true
+    `;
 
     if (!subscriptions || subscriptions.length === 0) {
-      return res.status(200).json({ 
-        success: true, 
+      return res.status(200).json({
+        success: true,
         message: 'No active push subscriptions found',
-        sent: 0 
+        sent: 0
       });
     }
 
     // Send push notifications using Web Push API
     const webpush = require('web-push');
-    
+
     // Set VAPID keys (should be in environment variables)
     webpush.setVapidDetails(
       process.env.VAPID_SUBJECT || 'mailto:notifications@seshnx.com',

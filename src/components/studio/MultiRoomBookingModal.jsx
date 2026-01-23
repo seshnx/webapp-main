@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Plus, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { query as neonQuery } from '../../config/neon.js';
 
 /**
  * MultiRoomBookingModal - Assign booking to multiple rooms
@@ -47,7 +48,7 @@ export default function MultiRoomBookingModal({ booking, rooms, onClose, onSucce
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!booking || selectedRooms.length === 0 || !supabase) return;
+        if (!booking || selectedRooms.length === 0) return;
 
         setLoading(true);
         const toastId = toast.loading('Assigning rooms...');
@@ -69,11 +70,22 @@ export default function MultiRoomBookingModal({ booking, rooms, onClose, onSucce
                 };
             });
 
-            const { error } = await supabase
-                .from('room_bookings')
-                .insert(roomBookings);
-
-            if (error) throw error;
+            // Insert room bookings using Neon
+            await Promise.all(
+                roomBookings.map(rb =>
+                    neonQuery(`
+                        INSERT INTO room_bookings (
+                            booking_id, room_id, room_name, start_time, end_time
+                        ) VALUES ($1, $2, $3, $4, $5)
+                    `, [
+                        rb.booking_id,
+                        rb.room_id,
+                        rb.room_name,
+                        rb.start_time,
+                        rb.end_time
+                    ])
+                )
+            );
 
             toast.success(`${selectedRooms.length} room(s) assigned!`, { id: toastId });
             onSuccess?.();

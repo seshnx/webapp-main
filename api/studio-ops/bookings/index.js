@@ -1,4 +1,5 @@
 import { query } from '../../../src/config/neon.js';
+import { syncBookingToConvex } from '../../../src/utils/convexSync.js';
 
 /**
  * Studio Bookings API
@@ -18,21 +19,24 @@ export default async function handler(req, res) {
 
 /**
  * GET /api/studio-ops/bookings
- * Get bookings for a studio
+ * Get bookings
  *
  * Query params:
- * - studioId: Studio UUID (required)
+ * - studioId: Studio UUID (optional)
+ * - senderId: Sender UUID (optional)
+ * - targetId: Target/studio UUID (optional)
  * - clientId: Filter by client UUID (optional)
  * - status: Filter by status (optional)
  * - limit: Max number of results (optional)
  */
 async function getBookings(req, res) {
     try {
-        const { studioId, clientId, status, limit } = req.query;
+        const { studioId, senderId, targetId, clientId, status, limit } = req.query;
 
-        if (!studioId) {
+        // Require at least one ID filter
+        if (!studioId && !senderId && !targetId) {
             return res.status(400).json({
-                error: 'Missing required parameter: studioId'
+                error: 'Missing required parameter: studioId, senderId, or targetId'
             });
         }
 
@@ -60,26 +64,45 @@ async function getBookings(req, res) {
             FROM bookings b
             LEFT JOIN profiles p_sender ON p_sender.id = b.sender_id
             LEFT JOIN venues v ON v.id = b.venue_id
-            WHERE b.studio_owner_id = $1
+            WHERE 1=1
         `;
-        const params = [studioId];
+        const params = [];
+        let paramIndex = 1;
+
+        // Filter by studio ID
+        if (studioId) {
+            sql += ` AND b.studio_owner_id = $${paramIndex++}`;
+            params.push(studioId);
+        }
+
+        // Filter by sender ID
+        if (senderId) {
+            sql += ` AND b.sender_id = $${paramIndex++}`;
+            params.push(senderId);
+        }
+
+        // Filter by target ID (alias for studio_owner_id)
+        if (targetId) {
+            sql += ` AND b.studio_owner_id = $${paramIndex++}`;
+            params.push(targetId);
+        }
 
         // Filter by client
         if (clientId) {
-            sql += ` AND b.sender_id = $${params.length + 1}`;
+            sql += ` AND b.sender_id = $${paramIndex++}`;
             params.push(clientId);
         }
 
         // Filter by status
         if (status) {
-            sql += ` AND b.status = $${params.length + 1}`;
+            sql += ` AND b.status = $${paramIndex++}`;
             params.push(status);
         }
 
         sql += ` ORDER BY b.date DESC, b.start_time DESC`;
 
         if (limit) {
-            sql += ` LIMIT $${params.length + 1}`;
+            sql += ` LIMIT $${paramIndex++}`;
             params.push(parseInt(limit));
         }
 
@@ -97,7 +120,8 @@ async function getBookings(req, res) {
                 duration: b.duration_hours,
                 totalPrice: b.offer_amount,
                 roomName: b.venue_name,
-                clientName: b.client_name || b.client_username
+                clientName: b.client_name || b.client_username,
+                target_id: b.studio_owner_id
             }))
         });
     } catch (error) {
@@ -183,6 +207,14 @@ async function createBooking(req, res) {
         ];
 
         const result = await query(sql, params);
+
+        // Sync to Convex for real-time updates
+        if (result && result[0]) {
+            // Non-blocking sync to Convex
+            syncBookingToConvex(result[0]).catch(err =>
+                console.error('Failed to sync booking to Convex:', err)
+            );
+        }
 
         return res.status(201).json({
             success: true,

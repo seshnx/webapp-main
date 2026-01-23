@@ -1,51 +1,44 @@
-import { supabase } from '../config/supabase';
+import { createNotification, getUser } from '../config/neonQueries.js';
+import { query as neonQuery } from '../config/neon.js';
 
 /**
  * Send notification to user about booking status change
  * This can be extended to send emails, push notifications, etc.
  */
 export const notifyBookingStatusChange = async (booking, newStatus, userId) => {
-    if (!supabase) return;
-
     try {
-        // Create notification record in database
-        // Uses the notifications table schema from sql/social_feed_module.sql
+        // Create notification record in database using Neon
         const targetUserId = booking.sender_id || booking.client_id;
         const studioUserId = booking.studio_owner_id || booking.target_id;
-        
+
         if (!targetUserId) {
             console.warn('Cannot send notification: no target user ID');
             return;
         }
 
+        // Map notification schema from old to new format
         const notification = {
             user_id: targetUserId,
-            type: 'booking', // Matches schema CHECK constraint
-            actor_id: studioUserId,
-            actor_name: booking.target_name || booking.studio_name || 'Studio',
-            target_type: 'booking',
-            target_id: booking.id,
+            type: 'booking',
             title: `Booking ${newStatus}`,
-            body: `Your booking with ${booking.target_name || 'the studio'} has been ${newStatus.toLowerCase()}.`,
-            link: `/bookings/${booking.id}`,
-            read: false,
-            action_taken: newStatus.toLowerCase(), // 'confirmed', 'cancelled', 'completed'
-            created_at: new Date().toISOString()
+            message: `Your booking with ${booking.target_name || 'the studio'} has been ${newStatus.toLowerCase()}.`,
+            reference_type: 'booking',
+            reference_id: booking.id,
+            metadata: {
+                actor_id: studioUserId,
+                actor_name: booking.target_name || booking.studio_name || 'Studio',
+                link: `/bookings/${booking.id}`,
+                action_taken: newStatus.toLowerCase(),
+                booking_status: newStatus
+            }
         };
 
-        // Try to insert notification (will fail gracefully if table doesn't exist)
+        // Try to insert notification using Neon
         try {
-            const { error } = await supabase
-                .from('notifications')
-                .insert(notification);
-            
-            if (error) {
-                // Log but don't throw - notifications are non-critical
-                console.log('Notification insert error (non-critical):', error.message);
-            }
+            await createNotification(notification);
         } catch (err) {
-            // Notifications table may not exist yet - that's okay
-            console.log('Notifications table not available:', err.message);
+            // Log but don't throw - notifications are non-critical
+            console.log('Notification insert error (non-critical):', err.message);
         }
 
         // Send email notification
@@ -61,20 +54,17 @@ export const notifyBookingStatusChange = async (booking, newStatus, userId) => {
                     <p><a href="${window.location.origin}/bookings/${booking.id}" style="background: #3B82F6; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">View Booking</a></p>
                 </div>
             `;
-            
-            // Get user email from database
-            const { data: userData } = await supabase
-                .from('users')
-                .select('email')
-                .eq('id', targetUserId)
-                .single();
 
-            if (userData?.email) {
+            // Get user email from database using Neon
+            const userData = await getUser(targetUserId);
+            const userEmail = userData?.email;
+
+            if (userEmail) {
                 await fetch(`${apiUrl}/notifications/send-email`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        to: userData.email,
+                        to: userEmail,
                         subject: emailSubject,
                         html: emailHtml,
                         text: `Your booking with ${booking.target_name || 'the studio'} has been ${newStatus.toLowerCase()}.`
@@ -116,8 +106,6 @@ export const notifyBookingStatusChange = async (booking, newStatus, userId) => {
  * Check for booking conflicts before confirming
  */
 export const checkBookingConflicts = async (booking, userId) => {
-    if (!supabase) return { hasConflict: false, conflicts: [] };
-
     try {
         // Only check if booking has a valid date
         if (!booking.date || booking.date === 'Flexible') {
@@ -129,24 +117,20 @@ export const checkBookingConflicts = async (booking, userId) => {
             return { hasConflict: false, conflicts: [] };
         }
 
-        // Check for other confirmed bookings at the same time
-        const { data: conflictingBookings, error } = await supabase
-            .from('bookings')
-            .select('id, status, date, time, duration, sender_name')
-            .or(`studio_owner_id.eq.${userId},target_id.eq.${userId}`)
-            .eq('status', 'Confirmed')
-            .neq('id', booking.id);
-
-        if (error) {
-            console.error('Error checking conflicts:', error);
-            return { hasConflict: false, conflicts: [] };
-        }
+        // Check for other confirmed bookings at the same time using Neon
+        const conflictingBookings = await neonQuery(`
+            SELECT id, status, date, time, duration, sender_name
+            FROM bookings
+            WHERE (studio_owner_id = $1 OR target_id = $1)
+            AND status = 'Confirmed'
+            AND id != $2
+        `, [userId, booking.id]);
 
         // Advanced conflict detection: Check for date AND time overlaps
         const conflicts = (conflictingBookings || []).filter(cb => {
             const cbDate = parseBookingDate(cb.date);
             if (!cbDate) return false;
-            
+
             // Check if same date
             if (cbDate.toDateString() !== bookingDate.toDateString()) {
                 return false;
@@ -213,10 +197,8 @@ const parseBookingDate = (dateValue) => {
  * Track booking history/audit log
  */
 export const trackBookingHistory = async (bookingId, oldStatus, newStatus, changedBy, notes = '') => {
-    if (!supabase) return;
-
     try {
-        // Insert into booking_history table (create if doesn't exist)
+        // Insert into booking_history table using Neon
         const historyEntry = {
             booking_id: bookingId,
             old_status: oldStatus,
@@ -226,14 +208,19 @@ export const trackBookingHistory = async (bookingId, oldStatus, newStatus, chang
             created_at: new Date().toISOString()
         };
 
-        const { error } = await supabase
-            .from('booking_history')
-            .insert(historyEntry);
+        await neonQuery(`
+            INSERT INTO booking_history (
+                booking_id, old_status, new_status, changed_by, notes, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+        `, [
+            historyEntry.booking_id,
+            historyEntry.old_status,
+            historyEntry.new_status,
+            historyEntry.changed_by,
+            historyEntry.notes,
+            historyEntry.created_at
+        ]);
 
-        if (error) {
-            // Table might not exist - that's okay, log it
-            console.log('Booking history table not available:', error.message);
-        }
     } catch (error) {
         console.log('Booking history tracking error (non-critical):', error.message);
     }
@@ -317,9 +304,9 @@ export const canCancelBooking = (booking, cancellationPolicy) => {
     // Check policy restrictions
     const policy = cancellationPolicy || {};
     if (policy.noCancellationAfterHours && hoursUntilBooking < policy.noCancellationAfterHours) {
-        return { 
-            canCancel: false, 
-            reason: `Cancellations not allowed within ${policy.noCancellationAfterHours} hours of booking` 
+        return {
+            canCancel: false,
+            reason: `Cancellations not allowed within ${policy.noCancellationAfterHours} hours of booking`
         };
     }
 

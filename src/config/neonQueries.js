@@ -496,16 +496,17 @@ export async function createPost(postData) {
   const {
     user_id,
     content,
-    media_urls = [],
+    media = [],
     mentions = [],
     hashtags = [],
-    metadata = {},
+    location = null,
+    visibility = 'public',
   } = postData;
 
   const sql = `
     INSERT INTO posts (
-      user_id, content, media_urls, mentions, hashtags, metadata
-    ) VALUES ($1, $2, $3, $4, $5, $6)
+      user_id, content, media, mentions, hashtags, location, visibility
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
     RETURNING *
   `;
 
@@ -514,10 +515,11 @@ export async function createPost(postData) {
     [
       user_id,
       content,
-      JSON.stringify(media_urls),
-      JSON.stringify(mentions),
-      JSON.stringify(hashtags),
-      JSON.stringify(metadata),
+      JSON.stringify(media),
+      mentions,
+      hashtags,
+      location ? JSON.stringify(location) : null,
+      visibility,
     ],
     'createPost'
   );
@@ -1584,6 +1586,52 @@ export async function updateRosterEntry(rosterId, updates) {
 }
 
 /**
+ * Delete roster entry
+ *
+ * @param {string} rosterId - Roster entry ID
+ * @param {string} labelId - Label ID (for verification)
+ * @returns {Promise<boolean>} True if deleted
+ */
+export async function deleteRosterEntry(rosterId, labelId) {
+  // First verify the roster entry belongs to this label
+  const verifyResult = await executeQuery(
+    'SELECT id FROM label_roster WHERE id = $1 AND label_id = $2',
+    [rosterId, labelId],
+    'verifyRosterEntry'
+  );
+
+  if (!verifyResult || verifyResult.length === 0) {
+    throw new Error('Roster entry not found or access denied');
+  }
+
+  // Delete the entry
+  const result = await executeQuery(
+    'DELETE FROM label_roster WHERE id = $1 RETURNING id',
+    [rosterId],
+    'deleteRosterEntry'
+  );
+
+  return result.length > 0;
+}
+
+/**
+ * Check if artist is already on label's roster
+ *
+ * @param {string} labelId - Label ID
+ * @param {string} artistId - Artist ID
+ * @returns {Promise<boolean>} True if artist is on roster
+ */
+export async function isArtistOnRoster(labelId, artistId) {
+  const result = await executeQuery(
+    'SELECT id FROM label_roster WHERE label_id = $1 AND artist_id = $2',
+    [labelId, artistId],
+    'isArtistOnRoster'
+  );
+
+  return result.length > 0;
+}
+
+/**
  * Create release
  *
  * @param {object} releaseData - Release data
@@ -2114,6 +2162,844 @@ export async function getEnrollments(userId) {
 }
 
 // =====================================================
+// EQUIPMENT DATABASE QUERIES
+// =====================================================
+
+/**
+ * Get all verified equipment items grouped by category
+ *
+ * @returns {Promise<Array>} All verified equipment items
+ *
+ * @example
+ * const equipment = await getAllEquipment();
+ */
+export async function getAllEquipment() {
+  const sql = `
+    SELECT
+      id,
+      name,
+      brand,
+      model,
+      category,
+      subcategory,
+      description,
+      specifications,
+      search_tokens,
+      verified,
+      created_at
+    FROM equipment_database
+    WHERE verified = true
+    ORDER BY category, subcategory, brand, name
+  `;
+
+  return executeQuery(sql, [], 'getAllEquipment');
+}
+
+/**
+ * Get equipment by category
+ *
+ * @param {string} category - Equipment category
+ * @returns {Promise<Array>} Equipment items in category
+ *
+ * @example
+ * const mics = await getEquipmentByCategory('Microphones & Transducers');
+ */
+export async function getEquipmentByCategory(category) {
+  const sql = `
+    SELECT * FROM equipment_database
+    WHERE category = $1 AND verified = true
+    ORDER BY subcategory, brand, name
+  `;
+
+  return executeQuery(sql, [category], 'getEquipmentByCategory');
+}
+
+/**
+ * Get equipment by subcategory
+ *
+ * @param {string} category - Equipment category
+ * @param {string} subcategory - Equipment subcategory
+ * @returns {Promise<Array>} Equipment items
+ *
+ * @example
+ * const dynamics = await getEquipmentBySubcategory('Microphones & Transducers', 'Dynamic Microphones');
+ */
+export async function getEquipmentBySubcategory(category, subcategory) {
+  const sql = `
+    SELECT * FROM equipment_database
+    WHERE category = $1 AND subcategory = $2 AND verified = true
+    ORDER BY brand, name
+  `;
+
+  return executeQuery(sql, [category, subcategory], 'getEquipmentBySubcategory');
+}
+
+/**
+ * Search equipment by name, brand, or model
+ *
+ * @param {string} searchTerm - Search term
+ * @param {number} limit - Max results (default: 50)
+ * @returns {Promise<Array>} Matching equipment items
+ *
+ * @example
+ * const results = await searchEquipment('Neumann');
+ * const results = await searchEquipment('SM58', 20);
+ */
+export async function searchEquipment(searchTerm, limit = 50) {
+  const sql = `
+    SELECT
+      id,
+      name,
+      brand,
+      model,
+      category,
+      subcategory,
+      description
+    FROM equipment_database
+    WHERE verified = true
+      AND (
+        name ILIKE $1
+        OR brand ILIKE $1
+        OR model ILIKE $1
+        OR $1 = ANY(search_tokens)
+      )
+    ORDER BY
+      CASE
+        WHEN name ILIKE $1 THEN 1
+        WHEN brand ILIKE $1 THEN 2
+        WHEN model ILIKE $1 THEN 3
+        ELSE 4
+      END,
+      name
+    LIMIT $2
+  `;
+
+  return executeQuery(sql, [`%${searchTerm}%`, limit], 'searchEquipment');
+}
+
+/**
+ * Get equipment by ID
+ *
+ * @param {string} equipmentId - Equipment ID
+ * @returns {Promise<object|null>} Equipment item or null
+ *
+ * @example
+ * const equipment = await getEquipmentById('uuid-123');
+ */
+export async function getEquipmentById(equipmentId) {
+  const sql = `
+    SELECT * FROM equipment_database
+    WHERE id = $1
+  `;
+
+  const result = await executeQuery(sql, [equipmentId], 'getEquipmentById');
+  return result[0] || null;
+}
+
+/**
+ * Get equipment grouped by category and subcategory
+ * Returns a nested structure for autocomplete components
+ *
+ * @returns {Promise<object>} Equipment grouped by category and subcategory
+ *
+ * @example
+ * const grouped = await getEquipmentGrouped();
+ * // Returns: {
+ * //   "Microphones & Transducers": {
+ * //     "Dynamic Microphones": [ ...items ],
+ * //     "Condenser Microphones": { ... }
+ * //   }
+ * // }
+ */
+export async function getEquipmentGrouped() {
+  const sql = `
+    SELECT
+      category,
+      subcategory,
+      id,
+      name,
+      brand,
+      model,
+      description,
+      specifications
+    FROM equipment_database
+    WHERE verified = true
+    ORDER BY category, subcategory, brand, name
+  `;
+
+  const items = await executeQuery(sql, [], 'getEquipmentGrouped');
+
+  // Group by category and subcategory
+  const grouped = {};
+  items.forEach(item => {
+    if (!grouped[item.category]) {
+      grouped[item.category] = {};
+    }
+    if (!grouped[item.category][item.subcategory]) {
+      grouped[item.category][item.subcategory] = [];
+    }
+    grouped[item.category][item.subcategory].push(item);
+  });
+
+  return grouped;
+}
+
+/**
+ * Get all equipment categories
+ *
+ * @returns {Promise<Array>} List of unique categories
+ *
+ * @example
+ * const categories = await getEquipmentCategories();
+ * // Returns: ["Microphones & Transducers", "Audio Interfaces", ...]
+ */
+export async function getEquipmentCategories() {
+  const sql = `
+    SELECT DISTINCT category
+    FROM equipment_database
+    WHERE verified = true
+    ORDER BY category
+  `;
+
+  const result = await executeQuery(sql, [], 'getEquipmentCategories');
+  return result.map(r => r.category);
+}
+
+/**
+ * Get subcategories for a category
+ *
+ * @param {string} category - Equipment category
+ * @returns {Promise<Array>} List of subcategories
+ *
+ * @example
+ * const subcats = await getEquipmentSubcategories('Microphones & Transducers');
+ */
+export async function getEquipmentSubcategories(category) {
+  const sql = `
+    SELECT DISTINCT subcategory
+    FROM equipment_database
+    WHERE category = $1 AND verified = true
+    ORDER BY subcategory
+  `;
+
+  const result = await executeQuery(sql, [category], 'getEquipmentSubcategories');
+  return result.map(r => r.subcategory);
+}
+
+// =====================================================
+// EQUIPMENT SUBMISSIONS (Community Verification)
+// =====================================================
+
+/**
+ * Get pending equipment submissions
+ *
+ * @param {number} limit - Max results (default: 20)
+ * @returns {Promise<Array>} Pending submissions
+ */
+export async function getPendingSubmissions(limit = 20) {
+  const sql = `
+    SELECT * FROM equipment_submissions
+    WHERE status = 'pending'
+    ORDER BY timestamp DESC
+    LIMIT $1
+  `;
+
+  return executeQuery(sql, [limit], 'getPendingSubmissions');
+}
+
+/**
+ * Create equipment submission
+ *
+ * @param {object} submission - Submission data
+ * @returns {Promise<object>} Created submission
+ */
+export async function createEquipmentSubmission(submission) {
+  const sql = `
+    INSERT INTO equipment_submissions (
+      brand, model, category, sub_category, specs,
+      submitted_by, submitter_name, status, votes
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    RETURNING *
+  `;
+
+  const params = [
+    submission.brand,
+    submission.model,
+    submission.category,
+    submission.subcategory || null,
+    submission.specs,
+    submission.submittedBy,
+    submission.submitterName || null,
+    submission.status || 'pending',
+    JSON.stringify(submission.votes || { yes: [], fake: [], duplicate: [] })
+  ];
+
+  const result = await executeQuery(sql, params, 'createEquipmentSubmission');
+  return result[0];
+}
+
+/**
+ * Update equipment submission votes
+ *
+ * @param {string} submissionId - Submission ID
+ * @param {object} votes - Updated votes object
+ * @returns {Promise<object>} Updated submission
+ */
+export async function updateSubmissionVotes(submissionId, votes) {
+  const sql = `
+    UPDATE equipment_submissions
+    SET votes = $2
+    WHERE id = $1
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [submissionId, JSON.stringify(votes)], 'updateSubmissionVotes');
+  return result[0];
+}
+
+/**
+ * Approve equipment submission and add to database
+ *
+ * @param {string} submissionId - Submission ID
+ * @param {string} verifiedBy - User ID of verifier
+ * @returns {Promise<object>} Approved submission
+ */
+export async function approveEquipmentSubmission(submissionId, verifiedBy) {
+  // First get the submission
+  const submission = await executeQuery(
+    'SELECT * FROM equipment_submissions WHERE id = $1',
+    [submissionId],
+    'getSubmissionForApproval'
+  );
+
+  if (!submission[0]) {
+    throw new Error('Submission not found');
+  }
+
+  const sub = submission[0];
+
+  // Add to equipment database
+  const equipment = await executeQuery(
+    `INSERT INTO equipment_database (
+      name, brand, model, category, subcategory, verified, verified_by, added_by
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    RETURNING *`,
+    [sub.model, sub.brand, sub.model, sub.category, sub.sub_category, true, [verifiedBy], sub.submitted_by],
+    'approveSubmission'
+  );
+
+  // Update submission status
+  await executeQuery(
+    "UPDATE equipment_submissions SET status = 'approved' WHERE id = $1",
+    [submissionId],
+    'updateSubmissionStatus'
+  );
+
+  return equipment[0];
+}
+
+/**
+ * Reject equipment submission
+ *
+ * @param {string} submissionId - Submission ID
+ * @returns {Promise<object>} Updated submission
+ */
+export async function rejectEquipmentSubmission(submissionId) {
+  const sql = `
+    UPDATE equipment_submissions
+    SET status = 'rejected'
+    WHERE id = $1
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [submissionId], 'rejectEquipmentSubmission');
+  return result[0];
+}
+
+// =====================================================
+// INSTRUMENT DATABASE QUERIES
+// =====================================================
+
+/**
+ * Get all verified instrument items grouped by category
+ *
+ * @returns {Promise<Array>} All verified instrument items
+ *
+ * @example
+ * const instruments = await getAllInstruments();
+ */
+export async function getAllInstruments() {
+  const sql = `
+    SELECT
+      id,
+      name,
+      brand,
+      model,
+      category,
+      subcategory,
+      type,
+      series,
+      size,
+      description,
+      specifications,
+      search_tokens,
+      verified,
+      created_at
+    FROM instrument_database
+    WHERE verified = true
+    ORDER BY category, subcategory, brand, name
+  `;
+
+  return executeQuery(sql, [], 'getAllInstruments');
+}
+
+/**
+ * Get instruments by category
+ *
+ * @param {string} category - Instrument category
+ * @returns {Promise<Array>} Instrument items in category
+ *
+ * @example
+ * const guitars = await getInstrumentsByCategory('String Instruments');
+ */
+export async function getInstrumentsByCategory(category) {
+  const sql = `
+    SELECT * FROM instrument_database
+    WHERE category = $1 AND verified = true
+    ORDER BY subcategory, brand, name
+  `;
+
+  return executeQuery(sql, [category], 'getInstrumentsByCategory');
+}
+
+/**
+ * Get instruments by subcategory
+ *
+ * @param {string} category - Instrument category
+ * @param {string} subcategory - Instrument subcategory
+ * @returns {Promise<Array>} Instrument items
+ *
+ * @example
+ * const electrics = await getInstrumentsBySubcategory('String Instruments', 'Electric Guitars');
+ */
+export async function getInstrumentsBySubcategory(category, subcategory) {
+  const sql = `
+    SELECT * FROM instrument_database
+    WHERE category = $1 AND subcategory = $2 AND verified = true
+    ORDER BY brand, name
+  `;
+
+  return executeQuery(sql, [category, subcategory], 'getInstrumentsBySubcategory');
+}
+
+/**
+ * Get instruments by brand
+ *
+ * @param {string} brand - Instrument brand
+ * @returns {Promise<Array>} Instrument items by brand
+ *
+ * @example
+ * const fenders = await getInstrumentsByBrand('Fender');
+ */
+export async function getInstrumentsByBrand(brand) {
+  const sql = `
+    SELECT * FROM instrument_database
+    WHERE brand = $1 AND verified = true
+    ORDER BY category, subcategory, name
+  `;
+
+  return executeQuery(sql, [brand], 'getInstrumentsByBrand');
+}
+
+/**
+ * Search instruments by name, brand, or model
+ *
+ * @param {string} searchTerm - Search term
+ * @param {number} limit - Max results (default: 50)
+ * @returns {Promise<Array>} Matching instrument items
+ *
+ * @example
+ * const results = await searchInstruments('Stratocaster');
+ * const results = await searchInstruments('SM58', 20);
+ */
+export async function searchInstruments(searchTerm, limit = 50) {
+  const sql = `
+    SELECT
+      id,
+      name,
+      brand,
+      model,
+      category,
+      subcategory,
+      type,
+      series,
+      size,
+      description
+    FROM instrument_database
+    WHERE verified = true
+      AND (
+        name ILIKE $1
+        OR brand ILIKE $1
+        OR model ILIKE $1
+        OR $1 = ANY(search_tokens)
+      )
+    ORDER BY
+      CASE
+        WHEN name ILIKE $1 THEN 1
+        WHEN brand ILIKE $1 THEN 2
+        WHEN model ILIKE $1 THEN 3
+        ELSE 4
+      END,
+      name
+    LIMIT $2
+  `;
+
+  return executeQuery(sql, [`%${searchTerm}%`, limit], 'searchInstruments');
+}
+
+/**
+ * Get instruments by brand and series (for cymbals and other nested categories)
+ *
+ * @param {string} category - Category (e.g., 'Percussion Instruments')
+ * @param {string} subcategory - Subcategory (e.g., 'Cymbals')
+ * @param {string} brand - Brand (e.g., 'Zildjian')
+ * @param {string} series - Series (e.g., 'K Custom')
+ * @returns {Promise<Array>} Instrument items matching brand and series
+ *
+ * @example
+ * const cymbals = await getInstrumentsBySeries('Percussion Instruments', 'Cymbals', 'Zildjian', 'K Custom');
+ */
+export async function getInstrumentsBySeries(category, subcategory, brand, series) {
+  const sql = `
+    SELECT * FROM instrument_database
+    WHERE category = $1
+      AND subcategory = $2
+      AND brand = $3
+      AND series = $4
+      AND verified = true
+    ORDER BY type, size
+  `;
+
+  return executeQuery(sql, [category, subcategory, brand, series], 'getInstrumentsBySeries');
+}
+
+/**
+ * Get instruments by type (e.g., Crash, Ride for cymbals)
+ *
+ * @param {string} category - Category
+ * @param {string} subcategory - Subcategory
+ * @param {string} brand - Brand
+ * @param {string} series - Series
+ * @param {string} type - Type
+ * @returns {Promise<Array>} Instrument items by type
+ */
+export async function getInstrumentsByType(category, subcategory, brand, series, type) {
+  const sql = `
+    SELECT * FROM instrument_database
+    WHERE category = $1
+      AND subcategory = $2
+      AND brand = $3
+      AND series = $4
+      AND type = $5
+      AND verified = true
+    ORDER BY size
+  `;
+
+  return executeQuery(sql, [category, subcategory, brand, series, type], 'getInstrumentsByType');
+}
+
+/**
+ * Get instrument by ID
+ *
+ * @param {string} instrumentId - Instrument ID
+ * @returns {Promise<object|null>} Instrument item or null
+ *
+ * @example
+ * const instrument = await getInstrumentById('uuid-123');
+ */
+export async function getInstrumentById(instrumentId) {
+  const sql = `
+    SELECT * FROM instrument_database
+    WHERE id = $1
+  `;
+
+  const result = await executeQuery(sql, [instrumentId], 'getInstrumentById');
+  return result[0] || null;
+}
+
+/**
+ * Get instrument grouped by category and subcategory
+ * Returns a nested structure for autocomplete components
+ *
+ * @returns {Promise<object>} Instruments grouped by category and subcategory
+ *
+ * @example
+ * const grouped = await getInstrumentsGrouped();
+ * // Returns: {
+ * //   "String Instruments": {
+ * //     "Electric Guitars": [ ...items ],
+ * //     "Acoustic Guitars": [ ...items ]
+ * //   }
+ * // }
+ */
+export async function getInstrumentsGrouped() {
+  const sql = `
+    SELECT
+      category,
+      subcategory,
+      id,
+      name,
+      brand,
+      model,
+      type,
+      series,
+      size,
+      description,
+      specifications
+    FROM instrument_database
+    WHERE verified = true
+    ORDER BY category, subcategory, brand, name
+  `;
+
+  const items = await executeQuery(sql, [], 'getInstrumentsGrouped');
+
+  // Group by category and subcategory
+  const grouped = {};
+  items.forEach(item => {
+    if (!grouped[item.category]) {
+      grouped[item.category] = {};
+    }
+    if (!grouped[item.category][item.subcategory]) {
+      grouped[item.category][item.subcategory] = [];
+    }
+    grouped[item.category][item.subcategory].push(item);
+  });
+
+  return grouped;
+}
+
+/**
+ * Get all instrument categories
+ *
+ * @returns {Promise<Array>} List of unique categories
+ *
+ * @example
+ * const categories = await getInstrumentCategories();
+ * // Returns: ["String Instruments", "Keyboard Instruments", ...]
+ */
+export async function getInstrumentCategories() {
+  const sql = `
+    SELECT DISTINCT category
+    FROM instrument_database
+    WHERE verified = true
+    ORDER BY category
+  `;
+
+  const result = await executeQuery(sql, [], 'getInstrumentCategories');
+  return result.map(r => r.category);
+}
+
+/**
+ * Get subcategories for a category
+ *
+ * @param {string} category - Instrument category
+ * @returns {Promise<Array>} List of subcategories
+ *
+ * @example
+ * const subcats = await getInstrumentSubcategories('String Instruments');
+ */
+export async function getInstrumentSubcategories(category) {
+  const sql = `
+    SELECT DISTINCT subcategory
+    FROM instrument_database
+    WHERE category = $1 AND verified = true
+    ORDER BY subcategory
+  `;
+
+  const result = await executeQuery(sql, [category], 'getInstrumentSubcategories');
+  return result.map(r => r.subcategory);
+}
+
+/**
+ * Get brands for a category
+ *
+ * @param {string} category - Instrument category
+ * @returns {Promise<Array>} List of brands
+ *
+ * @example
+ * const brands = await getInstrumentBrands('String Instruments');
+ */
+export async function getInstrumentBrands(category) {
+  const sql = `
+    SELECT DISTINCT brand
+    FROM instrument_database
+    WHERE category = $1 AND verified = true AND brand IS NOT NULL
+    ORDER BY brand
+  `;
+
+  const result = await executeQuery(sql, [category], 'getInstrumentBrands');
+  return result.map(r => r.brand);
+}
+
+/**
+ * Get series for a brand in a category
+ *
+ * @param {string} category - Instrument category
+ * @param {string} subcategory - Instrument subcategory
+ * @param {string} brand - Brand name
+ * @returns {Promise<Array>} List of series
+ */
+export async function getInstrumentSeries(category, subcategory, brand) {
+  const sql = `
+    SELECT DISTINCT series
+    FROM instrument_database
+    WHERE category = $1
+      AND subcategory = $2
+      AND brand = $3
+      AND verified = true
+      AND series IS NOT NULL
+    ORDER BY series
+  `;
+
+  const result = await executeQuery(sql, [category, subcategory, brand], 'getInstrumentSeries');
+  return result.map(r => r.series);
+}
+
+// =====================================================
+// INSTRUMENT SUBMISSIONS (Community Verification)
+// =====================================================
+
+/**
+ * Get pending instrument submissions
+ *
+ * @param {number} limit - Max results (default: 20)
+ * @returns {Promise<Array>} Pending submissions
+ */
+export async function getPendingInstrumentSubmissions(limit = 20) {
+  const sql = `
+    SELECT * FROM instrument_submissions
+    WHERE status = 'pending'
+    ORDER BY timestamp DESC
+    LIMIT $1
+  `;
+
+  return executeQuery(sql, [limit], 'getPendingInstrumentSubmissions');
+}
+
+/**
+ * Create instrument submission
+ *
+ * @param {object} submission - Submission data
+ * @returns {Promise<object>} Created submission
+ */
+export async function createInstrumentSubmission(submission) {
+  const sql = `
+    INSERT INTO instrument_submissions (
+      brand, model, category, sub_category, type, series, size, specs,
+      submitted_by, submitter_name, status, votes
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    RETURNING *
+  `;
+
+  const params = [
+    submission.brand,
+    submission.model,
+    submission.category,
+    submission.subcategory || null,
+    submission.type || null,
+    submission.series || null,
+    submission.size || null,
+    submission.specs,
+    submission.submittedBy,
+    submission.submitterName || null,
+    submission.status || 'pending',
+    JSON.stringify(submission.votes || { yes: [], fake: [], duplicate: [] })
+  ];
+
+  const result = await executeQuery(sql, params, 'createInstrumentSubmission');
+  return result[0];
+}
+
+/**
+ * Update instrument submission votes
+ *
+ * @param {string} submissionId - Submission ID
+ * @param {object} votes - Updated votes object
+ * @returns {Promise<object>} Updated submission
+ */
+export async function updateInstrumentSubmissionVotes(submissionId, votes) {
+  const sql = `
+    UPDATE instrument_submissions
+    SET votes = $2
+    WHERE id = $1
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [submissionId, JSON.stringify(votes)], 'updateInstrumentSubmissionVotes');
+  return result[0];
+}
+
+/**
+ * Approve instrument submission and add to database
+ *
+ * @param {string} submissionId - Submission ID
+ * @param {string} verifiedBy - User ID of verifier
+ * @returns {Promise<object>} Approved submission
+ */
+export async function approveInstrumentSubmission(submissionId, verifiedBy) {
+  // First get the submission
+  const submission = await executeQuery(
+    'SELECT * FROM instrument_submissions WHERE id = $1',
+    [submissionId],
+    'getInstrumentSubmissionForApproval'
+  );
+
+  if (!submission[0]) {
+    throw new Error('Submission not found');
+  }
+
+  const sub = submission[0];
+
+  // Add to instrument database
+  const instrument = await executeQuery(
+    `INSERT INTO instrument_database (
+      name, brand, model, category, subcategory, type, series, size,
+      verified, verified_by, added_by
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    RETURNING *`,
+    [sub.model, sub.brand, sub.model, sub.category, sub.sub_category, sub.type, sub.series, sub.size, true, [verifiedBy], sub.submitted_by],
+    'approveInstrumentSubmission'
+  );
+
+  // Update submission status
+  await executeQuery(
+    "UPDATE instrument_submissions SET status = 'approved' WHERE id = $1",
+    [submissionId],
+    'updateInstrumentSubmissionStatus'
+  );
+
+  return instrument[0];
+}
+
+/**
+ * Reject instrument submission
+ *
+ * @param {string} submissionId - Submission ID
+ * @returns {Promise<object>} Updated submission
+ */
+export async function rejectInstrumentSubmission(submissionId) {
+  const sql = `
+    UPDATE instrument_submissions
+    SET status = 'rejected'
+    WHERE id = $1
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [submissionId], 'rejectInstrumentSubmission');
+  return result[0];
+}
+
+// =====================================================
 // EXPORT QUERY OBJECT (for backward compatibility)
 // =====================================================
 
@@ -2152,6 +3038,24 @@ export const queries = {
     getStudent: `SELECT s.*, sc.name as school_name FROM students s LEFT JOIN schools sc ON sc.id = s.school_id WHERE s.user_id = $1`,
     getStaff: `SELECT ss.*, sc.name as school_name FROM school_staff ss LEFT JOIN schools sc ON sc.id = ss.school_id WHERE ss.user_id = $1`,
     getCourses: `SELECT c.* FROM courses c WHERE c.school_id = $1 ORDER BY c.created_at DESC`,
+  },
+  equipment: {
+    getAll: 'SELECT * FROM equipment_database WHERE verified = true ORDER BY category, subcategory, brand, name',
+    byCategory: 'SELECT * FROM equipment_database WHERE category = $1 AND verified = true ORDER BY subcategory, brand, name',
+    search: `SELECT id, name, brand, model, category, subcategory FROM equipment_database WHERE verified = true AND (name ILIKE $1 OR brand ILIKE $1 OR model ILIKE $1) ORDER BY name LIMIT $2`,
+    grouped: `SELECT category, subcategory, id, name, brand, model FROM equipment_database WHERE verified = true ORDER BY category, subcategory, brand, name`,
+    pendingSubmissions: 'SELECT * FROM equipment_submissions WHERE status = "pending" ORDER BY timestamp DESC LIMIT $1',
+  },
+  instruments: {
+    getAll: 'SELECT * FROM instrument_database WHERE verified = true ORDER BY category, subcategory, brand, name',
+    byCategory: 'SELECT * FROM instrument_database WHERE category = $1 AND verified = true ORDER BY subcategory, brand, name',
+    bySubcategory: 'SELECT * FROM instrument_database WHERE category = $1 AND subcategory = $2 AND verified = true ORDER BY brand, name',
+    byBrand: 'SELECT * FROM instrument_database WHERE brand = $1 AND verified = true ORDER BY category, subcategory, name',
+    search: `SELECT id, name, brand, model, category, subcategory, type, series, size FROM instrument_database WHERE verified = true AND (name ILIKE $1 OR brand ILIKE $1 OR model ILIKE $1) ORDER BY name LIMIT $2`,
+    bySeries: `SELECT * FROM instrument_database WHERE category = $1 AND subcategory = $2 AND brand = $3 AND series = $4 AND verified = true ORDER BY type, size`,
+    byType: `SELECT * FROM instrument_database WHERE category = $1 AND subcategory = $2 AND brand = $3 AND series = $4 AND type = $5 AND verified = true ORDER BY size`,
+    grouped: `SELECT category, subcategory, id, name, brand, model, type, series, size FROM instrument_database WHERE verified = true ORDER BY category, subcategory, brand, name`,
+    pendingSubmissions: 'SELECT * FROM instrument_submissions WHERE status = "pending" ORDER BY timestamp DESC LIMIT $1',
   },
 };
 
@@ -2213,7 +3117,9 @@ export default {
   getLabelDashboardMetrics,
   getDistributionStats,
   addArtistToRoster,
+  isArtistOnRoster,
   updateRosterEntry,
+  deleteRosterEntry,
   createRelease,
   updateRelease,
   getArtistCount,
@@ -2238,6 +3144,41 @@ export default {
   getStaff,
   getCourses,
   getEnrollments,
+
+  // Equipment database queries
+  getAllEquipment,
+  getEquipmentByCategory,
+  getEquipmentBySubcategory,
+  searchEquipment,
+  getEquipmentById,
+  getEquipmentGrouped,
+  getEquipmentCategories,
+  getEquipmentSubcategories,
+  getPendingSubmissions,
+  createEquipmentSubmission,
+  updateSubmissionVotes,
+  approveEquipmentSubmission,
+  rejectEquipmentSubmission,
+
+  // Instrument database queries
+  getAllInstruments,
+  getInstrumentsByCategory,
+  getInstrumentsBySubcategory,
+  getInstrumentsByBrand,
+  searchInstruments,
+  getInstrumentsBySeries,
+  getInstrumentsByType,
+  getInstrumentById,
+  getInstrumentsGrouped,
+  getInstrumentCategories,
+  getInstrumentSubcategories,
+  getInstrumentBrands,
+  getInstrumentSeries,
+  getPendingInstrumentSubmissions,
+  createInstrumentSubmission,
+  updateInstrumentSubmissionVotes,
+  approveInstrumentSubmission,
+  rejectInstrumentSubmission,
 
   // Query collection
   queries,

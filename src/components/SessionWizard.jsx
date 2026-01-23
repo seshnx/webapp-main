@@ -37,24 +37,23 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
 
     // --- STEP 2: STUDIO FETCHING ---
     const fetchStudios = async () => {
-        if (!supabase) return;
         setLoadingStudios(true);
         try {
             // Fetch all studios with Studio account type
-            const { data: profilesData, error } = await supabase
-                .from('profiles')
-                .select('id, display_name, location, account_types, city, state')
-                .contains('account_types', ['Studio']);
-            
-            if (error) throw error;
-            
+            const response = await fetch('/api/studio-ops/studios?accountType=Studio');
+            const result = await response.json();
+
+            if (!response.ok) {
+                throw new Error(result.error || 'Failed to fetch studios');
+            }
+
             // Client-side filtering for distance
             if (!safeSessionParams.location) {
                 setAvailableStudios([]);
                 return;
             }
-            
-            const filtered = (profilesData || []).filter(studio => {
+
+            const filtered = (result.data || []).filter(studio => {
                 if (!studio.location || !safeSessionParams.location) return false;
                 const dist = calcDist(
                     safeSessionParams.location.lat, safeSessionParams.location.lng,

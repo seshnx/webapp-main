@@ -1,50 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Database, CheckCircle, Loader2, User, ThumbsUp, ThumbsDown, Copy 
+import {
+    Database, CheckCircle, Loader2, User, ThumbsUp, ThumbsDown, Copy
 } from 'lucide-react';
 import { EQUIP_CATEGORIES } from '../../config/constants';
+import { getPendingSubmissions, updateSubmissionVotes, approveEquipmentSubmission, rejectEquipmentSubmission, upsertWallet, createEquipmentSubmission } from '../../config/neonQueries';
 
 export default function TechGearDatabase({ user, isTech }) {
-    const [view, setView] = useState('feed'); 
+    const [view, setView] = useState('feed');
     const [pendingItems, setPendingItems] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!supabase) return;
-        
-        const channel = supabase
-            .channel('equipment-submissions')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'equipment_submissions',
-                filter: 'status=eq.pending'
-            }, () => {
-                loadPendingItems();
-            })
-            .subscribe();
-
         loadPendingItems();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        // Poll for changes every 30 seconds (real-time via Convex can be added later)
+        const interval = setInterval(loadPendingItems, 30000);
+        return () => clearInterval(interval);
     }, [user?.id, user?.uid]);
 
     const loadPendingItems = async () => {
-        if (!supabase) return;
         setLoading(true);
         try {
-            const { data: itemsData, error } = await supabase
-                .from('equipment_submissions')
-                .select('*')
-                .eq('status', 'pending')
-                .order('timestamp', { ascending: false })
-                .limit(20);
-            
-            if (error) throw error;
-            
-            setPendingItems((itemsData || []).map(item => ({
+            const itemsData = await getPendingSubmissions(20);
+            setPendingItems(itemsData.map(item => ({
                 id: item.id,
                 ...item,
                 submittedBy: item.submitted_by,
@@ -57,11 +34,11 @@ export default function TechGearDatabase({ user, isTech }) {
     };
 
     const handleVote = async (itemId, voteType, currentData) => {
-        if (!isTech || !supabase) {
-            if (!isTech) alert("Only verified Technicians can vote on gear accuracy.");
+        if (!isTech) {
+            alert("Only verified Technicians can vote on gear accuracy.");
             return;
         }
-        
+
         const userId = user?.id || user?.uid;
         try {
             // Get current votes and add new vote
@@ -71,16 +48,13 @@ export default function TechGearDatabase({ user, isTech }) {
                 alert("You've already voted on this item.");
                 return;
             }
-            
+
             const updatedVotes = {
                 ...currentVotes,
                 [voteType]: [...voteArray, userId]
             };
-            
-            await supabase
-                .from('equipment_submissions')
-                .update({ votes: updatedVotes })
-                .eq('id', itemId);
+
+            await updateSubmissionVotes(itemId, updatedVotes);
 
             const YES_THRESHOLD = 3;
             const REJECT_THRESHOLD = 3;
@@ -90,62 +64,25 @@ export default function TechGearDatabase({ user, isTech }) {
             const dupVotes = (updatedVotes.duplicate?.length || 0);
 
             if (yesVotes >= YES_THRESHOLD) {
-                // Add to equipment database
-                await supabase
-                    .from('equipment_database')
-                    .insert({
-                        name: currentData.model,
-                        brand: currentData.brand,
-                        category: currentData.category,
-                        sub_category: currentData.subCategory,
-                        specs: currentData.specs,
-                        verified_by: [userId],
-                        added_by: currentData.submittedBy,
-                        added_at: new Date().toISOString()
-                    });
-                
-                // Update submission status
-                await supabase
-                    .from('equipment_submissions')
-                    .update({ status: 'approved' })
-                    .eq('id', itemId);
-                
-                // Update wallets (using RPC or direct update)
-                const { data: submitterWallet } = await supabase
-                    .from('wallets')
-                    .select('balance')
-                    .eq('user_id', currentData.submittedBy)
-                    .single();
-                
-                const { data: voterWallet } = await supabase
-                    .from('wallets')
-                    .select('balance')
-                    .eq('user_id', userId)
-                    .single();
-                
-                if (submitterWallet) {
-                    await supabase
-                        .from('wallets')
-                        .update({ balance: (submitterWallet.balance || 0) + 50 })
-                        .eq('user_id', currentData.submittedBy);
-                }
-                
-                if (voterWallet) {
-                    await supabase
-                        .from('wallets')
-                        .update({ balance: (voterWallet.balance || 0) + 5 })
-                        .eq('user_id', userId);
-                }
-                
+                // Approve and add to equipment database
+                await approveEquipmentSubmission(itemId, userId);
+
+                // Update wallets
+                await upsertWallet(currentData.submittedBy, 50);
+                await upsertWallet(userId, 5);
+
                 alert("Consensus reached! Item approved and rewards distributed.");
+                loadPendingItems(); // Refresh the list
 
             } else if (fakeVotes >= REJECT_THRESHOLD || dupVotes >= REJECT_THRESHOLD) {
-                await supabase
-                    .from('equipment_submissions')
-                    .update({ status: 'rejected' })
-                    .eq('id', itemId);
+                await rejectEquipmentSubmission(itemId);
+                alert("Submission rejected.");
+                loadPendingItems(); // Refresh the list
             }
-        } catch (e) { console.error("Voting failed:", e); }
+        } catch (e) {
+            console.error("Voting failed:", e);
+            alert("Voting failed: " + e.message);
+        }
     };
 
     return (
@@ -203,40 +140,31 @@ function GearSubmissionForm({ user, userData, onSuccess }) {
 
     const handleSubmit = async () => {
         if (!form.brand || !form.model || !form.specs) return alert("All fields required.");
-        if (!supabase) {
-            alert("Database unavailable.");
-            return;
-        }
-        
+
         setSubmitting(true);
         try {
             const userId = user?.id || user?.uid;
-            const submitterName = userData 
-                ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User' 
+            const submitterName = userData
+                ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'User'
                 : 'User';
-            
-            const { error } = await supabase
-                .from('equipment_submissions')
-                .insert({
-                    brand: form.brand,
-                    model: form.model,
-                    category: form.category,
-                    sub_category: form.subCategory,
-                    specs: form.specs,
-                    submitted_by: userId,
-                    submitter_name: submitterName,
-                    status: 'pending',
-                    timestamp: new Date().toISOString(),
-                    votes: { yes: [], fake: [], duplicate: [] }
-                });
-            
-            if (error) throw error;
-            
+
+            await createEquipmentSubmission({
+                brand: form.brand,
+                model: form.model,
+                category: form.category,
+                subcategory: form.subCategory,
+                specs: form.specs,
+                submittedBy: userId,
+                submitterName: submitterName,
+                status: 'pending',
+                votes: { yes: [], fake: [], duplicate: [] }
+            });
+
             alert("Submission Received! You'll earn 50 TK once verified.");
             onSuccess();
-        } catch (e) { 
-            console.error(e); 
-            alert("Submission failed: " + (e.message || "Unknown error")); 
+        } catch (e) {
+            console.error(e);
+            alert("Submission failed: " + (e.message || "Unknown error"));
         }
         setSubmitting(false);
     };

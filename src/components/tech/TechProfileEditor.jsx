@@ -2,85 +2,60 @@ import React, { useState, useEffect } from 'react';
 import { Save, Loader2 } from 'lucide-react';
 import { TECH_SPECIALTIES } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
+import { getSubProfile, upsertSubProfile } from '../../config/neonQueries';
 
 export default function TechProfileEditor({ user }) {
     const [data, setData] = useState({ skills: '', rate: '', serviceRadius: '', subRoles: [] });
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        if (!user?.id && !user?.uid || !supabase) {
+        if (!user?.id && !user?.uid) {
             setLoading(false);
             return;
         }
-        
+
         const userId = user.id || user.uid;
-        
-        // Fetch sub-profile data from profiles table or sub_profiles
-        supabase
-            .from('sub_profiles')
-            .select('*')
-            .eq('user_id', userId)
-            .eq('role', 'Technician')
-            .single()
-            .then(({ data, error }) => {
-                if (error && error.code !== 'PGRST116') {
-                    console.error('Error fetching tech profile:', error);
-                }
-                if (data) {
+
+        // Fetch sub-profile data using Neon
+        getSubProfile(userId, 'Technician')
+            .then((profile) => {
+                if (profile) {
                     setData({
-                        skills: data.skills || '',
-                        rate: data.rate || '',
-                        serviceRadius: data.service_radius || data.serviceRadius || '',
-                        subRoles: data.sub_roles || data.subRoles || []
+                        skills: profile.data?.skills || '',
+                        rate: profile.data?.rate || '',
+                        serviceRadius: profile.data?.service_radius || profile.data?.serviceRadius || '',
+                        subRoles: profile.data?.sub_roles || profile.data?.subRoles || []
                     });
                 }
+                setLoading(false);
+            })
+            .catch((err) => {
+                console.error('Error fetching tech profile:', err);
                 setLoading(false);
             });
     }, [user?.id, user?.uid]);
 
     const handleSave = async () => {
-        if (!supabase) {
-            alert("Database unavailable.");
+        if (!user?.id && !user?.uid) {
+            alert("User ID not available.");
             return;
         }
 
         try {
-            const userId = user?.id || user?.uid;
-            
-            // Update sub-profile
-            const { error: subProfileError } = await supabase
-                .from('sub_profiles')
-                .upsert({
-                    user_id: userId,
-                    role: 'Technician',
-                    skills: data.skills,
-                    rate: data.rate ? parseInt(data.rate) : null,
-                    service_radius: data.serviceRadius ? parseInt(data.serviceRadius) : null,
-                    sub_roles: data.subRoles || [],
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'user_id,role' });
+            const userId = user.id || user.uid;
 
-            if (subProfileError) throw subProfileError;
-            
-            // Sync searchable fields to public profile
-            const searchTerms = [
-                ...(data.skills ? data.skills.toLowerCase().split(',').map(s => s.trim()) : []),
-                ...(data.subRoles ? data.subRoles.map(r => r.toLowerCase()) : [])
-            ];
+            // Update sub-profile using Neon
+            const profileData = {
+                skills: data.skills,
+                rate: data.rate ? parseInt(data.rate) : null,
+                service_radius: data.serviceRadius ? parseInt(data.serviceRadius) : null,
+                sub_roles: data.subRoles || [],
+            };
 
-            const { error: publicProfileError } = await supabase
-                .from('public_profiles')
-                .update({
-                    rate: parseInt(data.rate) || 0,
-                    sub_roles: data.subRoles || [],
-                    search_terms: searchTerms
-                })
-                .eq('id', userId);
-
-            if (publicProfileError) throw publicProfileError;
+            await upsertSubProfile(userId, 'Technician', profileData);
 
             alert("Tech Profile Updated Successfully");
-        } catch (e) { 
+        } catch (e) {
             console.error(e);
             alert("Update failed: " + (e.message || "Unknown error"));
         }
