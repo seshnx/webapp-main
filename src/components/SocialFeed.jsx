@@ -148,8 +148,13 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                     id: post.id,
                     ...post,
                     userId: post.user_id,
-                    displayName: post.display_name || post.username || 'Unknown User',
-                    authorPhoto: post.photo_url,
+                    displayName: post.display_name ||
+                                   post.username ||
+                                   (post.first_name && post.last_name ? `${post.first_name} ${post.last_name}` : null) ||
+                                   post.first_name ||
+                                   post.last_name ||
+                                   'Unknown User',
+                    authorPhoto: post.photo_url || post.profile_photo_url,
                     username: post.username,
                     text: post.content, // Map 'content' to 'text' for PostCard compatibility
                     attachments: post.media, // Map 'media' to 'attachments' for PostCard compatibility
@@ -236,13 +241,19 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
             const userId = user.id || user.uid;
 
             // Ensure user exists in database (fallback for webhook sync)
+            const username = user.username ||
+                           user.publicMetadata?.username ||
+                           `${user.firstName || ''}${user.lastName ? ' ' + user.lastName : ''}`.trim() ||
+                           user.email?.split('@')[0] ||
+                           null;
+
             await ensureUserInDatabase(userId, {
                 id: userId,
-                email: user.primaryEmailAddress?.emailAddress || user.email,
+                email: user.primaryEmailAddress?.emailAddress || user.email || user.emailAddresses?.[0]?.emailAddress,
                 first_name: user.firstName || null,
                 last_name: user.lastName || null,
-                username: user.username || null,
-                profile_photo_url: user.imageUrl || null,
+                username: username,
+                profile_photo_url: user.imageUrl || user.profileImageUrl || null,
                 account_types: user.publicMetadata?.account_types || ['Fan'],
                 active_role: user.publicMetadata?.active_role || 'Fan'
             });

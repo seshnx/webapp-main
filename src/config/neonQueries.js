@@ -464,6 +464,9 @@ export async function getPosts({ limit = 50, userId = null, offset = 0 } = {}) {
         p.*,
         cu.username,
         cu.email,
+        cu.first_name,
+        cu.last_name,
+        cu.profile_photo_url,
         prof.display_name,
         prof.photo_url
       FROM posts p
@@ -481,6 +484,9 @@ export async function getPosts({ limit = 50, userId = null, offset = 0 } = {}) {
         p.*,
         cu.username,
         cu.email,
+        cu.first_name,
+        cu.last_name,
+        cu.profile_photo_url,
         prof.display_name,
         prof.photo_url
       FROM posts p
@@ -507,6 +513,10 @@ export async function getPost(postId) {
     SELECT
       p.*,
       cu.username,
+      cu.email,
+      cu.first_name,
+      cu.last_name,
+      cu.profile_photo_url,
       prof.display_name,
       prof.photo_url
     FROM posts p
