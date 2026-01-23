@@ -179,6 +179,13 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 screenReaderAnnouncements: true,
                 keyboardHints: true,
             },
+
+            // UI Preferences
+            ui: {
+                showBreadcrumbs: true,
+                compactMode: false,
+                sidebarCollapsed: false,
+            },
             
             // Performance
             performance: {
@@ -1575,6 +1582,15 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                 onChange={() => handleToggle('accessibility', 'keyboardHints')}
                                 label="Keyboard Navigation Hints"
                                 description="Show hints for keyboard navigation"
+                            />
+                            <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                                <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Navigation</p>
+                            </div>
+                            <ToggleSwitch
+                                checked={localSettings.ui?.showBreadcrumbs !== false}
+                                onChange={() => handleToggle('ui', 'showBreadcrumbs')}
+                                label="Show Breadcrumb Navigation"
+                                description="Display breadcrumb trail at the top of the page"
                             />
                         </div>
                     </div>

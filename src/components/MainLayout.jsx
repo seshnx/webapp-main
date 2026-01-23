@@ -191,6 +191,7 @@ export default function MainLayout({
       'edu-overview': '/edu-overview',
       'edu-admin': '/edu-admin',
       'studio-ops': '/studio-ops',
+      'labels': '/labels',
     };
 
     const route = tabRoutes[activeTab];
@@ -553,6 +554,7 @@ export default function MainLayout({
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             onRoleSwitch={handleRoleSwitch}
             openPublicProfile={openPublicProfile}
+            showBreadcrumbs={userData?.settings?.ui?.showBreadcrumbs !== false}
           />
         </Suspense>
 
