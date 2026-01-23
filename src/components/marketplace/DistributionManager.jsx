@@ -2,6 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Disc, Globe, AlertCircle, CheckCircle, Clock, Edit2, Trash2, X, Music } from 'lucide-react';
 import ReleaseBuilder from '../distribution/ReleaseBuilder';
 
+// Supabase has been migrated away - distribution features temporarily disabled
+const supabase = null;
+
 export default function DistributionManager({ user, userData }) {
     const [view, setView] = useState('list'); // 'list' or 'create'
     const [releases, setReleases] = useState([]);

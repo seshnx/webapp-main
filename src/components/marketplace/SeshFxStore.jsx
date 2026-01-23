@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Search, Disc, Sliders, Download, CheckCircle, Zap, Plus, X, Upload, Loader2, Music, Flag } from 'lucide-react';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
-import ReportModal from '../ReportModal'; 
+import ReportModal from '../ReportModal';
+
+// Supabase has been migrated away - marketplace features temporarily disabled
+const supabase = null;
 
 export default function SeshFxStore({ user, userData, tokenBalance, refreshWallet }) { 
   const [items, setItems] = useState([]);

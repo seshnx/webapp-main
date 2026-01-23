@@ -1,6 +1,6 @@
 // src/components/marketplace/ShippingVerification.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
+import {
     Package, Camera, Truck, MapPin, CheckCircle, Clock, AlertTriangle,
     X, Upload, ChevronRight, ChevronLeft, Loader2, Box, Scissors,
     Image as ImageIcon, Check, XCircle, ExternalLink, Copy
@@ -8,6 +8,9 @@ import {
 import { SHIPPING_VERIFICATION_STATUS, SHIPPING_VERIFICATION_STEPS } from '../../config/constants';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
 import UserAvatar from '../shared/UserAvatar';
+
+// Supabase has been migrated away - shipping verification features temporarily disabled
+const supabase = null;
 
 /**
  * ShippingVerification Component

@@ -1,19 +1,22 @@
 // src/components/marketplace/SafeExchangeTransaction.jsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { 
-    Shield, MapPin, Camera, CheckCircle, Clock, AlertTriangle, 
+import {
+    Shield, MapPin, Camera, CheckCircle, Clock, AlertTriangle,
     Navigation, Phone, MessageCircle, X, ChevronRight, User,
     DollarSign, Lock, Unlock, ArrowRight, Package, Loader2,
     Calendar, CreditCard, Map, Check, XCircle
 } from 'lucide-react';
-import { 
-    SAFE_EXCHANGE_STATUS, 
+import {
+    SAFE_EXCHANGE_STATUS,
     SAFE_EXCHANGE_STEPS,
-    HIGH_VALUE_THRESHOLD 
+    HIGH_VALUE_THRESHOLD
 } from '../../config/constants';
 import { useSafeZoneVerification } from '../../hooks/useSafeZoneVerification';
 import PhotoVerification from './PhotoVerification';
 import UserAvatar from '../shared/UserAvatar';
+
+// Supabase has been migrated away - safe exchange features temporarily disabled
+const supabase = null;
 
 /**
  * SafeExchangeTransaction Component
