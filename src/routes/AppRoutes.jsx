@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@clerk/clerk-react';
 import { Loader2 } from 'lucide-react';
 import { updateProfile } from '../config/neonQueries';
@@ -109,33 +109,41 @@ function Redirect({ to, replace = true }) {
 
 /**
  * AppRoutes - Full routing with all modules
- * MainLayout handles most routes, but Settings and Debug Report use direct routes
+ * MainLayout handles these routes internally via activeTab with URL-based navigation
  * Now uses Clerk authentication instead of Supabase
+ * Note: / is now a redirect to /dashboard for better breadcrumb navigation
  */
 export default function AppRoutes({ user, userData, loading, darkMode, toggleTheme, handleLogout }) {
   const { userId } = useAuth();
 
   return (
     <Routes>
-      {/* MainLayout handles these routes internally via activeTab */}
+      {/* MainLayout handles these routes internally via activeTab with URL sync */}
       {/* Dashboard and all main modules are handled by MainLayout */}
       {/* Support nested routes for better URL navigation */}
-      <Route path="/" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/feed/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/messages/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/bookings/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/marketplace/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/tech/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/payments/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/profile/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/business-center/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/dashboard" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/feed" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/feed/discover" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/messages" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/bookings" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/bookings/my-bookings" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/bookings/calendar" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/bookings/find-talent" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/bookings/broadcast-list" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/marketplace" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/tech" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/payments" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/business-center" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/legal" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/edu-student/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/edu-intern/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/edu-overview/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/edu-admin/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/studio-ops/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/labels/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-student" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-intern" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-overview" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-admin" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/studio-ops" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels/dashboard" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels/contracts" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
 
       {/* Debug Report Route - Test login destination */}
       <Route
@@ -210,15 +218,17 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
         }
       />
 
+      {/* Redirect root to dashboard */}
+      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+
       {/* Redirect dashboard aliases */}
-      <Route path="/dashboard" element={<Redirect to="/" />} />
-      <Route path="/home" element={<Redirect to="/" />} />
-      <Route path="/social" element={<Redirect to="/feed" />} />
-      <Route path="/chat" element={<Redirect to="/messages" />} />
-      <Route path="/billing" element={<Redirect to="/payments" />} />
+      <Route path="/home" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/social" element={<Navigate to="/feed" replace />} />
+      <Route path="/chat" element={<Navigate to="/messages" replace />} />
+      <Route path="/billing" element={<Navigate to="/payments" replace />} />
 
       {/* Fallback - redirect to dashboard */}
-      <Route path="*" element={<Redirect to="/" />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }

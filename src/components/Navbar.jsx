@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon } from 'lucide-react';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
@@ -7,22 +8,24 @@ import NotificationsPanel, { NotificationBadge } from './social/NotificationsPan
 import { useNotifications } from '../hooks/useNotifications';
 import { getDisplayRole } from '../config/constants';
 import { useLanguage } from '../contexts/LanguageContext';
+import { BreadcrumbNav } from './ui/breadcrumb';
 
-export default function Navbar({ 
-    user, 
-    userData, 
-    subProfiles, 
-    darkMode, 
-    toggleTheme, 
-    activeTab, 
-    setActiveTab, 
-    onMenuClick, 
+export default function Navbar({
+    user,
+    userData,
+    subProfiles,
+    darkMode,
+    toggleTheme,
+    activeTab,
+    setActiveTab,
+    onMenuClick,
     onRoleSwitch,
     openPublicProfile // Add callback for viewing profiles
 }) {
+  const location = useLocation();
   const [showNotifs, setShowNotifs] = useState(false);
   const [showRoleMenu, setShowRoleMenu] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false); 
+  const [isSwitching, setIsSwitching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const notifRef = useRef(null);
   const roleRef = useRef(null);
@@ -212,7 +215,12 @@ export default function Navbar({
         </div>
 
         {/* Global Search - desktop only */}
-        <div className="hidden md:flex flex-1 max-w-xl px-4">
+        <div className="hidden md:flex flex-1 flex-col items-center justify-center max-w-xl px-4 gap-1">
+          {/* Breadcrumb Navigation */}
+          <div className="w-full flex justify-start">
+            <BreadcrumbNav className="text-xs" />
+          </div>
+
           <form onSubmit={handleSearchSubmit} className="w-full">
             <div className="flex items-center gap-2 w-full bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-3 py-1.5 focus-within:ring-2 focus-within:ring-brand-blue/70">
               <SearchIcon size={16} className="text-gray-400" />

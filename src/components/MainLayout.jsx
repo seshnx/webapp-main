@@ -91,7 +91,7 @@ export default function MainLayout({
   
   // Helper function to get tab from pathname (supports nested routes)
   const getTabFromPath = (path) => {
-    if (path === '/') return 'dashboard';
+    if (path === '/dashboard' || path === '/') return 'dashboard';
     if (path.startsWith('/feed') || path === '/social') return 'feed';
     if (path.startsWith('/messages') || path.startsWith('/chat')) return 'messages';
     if (path.startsWith('/bookings')) return 'bookings';
@@ -176,7 +176,7 @@ export default function MainLayout({
     }
     
     const tabRoutes = {
-      'dashboard': '/',
+      'dashboard': '/dashboard',
       'feed': '/feed',
       'messages': '/messages',
       'bookings': '/bookings',
