@@ -554,7 +554,7 @@ export default function MainLayout({
             onMenuClick={() => setSidebarOpen(!sidebarOpen)}
             onRoleSwitch={handleRoleSwitch}
             openPublicProfile={openPublicProfile}
-            showBreadcrumbs={userData?.settings?.ui?.showBreadcrumbs !== false}
+            showBreadcrumbs={userData?.settings?.ui?.showBreadcrumbs === true}
           />
         </Suspense>
 

@@ -21,7 +21,7 @@ export default function Navbar({
     onMenuClick,
     onRoleSwitch,
     openPublicProfile, // Add callback for viewing profiles
-    showBreadcrumbs = true, // New prop for breadcrumb visibility
+    showBreadcrumbs = false, // New prop for breadcrumb visibility (default off)
 }) {
   const location = useLocation();
   const [showNotifs, setShowNotifs] = useState(false);

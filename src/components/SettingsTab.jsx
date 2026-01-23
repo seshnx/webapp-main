@@ -182,7 +182,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
 
             // UI Preferences
             ui: {
-                showBreadcrumbs: true,
+                showBreadcrumbs: false,
                 compactMode: false,
                 sidebarCollapsed: false,
             },
@@ -1587,7 +1587,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                 <p className="text-xs font-semibold text-gray-500 uppercase mb-3">Navigation</p>
                             </div>
                             <ToggleSwitch
-                                checked={localSettings.ui?.showBreadcrumbs !== false}
+                                checked={localSettings.ui?.showBreadcrumbs === true}
                                 onChange={() => handleToggle('ui', 'showBreadcrumbs')}
                                 label="Show Breadcrumb Navigation"
                                 description="Display breadcrumb trail at the top of the page"
