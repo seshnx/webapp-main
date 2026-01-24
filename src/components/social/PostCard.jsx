@@ -359,12 +359,13 @@ export default function PostCard({
                     <div className={`grid gap-2 mb-3 ${post.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         {post.attachments.map((att, i) => (
                             <div key={i} className="rounded-lg overflow-hidden bg-transparent relative">
-                                {att.type === 'image' && <img src={att.url} className="w-full h-full object-cover max-h-96" alt="content" />}
+                                {att.type === 'image' && <img src={att.url} className="w-full h-auto object-cover rounded-lg" alt="content" style={{ maxHeight: '70vh' }} />}
                                 {att.type === 'video' && (
                                     <video
                                         src={att.url}
                                         controls
-                                        className="w-full h-full max-h-96 bg-black"
+                                        className="w-full h-auto bg-black rounded-lg"
+                                        style={{ maxHeight: '70vh' }}
                                         autoPlay={autoPlayVideos}
                                         playsInline
                                         muted={autoPlayVideos}
@@ -387,7 +388,7 @@ export default function PostCard({
                         <StarFieldVisualizer audioUrl={post.audioUrl} fileName={post.audioName || 'Track'} />
                     </div>
                 )}
-                {post.imageUrl && !post.attachments && <img src={post.imageUrl} className="rounded-lg w-full mb-3 border dark:border-gray-700" alt="legacy content" />}
+                {post.imageUrl && !post.attachments && <img src={post.imageUrl} className="rounded-lg w-full h-auto mb-3 border dark:border-gray-700" alt="legacy content" style={{ maxHeight: '70vh' }} />}
             </div>
 
             {/* Engagement Stats */}
