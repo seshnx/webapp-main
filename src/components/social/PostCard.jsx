@@ -358,14 +358,14 @@ export default function PostCard({
                 {post.attachments && post.attachments.length > 0 && (
                     <div className={`grid gap-2 mb-3 ${post.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         {post.attachments.map((att, i) => (
-                            <div key={i} className="rounded-lg overflow-hidden bg-transparent relative">
-                                {att.type === 'image' && <img src={att.url} className="w-full h-auto object-cover rounded-lg" alt="content" style={{ maxHeight: '70vh' }} />}
+                            <div key={i} className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
+                                {att.type === 'image' && <img src={att.url} className="w-full h-auto object-contain rounded-lg" alt="content" style={{ maxHeight: '600px' }} />}
                                 {att.type === 'video' && (
                                     <video
                                         src={att.url}
                                         controls
-                                        className="w-full h-auto bg-black rounded-lg"
-                                        style={{ maxHeight: '70vh' }}
+                                        className="w-full h-auto object-contain bg-black rounded-lg"
+                                        style={{ maxHeight: '600px' }}
                                         autoPlay={autoPlayVideos}
                                         playsInline
                                         muted={autoPlayVideos}
@@ -388,7 +388,11 @@ export default function PostCard({
                         <StarFieldVisualizer audioUrl={post.audioUrl} fileName={post.audioName || 'Track'} />
                     </div>
                 )}
-                {post.imageUrl && !post.attachments && <img src={post.imageUrl} className="rounded-lg w-full h-auto mb-3 border dark:border-gray-700" alt="legacy content" style={{ maxHeight: '70vh' }} />}
+                {post.imageUrl && !post.attachments && (
+                    <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 mb-3">
+                        <img src={post.imageUrl} className="w-full h-auto object-contain rounded-lg" alt="legacy content" style={{ maxHeight: '600px' }} />
+                    </div>
+                )}
             </div>
 
             {/* Engagement Stats */}
