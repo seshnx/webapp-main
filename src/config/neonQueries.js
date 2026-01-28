@@ -1558,7 +1558,7 @@ export async function addTransactionPhoto(transactionId, photoData) {
  * @param {object} options - Query options
  * @returns {Promise<Array>} Array of marketplace items
  */
-export async function getMarketplaceItems({ limit = 50, type } = {}) {
+export async function getSeshFxStoreItems({ limit = 50, type } = {}) {
   let sql = `SELECT * FROM marketplace_items WHERE deleted_at IS NULL`;
   const params = [];
   let paramIndex = 1;
@@ -1572,7 +1572,7 @@ export async function getMarketplaceItems({ limit = 50, type } = {}) {
   sql += ` ORDER BY created_at DESC LIMIT $${paramIndex}`;
   params.push(limit);
 
-  return executeQuery(sql, params, 'getMarketplaceItems');
+  return executeQuery(sql, params, 'getSeshFxStoreItems');
 }
 
 /**

@@ -108,7 +108,7 @@ export default defineSchema({
   })
     .index("by_target_status", ["targetId", "status"])
     .index("by_sender", ["senderId"])
-    .index("by_id", ["id"]),
+    .index("by_booking_id", ["id"]),
 
   // Notifications table - for real-time notification updates
   notifications: defineTable({
@@ -122,7 +122,7 @@ export default defineSchema({
     metadata: v.optional(v.any()), // Flexible metadata for different notification types
   })
     .index("by_user_read", ["userId", "createdAt"])
-    .index("by_id", ["id"]),
+    .index("by_notification_id", ["id"]),
 
   // User profile updates - for real-time profile changes
   profileUpdates: defineTable({

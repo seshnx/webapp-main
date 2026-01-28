@@ -39,7 +39,7 @@ export const getBooking = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("bookings")
-      .withIndex("by_id", (q) => q.eq("id", args.bookingId))
+      .withIndex("by_booking_id", (q) => q.eq("id", args.bookingId))
       .first();
   },
 });
@@ -64,7 +64,7 @@ export const syncBooking = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("bookings")
-      .withIndex("by_id", (q) => q.eq("id", args.id))
+      .withIndex("by_booking_id", (q) => q.eq("id", args.id))
       .first();
 
     const now = Date.now();
@@ -115,7 +115,7 @@ export const removeBooking = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("bookings")
-      .withIndex("by_id", (q) => q.eq("id", args.bookingId))
+      .withIndex("by_booking_id", (q) => q.eq("id", args.bookingId))
       .first();
 
     if (existing) {
