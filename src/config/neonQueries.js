@@ -389,21 +389,44 @@ export async function upsertSubProfile(userId, accountType, data) {
     new Date().toISOString()
   ];
 
-  const sql = `
-    INSERT INTO sub_profiles (user_id, account_type, display_name, bio, photo_url, profile_data, updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamp)
-    ON CONFLICT (user_id, account_type)
-    DO UPDATE SET
-      display_name = $3,
-      bio = $4,
-      photo_url = $5,
-      profile_data = $6::jsonb,
-      updated_at = $7::timestamp
-    RETURNING *
-  `;
+  try {
+    const sql = `
+      INSERT INTO sub_profiles (user_id, account_type, display_name, bio, photo_url, profile_data, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamp)
+      ON CONFLICT (user_id, account_type)
+      DO UPDATE SET
+        display_name = $3,
+        bio = $4,
+        photo_url = $5,
+        profile_data = $6::jsonb,
+        updated_at = $7::timestamp
+      RETURNING *
+    `;
 
-  const result = await executeQuery(sql, values, 'upsertSubProfile');
-  return result[0];
+    const result = await executeQuery(sql, values, 'upsertSubProfile');
+    return result[0];
+  } catch (error) {
+    // Handle UUID constraint errors gracefully
+    if (error.message && error.message.includes('invalid input syntax for type uuid')) {
+      console.error('UUID constraint error in upsertSubProfile:', error.message);
+      // Try with explicit cast
+      const sql = `
+        INSERT INTO sub_profiles (user_id, account_type, display_name, bio, photo_url, profile_data, updated_at)
+        VALUES ($1::text, $2, $3, $4, $5, $6::jsonb, $7::timestamp)
+        ON CONFLICT (user_id, account_type)
+        DO UPDATE SET
+          display_name = $3,
+          bio = $4,
+          photo_url = $5,
+          profile_data = $6::jsonb,
+          updated_at = $7::timestamp
+        RETURNING *
+      `;
+      const result = await executeQuery(sql, values, 'upsertSubProfile');
+      return result[0];
+    }
+    throw error;
+  }
 }
 
 /**
@@ -414,12 +437,25 @@ export async function upsertSubProfile(userId, accountType, data) {
  * @returns {Promise<object|null>} Sub-profile or null
  */
 export async function getSubProfile(userId, accountType) {
-  const result = await executeQuery(
-    'SELECT * FROM sub_profiles WHERE user_id = $1 AND account_type = $2',
-    [userId, accountType],
-    'getSubProfile'
-  );
-  return result[0] || null;
+  try {
+    const result = await executeQuery(
+      'SELECT * FROM sub_profiles WHERE user_id = $1 AND account_type = $2',
+      [userId, accountType],
+      'getSubProfile'
+    );
+    return result[0] || null;
+  } catch (error) {
+    if (error.message && error.message.includes('invalid input syntax for type uuid')) {
+      console.error('UUID constraint error in getSubProfile, retrying with cast:', error.message);
+      const result = await executeQuery(
+        'SELECT * FROM sub_profiles WHERE user_id::text = $1 AND account_type = $2',
+        [userId, accountType],
+        'getSubProfile'
+      );
+      return result[0] || null;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -429,12 +465,25 @@ export async function getSubProfile(userId, accountType) {
  * @returns {Promise<Array>} Array of sub-profiles
  */
 export async function getSubProfiles(userId) {
-  const result = await executeQuery(
-    'SELECT * FROM sub_profiles WHERE user_id = $1 ORDER BY account_type',
-    [userId],
-    'getSubProfiles'
-  );
-  return result;
+  try {
+    const result = await executeQuery(
+      'SELECT * FROM sub_profiles WHERE user_id = $1 ORDER BY account_type',
+      [userId],
+      'getSubProfiles'
+    );
+    return result;
+  } catch (error) {
+    if (error.message && error.message.includes('invalid input syntax for type uuid')) {
+      console.error('UUID constraint error in getSubProfiles, retrying with cast:', error.message);
+      const result = await executeQuery(
+        'SELECT * FROM sub_profiles WHERE user_id::text = $1 ORDER BY account_type',
+        [userId],
+        'getSubProfiles'
+      );
+      return result;
+    }
+    throw error;
+  }
 }
 
 /**
@@ -445,12 +494,32 @@ export async function getSubProfiles(userId) {
  * @returns {Promise<boolean>} True if deleted
  */
 export async function deleteSubProfile(userId, accountType) {
-  const result = await executeQuery(
-    'DELETE FROM sub_profiles WHERE user_id = $1 AND account_type = $2 RETURNING *',
-    [userId, accountType],
-    'deleteSubProfile'
-  );
-  return result.length > 0;
+  try {
+    const result = await executeQuery(
+      'DELETE FROM sub_profiles WHERE user_id = $1 AND account_type = $2 RETURNING *',
+      [userId, accountType],
+      'deleteSubProfile'
+    );
+    return result.length > 0;
+  } catch (error) {
+    // Handle UUID constraint errors gracefully
+    if (error.message && error.message.includes('invalid input syntax for type uuid')) {
+      console.error('UUID constraint error - this may be due to legacy database schema:', error.message);
+      // Try alternative approach without UUID comparison
+      try {
+        const result = await executeQuery(
+          'DELETE FROM sub_profiles WHERE user_id::text = $1 AND account_type = $2 RETURNING *',
+          [userId, accountType],
+          'deleteSubProfile'
+        );
+        return result.length > 0;
+      } catch (retryError) {
+        console.error('Retry also failed:', retryError.message);
+        throw retryError;
+      }
+    }
+    throw error;
+  }
 }
 
 /**
