@@ -1,74 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Disc, Globe, AlertCircle, CheckCircle, Clock, Edit2, Trash2, X, Music } from 'lucide-react';
+import { useDistributionReleases, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import ReleaseBuilder from '../distribution/ReleaseBuilder';
 
-// Supabase has been migrated away - distribution features temporarily disabled
-const supabase = null;
-
 export default function DistributionManager({ user, userData }) {
+    const userId = user?.id || user?.uid;
+
+    // Fetch distribution releases with polling
+    const { data: rawReleases, loading } = useDistributionReleases(userId);
+
+    // Mutation functions
+    const { deleteRelease } = useMarketplaceMutations();
+
     const [view, setView] = useState('list'); // 'list' or 'create'
-    const [releases, setReleases] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [editingRelease, setEditingRelease] = useState(null);
 
-    // Fetch User's Releases
-    useEffect(() => {
-        if (!user?.id && !user?.uid || !supabase) return;
-        const userId = user?.id || user?.uid;
-        
-        // Query releases where the current user is the primary artist/uploader
-        const channel = supabase
-            .channel('distribution-releases')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'distribution_releases',
-                filter: `uploader_id=eq.${userId}`
-            }, (payload) => {
-                loadReleases();
-            })
-            .subscribe();
-
-        loadReleases();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user?.id, user?.uid]);
-
-    const loadReleases = async () => {
-        if (!supabase) return;
-        const userId = user?.id || user?.uid;
-        setLoading(true);
-        try {
-            const { data: releasesData, error } = await supabase
-                .from('distribution_releases')
-                .select('*')
-                .eq('uploader_id', userId)
-                .order('updated_at', { ascending: false });
-            
-            if (error) throw error;
-            
-            setReleases((releasesData || []).map(r => ({
-                id: r.id,
-                ...r,
-                uploaderId: r.uploader_id,
-                updatedAt: r.updated_at,
-                createdAt: r.created_at
-            })));
-        } catch (error) {
-            console.error('Error loading releases:', error);
-        }
-        setLoading(false);
-    };
+    // Transform raw releases
+    const releases = (rawReleases || []).map(r => ({
+        id: r.id,
+        ...r,
+        uploaderId: r.uploader_id,
+        updatedAt: r.updated_at,
+        createdAt: r.created_at
+    }));
 
     const handleDelete = async (releaseId, title) => {
-        if (!confirm(`Are you sure you want to delete "${title}"? This cannot be undone if already distributed.`) || !supabase) return;
+        if (!confirm(`Are you sure you want to delete "${title}"? This cannot be undone if already distributed.`)) return;
         try {
-            await supabase
-                .from('distribution_releases')
-                .delete()
-                .eq('id', releaseId);
+            await deleteRelease(releaseId);
         } catch (e) {
             console.error(e);
             alert("Failed to delete release.");

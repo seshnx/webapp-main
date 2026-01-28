@@ -19,7 +19,7 @@ const FEED_MODES = {
     DISCOVER: 'discover'
 };
 
-export default function SocialFeed({ user, userData, openPublicProfile }) {
+export default function SocialFeed({ user, userData, subProfiles = {}, openPublicProfile }) {
     const [posts, setPosts] = useState([]);
     const [loading, setLoading] = useState(true);
     const [reportTarget, setReportTarget] = useState(null);
@@ -239,6 +239,12 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
         if (!user) return;
         try {
             const userId = user.id || user.uid;
+            const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'Fan';
+
+            // Get active profile data from subProfiles
+            const activeProfile = subProfiles?.[activeRole] || {};
+            const displayName = activeProfile?.display_name || userData?.effectiveDisplayName || `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || null;
+            const authorPhoto = activeProfile?.photo_url || userData?.photoURL || user?.imageUrl || null;
 
             // Ensure user exists in database (fallback for webhook sync)
             const username = user.username ||
@@ -280,7 +286,10 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
                 media: media,
                 mentions: mentions,
                 hashtags: hashtags,
-                visibility: 'public'
+                visibility: 'public',
+                display_name: displayName,
+                author_photo: authorPhoto,
+                posted_as_role: activeRole
             });
         } catch (e) {
             console.error("Failed to post:", e);
@@ -334,6 +343,7 @@ export default function SocialFeed({ user, userData, openPublicProfile }) {
             <CreatePostWidget
                 user={user}
                 userData={userData}
+                subProfiles={subProfiles}
                 onPost={handlePost}
             />
 

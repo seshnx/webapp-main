@@ -45,7 +45,22 @@ export default function Navbar({
   } = useNotifications(user?.id || user?.uid);
 
   const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'User';
-  const displayRole = getDisplayRole(userData); // Shows subRole if set for Talent
+
+  // Get display role - checks sub-profiles for Talent subrole
+  const getDisplayRoleLocal = (role) => {
+    if (!role || role === 'User' || role === 'Fan') return role || 'User';
+
+    // For Talent, check if they have a subRole set in their sub-profile
+    if (role === 'Talent') {
+      const talentSub = subProfiles?.['Talent'];
+      const subRole = talentSub?.profile_data?.talentSubRole || talentSub?.talentSubRole;
+      if (subRole && subRole !== '') return subRole;
+    }
+
+    return role;
+  };
+
+  const displayRole = getDisplayRoleLocal(activeRole);
   const roles = userData?.accountTypes || [];
 
   const eduRoles = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin'];

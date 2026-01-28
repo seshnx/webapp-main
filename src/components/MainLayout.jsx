@@ -204,33 +204,33 @@ export default function MainLayout({
   }, [activeTab, navigate, location.pathname]);
 
   // Load sub-profiles (optional - doesn't block the app if it fails)
-  useEffect(() => {
+  const loadSubProfiles = useCallback(async () => {
     if (!user?.id) return;
 
-    const loadSubProfiles = async () => {
-      try {
-        const response = await fetch(`/api/user/sub-profiles/${user.id}`);
-        const result = await response.json();
+    try {
+      const response = await fetch(`/api/user/sub-profiles/${user.id}`);
+      const result = await response.json();
 
-        if (!response.ok) {
-          console.warn('Sub-profiles API not available:', result.error);
-          setSubProfiles({});
-          return;
-        }
-
-        const profiles = {};
-        result.data?.forEach(profile => {
-          profiles[profile.account_type] = profile;
-        });
-        setSubProfiles(profiles);
-      } catch (err) {
-        console.warn('Failed to load sub-profiles (non-critical):', err?.message || err);
+      if (!response.ok) {
+        console.warn('Sub-profiles API not available:', result.error);
         setSubProfiles({});
+        return;
       }
-    };
 
-    loadSubProfiles();
+      const profiles = {};
+      result.data?.forEach(profile => {
+        profiles[profile.account_type] = profile;
+      });
+      setSubProfiles(profiles);
+    } catch (err) {
+      console.warn('Failed to load sub-profiles (non-critical):', err?.message || err);
+      setSubProfiles({});
+    }
   }, [user?.id]);
+
+  useEffect(() => {
+    loadSubProfiles();
+  }, [loadSubProfiles]);
 
   // Load token balance (optional - doesn't block the app if it fails)
   useEffect(() => {
@@ -339,6 +339,7 @@ export default function MainLayout({
             <SocialFeed
               user={user}
               userData={userData}
+              subProfiles={subProfiles}
               openPublicProfile={openPublicProfile}
             />
           </Suspense>
@@ -351,6 +352,7 @@ export default function MainLayout({
             <ChatInterface
               user={user}
               userData={userData}
+              subProfiles={subProfiles}
               openPublicProfile={openPublicProfile}
               pendingChatTarget={pendingChatTarget}
               clearPendingChatTarget={clearPendingChatTarget}
@@ -413,6 +415,8 @@ export default function MainLayout({
               subProfiles={subProfiles}
               handleLogout={handleLogout}
               openPublicProfile={openPublicProfile}
+              onSubProfileUpdate={loadSubProfiles}
+              onRoleSwitch={handleRoleSwitch}
             />
           </Suspense>
         );

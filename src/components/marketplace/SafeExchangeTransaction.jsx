@@ -11,12 +11,10 @@ import {
     SAFE_EXCHANGE_STEPS,
     HIGH_VALUE_THRESHOLD
 } from '../../config/constants';
+import { useSafeExchangeTransaction, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import { useSafeZoneVerification } from '../../hooks/useSafeZoneVerification';
 import PhotoVerification from './PhotoVerification';
 import UserAvatar from '../shared/UserAvatar';
-
-// Supabase has been migrated away - safe exchange features temporarily disabled
-const supabase = null;
 
 /**
  * SafeExchangeTransaction Component
@@ -30,8 +28,14 @@ export default function SafeExchangeTransaction({
     onComplete,
     onMessage // Function to open chat with other party
 }) {
-    const [transaction, setTransaction] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const userId = user?.id || user?.uid;
+
+    // Fetch transaction with polling
+    const { transaction: rawTransaction, loading } = useSafeExchangeTransaction(transactionId);
+
+    // Mutation functions
+    const { updateTransaction, addPhoto } = useMarketplaceMutations();
+
     const [actionLoading, setActionLoading] = useState(false);
     const [selectedSafeZone, setSelectedSafeZone] = useState(null);
     const [meetupDate, setMeetupDate] = useState('');
@@ -40,8 +44,18 @@ export default function SafeExchangeTransaction({
     const [nearbyZones, setNearbyZones] = useState([]);
     const [photoMode, setPhotoMode] = useState(null); // 'seller_depart' | 'buyer_inspect' | null
 
+    // Transform transaction data
+    const transaction = rawTransaction ? {
+        id: rawTransaction.id,
+        ...rawTransaction,
+        buyerId: rawTransaction.parties?.buyer,
+        sellerId: rawTransaction.parties?.seller,
+        listingId: rawTransaction.item_id,
+        itemDetails: rawTransaction.item_details,
+        verificationData: rawTransaction.verification_data
+    } : null;
+
     // Get current role
-    const userId = user?.id || user?.uid;
     const isSeller = transaction?.sellerId === userId;
     const isBuyer = transaction?.buyerId === userId;
     const role = isSeller ? 'seller' : 'buyer';
@@ -62,81 +76,29 @@ export default function SafeExchangeTransaction({
         verifyProximity
     } = useSafeZoneVerification(transactionId, user?.uid);
 
-    // Subscribe to transaction updates
-    useEffect(() => {
-        if (!transactionId || !supabase) return;
-
-        const channel = supabase
-            .channel(`safe-exchange-${transactionId}`)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'safe_exchange_transactions',
-                filter: `id=eq.${transactionId}`
-            }, () => {
-                loadTransaction();
-            })
-            .subscribe();
-
-        loadTransaction();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [transactionId]);
-
-    const loadTransaction = async () => {
-        if (!supabase) return;
-        setLoading(true);
-        try {
-            const { data: transactionData, error } = await supabase
-                .from('safe_exchange_transactions')
-                .select('*')
-                .eq('id', transactionId)
-                .single();
-            
-            if (error) throw error;
-            
-            if (transactionData) {
-                setTransaction({
-                    id: transactionData.id,
-                    ...transactionData,
-                    buyerId: transactionData.buyer_id,
-                    sellerId: transactionData.seller_id,
-                    listingId: transactionData.listing_id
-                });
-            }
-        } catch (error) {
-            console.error('Error loading transaction:', error);
-        }
-        setLoading(false);
-    };
+    // State management is now handled by the hook - no need for manual loading/subscription
 
     // Update user's position in transaction
     useEffect(() => {
-        if (!transaction || !currentPosition || !supabase) return;
+        if (!transaction || !currentPosition) return;
 
         const updatePosition = async () => {
             try {
                 const locationField = role === 'seller' ? 'seller_location' : 'buyer_location';
-                await supabase
-                    .from('safe_exchange_transactions')
-                    .update({
-                        [locationField]: {
-                            lat: currentPosition.lat,
-                            lng: currentPosition.lng,
-                            updated_at: Date.now()
-                        },
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', transactionId);
+                await updateTransaction(transactionId, {
+                    [locationField]: {
+                        lat: currentPosition.lat,
+                        lng: currentPosition.lng,
+                        updated_at: Date.now()
+                    }
+                });
             } catch (error) {
                 console.error('Failed to update position:', error);
             }
         };
 
         updatePosition();
-    }, [currentPosition, transaction, transactionId, role]);
+    }, [currentPosition, transaction, transactionId, role, updateTransaction]);
 
     // Load nearby safe zones when zone picker is opened
     useEffect(() => {
@@ -147,72 +109,42 @@ export default function SafeExchangeTransaction({
 
     // Update transaction status
     const updateStatus = useCallback(async (newStatus, additionalData = {}) => {
-        if (!transactionId || !supabase) return;
+        if (!transactionId) return;
 
         setActionLoading(true);
         const userId = user?.id || user?.uid;
         try {
-            const statusHistory = transaction?.status_history || {};
+            const verificationData = transaction?.verificationData || {};
+            const statusHistory = verificationData.status_history || {};
+
             statusHistory[newStatus] = {
                 timestamp: Date.now(),
                 userId: userId
             };
-            
-            // Convert camelCase keys to snake_case for Supabase
-            const convertedData = Object.keys(additionalData).reduce((acc, key) => {
-                const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-                acc[snakeKey] = additionalData[key];
-                return acc;
-            }, {});
-            
-            await supabase
-                .from('safe_exchange_transactions')
-                .update({
-                    status: newStatus,
-                    status_history: statusHistory,
-                    updated_at: new Date().toISOString(),
-                    ...convertedData
-                })
-                .eq('id', transactionId);
 
-            // Send notification to other party
-            await sendNotification(newStatus, additionalData);
+            await updateTransaction(transactionId, {
+                status: newStatus,
+                verification_data: {
+                    ...verificationData,
+                    status_history: statusHistory,
+                    ...additionalData
+                }
+            });
+
+            // Notifications are temporarily disabled during migration
+            // await sendNotification(newStatus, additionalData);
         } catch (error) {
             console.error('Failed to update status:', error);
             alert('Failed to update transaction. Please try again.');
         }
         setActionLoading(false);
-    }, [transactionId, transaction, user?.id, user?.uid]);
+    }, [transactionId, transaction, user?.id, user?.uid, updateTransaction]);
 
-    // Send notification to other party
+    // Send notification to other party (temporarily disabled)
     const sendNotification = async (status, data = {}) => {
-        if (!supabase || !transaction) return;
-        const otherUserId = isSeller ? transaction.buyerId : transaction.sellerId;
-        
-        // Use data passed from updateStatus for values that may not be in React state yet
-        const messages = {
-            [SAFE_EXCHANGE_STATUS.MEETUP_SCHEDULED]: `Meetup scheduled for ${data.meetupDate || transaction.meetup_date} at ${data.meetupTime || transaction.meetup_time}`,
-            [SAFE_EXCHANGE_STATUS.SELLER_EN_ROUTE]: 'Seller is on their way to the exchange location',
-            [SAFE_EXCHANGE_STATUS.BUYER_EN_ROUTE]: 'Buyer is on their way to the exchange location',
-            [SAFE_EXCHANGE_STATUS.AT_SAFE_ZONE]: `${isSeller ? 'Seller' : 'Buyer'} has arrived at the safe zone`,
-            [SAFE_EXCHANGE_STATUS.SELLER_PHOTOS_UPLOADED]: 'Seller has uploaded pre-departure photos',
-            [SAFE_EXCHANGE_STATUS.BUYER_APPROVED]: 'Buyer has approved the exchange',
-            [SAFE_EXCHANGE_STATUS.SELLER_APPROVED]: 'Seller has approved the exchange',
-            [SAFE_EXCHANGE_STATUS.COMPLETED]: '🎉 Exchange completed! Funds have been released.',
-            [SAFE_EXCHANGE_STATUS.DISPUTED]: '⚠️ A dispute has been raised on the transaction'
-        };
-
-        await supabase
-            .from('notifications')
-            .insert({
-                user_id: otherUserId,
-                type: 'safe_exchange',
-                transaction_id: transactionId,
-                message: messages[status] || `Transaction status updated: ${status}`,
-                item_title: transaction.item_title,
-                read: false,
-                created_at: new Date().toISOString()
-            });
+        // TODO: Implement notification system with Neon
+        console.log('Notification system temporarily disabled during migration');
+        return;
     };
 
     // Schedule meetup
@@ -289,22 +221,12 @@ export default function SafeExchangeTransaction({
 
     // Complete transaction and release funds
     const completeTransaction = async () => {
-        if (!supabase) return;
         const userId = user?.id || user?.uid;
         await updateStatus(SAFE_EXCHANGE_STATUS.COMPLETED, {
-            completedAt: new Date().toISOString()
+            completedAt: new Date().toISOString(),
+            fundsReleased: true,
+            fundsReleasedAt: new Date().toISOString()
         });
-
-        // Release escrow funds (in production, this would call a cloud function)
-        // For now, we mark it as released
-        await supabase
-            .from('safe_exchange_transactions')
-            .update({
-                funds_released: true,
-                funds_released_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', transactionId);
 
         onComplete?.();
     };

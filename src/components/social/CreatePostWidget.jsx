@@ -5,7 +5,7 @@ import { POPULAR_PLUGINS_LIST } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
 import { motion, AnimatePresence } from 'framer-motion';
 
-export default function CreatePostWidget({ user, userData, onPost }) {
+export default function CreatePostWidget({ user, userData, subProfiles = {}, onPost }) {
     const [text, setText] = useState('');
     const [media, setMedia] = useState([]); // Array of {file, type, previewUrl}
     const [seshFxOpen, setSeshFxOpen] = useState(false);
@@ -13,6 +13,20 @@ export default function CreatePostWidget({ user, userData, onPost }) {
     const [presetFile, setPresetFile] = useState(null);
     const [isPosting, setIsPosting] = useState(false);
     const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0, percent: 0 });
+
+    // Get active profile info
+    const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'Fan';
+    const activeProfile = subProfiles?.[activeRole] || {};
+    const getDisplayRole = (role) => {
+        if (!role || role === 'User' || role === 'Fan') return role || 'User';
+        if (role === 'Talent') {
+            const talentSub = subProfiles?.['Talent'];
+            const subRole = talentSub?.profile_data?.talentSubRole || talentSub?.talentSubRole;
+            if (subRole && subRole !== '') return subRole;
+        }
+        return role;
+    };
+    const displayRole = getDisplayRole(activeRole);
 
     const { uploadMedia } = useVercelUpload('post-media');
 
@@ -149,8 +163,20 @@ export default function CreatePostWidget({ user, userData, onPost }) {
             </AnimatePresence>
 
             <div className="flex gap-3">
-                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0">
-                    {userData?.photoURL ? <img src={userData.photoURL} className="h-full w-full object-cover" /> : <div className="h-full w-full bg-brand-blue"></div>}
+                <div className="relative">
+                    <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0">
+                        {activeProfile?.photo_url || userData?.photoURL ? (
+                            <img src={activeProfile?.photo_url || userData?.photoURL} className="h-full w-full object-cover" />
+                        ) : (
+                            <div className="h-full w-full bg-brand-blue"></div>
+                        )}
+                    </div>
+                    {/* Profile Badge */}
+                    {activeRole && activeRole !== 'Fan' && (
+                        <div className="absolute -bottom-1 -right-1 bg-brand-blue text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border-2 border-white dark:border-[#2c2e36]">
+                            {displayRole}
+                        </div>
+                    )}
                 </div>
                 <div className="flex-1">
                     <textarea

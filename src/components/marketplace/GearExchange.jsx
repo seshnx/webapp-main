@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Camera, DollarSign, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info, ToggleLeft, ToggleRight, Package, Star, MessageCircle, Send, Clock, ThumbsUp, ThumbsDown, BadgeCheck, ShoppingCart, ArrowRight, Home, BoxIcon, Receipt, ChevronRight, WrenchIcon } from 'lucide-react';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useGearListings, useGearOrders, useGearOffers, useSafeExchangeTransactions, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import { EQUIP_CATEGORIES, HIGH_VALUE_THRESHOLD, SAFE_EXCHANGE_STATUS, SAFE_EXCHANGE_REQUIREMENT, FULFILLMENT_METHOD, SHIPPING_VERIFICATION_STATUS } from '../../config/constants';
 import InspectionEditor from '../tech/InspectionEditor';
 import { InspectionSvg } from '../tech/InspectionDiagrams';
@@ -8,9 +9,6 @@ import SafeExchangeTransaction from './SafeExchangeTransaction';
 import ShippingVerification from './ShippingVerification';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-
-// Supabase has been migrated away - marketplace features temporarily disabled
-const supabase = null;
 
 const CONDITIONS = ['Mint', 'Excellent', 'Good', 'Fair', 'Non-Functioning'];
 
@@ -109,366 +107,158 @@ const getSafeExchangeRequirement = (price, sellerRequiresSafeExchange) => {
 };
 
 export default function GearExchange({ user, userData, setActiveTab, openChat }) {
+    const userId = user?.id || user?.uid;
+
+    // Fetch data with polling hooks
+    const { data: rawListings } = useGearListings({ status: 'active' });
+    const { data: rawTransactions } = useSafeExchangeTransactions(userId);
+    const { data: rawOrders } = useGearOrders(userId);
+
+    // Mutation functions
+    const {
+        createListing,
+        updateListingStatus,
+        createOrder,
+        updateOrderStatus,
+        createOffer,
+        respondToOffer,
+        createTransaction,
+        updateTransaction
+    } = useMarketplaceMutations();
+
     const [view, setView] = useState('browse'); // 'browse', 'create', 'detail', 'orders'
-    const [listings, setListings] = useState([]);
     const [filter, setFilter] = useState('All');
     const [search, setSearch] = useState('');
     const [selectedItem, setSelectedItem] = useState(null);
-    
+
     // Safe Exchange State
     const [activeTransaction, setActiveTransaction] = useState(null);
-    const [userTransactions, setUserTransactions] = useState([]);
-    
+
     // Standard Orders State
-    const [userOrders, setUserOrders] = useState([]);
     const [selectedOrder, setSelectedOrder] = useState(null);
 
-    // Fetch Listings
-    useEffect(() => {
-        if (!supabase) return;
-        
-        const channel = supabase
-            .channel('gear-listings')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'gear_listings'
-            }, () => {
-                loadListings();
-            })
-            .subscribe();
+    // Transform raw listings
+    const listings = (rawListings || []).map(l => ({
+        id: l.id,
+        ...l,
+        sellerId: l.seller_id,
+        sellerName: l.seller_name,
+        sellerPhoto: l.seller_photo,
+        sellerRating: l.seller_rating,
+        sellerSalesCount: l.seller_sales_count,
+        sellerVerified: l.seller_verified,
+        sellerResponseTime: l.seller_response_time,
+        minimumOffer: l.minimum_offer,
+        conditionReport: l.condition_report,
+        timestamp: l.timestamp
+    }));
 
-        loadListings();
+    // Transform raw transactions with role tagging
+    const userTransactions = [
+        ...(rawTransactions || []).map(t => {
+            const isBuyer = t.parties?.buyer === userId;
+            return {
+                id: t.id,
+                ...t,
+                buyerId: t.parties?.buyer,
+                sellerId: t.parties?.seller,
+                listingId: t.item_id,
+                role: isBuyer ? 'buyer' : 'seller'
+            };
+        })
+    ];
 
-        return () => {
-            supabase.removeChannel(channel);
+    // Transform raw orders with role tagging
+    const userOrders = (rawOrders || []).map(o => {
+        const isBuyer = o.buyer_id === userId;
+        return {
+            id: o.id,
+            ...o,
+            buyerId: o.buyer_id,
+            sellerId: o.seller_id,
+            listingId: o.listing_id,
+            itemTitle: o.item_title,
+            itemBrand: o.item_brand,
+            itemDescription: o.item_description,
+            itemPhotos: o.item_photos,
+            itemCondition: o.item_condition,
+            itemPrice: o.item_price,
+            serviceFee: o.service_fee,
+            serviceFeeRate: o.service_fee_rate,
+            buyerTotal: o.buyer_total,
+            sellerPayout: o.seller_payout,
+            buyerName: o.buyer_name,
+            buyerPhoto: o.buyer_photo,
+            sellerName: o.seller_name,
+            sellerPhoto: o.seller_photo,
+            fulfillmentMethod: o.fulfillment_method,
+            shippingAddress: o.shipping_address,
+            shippingPhone: o.shipping_phone,
+            shippingNotes: o.shipping_notes,
+            statusHistory: o.status_history,
+            createdAt: o.created_at,
+            updatedAt: o.updated_at,
+            role: isBuyer ? 'buyer' : 'seller'
         };
-    }, [user?.id, user?.uid]);
-
-    const loadListings = async () => {
-        if (!supabase) return;
-        try {
-            const { data: listingsData, error } = await supabase
-                .from('gear_listings')
-                .select('*')
-                .order('timestamp', { ascending: false });
-            
-            if (error) throw error;
-            
-            setListings((listingsData || []).map(l => ({
-                id: l.id,
-                ...l,
-                sellerId: l.seller_id,
-                sellerName: l.seller_name,
-                sellerPhoto: l.seller_photo,
-                sellerRating: l.seller_rating,
-                sellerSalesCount: l.seller_sales_count,
-                sellerVerified: l.seller_verified,
-                sellerResponseTime: l.seller_response_time,
-                minimumOffer: l.minimum_offer,
-                conditionReport: l.condition_report,
-                timestamp: l.timestamp
-            })));
-        } catch (error) {
-            console.error('Error loading listings:', error);
-        }
-    };
-
-    // Fetch user's active safe exchange transactions
-    useEffect(() => {
-        if ((!user?.id && !user?.uid) || !supabase) return;
-        const userId = user?.id || user?.uid;
-
-        const channel = supabase
-            .channel('safe-exchange-transactions')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'safe_exchange_transactions',
-                filter: `buyer_id=eq.${userId}`
-            }, () => {
-                loadTransactions();
-            })
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'safe_exchange_transactions',
-                filter: `seller_id=eq.${userId}`
-            }, () => {
-                loadTransactions();
-            })
-            .subscribe();
-
-        loadTransactions();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user?.id, user?.uid]);
-
-    const loadTransactions = async () => {
-        if (!supabase) return;
-        const userId = user?.id || user?.uid;
-        try {
-            const { data: buyerTxns, error: buyerError } = await supabase
-                .from('safe_exchange_transactions')
-                .select('*')
-                .eq('buyer_id', userId);
-            
-            const { data: sellerTxns, error: sellerError } = await supabase
-                .from('safe_exchange_transactions')
-                .select('*')
-                .eq('seller_id', userId);
-            
-            if (buyerError || sellerError) throw buyerError || sellerError;
-            
-            const allTxns = [
-                ...(buyerTxns || []).map(t => ({
-                    id: t.id,
-                    ...t,
-                    buyerId: t.buyer_id,
-                    sellerId: t.seller_id,
-                    listingId: t.listing_id,
-                    role: 'buyer'
-                })),
-                ...(sellerTxns || []).map(t => ({
-                    id: t.id,
-                    ...t,
-                    buyerId: t.buyer_id,
-                    sellerId: t.seller_id,
-                    listingId: t.listing_id,
-                    role: 'seller'
-                }))
-            ];
-            
-            setUserTransactions(allTxns);
-        } catch (error) {
-            console.error('Error loading transactions:', error);
-        }
-    };
-
-    // Fetch user's standard orders (as buyer and seller)
-    useEffect(() => {
-        if ((!user?.id && !user?.uid) || !supabase) return;
-        const userId = user?.id || user?.uid;
-
-        const channel = supabase
-            .channel('gear-orders')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'gear_orders',
-                filter: `buyer_id=eq.${userId}`
-            }, () => {
-                loadOrders();
-            })
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'gear_orders',
-                filter: `seller_id=eq.${userId}`
-            }, () => {
-                loadOrders();
-            })
-            .subscribe();
-
-        loadOrders();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [user?.id, user?.uid]);
-
-    const loadOrders = async () => {
-        if (!supabase) return;
-        const userId = user?.id || user?.uid;
-        try {
-            const { data: buyerOrders, error: buyerError } = await supabase
-                .from('gear_orders')
-                .select('*')
-                .eq('buyer_id', userId);
-            
-            const { data: sellerOrders, error: sellerError } = await supabase
-                .from('gear_orders')
-                .select('*')
-                .eq('seller_id', userId);
-            
-            if (buyerError || sellerError) throw buyerError || sellerError;
-            
-            const allOrders = [
-                ...(buyerOrders || []).map(o => ({
-                    id: o.id,
-                    ...o,
-                    buyerId: o.buyer_id,
-                    sellerId: o.seller_id,
-                    listingId: o.listing_id,
-                    itemTitle: o.item_title,
-                    itemBrand: o.item_brand,
-                    itemDescription: o.item_description,
-                    itemPhotos: o.item_photos,
-                    itemCondition: o.item_condition,
-                    itemPrice: o.item_price,
-                    serviceFee: o.service_fee,
-                    serviceFeeRate: o.service_fee_rate,
-                    buyerTotal: o.buyer_total,
-                    sellerPayout: o.seller_payout,
-                    buyerName: o.buyer_name,
-                    buyerPhoto: o.buyer_photo,
-                    sellerName: o.seller_name,
-                    sellerPhoto: o.seller_photo,
-                    fulfillmentMethod: o.fulfillment_method,
-                    shippingAddress: o.shipping_address,
-                    shippingPhone: o.shipping_phone,
-                    shippingNotes: o.shipping_notes,
-                    statusHistory: o.status_history,
-                    createdAt: o.created_at,
-                    updatedAt: o.updated_at,
-                    role: 'buyer'
-                })),
-                ...(sellerOrders || []).map(o => ({
-                    id: o.id,
-                    ...o,
-                    buyerId: o.buyer_id,
-                    sellerId: o.seller_id,
-                    listingId: o.listing_id,
-                    itemTitle: o.item_title,
-                    itemBrand: o.item_brand,
-                    itemDescription: o.item_description,
-                    itemPhotos: o.item_photos,
-                    itemCondition: o.item_condition,
-                    itemPrice: o.item_price,
-                    serviceFee: o.service_fee,
-                    serviceFeeRate: o.service_fee_rate,
-                    buyerTotal: o.buyer_total,
-                    sellerPayout: o.seller_payout,
-                    buyerName: o.buyer_name,
-                    buyerPhoto: o.buyer_photo,
-                    sellerName: o.seller_name,
-                    sellerPhoto: o.seller_photo,
-                    fulfillmentMethod: o.fulfillment_method,
-                    shippingAddress: o.shipping_address,
-                    shippingPhone: o.shipping_phone,
-                    shippingNotes: o.shipping_notes,
-                    statusHistory: o.status_history,
-                    createdAt: o.created_at,
-                    updatedAt: o.updated_at,
-                    role: 'seller'
-                }))
-            ].sort((a, b) => {
-                const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-                const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-                return bTime - aTime;
-            });
-            
-            setUserOrders(allOrders);
-        } catch (error) {
-            console.error('Error loading orders:', error);
-        }
-    };
+    }).sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return bTime - aTime;
+    });
 
     // Handle initiating a safe exchange purchase
     const handleSafeExchangePurchase = async (item) => {
-        if (!supabase) return;
         // Calculate fees
         const fees = calculateFees(item.price);
         const userId = user?.id || user?.uid;
-        const now = new Date().toISOString();
-        
+
         try {
-            // Create the safe exchange transaction
+            // Create the safe exchange transaction with JSONB structure
             const statusHistory = {
                 [SAFE_EXCHANGE_STATUS.INTENT_CREATED]: {
                     timestamp: Date.now(),
                     userId: userId
                 }
             };
-            
-            const { data: transaction, error: createError } = await supabase
-                .from('safe_exchange_transactions')
-                .insert({
-                    listing_id: item.id,
-                    item_title: item.title,
-                    item_brand: item.brand,
-                    item_description: item.description || null,
-                    item_photos: item.images || [],
-                    item_condition: item.condition,
+
+            const transaction = await createTransaction({
+                itemId: item.id,
+                transactionType: 'gear_sale',
+                parties: {
+                    buyer: userId,
+                    seller: item.sellerId,
+                    buyerName: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Buyer' : 'Buyer',
+                    buyerPhoto: userData.photoURL || null,
+                    sellerName: item.sellerName,
+                    sellerPhoto: item.sellerPhoto
+                },
+                itemDetails: {
+                    title: item.title,
+                    brand: item.brand,
+                    description: item.description || null,
+                    photos: item.images || [],
+                    condition: item.condition,
                     price: item.price,
-                    item_price: fees.itemPrice,
-                    service_fee: fees.serviceFee,
-                    service_fee_rate: fees.serviceFeeRate,
-                    buyer_total: fees.buyerTotal,
-                    seller_payout: fees.sellerPayout,
-                    seller_id: item.sellerId,
-                    seller_name: item.sellerName,
-                    seller_photo: item.sellerPhoto,
-                    buyer_id: userId,
-                    buyer_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Buyer' : 'Buyer',
-                    buyer_photo: userData.photoURL || null,
-                    status: SAFE_EXCHANGE_STATUS.INTENT_CREATED,
-                    status_history: statusHistory,
-                    escrow_amount: fees.buyerTotal,
-                    escrow_status: 'pending',
-                    seller_approved: false,
-                    buyer_approved: false,
-                    created_at: now,
-                    updated_at: now
-                })
-                .select()
-                .single();
-            
-            if (createError) throw createError;
-
-            // Update transaction to hold_placed status (simulating payment hold)
-            statusHistory[SAFE_EXCHANGE_STATUS.HOLD_PLACED] = {
-                timestamp: Date.now(),
-                userId: userId
-            };
-            
-            await supabase
-                .from('safe_exchange_transactions')
-                .update({
-                    status: SAFE_EXCHANGE_STATUS.HOLD_PLACED,
-                    status_history: statusHistory,
-                    escrow_status: 'held',
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', transaction.id);
-
-            // Notify seller
-            statusHistory[SAFE_EXCHANGE_STATUS.SELLER_NOTIFIED] = {
-                timestamp: Date.now(),
-                userId: userId
-            };
-            
-            await supabase
-                .from('safe_exchange_transactions')
-                .update({
-                    status: SAFE_EXCHANGE_STATUS.SELLER_NOTIFIED,
-                    status_history: statusHistory,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', transaction.id);
-
-            // Send notification to seller with payout info
-            await supabase
-                .from('notifications')
-                .insert({
-                    user_id: item.sellerId,
-                    type: 'safe_exchange_intent',
-                    transaction_id: transaction.id,
-                    message: `${userData?.firstName || 'A user'} wants to purchase your ${item.title} - You'll receive $${fees.sellerPayout.toFixed(2)}`,
-                    buyer_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Buyer' : 'Buyer',
-                    item_title: item.title,
-                    price: item.price,
-                    seller_payout: fees.sellerPayout,
-                    service_fee: fees.serviceFee,
-                    read: false,
-                    created_at: new Date().toISOString()
-                });
+                    itemPrice: fees.itemPrice,
+                    serviceFee: fees.serviceFee,
+                    serviceFeeRate: fees.serviceFeeRate,
+                    buyerTotal: fees.buyerTotal,
+                    sellerPayout: fees.sellerPayout
+                },
+                verificationData: {
+                    statusHistory: statusHistory,
+                    escrowAmount: fees.buyerTotal,
+                    escrowStatus: 'held',
+                    sellerApproved: false,
+                    buyerApproved: false
+                },
+                status: SAFE_EXCHANGE_STATUS.SELLER_NOTIFIED
+            });
 
             // Open the transaction view
             setActiveTransaction(transaction.id);
             setSelectedItem(null);
+            toast.success('Purchase initiated! Seller will be notified.');
 
         } catch (error) {
             console.error('Failed to create safe exchange:', error);
@@ -478,92 +268,50 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
 
     // Handle standard purchase for low-value items
     const handleStandardPurchase = async (item, shippingDetails) => {
-        if (!supabase) return;
         const toastId = toast.loading('Processing your order...');
-        
+
         // Calculate fees
         const fees = calculateFees(item.price);
         const userId = user?.id || user?.uid;
-        const now = new Date().toISOString();
-        
+
         try {
             // Create the order
-            const { data: order, error: orderError } = await supabase
-                .from('gear_orders')
-                .insert({
-                    listing_id: item.id,
-                    item_title: item.title,
-                    item_brand: item.brand,
-                    item_description: item.description || null,
-                    item_photos: item.images || [],
-                    item_condition: item.condition,
-                    price: item.price,
-                    item_price: fees.itemPrice,
-                    service_fee: fees.serviceFee,
-                    service_fee_rate: fees.serviceFeeRate,
-                    buyer_total: fees.buyerTotal,
-                    seller_payout: fees.sellerPayout,
-                    seller_id: item.sellerId,
-                    seller_name: item.sellerName,
-                    seller_photo: item.sellerPhoto,
-                    buyer_id: userId,
-                    buyer_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Buyer' : 'Buyer',
-                    buyer_photo: userData.photoURL || null,
-                    fulfillment_method: shippingDetails.method,
-                    shipping_address: shippingDetails.method === 'shipping' ? shippingDetails.address : null,
-                    shipping_phone: shippingDetails.phone || null,
-                    shipping_notes: shippingDetails.notes || null,
-                    tracking_number: null,
-                    tracking_carrier: null,
+            const order = await createOrder({
+                listing_id: item.id,
+                buyer_id: userId,
+                seller_id: item.sellerId,
+                total_price: fees.buyerTotal,
+                item_title: item.title,
+                item_brand: item.brand,
+                item_description: item.description || null,
+                item_photos: item.images || [],
+                item_condition: item.condition,
+                item_price: fees.itemPrice,
+                service_fee: fees.serviceFee,
+                service_fee_rate: fees.serviceFeeRate,
+                seller_payout: fees.sellerPayout,
+                buyer_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Buyer' : 'Buyer',
+                buyer_photo: userData.photoURL || null,
+                seller_name: item.sellerName,
+                seller_photo: item.sellerPhoto,
+                fulfillment_method: shippingDetails.method,
+                shipping_address: shippingDetails.method === 'shipping' ? shippingDetails.address : null,
+                shipping_phone: shippingDetails.phone || null,
+                shipping_notes: shippingDetails.notes || null,
+                status_history: [{
                     status: ORDER_STATUS.PENDING,
-                    status_history: [{
-                        status: ORDER_STATUS.PENDING,
-                        timestamp: Date.now(),
-                        note: 'Order placed by buyer'
-                    }],
-                    payment_status: 'pending',
-                    payment_intent_id: null,
-                    created_at: now,
-                    updated_at: now
-                })
-                .select()
-                .single();
-            
-            if (orderError) throw orderError;
+                    timestamp: Date.now(),
+                    note: 'Order placed by buyer'
+                }]
+            });
 
-            // Send notification to seller with payout info
-            await supabase
-                .from('notifications')
-                .insert({
-                    user_id: item.sellerId,
-                    type: 'gear_order',
-                    order_id: order.id,
-                    listing_id: item.id,
-                    message: `${userData?.firstName || 'A user'} purchased your ${item.title} - You'll receive $${fees.sellerPayout.toFixed(2)}`,
-                    buyer_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Buyer' : 'Buyer',
-                    item_title: item.title,
-                    price: item.price,
-                    seller_payout: fees.sellerPayout,
-                    service_fee: fees.serviceFee,
-                    fulfillment_method: shippingDetails.method,
-                    read: false,
-                    created_at: new Date().toISOString()
-                });
-
-            // Update listing status to sold/pending
-            await supabase
-                .from('gear_listings')
-                .update({
-                    status: 'Pending Sale',
-                    pending_order_id: order.id,
-                    updated_at: new Date().toISOString()
-                })
-                .eq('id', item.id);
+            // Update listing status to pending sale
+            await updateListingStatus(item.id, 'Pending Sale');
 
             toast.success('Order placed successfully!', { id: toastId });
             setSelectedItem(null);
             setView('orders'); // Switch to orders view
-            
+
             return order.id;
         } catch (error) {
             console.error('Failed to create order:', error);
@@ -574,84 +322,46 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
 
     // Update order status (for sellers)
     const handleUpdateOrderStatus = async (orderId, newStatus, trackingInfo = null) => {
-        if (!supabase) return;
         const toastId = toast.loading('Updating order...');
-        
+
         try {
-            const { data: orderData, error: fetchError } = await supabase
-                .from('gear_orders')
-                .select('*')
-                .eq('id', orderId)
-                .single();
-            
-            if (fetchError || !orderData) {
+            // Find the order first to get its status history
+            const order = userOrders.find(o => o.id === orderId);
+            if (!order) {
                 toast.error('Order not found', { id: toastId });
                 return;
             }
-            
-            const statusHistory = orderData.status_history || [];
-            
+
+            const statusHistory = order.statusHistory || [];
+
+            // Prepare update data
             const updateData = {
                 status: newStatus,
                 status_history: [...statusHistory, {
                     status: newStatus,
                     timestamp: Date.now(),
                     note: `Status updated to ${newStatus}`
-                }],
-                updated_at: new Date().toISOString()
+                }]
             };
-            
+
             // Add tracking info if provided
             if (trackingInfo) {
                 updateData.tracking_number = trackingInfo.trackingNumber;
                 updateData.tracking_carrier = trackingInfo.carrier;
             }
-            
-            await supabase
-                .from('gear_orders')
-                .update(updateData)
-                .eq('id', orderId);
-            
-            // Send notification to buyer
-            const notificationMessage = newStatus === ORDER_STATUS.SHIPPED 
-                ? `Your order "${orderData.item_title}" has been shipped!`
-                : `Your order "${orderData.item_title}" status updated to ${newStatus}`;
-                
-            await supabase
-                .from('notifications')
-                .insert({
-                    user_id: orderData.buyer_id,
-                    type: 'order_update',
-                    order_id: orderId,
-                    message: notificationMessage,
-                    item_title: orderData.item_title,
-                    new_status: newStatus,
-                    tracking_number: trackingInfo?.trackingNumber || null,
-                    read: false,
-                    created_at: new Date().toISOString()
-                });
-            
-            // If completed, update listing to sold
-            if (newStatus === ORDER_STATUS.COMPLETED) {
-                await supabase
-                    .from('gear_listings')
-                    .update({
-                        status: 'Sold',
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', orderData.listing_id);
-            }
-            
-            toast.success('Order updated!', { id: toastId });
+
+            await updateOrderStatus(orderId, newStatus);
+
+            toast.success(`Order ${newStatus}!`, { id: toastId });
         } catch (error) {
             console.error('Failed to update order:', error);
-            toast.error('Failed to update order', { id: toastId });
+            toast.error('Failed to update order. Please try again.', { id: toastId });
         }
     };
 
     // Get pending orders count
-    const pendingOrders = userOrders.filter(o => 
-        o.status !== ORDER_STATUS.COMPLETED && 
+    const pendingOrders = userOrders.filter(o =>
+        o.status !== ORDER_STATUS.COMPLETED &&
         o.status !== ORDER_STATUS.CANCELLED &&
         o.status !== ORDER_STATUS.REFUNDED
     );
@@ -902,41 +612,31 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
     };
 
     const handleSubmit = async () => {
-        if (!form.title || !form.price || !supabase) {
-            if (!form.title || !form.price) alert("Title and Price required.");
+        if (!form.title || !form.price) {
+            alert("Title and Price required.");
             return;
         }
         setSubmitting(true);
         const userId = user?.id || user?.uid;
         try {
-            await supabase
-                .from('gear_listings')
-                .insert({
-                    title: form.title,
-                    brand: form.brand,
-                    category: form.category,
-                    condition: form.condition,
-                    price: parseInt(form.price),
-                    description: form.description || null,
-                    location: form.location || null,
-                    weight: form.weight || null,
-                    length: form.length || null,
-                    width: form.width || null,
-                    height: form.height || null,
-                    accepts_offers: form.acceptsOffers || false,
-                    minimum_offer: form.minimumOffer ? parseInt(form.minimumOffer) : null,
-                    images: images || [],
-                    condition_report: conditionReport,
-                    seller_id: userId,
-                    seller_name: userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() || 'Seller' : 'Seller',
-                    seller_photo: userData?.photoURL || null,
-                    seller_rating: userData?.sellerRating || null,
-                    seller_sales_count: userData?.sellerSalesCount || 0,
-                    seller_verified: userData?.verified || false,
-                    seller_response_time: userData?.avgResponseTime || null,
-                    timestamp: new Date().toISOString(),
-                    status: 'Active'
-                });
+            await createListing({
+                seller_id: userId,
+                title: form.title,
+                brand: form.brand,
+                category: form.category,
+                condition: form.condition,
+                price: parseInt(form.price),
+                description: form.description || null,
+                location: form.location || null,
+                weight: form.weight || null,
+                length: form.length || null,
+                width: form.width || null,
+                height: form.height || null,
+                accepts_offers: form.acceptsOffers || false,
+                minimum_offer: form.minimumOffer ? parseInt(form.minimumOffer) : null,
+                images: images || [],
+                condition_report: conditionReport
+            });
             toast.success("Listing posted!");
             onSuccess();
         } catch (e) {
@@ -1280,51 +980,16 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
 
         setSubmittingOffer(true);
         const toastId = toast.loading('Submitting offer...');
-
-        if (!supabase) return;
         const userId = currentUser?.id || currentUser?.uid;
-        
-        try {
-            // Create offer document
-            const { data: offerData, error: offerError } = await supabase
-                .from('gear_offers')
-                .insert({
-                    listing_id: item.id,
-                    item_title: item.title,
-                    item_brand: item.brand,
-                    asking_price: item.price,
-                    offer_amount: offer,
-                    message: offerMessage || null,
-                    buyer_id: userId,
-                    buyer_name: `${currentUserData.firstName} ${currentUserData.lastName}`,
-                    buyer_photo: currentUserData.photoURL || null,
-                    seller_id: item.sellerId,
-                    seller_name: item.sellerName,
-                    status: 'pending',
-                    created_at: new Date().toISOString(),
-                    expires_at: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString()
-                })
-                .select()
-                .single();
-            
-            if (offerError) throw offerError;
 
-            // Send notification to seller
-            await supabase
-                .from('notifications')
-                .insert({
-                    user_id: item.sellerId,
-                    type: 'gear_offer',
-                    offer_id: offerData.id,
-                    listing_id: item.id,
-                    message: `${currentUserData.firstName} made an offer of $${offer} on your ${item.title}`,
-                    buyer_name: `${currentUserData.firstName} ${currentUserData.lastName}`,
-                    item_title: item.title,
-                    offer_amount: offer,
-                    asking_price: item.price,
-                    read: false,
-                    created_at: new Date().toISOString()
-                });
+        try {
+            await createOffer({
+                listing_id: item.id,
+                offeror_id: userId,
+                recipient_id: item.sellerId,
+                offer_amount: offer,
+                message: offerMessage || null
+            });
 
             toast.success('Offer submitted!', { id: toastId });
             setShowOfferForm(false);

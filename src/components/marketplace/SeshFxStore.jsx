@@ -1,86 +1,33 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Disc, Sliders, Download, CheckCircle, Zap, Plus, X, Upload, Loader2, Music, Flag } from 'lucide-react';
+import { Search, Disc, Sliders, Download, CheckCircle, Zap, Plus, X, Upload, Loader2, Music, Flag, Info } from 'lucide-react';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useMarketplaceItems, useUserLibrary, useItemOwnership, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import ReportModal from '../ReportModal';
 
-// Supabase has been migrated away - marketplace features temporarily disabled
-const supabase = null;
+export default function SeshFxStore({ user, userData, tokenBalance, refreshWallet }) {
+  const userId = user?.id || user?.uid;
 
-export default function SeshFxStore({ user, userData, tokenBalance, refreshWallet }) { 
-  const [items, setItems] = useState([]);
+  // Fetch marketplace items with polling
+  const { data: rawItems, loading } = useMarketplaceItems({ type: filter === 'All' ? undefined : filter });
+
+  // Fetch user library with polling
+  const { data: library } = useUserLibrary(userId);
+
+  // Mutation functions
+  const { purchaseItem } = useMarketplaceMutations();
+
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
-  const [ownedItemIds, setOwnedItemIds] = useState(new Set());
-  
+
   // UI State
   const [showSellModal, setShowSellModal] = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null); 
-  const [reportTarget, setReportTarget] = useState(null); 
-  
-  // 1. Fetch Market Items
-  useEffect(() => {
-      if (!user?.id && !user?.uid || !supabase) return;
-      const userId = user.id || user.uid;
-      
-      // Initial fetch
-      supabase
-          .from('market_items')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .then(({ data, error }) => {
-              if (error) {
-                  console.error('Error fetching market items:', error);
-                  return;
-              }
-              setItems((data || []).map(item => ({
-                  id: item.id,
-                  ...item,
-                  timestamp: item.created_at
-              })));
-          });
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [reportTarget, setReportTarget] = useState(null);
 
-      // Subscribe to realtime changes
-      const channel = supabase
-          .channel('market-items')
-          .on(
-              'postgres_changes',
-              {
-                  event: '*',
-                  schema: 'public',
-                  table: 'market_items'
-              },
-              async () => {
-                  const { data } = await supabase
-                      .from('market_items')
-                      .select('*')
-                      .order('created_at', { ascending: false });
-                  
-                  if (data) {
-                      setItems(data.map(item => ({
-                          id: item.id,
-                          ...item,
-                          timestamp: item.created_at
-                      })));
-                  }
-              }
-          )
-          .subscribe();
-
-      return () => {
-          supabase.removeChannel(channel);
-      };
-  }, [user?.id, user?.uid]);
-
-  // 2. Fetch Owned Items
-  useEffect(() => {
-      if (!user?.id && !user?.uid) return;
-      const userId = user.id || user.uid;
-
-      // TODO: Create API route for fetching user library
-      // For now, set empty owned items
-      setOwnedItemIds(new Set());
-  }, [user?.id, user?.uid]);
+  // Transform raw items and map ownership
+  const items = rawItems || [];
+  const ownedItemIds = new Set((library || []).map(lib => lib.item_id));
 
   const handlePurchase = async (item) => {
       if (tokenBalance < item.price) {
@@ -90,8 +37,15 @@ export default function SeshFxStore({ user, userData, tokenBalance, refreshWalle
 
       if(!window.confirm(`Purchase ${item.title} for ${item.price} Tokens?`)) return;
 
-      // TODO: Create API route for marketplace purchase
-      alert("Purchase flow coming soon! Please contact support to complete this purchase.");
+      try {
+          await purchaseItem(userId, item.id);
+          alert("Purchase successful! Item added to your library.");
+          // Refresh wallet balance
+          if (refreshWallet) refreshWallet();
+      } catch (error) {
+          console.error('Purchase error:', error);
+          alert("Failed to purchase item. Please try again.");
+      }
   };
 
   const filteredItems = items.filter(i => 
@@ -192,38 +146,35 @@ function SellItemModal({ user, userData, onClose }) {
     const [form, setForm] = useState({ title: '', price: '', type: 'Presets', tags: '', description: '' });
     const [audioFile, setAudioFile] = useState(null);
     const [status, setStatus] = useState('');
-    const { uploadMedia, uploading } = useMediaUpload(); // Destructure uploading
+    const { uploadMedia, uploading } = useMediaUpload();
+    const { createMarketplaceItem } = useMarketplaceMutations();
 
     const handleSubmit = async () => {
-        if(!form.title || !form.price || !audioFile || !supabase) return alert("Title, Price, and Audio File are required.");
-        
+        if(!form.title || !form.price || !audioFile) return alert("Title, Price, and Audio File are required.");
+
         const userId = user?.id || user?.uid;
-        
+
         try {
             setStatus('Uploading Audio Asset...');
             // Single file upload serves as both preview and product for now
-            // Note: uploadMedia may need to be updated to work with Supabase Storage
             const downloadUrl = await uploadMedia(audioFile, `market-assets/${userId}`);
 
             setStatus('Listing Item...');
-            await supabase
-                .from('market_items')
-                .insert({
-                    title: form.title,
-                    price: parseInt(form.price),
-                    type: form.type,
-                    tags: form.tags.split(',').map(t => t.trim()).filter(t => t),
-                    description: form.description || null,
-                    author: `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim(),
-                    author_id: userId,
-                    download_url: downloadUrl, // This URL acts as both source and download
-                    created_at: new Date().toISOString()
-                });
-            
+            await createMarketplaceItem({
+                userId,
+                title: form.title,
+                type: form.type,
+                price: parseInt(form.price),
+                downloadUrl,
+                tags: form.tags.split(',').map(t => t.trim()).filter(t => t),
+                description: form.description || null,
+                author: `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || 'Unknown'
+            });
+
             setStatus('Success!');
             setTimeout(onClose, 1000);
-        } catch(e) { 
-            console.error(e); 
+        } catch(e) {
+            console.error(e);
             setStatus('Error listing item.');
             alert("Failed to submit item to market. Check console.");
         }
@@ -285,16 +236,16 @@ function ItemDetailModal({ item, isOwned, onClose, onBuy, onDownload, onReport }
                      </div>
                      <h2 className="text-2xl font-bold dark:text-white mb-2">{item.title}</h2>
                      <div className="text-brand-blue font-medium mb-6">by {item.author}</div>
-                     
+
                      {/* Large Preview Player with TRUNCATION */}
-                     {item.downloadUrl && (
+                     {item.download_url && (
                          <div className="w-full">
                              {/* Passes isOwned check to enable/disable truncation logic in visualizer */}
-                             <StarFieldVisualizer audioUrl={item.downloadUrl} fileName="Preview Track" previewMode={!isOwned} />
+                             <StarFieldVisualizer audioUrl={item.download_url} fileName="Preview Track" previewMode={!isOwned} />
                          </div>
                      )}
                 </div>
-                
+
                 {/* Right: Info */}
                 <div className="md:w-7/12 p-8 overflow-y-auto flex flex-col">
                     <div className="flex justify-between items-start mb-6">
@@ -303,8 +254,8 @@ function ItemDetailModal({ item, isOwned, onClose, onBuy, onDownload, onReport }
                             <h1 className="text-3xl font-extrabold dark:text-white mt-2">{item.title}</h1>
                         </div>
                         <div className="flex gap-2">
-                            <button 
-                                onClick={onReport} 
+                            <button
+                                onClick={onReport}
                                 className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 rounded-full transition"
                                 title="Report Violation"
                             >

@@ -10,7 +10,7 @@ import { usePresence } from '../hooks/usePresence';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLanguage } from '../contexts/LanguageContext';
 
-export default function ChatInterface({ user, userData, openPublicProfile, pendingChatTarget, clearPendingChatTarget }) {
+export default function ChatInterface({ user, userData, subProfiles = {}, openPublicProfile, pendingChatTarget, clearPendingChatTarget }) {
     const location = useLocation();
     const navigate = useNavigate();
     const { t } = useLanguage();
@@ -158,6 +158,7 @@ export default function ChatInterface({ user, userData, openPublicProfile, pendi
                 <ChatSidebar
                     user={user}
                     userData={userData}
+                    subProfiles={subProfiles}
                     conversations={conversations}
                     activeChat={activeChat}
                     onSelectChat={handleChatSelect}

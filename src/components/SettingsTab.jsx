@@ -5,9 +5,9 @@ import {
     MessageSquare, UserX, Download, Globe, Calendar, ShoppingBag,
     Image, Accessibility, Zap, Clock, Volume2, VolumeX, Monitor,
     Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
-    FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save
+    FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save, Trash2
 } from 'lucide-react';
-import { updateProfile, getProfile, getSubProfile, upsertSubProfile } from '../config/neonQueries';
+import { updateProfile, getProfile, getSubProfile, upsertSubProfile, deleteSubProfile } from '../config/neonQueries';
 import { query as neonQuery } from '../config/neon';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { useSettings } from '../hooks/useSettings';
@@ -30,7 +30,7 @@ const SETTINGS_TABS = [
     { id: 'performance', labelKey: 'performance', icon: Zap },
 ];
 
-export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) {
+export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch, subProfiles = {} }) {
     const { t, language } = useLanguage();
     const [activeTab, setActiveTab] = useState('general');
     const [localSettings, setLocalSettings] = useState(() => {
@@ -43,7 +43,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             timezone: 'auto',
             currency: 'USD',
             numberFormat: '1,000.00',
-            
+
             // Security & Privacy
             privacy: {
                 publicProfile: true,
@@ -60,7 +60,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 showFollowersList: true,
             },
             twoFactorEnabled: false,
-            
+
             // Notifications
             notifications: {
                 email: true,
@@ -97,7 +97,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 soundEnabled: true,
                 badgeCount: true,
             },
-            
+
             // Messaging
             messaging: {
                 readReceipts: true,
@@ -110,7 +110,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 mutedThreads: [],
                 blockedContacts: [],
             },
-            
+
             // Social & Feed
             social: {
                 feedAlgorithm: 'recommended', // 'chronological', 'recommended', 'following'
@@ -128,7 +128,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 autoHideReported: true,
                 showAgeRestricted: false,
             },
-            
+
             // Bookings
             bookings: {
                 autoAccept: false,
@@ -145,7 +145,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                     cancellations: true,
                 },
             },
-            
+
             // Marketplace
             marketplace: {
                 autoListItems: false,
@@ -161,7 +161,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                     messages: true,
                 },
             },
-            
+
             // Content & Media
             content: {
                 imageQuality: 'high', // 'high', 'medium', 'low'
@@ -170,7 +170,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 compressImages: true,
                 maxUploadSize: 10, // MB
             },
-            
+
             // Accessibility
             accessibility: {
                 fontSize: 'medium', // 'small', 'medium', 'large', 'xlarge'
@@ -186,7 +186,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 compactMode: false,
                 sidebarCollapsed: false,
             },
-            
+
             // Performance
             performance: {
                 dataUsage: 'auto', // 'wifi-only', 'auto', 'never'
@@ -195,29 +195,34 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                 autoClearOldNotifications: true,
                 autoClearAfterDays: 30,
             },
-            
+
             // Legacy/Other
             preferences: {
                 seeAllProfiles: false,
             },
         };
-        
+
         // Merge with existing settings
         return { ...defaults, ...(userData?.settings || {}) };
     });
-    
+
     const [roles, setRoles] = useState(userData?.accountTypes || []);
     const [preferredRole, setPreferredRole] = useState(userData?.preferredRole || roles[0]);
     const [activeRole, setActiveRole] = useState(userData?.activeProfileRole || roles[0]);
+    const [defaultProfileRole, setDefaultProfileRole] = useState(userData?.defaultProfileRole || userData?.activeProfileRole || roles[0] || 'Fan');
     const [saving, setSaving] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [activeSessions, setActiveSessions] = useState([]);
-    
+
     // Deletion State
     const [isDeleting, setIsDeleting] = useState(false);
     const [deleteConfirm, setDeleteConfirm] = useState('');
     const [showDeleteModal, setShowDeleteModal] = useState(false);
-    
+
+    // Role Removal Confirmation State
+    const [roleToRemove, setRoleToRemove] = useState(null);
+    const [showRoleRemoveModal, setShowRoleRemoveModal] = useState(false);
+
     // Security / Account State
     const [showSecurityModal, setShowSecurityModal] = useState(false);
     const [securityAction, setSecurityAction] = useState(null);
@@ -287,7 +292,10 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
             onUpdate(updated);
             // Auto-save to database using Neon
             if (user?.id) {
-                updateProfile(user.id, { settings: updated })
+                updateProfile(user.id, {
+                    settings: updated,
+                    default_profile_role: defaultProfileRole
+                })
                     .catch(err => console.error('Auto-save failed:', err));
             }
             return updated;
@@ -304,8 +312,19 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         try {
             await updateProfile(user.id, {
                 settings: localSettings,
+                default_profile_role: defaultProfileRole,
                 updated_at: new Date().toISOString()
             });
+
+            // Update parent component's userData
+            if (onUpdate && userData) {
+                const updatedUserData = {
+                    ...userData,
+                    settings: localSettings,
+                    defaultProfileRole: defaultProfileRole
+                };
+                onUpdate(updatedUserData);
+            }
 
             alert("Settings saved successfully!");
         } catch (e) {
@@ -319,15 +338,57 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
         if (roles.length === 0 || !user?.id) return alert("You must have at least one role.");
         setSaving(true);
         try {
-            // Update both clerk_users and profiles tables in Neon
-            await updateProfile(user.id, {
+            const userId = user.id;
+
+            // Find removed roles
+            const removedRoles = (userData?.accountTypes || []).filter(role => !roles.includes(role));
+
+            // Handle edge case: if active role is being removed, switch to another role
+            let newActiveRole = activeRole;
+            if (removedRoles.includes(activeRole) || !roles.includes(activeRole)) {
+                // Switch to the first available role that's not hidden
+                newActiveRole = roles.find(r => !HIDDEN_ROLES.includes(r)) || roles[0];
+                setActiveRole(newActiveRole);
+
+                // Call onRoleSwitch if available
+                if (onRoleSwitch) {
+                    onRoleSwitch(newActiveRole);
+                }
+            }
+
+            // Ensure default profile role is still valid
+            let validDefaultRole = defaultProfileRole;
+            if (!roles.includes(defaultProfileRole)) {
+                validDefaultRole = newActiveRole;
+                setDefaultProfileRole(newActiveRole);
+            }
+
+            // Delete sub-profiles for removed roles
+            for (const role of removedRoles) {
+                try {
+                    await deleteSubProfile(userId, role);
+                } catch (err) {
+                    console.warn(`Failed to delete sub-profile for ${role}:`, err);
+                    // Continue even if deletion fails
+                }
+            }
+
+            // Update clerk_users table with new roles
+            await updateProfile(userId, {
                 account_types: roles,
-                active_role: activeRole,
+                active_role: newActiveRole,
+                default_profile_role: validDefaultRole,
             });
 
-            // Call onRoleSwitch callback if role changed
-            if (userData && activeRole !== userData.activeProfileRole && onRoleSwitch) {
-                onRoleSwitch(activeRole);
+            // Update parent component's userData with new roles
+            if (onUpdate && userData) {
+                const updatedUserData = {
+                    ...userData,
+                    accountTypes: roles,
+                    activeProfileRole: newActiveRole,
+                    defaultProfileRole: validDefaultRole,
+                };
+                onUpdate(updatedUserData);
             }
 
             alert("Roles & Preferences updated!");
@@ -339,7 +400,43 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
     };
 
     const toggleRole = (role) => {
+        // Check if we're removing a role
+        if (roles.includes(role)) {
+            // Check if this role has a sub-profile with data
+            const hasSubProfile = subProfiles?.[role] && (
+                subProfiles[role].display_name ||
+                (subProfiles[role].profile_data && Object.keys(subProfiles[role].profile_data).length > 0)
+            );
+
+            // Prevent removing the last role
+            if (roles.length === 1) {
+                alert("You must have at least one role.");
+                return;
+            }
+
+            // Show confirmation modal if role has data
+            if (hasSubProfile) {
+                setRoleToRemove(role);
+                setShowRoleRemoveModal(true);
+                return;
+            }
+        }
+
+        // Add or remove role directly
         setRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]);
+    };
+
+    const confirmRoleRemoval = () => {
+        if (roleToRemove) {
+            setRoles(prev => prev.filter(r => r !== roleToRemove));
+            setShowRoleRemoveModal(false);
+            setRoleToRemove(null);
+        }
+    };
+
+    const cancelRoleRemoval = () => {
+        setShowRoleRemoveModal(false);
+        setRoleToRemove(null);
     };
 
     // Security handlers
@@ -630,7 +727,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                 <SelectField
                                     label={t('preferredProfile')}
                                     value={preferredRole}
@@ -644,6 +741,13 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                     onChange={setActiveRole}
                                     options={roles.filter(r => !HIDDEN_ROLES.includes(r))}
                                     icon={RefreshCw}
+                                />
+                                <SelectField
+                                    label="Default Profile for Posts/Chats"
+                                    value={defaultProfileRole}
+                                    onChange={setDefaultProfileRole}
+                                    options={roles.filter(r => !HIDDEN_ROLES.includes(r))}
+                                    icon={Star}
                                 />
                             </div>
 
@@ -1706,7 +1810,7 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                 </div>
                             )}
 
-                            <button 
+                            <button
                                 onClick={handleSecurityUpdate}
                                 disabled={isSecurityLoading}
                                 className="w-full bg-blue-600 text-white py-2.5 rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg mt-2"
@@ -1714,6 +1818,59 @@ export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch }) 
                                 {isSecurityLoading ? <Loader2 className="animate-spin" size={18}/> : <CheckCircle size={18}/>}
                                 Confirm Update
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Role Removal Confirmation Modal */}
+            {showRoleRemoveModal && roleToRemove && (
+                <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-[#2c2e36] w-full max-w-md rounded-xl p-6 shadow-2xl animate-in zoom-in-95 border dark:border-gray-700">
+                        <div className="flex justify-between items-center mb-4">
+                            <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
+                                <Trash2 size={20} className="text-red-500"/>
+                                Remove {roleToRemove} Role?
+                            </h3>
+                            <button onClick={cancelRoleRemoval} className="text-gray-400 hover:text-gray-600 dark:hover:text-white">
+                                <X size={20}/>
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                                    <strong>Warning:</strong> You have a profile configured for the {roleToRemove} role with data. Removing this role will:
+                                </p>
+                                <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-2 list-disc list-inside space-y-1">
+                                    <li>Delete all your {roleToRemove} profile data</li>
+                                    <li>Remove this role from your account</li>
+                                    <li>This action cannot be undone</li>
+                                </ul>
+                            </div>
+
+                            {roleToRemove === activeRole && (
+                                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                                        <strong>Note:</strong> This is your active role. You'll be switched to another available role after removal.
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="flex gap-2 pt-2">
+                                <button
+                                    onClick={confirmRoleRemoval}
+                                    className="flex-1 bg-red-600 text-white py-2.5 rounded-lg font-bold hover:bg-red-700 flex items-center justify-center gap-2 shadow-lg"
+                                >
+                                    <Trash2 size={16}/> Remove Role
+                                </button>
+                                <button
+                                    onClick={cancelRoleRemoval}
+                                    className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 py-2.5 rounded-lg font-bold hover:opacity-80"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>

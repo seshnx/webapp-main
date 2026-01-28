@@ -5,14 +5,18 @@ import { api } from "../../../convex/_generated/api";
 import { isConvexAvailable } from '../../config/convex';
 import ConversationItem from './ConversationItem';
 import UserAvatar from '../shared/UserAvatar';
+import ProfileSelectionModal from '../shared/ProfileSelectionModal';
 import { useLanguage } from '../../contexts/LanguageContext';
 
-export default function ChatSidebar({ user, conversations = [], activeChat, onSelectChat }) {
+export default function ChatSidebar({ user, userData, subProfiles = {}, conversations = [], activeChat, onSelectChat }) {
     const { t } = useLanguage();
     // ... (State logic unchanged) ...
     const [showSearch, setShowSearch] = useState(false);
     const [showGroupModal, setShowGroupModal] = useState(false);
-    const [searchMode, setSearchMode] = useState('direct'); 
+    const [showProfileModal, setShowProfileModal] = useState(false);
+    const [pendingChatTarget, setPendingChatTarget] = useState(null);
+    const [selectedChatProfile, setSelectedChatProfile] = useState(null);
+    const [searchMode, setSearchMode] = useState('direct');
     const [isCreating, setIsCreating] = useState(false);
 
     const [groupName, setGroupName] = useState('');
@@ -62,15 +66,32 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
     const handleSelectSearchResult = (result) => {
         const userId = user?.id || user?.uid;
         if (searchMode === 'direct') {
-            const chatId = [userId, result.id].sort().join('_');
-            onSelectChat({ id: chatId, uid: result.id, name: `${result.firstName} ${result.lastName}`, type: 'direct' });
-            closeSearch();
+            // Show profile selection modal before creating chat
+            setPendingChatTarget(result);
+            setShowProfileModal(true);
         } else if (searchMode === 'add_member') {
             if (!groupMembers.find(m => m.id === result.id)) {
                 setGroupMembers(prev => [...prev, result]);
             }
-            closeSearch(); 
+            closeSearch();
         }
+    };
+
+    const handleProfileConfirmed = (role) => {
+        setSelectedChatProfile(role);
+        if (pendingChatTarget) {
+            const userId = user?.id || user?.uid;
+            const chatId = [userId, pendingChatTarget.id].sort().join('_');
+            onSelectChat({
+                id: chatId,
+                uid: pendingChatTarget.id,
+                name: `${pendingChatTarget.firstName} ${pendingChatTarget.lastName}`,
+                type: 'direct',
+                profileRole: role // Store the selected profile role
+            });
+            setPendingChatTarget(null);
+        }
+        closeSearch();
     };
 
     const closeSearch = () => {
@@ -237,6 +258,21 @@ export default function ChatSidebar({ user, conversations = [], activeChat, onSe
                     </div>
                 </div>
             )}
+
+            {/* Profile Selection Modal */}
+            <ProfileSelectionModal
+                show={showProfileModal}
+                onConfirm={handleProfileConfirmed}
+                onCancel={() => {
+                    setShowProfileModal(false);
+                    setPendingChatTarget(null);
+                }}
+                userData={userData}
+                subProfiles={subProfiles}
+                title="Select Chat Profile"
+                message={`You're starting a chat with ${pendingChatTarget?.firstName || 'this user'}. Which profile would you like to use?`}
+                excludeRoles={['Fan', 'User']}
+            />
         </div>
     );
 }

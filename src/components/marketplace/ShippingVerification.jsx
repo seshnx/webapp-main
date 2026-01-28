@@ -7,14 +7,16 @@ import {
 } from 'lucide-react';
 import { SHIPPING_VERIFICATION_STATUS, SHIPPING_VERIFICATION_STEPS } from '../../config/constants';
 import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useSafeExchangeTransaction, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import UserAvatar from '../shared/UserAvatar';
-
-// Supabase has been migrated away - shipping verification features temporarily disabled
-const supabase = null;
 
 /**
  * ShippingVerification Component
  * Manages the photo verification workflow for shipped items
+ *
+ * TODO: This component uses the shipping_transactions table which needs
+ * to be added to the Neon schema. The table structure and queries need to be created.
+ * For now, this component is partially migrated but needs additional work.
  */
 export default function ShippingVerification({
     transactionId,
@@ -24,8 +26,12 @@ export default function ShippingVerification({
     onComplete,
     onMessage
 }) {
+    // TODO: Create useShippingTransaction hook when shipping_transactions table is added to Neon
+    // const { transaction, loading } = useShippingTransaction(transactionId);
+    // const { updateShippingTransaction, addShippingPhoto } = useMarketplaceMutations();
+
     const [transaction, setTransaction] = useState(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false); // Set to false to avoid loading state
     const [actionLoading, setActionLoading] = useState(false);
     const [photoMode, setPhotoMode] = useState(null); // 'packaging' | 'dropoff' | 'pickup' | 'unboxing'
     const [photos, setPhotos] = useState([]);
@@ -44,57 +50,14 @@ export default function ShippingVerification({
     const isBuyer = transaction?.buyerId === userId;
     const role = isSeller ? 'seller' : 'buyer';
 
-    // Subscribe to transaction updates
+    // TODO: Implement transaction loading with Neon when shipping_transactions table is ready
+    // For now, this component will need transaction data passed as props or fetched from parent
+    /*
     useEffect(() => {
-        if (!transactionId || !supabase) return;
-
-        const channel = supabase
-            .channel(`shipping-${transactionId}`)
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'shipping_transactions',
-                filter: `id=eq.${transactionId}`
-            }, () => {
-                loadTransaction();
-            })
-            .subscribe();
-
-        loadTransaction();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
+        if (!transactionId) return;
+        // Load transaction using Neon hook
     }, [transactionId]);
-
-    const loadTransaction = async () => {
-        if (!supabase) return;
-        setLoading(true);
-        try {
-            const { data: transactionData, error } = await supabase
-                .from('shipping_transactions')
-                .select('*')
-                .eq('id', transactionId)
-                .single();
-            
-            if (error) throw error;
-            
-            if (transactionData) {
-                setTransaction({
-                    id: transactionData.id,
-                    ...transactionData,
-                    buyerId: transactionData.buyer_id,
-                    sellerId: transactionData.seller_id,
-                    listingId: transactionData.listing_id,
-                    itemTitle: transactionData.item_title,
-                    trackingNumber: transactionData.tracking_number
-                });
-            }
-        } catch (error) {
-            console.error('Error loading transaction:', error);
-        }
-        setLoading(false);
-    };
+    */
 
     // Camera functions
     const startCamera = useCallback(async () => {
@@ -167,48 +130,15 @@ export default function ShippingVerification({
     };
 
     // Update transaction status
+    // TODO: Implement with Neon when shipping_transactions table is added to schema
     const updateStatus = async (newStatus, additionalData = {}) => {
-        if (!transactionId || !supabase) return;
-        setActionLoading(true);
-        const userId = user?.id || user?.uid;
-        try {
-            const statusHistory = transaction?.status_history || {};
-            statusHistory[newStatus] = { timestamp: Date.now(), userId: userId };
-            
-            // Convert camelCase keys to snake_case for Supabase
-            const convertedData = Object.keys(additionalData).reduce((acc, key) => {
-                const snakeKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-                acc[snakeKey] = additionalData[key];
-                return acc;
-            }, {});
-            
-            await supabase
-                .from('shipping_transactions')
-                .update({
-                    status: newStatus,
-                    status_history: statusHistory,
-                    updated_at: new Date().toISOString(),
-                    ...convertedData
-                })
-                .eq('id', transactionId);
+        if (!transactionId) return;
+        console.log('Shipping verification update disabled - shipping_transactions table not yet migrated to Neon');
+        console.log('Status:', newStatus, 'Data:', additionalData);
 
-            // Notify other party
-            const otherUserId = isSeller ? transaction.buyerId : transaction.sellerId;
-            await supabase
-                .from('notifications')
-                .insert({
-                    user_id: otherUserId,
-                    type: 'shipping_verification',
-                    transaction_id: transactionId,
-                    message: getNotificationMessage(newStatus),
-                    item_title: transaction.itemTitle,
-                    read: false,
-                    created_at: new Date().toISOString()
-                });
-        } catch (error) {
-            console.error('Update failed:', error);
-            alert('Failed to update. Please try again.');
-        }
+        // Placeholder - when schema is ready, use:
+        // await updateShippingTransaction(transactionId, { status: newStatus, ...additionalData });
+        setActionLoading(true);
         setActionLoading(false);
     };
 

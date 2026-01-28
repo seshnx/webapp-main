@@ -274,10 +274,12 @@ export async function ensureUserInDatabase(userId, userData = null) {
  */
 export async function updateProfile(userId, updates) {
   // Fields that go in clerk_users table
-  const clerkUserFields = ['first_name', 'last_name', 'username', 'profile_photo_url', 'bio', 'zip_code', 'account_types', 'active_role'];
+  const clerkUserFields = ['first_name', 'last_name', 'username', 'profile_photo_url', 'bio', 'zip_code',
+                          'account_types', 'active_role', 'default_profile_role', 'settings',
+                          'display_name', 'effective_display_name'];
 
   // Fields that go in profiles table
-  const profileFields = ['display_name', 'location', 'website', 'social_links', 'photo_url', 'cover_photo_url',
+  const profileFields = ['location', 'website', 'social_links', 'photo_url', 'cover_photo_url',
                         'talent_info', 'engineer_info', 'producer_info', 'studio_info', 'education_info', 'label_info',
                         'profile_visibility', 'messaging_permission'];
 
@@ -299,8 +301,17 @@ export async function updateProfile(userId, updates) {
     let paramIndex = 1;
 
     for (const [key, value] of Object.entries(clerkUpdates)) {
-      fields.push(`${key} = $${paramIndex}`);
-      values.push(value);
+      // Handle JSONB fields (settings is an object)
+      if (key === 'settings' && typeof value === 'object') {
+        fields.push(`${key} = $${paramIndex}::jsonb`);
+        values.push(JSON.stringify(value));
+      } else if (key === 'account_types' && Array.isArray(value)) {
+        fields.push(`${key} = $${paramIndex}::text[]`);
+        values.push(value);
+      } else {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+      }
       paramIndex++;
     }
 
@@ -352,22 +363,42 @@ export async function updateProfile(userId, updates) {
  * Upsert sub-profile
  *
  * @param {string} userId - User ID
- * @param {string} role - Role (Talent, Studio, Label, etc.)
+ * @param {string} accountType - Account type (Talent, Studio, Label, etc.)
  * @param {object} data - Sub-profile data
  * @returns {Promise<object>} Upserted sub-profile
  */
-export async function upsertSubProfile(userId, role, data) {
-  // Convert data object to JSONB-compatible fields
-  const fields = ['user_id', 'role', 'data', 'updated_at'];
-  const values = [userId, role, JSON.stringify(data), new Date().toISOString()];
+export async function upsertSubProfile(userId, accountType, data) {
+  // Extract top-level fields for database columns
+  const { displayName, bio, photo_url, ...restOfData } = data;
+
+  // Convert remaining data to JSONB
+  const profileData = {
+    ...restOfData,
+    // Keep these in profile_data too for backward compatibility
+    displayName,
+    bio
+  };
+
+  const values = [
+    userId,
+    accountType,
+    displayName || null,
+    bio || null,
+    photo_url || null,
+    JSON.stringify(profileData),
+    new Date().toISOString()
+  ];
 
   const sql = `
-    INSERT INTO sub_profiles (user_id, role, data, updated_at)
-    VALUES ($1, $2, $3::jsonb, $4::timestamp)
-    ON CONFLICT (user_id, role)
+    INSERT INTO sub_profiles (user_id, account_type, display_name, bio, photo_url, profile_data, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::timestamp)
+    ON CONFLICT (user_id, account_type)
     DO UPDATE SET
-      data = $3::jsonb,
-      updated_at = $4::timestamp
+      display_name = $3,
+      bio = $4,
+      photo_url = $5,
+      profile_data = $6::jsonb,
+      updated_at = $7::timestamp
     RETURNING *
   `;
 
@@ -379,13 +410,13 @@ export async function upsertSubProfile(userId, role, data) {
  * Get sub-profile
  *
  * @param {string} userId - User ID
- * @param {string} role - Role
+ * @param {string} accountType - Account type
  * @returns {Promise<object|null>} Sub-profile or null
  */
-export async function getSubProfile(userId, role) {
+export async function getSubProfile(userId, accountType) {
   const result = await executeQuery(
-    'SELECT * FROM sub_profiles WHERE user_id = $1 AND role = $2',
-    [userId, role],
+    'SELECT * FROM sub_profiles WHERE user_id = $1 AND account_type = $2',
+    [userId, accountType],
     'getSubProfile'
   );
   return result[0] || null;
@@ -399,11 +430,27 @@ export async function getSubProfile(userId, role) {
  */
 export async function getSubProfiles(userId) {
   const result = await executeQuery(
-    'SELECT * FROM sub_profiles WHERE user_id = $1 ORDER BY role',
+    'SELECT * FROM sub_profiles WHERE user_id = $1 ORDER BY account_type',
     [userId],
     'getSubProfiles'
   );
   return result;
+}
+
+/**
+ * Delete sub-profile
+ *
+ * @param {string} userId - User ID
+ * @param {string} accountType - Account type to delete
+ * @returns {Promise<boolean>} True if deleted
+ */
+export async function deleteSubProfile(userId, accountType) {
+  const result = await executeQuery(
+    'DELETE FROM sub_profiles WHERE user_id = $1 AND account_type = $2 RETURNING *',
+    [userId, accountType],
+    'deleteSubProfile'
+  );
+  return result.length > 0;
 }
 
 /**
@@ -544,12 +591,16 @@ export async function createPost(postData) {
     hashtags = [],
     location = null,
     visibility = 'public',
+    display_name = null,
+    author_photo = null,
+    posted_as_role = null,
   } = postData;
 
   const sql = `
     INSERT INTO posts (
-      user_id, content, media, mentions, hashtags, location, visibility
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      user_id, content, media, mentions, hashtags, location, visibility,
+      display_name, author_photo, posted_as_role
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
     RETURNING *
   `;
 
@@ -563,6 +614,9 @@ export async function createPost(postData) {
       hashtags,
       location ? JSON.stringify(location) : null,
       visibility,
+      display_name,
+      author_photo,
+      posted_as_role,
     ],
     'createPost'
   );
@@ -1192,6 +1246,527 @@ export async function searchMarketplaceItems(options = {}) {
   params.push(limit, offset);
 
   return executeQuery(sql, params, 'searchMarketplaceItems');
+}
+
+// =====================================================
+// GEAR EXCHANGE QUERIES
+// =====================================================
+
+/**
+ * Get gear listings
+ *
+ * @param {object} options - Query options
+ * @returns {Promise<Array>} Array of gear listings
+ */
+export async function getGearListings({ limit = 50, offset = 0, status = null } = {}) {
+  let sql = `SELECT * FROM gear_listings WHERE deleted_at IS NULL`;
+  const params = [];
+  let paramIndex = 1;
+
+  if (status) {
+    sql += ` AND status = $${paramIndex}`;
+    params.push(status);
+    paramIndex++;
+  }
+
+  sql += ` ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+  params.push(limit, offset);
+
+  return executeQuery(sql, params, 'getGearListings');
+}
+
+/**
+ * Get gear listing by ID
+ *
+ * @param {string} listingId - Listing ID
+ * @returns {Promise<object|null>} Listing object or null
+ */
+export async function getGearListingById(listingId) {
+  const sql = `SELECT * FROM gear_listings WHERE id = $1 AND deleted_at IS NULL`;
+  const result = await executeQuery(sql, [listingId], 'getGearListingById');
+  return result[0] || null;
+}
+
+/**
+ * Create gear listing
+ *
+ * @param {object} listingData - Listing data
+ * @returns {Promise<object>} Created listing
+ */
+export async function createGearListing(listingData) {
+  const {
+    seller_id,
+    title,
+    description,
+    price,
+    condition,
+    images = [],
+    category,
+    brand,
+    model
+  } = listingData;
+
+  const sql = `
+    INSERT INTO gear_listings (
+      seller_id, title, description, price, condition, images, category, brand, model, status, created_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'active', NOW())
+    RETURNING *
+  `;
+
+  const result = await executeQuery(
+    sql,
+    [seller_id, title, description, price, condition, JSON.stringify(images), category, brand, model],
+    'createGearListing'
+  );
+
+  return result[0];
+}
+
+/**
+ * Update gear listing status
+ *
+ * @param {string} listingId - Listing ID
+ * @param {string} status - New status
+ * @returns {Promise<object>} Updated listing
+ */
+export async function updateGearListingStatus(listingId, status) {
+  const sql = `UPDATE gear_listings SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`;
+  const result = await executeQuery(sql, [status, listingId], 'updateGearListingStatus');
+  return result[0] || null;
+}
+
+/**
+ * Get gear orders
+ *
+ * @param {object} options - Query options
+ * @returns {Promise<Array>} Array of gear orders
+ */
+export async function getGearOrders({ userId, status }) {
+  let sql = `SELECT * FROM gear_orders WHERE (buyer_id = $1 OR seller_id = $1)`;
+  const params = [userId];
+  let paramIndex = 2;
+
+  if (status) {
+    sql += ` AND status = $${paramIndex}`;
+    params.push(status);
+    paramIndex++;
+  }
+
+  sql += ` ORDER BY created_at DESC`;
+
+  return executeQuery(sql, params, 'getGearOrders');
+}
+
+/**
+ * Create gear order
+ *
+ * @param {object} orderData - Order data
+ * @returns {Promise<object>} Created order
+ */
+export async function createGearOrder(orderData) {
+  const { listing_id, buyer_id, seller_id, total_price } = orderData;
+
+  const sql = `
+    INSERT INTO gear_orders (listing_id, buyer_id, seller_id, total_price, status, created_at)
+    VALUES ($1, $2, $3, $4, 'pending', NOW())
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [listing_id, buyer_id, seller_id, total_price], 'createGearOrder');
+  return result[0];
+}
+
+/**
+ * Update gear order status
+ *
+ * @param {string} orderId - Order ID
+ * @param {string} status - New status
+ * @returns {Promise<object>} Updated order
+ */
+export async function updateGearOrderStatus(orderId, status) {
+  const sql = `UPDATE gear_orders SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`;
+  const result = await executeQuery(sql, [status, orderId], 'updateGearOrderStatus');
+  return result[0] || null;
+}
+
+/**
+ * Get gear offers
+ *
+ * @param {object} options - Query options
+ * @returns {Promise<Array>} Array of gear offers
+ */
+export async function getGearOffers({ listingId, userId }) {
+  let sql = `SELECT * FROM gear_offers WHERE `;
+  const params = [];
+
+  if (listingId) {
+    sql += `listing_id = $1`;
+    params.push(listingId);
+  } else if (userId) {
+    sql += `(offeror_id = $1 OR recipient_id = $1)`;
+    params.push(userId);
+  } else {
+    // Return empty array if no filter provided
+    return [];
+  }
+
+  sql += ` ORDER BY created_at DESC`;
+
+  return executeQuery(sql, params, 'getGearOffers');
+}
+
+/**
+ * Create gear offer
+ *
+ * @param {object} offerData - Offer data
+ * @returns {Promise<object>} Created offer
+ */
+export async function createGearOffer(offerData) {
+  const { listing_id, offeror_id, recipient_id, offer_amount, message } = offerData;
+
+  const sql = `
+    INSERT INTO gear_offers (listing_id, offeror_id, recipient_id, offer_amount, message, status, created_at)
+    VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [listing_id, offeror_id, recipient_id, offer_amount, message], 'createGearOffer');
+  return result[0];
+}
+
+/**
+ * Respond to gear offer
+ *
+ * @param {string} offerId - Offer ID
+ * @param {string} response - Response ('accepted' or 'rejected')
+ * @returns {Promise<object>} Updated offer
+ */
+export async function respondToGearOffer(offerId, response) {
+  const sql = `UPDATE gear_offers SET status = $1, updated_at = NOW() WHERE id = $2 RETURNING *`;
+  const result = await executeQuery(sql, [response, offerId], 'respondToGearOffer');
+  return result[0] || null;
+}
+
+// =====================================================
+// SAFE EXCHANGE QUERIES
+// =====================================================
+
+/**
+ * Get safe exchange transactions
+ *
+ * @param {object} options - Query options
+ * @returns {Promise<Array>} Array of transactions
+ */
+export async function getSafeExchangeTransactions({ userId, status }) {
+  let sql = `SELECT * FROM safe_exchange_transactions WHERE parties->>'buyer' = $1 OR parties->>'seller' = $1`;
+  const params = [userId];
+  let paramIndex = 2;
+
+  if (status) {
+    sql += ` AND status = $${paramIndex}`;
+    params.push(status);
+    paramIndex++;
+  }
+
+  sql += ` ORDER BY created_at DESC`;
+
+  return executeQuery(sql, params, 'getSafeExchangeTransactions');
+}
+
+/**
+ * Get safe exchange transaction by ID
+ *
+ * @param {string} transactionId - Transaction ID
+ * @returns {Promise<object|null>} Transaction object or null
+ */
+export async function getSafeExchangeTransactionById(transactionId) {
+  const sql = `SELECT * FROM safe_exchange_transactions WHERE id = $1`;
+  const result = await executeQuery(sql, [transactionId], 'getSafeExchangeTransactionById');
+  return result[0] || null;
+}
+
+/**
+ * Create safe exchange transaction
+ *
+ * @param {object} transactionData - Transaction data
+ * @returns {Promise<object>} Created transaction
+ */
+export async function createSafeExchangeTransaction(transactionData) {
+  const { item_id, transaction_type, parties, item_details } = transactionData;
+
+  const sql = `
+    INSERT INTO safe_exchange_transactions (item_id, transaction_type, parties, item_details, status, verification_data, created_at)
+    VALUES ($1, $2, $3, $4, 'pending', '{}', NOW())
+    RETURNING *
+  `;
+
+  const result = await executeQuery(
+    sql,
+    [item_id, transaction_type, JSON.stringify(parties), JSON.stringify(item_details)],
+    'createSafeExchangeTransaction'
+  );
+
+  return result[0];
+}
+
+/**
+ * Update safe exchange transaction
+ *
+ * @param {string} transactionId - Transaction ID
+ * @param {object} updates - Fields to update
+ * @returns {Promise<object>} Updated transaction
+ */
+export async function updateSafeExchangeTransaction(transactionId, updates) {
+  const fields = Object.keys(updates).map((key, i) => `${key} = $${i + 2}`).join(', ');
+  const values = Object.values(updates);
+  const sql = `UPDATE safe_exchange_transactions SET ${fields}, updated_at = NOW() WHERE id = $1 RETURNING *`;
+  const result = await executeQuery(sql, [transactionId, ...values], 'updateSafeExchangeTransaction');
+  return result[0] || null;
+}
+
+/**
+ * Add transaction photo
+ *
+ * @param {string} transactionId - Transaction ID
+ * @param {object} photoData - Photo data
+ * @returns {Promise<object>} Updated transaction
+ */
+export async function addTransactionPhoto(transactionId, photoData) {
+  const sql = `
+    UPDATE safe_exchange_transactions
+    SET verification_data = jsonb_set(
+      COALESCE(verification_data, '{}'),
+      '{photos}',
+      COALESCE(verification_data->'photos', '[]'::jsonb) || $2::jsonb
+    ),
+    updated_at = NOW()
+    WHERE id = $1
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [transactionId, JSON.stringify([photoData])], 'addTransactionPhoto');
+  return result[0] || null;
+}
+
+// =====================================================
+// MARKETPLACE ITEMS (SeshFx) QUERIES
+// =====================================================
+
+/**
+ * Get marketplace items (SeshFx)
+ *
+ * @param {object} options - Query options
+ * @returns {Promise<Array>} Array of marketplace items
+ */
+export async function getMarketplaceItems({ limit = 50, type } = {}) {
+  let sql = `SELECT * FROM marketplace_items WHERE deleted_at IS NULL`;
+  const params = [];
+  let paramIndex = 1;
+
+  if (type) {
+    sql += ` AND type = $${paramIndex}`;
+    params.push(type);
+    paramIndex++;
+  }
+
+  sql += ` ORDER BY created_at DESC LIMIT $${paramIndex}`;
+  params.push(limit);
+
+  return executeQuery(sql, params, 'getMarketplaceItems');
+}
+
+/**
+ * Get marketplace item by ID (SeshFx)
+ *
+ * @param {string} itemId - Item ID
+ * @returns {Promise<object|null>} Item object or null
+ */
+export async function getMarketplaceItemById(itemId) {
+  const sql = `SELECT * FROM marketplace_items WHERE id = $1 AND deleted_at IS NULL`;
+  const result = await executeQuery(sql, [itemId], 'getMarketplaceItemById');
+  return result[0] || null;
+}
+
+/**
+ * Create marketplace item (SeshFx)
+ *
+ * @param {object} itemData - Item data
+ * @returns {Promise<object>} Created item
+ */
+export async function createMarketplaceItemSeshFx(itemData) {
+  const { userId, title, type, price, downloadUrl, tags, description, author } = itemData;
+
+  const sql = `
+    INSERT INTO marketplace_items (title, type, price, download_url, tags, description, author, author_id, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+    RETURNING *
+  `;
+
+  const result = await executeQuery(
+    sql,
+    [title, type, price, downloadUrl, tags, description, author, userId],
+    'createMarketplaceItemSeshFx'
+  );
+
+  return result[0];
+}
+
+/**
+ * Get user library
+ *
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of purchased items
+ */
+export async function getUserLibrary(userId) {
+  const sql = `
+    SELECT mi.*, ul.purchase_date
+    FROM user_library ul
+    JOIN marketplace_items mi ON ul.item_id = mi.id
+    WHERE ul.user_id = $1
+    ORDER BY ul.purchase_date DESC
+  `;
+
+  return executeQuery(sql, [userId], 'getUserLibrary');
+}
+
+/**
+ * Add to user library
+ *
+ * @param {string} userId - User ID
+ * @param {string} itemId - Item ID
+ * @returns {Promise<object>} Created library entry
+ */
+export async function addToUserLibrary(userId, itemId) {
+  const sql = `
+    INSERT INTO user_library (user_id, item_id, purchase_date)
+    VALUES ($1, $2, NOW())
+    ON CONFLICT (user_id, item_id) DO NOTHING
+    RETURNING *
+  `;
+
+  const result = await executeQuery(sql, [userId, itemId], 'addToUserLibrary');
+  return result[0] || null;
+}
+
+/**
+ * Check item ownership
+ *
+ * @param {string} userId - User ID
+ * @param {string} itemId - Item ID
+ * @returns {Promise<boolean>} True if user owns item
+ */
+export async function checkItemOwnership(userId, itemId) {
+  const sql = `SELECT 1 FROM user_library WHERE user_id = $1 AND item_id = $2 LIMIT 1`;
+  const result = await executeQuery(sql, [userId, itemId], 'checkItemOwnership');
+  return result.length > 0;
+}
+
+// =====================================================
+// DISTRIBUTION RELEASES QUERIES
+// =====================================================
+
+/**
+ * Get distribution releases
+ *
+ * @param {string} userId - User ID
+ * @returns {Promise<Array>} Array of releases
+ */
+export async function getDistributionReleases(userId) {
+  const sql = `SELECT * FROM distribution_releases WHERE uploader_id = $1 ORDER BY updated_at DESC`;
+  return executeQuery(sql, [userId], 'getDistributionReleases');
+}
+
+/**
+ * Get distribution release by ID
+ *
+ * @param {string} releaseId - Release ID
+ * @returns {Promise<object|null>} Release object or null
+ */
+export async function getDistributionReleaseById(releaseId) {
+  const sql = `SELECT * FROM distribution_releases WHERE id = $1`;
+  const result = await executeQuery(sql, [releaseId], 'getDistributionReleaseById');
+  return result[0] || null;
+}
+
+/**
+ * Create distribution release
+ *
+ * @param {object} releaseData - Release data
+ * @returns {Promise<object>} Created release
+ */
+export async function createDistributionRelease(releaseData) {
+  const {
+    userId,
+    title,
+    type,
+    tracks = [],
+    artworkUrl,
+    releaseDate,
+    primaryArtist,
+    upc,
+    isrcCode
+  } = releaseData;
+
+  const sql = `
+    INSERT INTO distribution_releases (
+      uploader_id, title, type, tracks, artwork_url, release_date, primary_artist, upc, isrc_code, status, created_at, updated_at
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'Draft', NOW(), NOW())
+    RETURNING *
+  `;
+
+  const result = await executeQuery(
+    sql,
+    [userId, title, type, JSON.stringify(tracks), artworkUrl, releaseDate, primaryArtist, upc, isrcCode],
+    'createDistributionRelease'
+  );
+
+  return result[0];
+}
+
+/**
+ * Update distribution release
+ *
+ * @param {string} releaseId - Release ID
+ * @param {object} updates - Fields to update
+ * @returns {Promise<object>} Updated release
+ */
+export async function updateDistributionRelease(releaseId, updates) {
+  const fields = [];
+  const values = [];
+  let paramIndex = 1;
+
+  for (const [key, value] of Object.entries(updates)) {
+    if (['tracks', 'metadata'].includes(key)) {
+      fields.push(`${key} = $${paramIndex}::jsonb`);
+      values.push(JSON.stringify(value));
+    } else {
+      fields.push(`${key} = $${paramIndex}`);
+      values.push(value);
+    }
+    paramIndex++;
+  }
+
+  if (fields.length === 0) {
+    throw new Error('No updates provided');
+  }
+
+  values.push(releaseId);
+  const sql = `UPDATE distribution_releases SET ${fields.join(', ')}, updated_at = NOW() WHERE id = $${paramIndex} RETURNING *`;
+
+  const result = await executeQuery(sql, values, 'updateDistributionRelease');
+  return result[0] || null;
+}
+
+/**
+ * Delete distribution release
+ *
+ * @param {string} releaseId - Release ID
+ * @returns {Promise<boolean>} True if deleted
+ */
+export async function deleteDistributionRelease(releaseId) {
+  const sql = `DELETE FROM distribution_releases WHERE id = $1 AND status IN ('Draft', 'Action Needed')`;
+  const result = await executeQuery(sql, [releaseId], 'deleteDistributionRelease');
+  return result.length > 0;
 }
 
 // =====================================================
@@ -3138,6 +3713,39 @@ export default {
   getMarketplaceItem,
   createMarketplaceItem,
   searchMarketplaceItems,
+
+  // Gear exchange queries
+  getGearListings,
+  getGearListingById,
+  createGearListing,
+  updateGearListingStatus,
+  getGearOrders,
+  createGearOrder,
+  updateGearOrderStatus,
+  getGearOffers,
+  createGearOffer,
+  respondToGearOffer,
+
+  // Safe exchange queries
+  getSafeExchangeTransactions,
+  getSafeExchangeTransactionById,
+  createSafeExchangeTransaction,
+  updateSafeExchangeTransaction,
+  addTransactionPhoto,
+
+  // SeshFx marketplace queries
+  getMarketplaceItemById,
+  createMarketplaceItemSeshFx,
+  getUserLibrary,
+  addToUserLibrary,
+  checkItemOwnership,
+
+  // Distribution queries
+  getDistributionReleases,
+  getDistributionReleaseById,
+  createDistributionRelease,
+  updateDistributionRelease,
+  deleteDistributionRelease,
 
   // Wallet queries
   getWalletBalance,

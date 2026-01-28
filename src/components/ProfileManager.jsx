@@ -30,8 +30,8 @@ const getInitials = (first, last, display) => {
     return ((first?.[0] || '') + (last?.[0] || '')).toUpperCase() || 'U';
 };
 
-// Added openPublicProfile to props
-export default function ProfileManager({ user, userData, subProfiles = {}, handleLogout, openPublicProfile }) {
+// Added openPublicProfile, onSubProfileUpdate, and onRoleSwitch to props
+export default function ProfileManager({ user, userData, subProfiles = {}, handleLogout, openPublicProfile, onSubProfileUpdate, onRoleSwitch }) {
     const [activeSubTab, setActiveSubTab] = useState('details');
     const [selectedRole, setSelectedRole] = useState('Main');
     const [saving, setSaving] = useState(false);
@@ -292,19 +292,26 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                                 </div>
                             </div>
                         ) : (
-                            <DynamicSubProfileForm user={user} userData={userData} role={selectedRole} initialData={subProfiles[selectedRole] || {}} schema={PROFILE_SCHEMAS[selectedRole] || []}/>
+                            <DynamicSubProfileForm
+                                user={user}
+                                userData={userData}
+                                role={selectedRole}
+                                initialData={subProfiles[selectedRole] || {}}
+                                schema={PROFILE_SCHEMAS[selectedRole] || []}
+                                onSave={onSubProfileUpdate}
+                            />
                         )}
                     </div>
                 </div>
             ) : (
-                <div className="animate-in fade-in slide-in-from-right-2"><SettingsTab user={user} userData={userData} handleLogout={handleLogout} onUpdate={handleSettingsUpdate}/></div>
+                <div className="animate-in fade-in slide-in-from-right-2"><SettingsTab user={user} userData={userData} handleLogout={handleLogout} onUpdate={handleSettingsUpdate} onRoleSwitch={onRoleSwitch} subProfiles={subProfiles}/></div>
             )}
         </div>
     );
 }
 
 // ... (DynamicSubProfileForm remains unchanged from previous version) ...
-function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
+function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSave }) {
     const [formData, setFormData] = useState(initialData);
     const [isSaving, setIsSaving] = useState(false);
     const [followMainProfile, setFollowMainProfile] = useState(initialData.followMainProfile ?? true);
@@ -359,6 +366,11 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema }) {
                 await updateProfile(userId, {
                     studio_name: effectiveName,
                 });
+            }
+
+            // Refresh sub-profiles in parent component
+            if (onSave) {
+                await onSave();
             }
 
             toast.success(`${role} Profile Saved!`, { id: toastId });
