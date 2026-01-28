@@ -5,7 +5,7 @@ import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ACCOUNT_TYPES, TALENT_SUBROLES } from '../config/constants';
 import { fetchZipLocation } from '../utils/geocode';
-import { updateProfile } from '../config/neonQueries';
+import { updateProfile, upsertSubProfile } from '../config/neonQueries';
 import AuthWizardBackground from './AuthWizardBackground';
 
 // Lazy load LegalDocs
@@ -414,6 +414,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       // Update profile with Neon
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
       const displayName = `${form.firstName} ${form.lastName}`;
+      const activeRole = finalRoles[0];
 
       await updateProfile(userId, {
         email: form.email,
@@ -421,11 +422,32 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         last_name: form.lastName,
         zip_code: form.zip,
         account_types: finalRoles,
-        active_role: finalRoles[0],
-        preferred_role: finalRoles[0],
+        active_role: activeRole,
+        preferred_role: activeRole,
+        default_profile_role: activeRole,
         effective_display_name: displayName,
         search_terms: [form.firstName, form.lastName, displayName].map(s => s?.toLowerCase()).filter(Boolean),
       });
+
+      // Create sub-profiles for each role
+      const profileData = {
+        displayName: displayName,
+      };
+
+      // Add talent subrole if selected
+      if (form.talentSubRole && finalRoles.includes('Talent')) {
+        profileData.talentSubRole = form.talentSubRole;
+      }
+
+      // Upsert sub-profile for each role (using the same data for now)
+      for (const role of finalRoles) {
+        try {
+          await upsertSubProfile(userId, role, profileData);
+        } catch (err) {
+          console.warn(`Failed to create sub-profile for ${role}:`, err);
+          // Continue even if one fails
+        }
+      }
 
       // Success - NO REDIRECT
       if (onSuccess) onSuccess();
@@ -536,24 +558,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           {/* Custom Signup Form */}
           {mode === 'signup' && (
             <form onSubmit={handleSignup} className="space-y-4">
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                  placeholder="First Name"
-                  value={form.firstName}
-                  onChange={(e) => setForm(prev => ({ ...prev, firstName: e.target.value }))}
-                  required
-                />
-                <input
-                  type="text"
-                  className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                  placeholder="Last Name"
-                  value={form.lastName}
-                  onChange={(e) => setForm(prev => ({ ...prev, lastName: e.target.value }))}
-                  required
-                />
-              </div>
               <input
                 type="email"
                 className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
@@ -660,56 +664,100 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             )}
 
             {/* ONBOARDING STEPS */}
+            {/* Progress Indicator */}
+            <div className="flex items-center justify-center gap-2 mb-6">
+              <div className={`h-1 flex-1 rounded-full transition-colors ${step >= 1 ? 'bg-brand-blue' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
+              <div className={`h-1 flex-1 rounded-full transition-colors ${step >= 2 ? 'bg-brand-blue' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500 mb-4 px-2">
+              <span className={step === 1 ? 'font-bold text-brand-blue' : ''}>Profile</span>
+              <span className={step === 2 ? 'font-bold text-brand-blue' : ''}>Roles</span>
+            </div>
+
             {step === 1 && (
               <div className="space-y-4">
-                <h3 className="text-xl font-bold dark:text-white text-center mb-4">
-                  Welcome! Let&apos;s finish setting up your account.
+                <h3 className="text-xl font-bold dark:text-white text-center mb-2">
+                  Let&apos;s get to know you
                 </h3>
-                <div className="flex gap-3">
-                  <input
-                    className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                    placeholder="First Name"
-                    value={form.firstName}
-                    onChange={(e) => setForm(prev => ({ ...prev, firstName: e.target.value }))}
-                  />
-                  <input
-                    className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                    placeholder="Last Name"
-                    value={form.lastName}
-                    onChange={(e) => setForm(prev => ({ ...prev, lastName: e.target.value }))}
-                  />
-                </div>
-                <div className="relative flex gap-2">
-                  <div className="relative flex-1">
+                <p className="text-sm text-gray-500 text-center mb-6">
+                  Tell us your name and where you&apos;re located
+                </p>
+
+                <div className="space-y-3">
+                  <div className="flex gap-3">
                     <input
-                      className="w-full p-3.5 pl-10 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                      placeholder="Zip Code"
-                      maxLength={5}
-                      value={form.zip}
-                      onChange={(e) => setForm(prev => ({ ...prev, zip: e.target.value.replace(/\D/g, '') }))}
+                      className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      placeholder="First Name *"
+                      value={form.firstName}
+                      onChange={(e) => setForm(prev => ({ ...prev, firstName: e.target.value }))}
+                      required
                     />
-                    <MapPin className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                    <input
+                      className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      placeholder="Last Name *"
+                      value={form.lastName}
+                      onChange={(e) => setForm(prev => ({ ...prev, lastName: e.target.value }))}
+                      required
+                    />
                   </div>
-                  <button onClick={handleUseLocation} className="p-3.5 border dark:border-gray-600 rounded-xl text-brand-blue" disabled={locating}>
-                    {locating ? <Loader2 className="animate-spin" size={18} /> : <Crosshair size={18} />}
-                  </button>
+
+                  <div className="relative flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        className="w-full p-3.5 pl-10 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                        placeholder="Zip Code *"
+                        maxLength={5}
+                        value={form.zip}
+                        onChange={(e) => setForm(prev => ({ ...prev, zip: e.target.value.replace(/\D/g, '') }))}
+                        required
+                      />
+                      <MapPin className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                    </div>
+                    <button
+                      onClick={handleUseLocation}
+                      className="p-3.5 border dark:border-gray-600 rounded-xl text-brand-blue hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                      disabled={locating}
+                      title="Use my current location"
+                    >
+                      {locating ? <Loader2 className="animate-spin" size={18} /> : <Crosshair size={18} />}
+                    </button>
+                  </div>
+
+                  <ZipUserMap zip={form.zip} />
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                    <p className="text-xs text-blue-800 dark:text-blue-200">
+                      <strong>Why we need this:</strong> Your location helps us connect you with nearby musicians, studios, and opportunities in your area.
+                    </p>
+                  </div>
                 </div>
-                <ZipUserMap zip={form.zip} />
+
                 <button
-                  className="w-full bg-black dark:bg-white dark:text-black text-white px-6 py-2.5 rounded-xl font-bold disabled:opacity-50"
-                  onClick={() => { if (form.firstName && form.zip) setStep(2); }}
-                  disabled={!form.firstName || !form.zip}
+                  className="w-full bg-brand-blue hover:bg-blue-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 transition shadow-lg mt-4"
+                  onClick={() => {
+                    if (!form.firstName || !form.lastName || !form.zip) {
+                      setError("Please fill in all fields");
+                      return;
+                    }
+                    setError('');
+                    setStep(2);
+                  }}
+                  disabled={!form.firstName || !form.lastName || !form.zip}
                 >
-                  Next
+                  Continue to Roles
                 </button>
               </div>
             )}
 
             {step === 2 && (
               <div className="space-y-5">
-                <h3 className="text-lg font-bold dark:text-white text-center mb-4">
-                  Select your role(s)
+                <h3 className="text-xl font-bold dark:text-white text-center mb-2">
+                  How do you fit in the music industry?
                 </h3>
+                <p className="text-sm text-gray-500 text-center mb-4">
+                  Select all that apply - you can always update these later
+                </p>
+
                 <div className="grid grid-cols-2 gap-2.5">
                   {publicRoles.map(role => {
                     const isSelected = form.roles.includes(role);
@@ -733,24 +781,47 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                     );
                   })}
                 </div>
+
                 {form.roles.includes('Talent') && (
-                  <select
-                    className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                    value={form.talentSubRole}
-                    onChange={(e) => setForm(prev => ({ ...prev, talentSubRole: e.target.value }))}
-                  >
-                    <option value="">Select Talent Type (Optional)</option>
-                    {TALENT_SUBROLES.map(subRole => (<option key={subRole} value={subRole}>{subRole}</option>))}
-                  </select>
+                  <div className="animate-in slide-in-from-top-2">
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">
+                      Talent Specialization (Optional)
+                    </label>
+                    <select
+                      className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      value={form.talentSubRole}
+                      onChange={(e) => setForm(prev => ({ ...prev, talentSubRole: e.target.value }))}
+                    >
+                      <option value="">Select your talent type...</option>
+                      {TALENT_SUBROLES.map(subRole => (<option key={subRole} value={subRole}>{subRole}</option>))}
+                    </select>
+                  </div>
                 )}
-                <button
-                  className="w-full bg-green-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50"
-                  onClick={handleCompleteSignup}
-                  disabled={isLoading || form.roles.length === 0}
-                >
-                  {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
-                </button>
-                <button className="w-full text-gray-400 text-xs" onClick={() => setStep(1)}>Back</button>
+
+                <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
+                  <p className="text-xs text-purple-800 dark:text-purple-200">
+                    <strong>Pro tip:</strong> Don't worry if you're unsure! You can add or remove roles anytime from your settings.
+                  </p>
+                </div>
+
+                <div className="space-y-2 pt-2">
+                  <button
+                    className="w-full bg-brand-blue hover:bg-blue-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 transition shadow-lg"
+                    onClick={handleCompleteSignup}
+                    disabled={isLoading || form.roles.length === 0}
+                  >
+                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
+                  </button>
+                  <button
+                    className="w-full text-gray-400 text-sm hover:text-gray-600 dark:hover:text-gray-300 transition py-2"
+                    onClick={() => {
+                      setError('');
+                      setStep(1);
+                    }}
+                  >
+                    ← Back
+                  </button>
+                </div>
               </div>
             )}
           </div>
