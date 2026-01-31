@@ -5,6 +5,7 @@ import BookingCalendar from './shared/BookingCalendar';
 import SessionDetailsModal from './SessionDetailsModal';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
+import { getBookings, updateBookingStatus } from '../config/neonQueries';
 
 // Lazy load the missing modules
 const TalentSearch = lazy(() => import('./TalentSearch'));
@@ -82,33 +83,19 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     
     // Fetch all bookings for the user
     useEffect(() => {
-        if (!user?.id && !user?.uid) return;
+        if (!userData?.id && !user?.id && !user?.uid) return;
 
         const loadBookings = async () => {
             setLoading(true);
             try {
-                const userId = user?.id || user?.uid;
+                // Use profile UUID from userData instead of Clerk user ID
+                const userId = userData?.id || user?.id || user?.uid;
 
-                // Fetch bookings where user is sender OR target
-                const [sentResponse, receivedResponse] = await Promise.all([
-                    fetch(`/api/studio-ops/bookings?senderId=${userId}`),
-                    fetch(`/api/studio-ops/bookings?targetId=${userId}`)
-                ]);
+                // Fetch bookings using direct database query
+                // The getBookings function will return bookings where user is sender or target
+                const bookingsData = await getBookings(userId, { limit: 100 });
 
-                const sentResult = await sentResponse.json();
-                const receivedResult = await receivedResponse.json();
-
-                if (!sentResponse.ok || !receivedResponse.ok) {
-                    throw new Error('Failed to fetch bookings');
-                }
-
-                // Combine and deduplicate (in case of edge cases)
-                const allBookings = [...(sentResult.data || []), ...(receivedResult.data || [])];
-                const uniqueBookings = Array.from(
-                    new Map(allBookings.map(b => [b.id, b])).values()
-                );
-
-                setBookings(uniqueBookings);
+                setBookings(bookingsData || []);
             } catch (error) {
                 console.error('Error loading bookings:', error);
             } finally {
@@ -200,16 +187,13 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
         try {
             const status = action === 'accept' ? 'Confirmed' : action === 'decline' ? 'Declined' : 'Pending';
 
-            const response = await fetch(`/api/studio-ops/bookings/${bookingId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status })
-            });
+            // Use direct database query instead of API route
+            await updateBookingStatus(bookingId, status);
 
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to update booking');
-            }
+            // Reload bookings to show updated state
+            const userId = userData?.id || user?.id || user?.uid;
+            const bookingsData = await getBookings(userId, { limit: 100 });
+            setBookings(bookingsData || []);
         } catch (error) {
             console.error('Error updating booking:', error);
             alert('Failed to update booking');

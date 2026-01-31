@@ -108,12 +108,14 @@ const getSafeExchangeRequirement = (price, sellerRequiresSafeExchange) => {
 
 export default function GearExchange({ user, userData, setActiveTab, openChat }) {
     // Use profile UUID from userData instead of Clerk user ID
-    const userId = userData?.id || user?.id || user?.uid;
+    // Only proceed if we have a valid profile UUID (not Clerk user ID)
+    const userId = userData?.id;
+    const hasValidUserId = userId && !userId.startsWith('user_');
 
-    // Fetch data with polling hooks
+    // Fetch data with polling hooks (only if we have valid user ID)
     const { data: rawListings } = useGearListings({ status: 'active' });
-    const { data: rawTransactions } = useSafeExchangeTransactions(userId);
-    const { data: rawOrders } = useGearOrders(userId);
+    const { data: rawTransactions } = useSafeExchangeTransactions(hasValidUserId ? userId : null);
+    const { data: rawOrders } = useGearOrders(hasValidUserId ? userId : null);
 
     // Mutation functions
     const {
@@ -209,9 +211,15 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
 
     // Handle initiating a safe exchange purchase
     const handleSafeExchangePurchase = async (item) => {
+        // Must have valid profile UUID to proceed
+        const userId = userData?.id;
+        if (!userId || userId.startsWith('user_')) {
+            alert('User profile not loaded. Please wait a moment and try again.');
+            return;
+        }
+
         // Calculate fees
         const fees = calculateFees(item.price);
-        const userId = userData?.id || user?.id || user?.uid;
 
         try {
             // Create the safe exchange transaction with JSONB structure
@@ -271,9 +279,15 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
     const handleStandardPurchase = async (item, shippingDetails) => {
         const toastId = toast.loading('Processing your order...');
 
+        // Must have valid profile UUID to proceed
+        const userId = userData?.id;
+        if (!userId || userId.startsWith('user_')) {
+            toast.error('User profile not loaded. Please wait a moment and try again.', { id: toastId });
+            return;
+        }
+
         // Calculate fees
         const fees = calculateFees(item.price);
-        const userId = userData?.id || user?.id || user?.uid;
 
         try {
             // Create the order
@@ -617,8 +631,15 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
             alert("Title and Price required.");
             return;
         }
+
+        // Must have valid profile UUID to proceed
+        const userId = userData?.id;
+        if (!userId || userId.startsWith('user_')) {
+            alert('User profile not loaded. Please wait a moment and try again.');
+            return;
+        }
+
         setSubmitting(true);
-        const userId = userData?.id || user?.id || user?.uid;
         try {
             await createListing({
                 seller_id: userId,
