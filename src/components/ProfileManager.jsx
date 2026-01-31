@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { User, Mail, MapPin, Briefcase, Music, Save, Loader2, DollarSign, Settings, Users, ChevronRight, Check, ToggleLeft, ToggleRight, Camera, Eye, ExternalLink, Image as ImageIcon } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -32,11 +33,45 @@ const getInitials = (first, last, display) => {
 
 // Added openPublicProfile, onSubProfileUpdate, and onRoleSwitch to props
 export default function ProfileManager({ user, userData, subProfiles = {}, handleLogout, openPublicProfile, onSubProfileUpdate, onRoleSwitch }) {
-    const [activeSubTab, setActiveSubTab] = useState('details');
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    // Get active tab from URL path
+    const getTabFromPath = (path) => {
+        const parts = path.split('/').filter(Boolean);
+        if (parts[0] === 'profile') {
+            if (parts[1] === 'settings' && parts[2]) {
+                // Return both settings tab and sub-tab
+                return { mainTab: 'settings', subTab: parts[2] };
+            } else if (parts[1] === 'settings') {
+                return { mainTab: 'settings', subTab: 'general' };
+            }
+            return { mainTab: 'details', subTab: null };
+        }
+        return { mainTab: 'details', subTab: null };
+    };
+
+    const [activeSubTab, setActiveSubTab] = useState(() => getTabFromPath(location.pathname).mainTab);
     const [selectedRole, setSelectedRole] = useState('Main');
     const [saving, setSaving] = useState(false);
     const { uploadImage, uploading } = useVercelImageUpload();
     const [bannerUploading, setBannerUploading] = useState(false); // New state for banner
+
+    // Sync URL with active tab
+    useEffect(() => {
+        const currentTab = activeSubTab === 'details' ? '/profile' : `/profile/${activeSubTab}`;
+        if (location.pathname !== currentTab) {
+            navigate(currentTab, { replace: true });
+        }
+    }, [activeSubTab]);
+
+    // Update tab when URL changes
+    useEffect(() => {
+        const { mainTab } = getTabFromPath(location.pathname);
+        if (mainTab !== activeSubTab) {
+            setActiveSubTab(mainTab);
+        }
+    }, [location.pathname]);
 
     // Toggle States
     const [useLegalNameOnly, setUseLegalNameOnly] = useState(userData?.useLegalNameOnly || false);

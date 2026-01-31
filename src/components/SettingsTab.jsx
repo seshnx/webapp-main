@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
     X, Loader2, Settings, Bell, Shield, Moon, Users, RefreshCw, Star,
     Filter, Lock, AlertTriangle, Key, Mail, CheckCircle, Eye, MapPin,
@@ -32,7 +33,36 @@ const SETTINGS_TABS = [
 
 export default function SettingsTab({ user, userData, onUpdate, onRoleSwitch, subProfiles = {} }) {
     const { t, language } = useLanguage();
-    const [activeTab, setActiveTab] = useState('general');
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    // Get settings sub-tab from URL path
+    const getSettingsTabFromPath = (path) => {
+        const parts = path.split('/').filter(Boolean);
+        if (parts[0] === 'profile' && parts[1] === 'settings' && parts[2]) {
+            return parts[2];
+        }
+        return 'general';
+    };
+
+    const [activeTab, setActiveTab] = useState(() => getSettingsTabFromPath(location.pathname));
+
+    // Sync URL with active settings tab
+    useEffect(() => {
+        const currentPath = `/profile/settings/${activeTab}`;
+        if (location.pathname !== currentPath) {
+            navigate(currentPath, { replace: true });
+        }
+    }, [activeTab]);
+
+    // Update tab when URL changes
+    useEffect(() => {
+        const tabFromPath = getSettingsTabFromPath(location.pathname);
+        if (tabFromPath !== activeTab) {
+            setActiveTab(tabFromPath);
+        }
+    }, [location.pathname]);
+
     const [localSettings, setLocalSettings] = useState(() => {
         const defaults = {
             // General
