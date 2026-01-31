@@ -107,7 +107,8 @@ const getSafeExchangeRequirement = (price, sellerRequiresSafeExchange) => {
 };
 
 export default function GearExchange({ user, userData, setActiveTab, openChat }) {
-    const userId = user?.id || user?.uid;
+    // Use profile UUID from userData instead of Clerk user ID
+    const userId = userData?.id || user?.id || user?.uid;
 
     // Fetch data with polling hooks
     const { data: rawListings } = useGearListings({ status: 'active' });
@@ -210,7 +211,7 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
     const handleSafeExchangePurchase = async (item) => {
         // Calculate fees
         const fees = calculateFees(item.price);
-        const userId = user?.id || user?.uid;
+        const userId = userData?.id || user?.id || user?.uid;
 
         try {
             // Create the safe exchange transaction with JSONB structure
@@ -272,7 +273,7 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
 
         // Calculate fees
         const fees = calculateFees(item.price);
-        const userId = user?.id || user?.uid;
+        const userId = userData?.id || user?.id || user?.uid;
 
         try {
             // Create the order
@@ -617,7 +618,7 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
             return;
         }
         setSubmitting(true);
-        const userId = user?.id || user?.uid;
+        const userId = userData?.id || user?.id || user?.uid;
         try {
             await createListing({
                 seller_id: userId,
@@ -864,8 +865,8 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
         }
 
         if (!supabase) return;
-        const userId = currentUser?.id || currentUser?.uid;
-        
+        const userId = currentUserData?.id || currentUser?.id || currentUser?.uid;
+
         const channel = supabase
             .channel(`gear-offers-${item.id}`)
             .on('postgres_changes', {
@@ -886,7 +887,7 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
         
         async function loadOffers() {
             if (!supabase) return;
-            const userId = currentUser?.id || currentUser?.uid;
+            const userId = currentUserData?.id || currentUser?.id || currentUser?.uid;
             setLoadingOffers(true);
             try {
                 const { data: offersData, error } = await supabase
@@ -980,7 +981,7 @@ function ListingDetailModal({ item, onClose, currentUser, currentUserData, onSaf
 
         setSubmittingOffer(true);
         const toastId = toast.loading('Submitting offer...');
-        const userId = currentUser?.id || currentUser?.uid;
+        const userId = currentUserData?.id || currentUser?.id || currentUser?.uid;
 
         try {
             await createOffer({

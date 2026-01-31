@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SchoolProvider } from '../contexts/SchoolContext';
-import { updateProfile } from '../config/neonQueries';
+import { updateProfile, getSubProfiles, getWalletBalance } from '../config/neonQueries';
 import { Loader2 } from 'lucide-react';
 import ErrorBoundary from './shared/ErrorBoundary';
 import MobileBottomNav from './MobileBottomNav';
@@ -205,20 +205,15 @@ export default function MainLayout({
 
   // Load sub-profiles (optional - doesn't block the app if it fails)
   const loadSubProfiles = useCallback(async () => {
-    if (!user?.id) return;
+    if (!userData?.id && !user?.id) return;
 
     try {
-      const response = await fetch(`/api/user/sub-profiles/${user.id}`);
-      const result = await response.json();
-
-      if (!response.ok) {
-        console.warn('Sub-profiles API not available:', result.error);
-        setSubProfiles({});
-        return;
-      }
+      // Use profile UUID from userData, or fall back to user.id
+      const userId = userData?.id || user?.id;
+      const result = await getSubProfiles(userId);
 
       const profiles = {};
-      result.data?.forEach(profile => {
+      result?.forEach(profile => {
         profiles[profile.account_type] = profile;
       });
       setSubProfiles(profiles);
@@ -226,7 +221,7 @@ export default function MainLayout({
       console.warn('Failed to load sub-profiles (non-critical):', err?.message || err);
       setSubProfiles({});
     }
-  }, [user?.id]);
+  }, [userData?.id, user?.id]);
 
   useEffect(() => {
     loadSubProfiles();
@@ -234,22 +229,14 @@ export default function MainLayout({
 
   // Load token balance (optional - doesn't block the app if it fails)
   useEffect(() => {
-    if (!user?.id) return;
+    if (!userData?.id && !user?.id) return;
 
     const loadBalance = async () => {
       try {
-        const response = await fetch(`/api/user/wallets/${user.id}`);
-        const result = await response.json();
-
-        if (!response.ok) {
-          console.warn('Wallets API not available:', result.error);
-          setTokenBalance(0);
-          return;
-        }
-
-        if (result.data) {
-          setTokenBalance(result.data.balance || 0);
-        }
+        // Use profile UUID from userData, or fall back to user.id
+        const userId = userData?.id || user?.id;
+        const balance = await getWalletBalance(userId);
+        setTokenBalance(balance);
       } catch (err) {
         console.warn('Failed to load token balance (non-critical):', err?.message || err);
         setTokenBalance(0);
@@ -257,7 +244,7 @@ export default function MainLayout({
     };
 
     loadBalance();
-  }, [user?.id]);
+  }, [userData?.id, user?.id]);
 
   const handleRoleSwitch = async (newRole) => {
     if (!user?.id) return;

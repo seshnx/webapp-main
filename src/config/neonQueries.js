@@ -1527,12 +1527,12 @@ export async function respondToGearOffer(offerId, response) {
  * @returns {Promise<Array>} Array of transactions
  */
 export async function getSafeExchangeTransactions({ userId, status }) {
-  let sql = `SELECT * FROM safe_exchange_transactions WHERE parties->>'buyer' = $1 OR parties->>'seller' = $1`;
+  let sql = `SELECT * FROM safe_exchange_transactions WHERE buyer_id = $1 OR seller_id = $1`;
   const params = [userId];
   let paramIndex = 2;
 
   if (status) {
-    sql += ` AND status = $${paramIndex}`;
+    sql += ` AND escrow_status = $${paramIndex}`;
     params.push(status);
     paramIndex++;
   }
@@ -1561,17 +1561,38 @@ export async function getSafeExchangeTransactionById(transactionId) {
  * @returns {Promise<object>} Created transaction
  */
 export async function createSafeExchangeTransaction(transactionData) {
-  const { item_id, transaction_type, parties, item_details } = transactionData;
+  // Support both old format (order_id, buyer_id, seller_id, amount)
+  // and new format (itemId, transactionType, parties, itemDetails, verificationData, status)
+  const {
+    order_id,
+    buyer_id,
+    seller_id,
+    amount,
+    itemId,
+    transactionType,
+    parties,
+    itemDetails,
+    verificationData,
+    status
+  } = transactionData;
+
+  // If new format is used, extract the data
+  const finalOrderId = order_id || null;
+  const finalBuyerId = buyer_id || parties?.buyer;
+  const finalSellerId = seller_id || parties?.seller;
+  const finalAmount = amount || itemDetails?.buyerTotal || verificationData?.escrowAmount;
+  const finalEscrowStatus = verificationData?.escrowStatus || 'pending';
+  const photoVerification = verificationData ? { verificationData } : null;
 
   const sql = `
-    INSERT INTO safe_exchange_transactions (item_id, transaction_type, parties, item_details, status, verification_data, created_at)
-    VALUES ($1, $2, $3, $4, 'pending', '{}', NOW())
+    INSERT INTO safe_exchange_transactions (order_id, buyer_id, seller_id, amount, escrow_status, photo_verification, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, NOW())
     RETURNING *
   `;
 
   const result = await executeQuery(
     sql,
-    [item_id, transaction_type, JSON.stringify(parties), JSON.stringify(item_details)],
+    [finalOrderId, finalBuyerId, finalSellerId, finalAmount, finalEscrowStatus, JSON.stringify(photoVerification)],
     'createSafeExchangeTransaction'
   );
 
