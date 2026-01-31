@@ -55,7 +55,8 @@ function usePolling(fetchFn, deps, enabled = true) {
 
     const interval = setInterval(fetchData, POLL_INTERVAL);
     return () => clearInterval(interval);
-  }, [fetchData, enabled, ...deps]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled, ...deps]); // Remove fetchData from deps to prevent infinite loop
 
   return { data, loading, refresh: fetchData };
 }

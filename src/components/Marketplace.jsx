@@ -68,7 +68,7 @@ export default function Marketplace({ user, userData, tokenBalance }) {
                 )}
                 {subTab === 'fx' && (
                     <div key="fx" className="tab-content">
-                        <SeshFxStore user={user} tokenBalance={tokenBalance} />
+                        <SeshFxStore user={user} userData={userData} tokenBalance={tokenBalance} />
                     </div>
                 )}
             </div>

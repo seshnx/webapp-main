@@ -5,8 +5,9 @@ import { useMarketplaceItems, useUserLibrary, useItemOwnership, useMarketplaceMu
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import ReportModal from '../ReportModal';
 
-export default function SeshFxStore({ user, userData, tokenBalance, refreshWallet }) {
-  const userId = user?.id || user?.uid;
+export default function SeshFxStore({ user, userData, tokenBalance }) {
+  // Use profile UUID from userData instead of Clerk user ID
+  const userId = userData?.id || user?.id || user?.uid;
 
   // Fetch marketplace items with polling
   const { data: rawItems, loading } = useMarketplaceItems({ type: filter === 'All' ? undefined : filter });
@@ -40,11 +41,25 @@ export default function SeshFxStore({ user, userData, tokenBalance, refreshWalle
       try {
           await purchaseItem(userId, item.id);
           alert("Purchase successful! Item added to your library.");
-          // Refresh wallet balance
-          if (refreshWallet) refreshWallet();
+          // Note: Token balance refresh would require a prop from parent
       } catch (error) {
           console.error('Purchase error:', error);
           alert("Failed to purchase item. Please try again.");
+      }
+  };
+
+  const handleDownload = async (item) => {
+      try {
+          // Create a temporary link to download the file
+          const link = document.createElement('a');
+          link.href = item.download_url;
+          link.download = `${item.title}.${item.download_url.split('.').pop()}`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+      } catch (error) {
+          console.error('Download error:', error);
+          alert("Failed to download item.");
       }
   };
 
@@ -152,7 +167,8 @@ function SellItemModal({ user, userData, onClose }) {
     const handleSubmit = async () => {
         if(!form.title || !form.price || !audioFile) return alert("Title, Price, and Audio File are required.");
 
-        const userId = user?.id || user?.uid;
+        // Use profile UUID from userData instead of Clerk user ID
+        const userId = userData?.id || user?.id || user?.uid;
 
         try {
             setStatus('Uploading Audio Asset...');
