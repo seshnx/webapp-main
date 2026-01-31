@@ -1,8 +1,8 @@
 // Import React and hooks first to ensure they're available
 import React, { useState, useEffect, useMemo } from 'react';
-import { 
-    Calendar, User, MessageCircle, Search, Edit2, Zap, Sliders, 
-    ArrowRight, Bell, Music, TrendingUp, Clock, AlertTriangle, 
+import {
+    Calendar, User, MessageCircle, Search, Edit2, Zap, Sliders,
+    ArrowRight, Bell, Music, TrendingUp, Clock, AlertTriangle,
     CheckCircle, XCircle, ShoppingBag, ChevronRight, Sparkles,
     Headphones, Radio, Mic2, Play, Heart, Star, ArrowUpRight,
     Wallet, Users, Eye, Activity, BarChart3, Crown, Flame, Target
@@ -11,6 +11,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
 import { useNotifications } from '../hooks/useNotifications';
+import { getMarketplaceItems } from '../config/neonQueries';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedNumber from './shared/AnimatedNumber';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -254,16 +255,11 @@ export default function Dashboard({
         // Initial fetch of trending item
         const fetchTrendingItem = async () => {
             try {
-                const response = await fetch('/api/marketplace/items?limit=1');
-                const result = await response.json();
+                // Use direct database query instead of API route
+                const items = await getMarketplaceItems({ limit: 1 });
 
-                if (!response.ok) {
-                    // Silently handle errors (table might not exist)
-                    return;
-                }
-
-                if (result.data && result.data.length > 0) {
-                    const data = result.data[0];
+                if (items && items.length > 0) {
+                    const data = items[0];
                     setTrendingItem({
                         id: data.id,
                         ...data,
