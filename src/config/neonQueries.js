@@ -281,16 +281,31 @@ export async function updateProfile(userId, updates) {
   // Fields that go in profiles table
   const profileFields = ['location', 'website', 'social_links', 'photo_url', 'cover_photo_url',
                         'talent_info', 'engineer_info', 'producer_info', 'studio_info', 'education_info', 'label_info',
-                        'profile_visibility', 'messaging_permission'];
+                        'profile_visibility', 'messaging_permission', 'hourly_rate', 'use_legal_name_only',
+                        'use_user_name_only', 'search_terms'];
+
+  // Field name mappings (frontend -> database)
+  const fieldMappings = {
+    'zip': 'zip_code',
+    'avatar_url': 'photo_url',
+    'banner_url': 'cover_photo_url',
+    'hourlyRate': 'hourly_rate',
+    'useLegalNameOnly': 'use_legal_name_only',
+    'useUserNameOnly': 'use_user_name_only',
+    'searchTerms': 'search_terms'
+  };
 
   const clerkUpdates = {};
   const profileUpdates = {};
 
   for (const [key, value] of Object.entries(updates)) {
-    if (clerkUserFields.includes(key)) {
-      clerkUpdates[key] = value;
-    } else if (profileFields.includes(key)) {
-      profileUpdates[key] = value;
+    // Map field name if there's a mapping
+    const mappedKey = fieldMappings[key] || key;
+
+    if (clerkUserFields.includes(mappedKey)) {
+      clerkUpdates[mappedKey] = value;
+    } else if (profileFields.includes(mappedKey)) {
+      profileUpdates[mappedKey] = value;
     }
   }
 
