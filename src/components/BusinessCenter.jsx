@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
     Briefcase, Home, Globe, Users, ChevronRight,
     Building2, Music2, BarChart3, Settings2
@@ -20,7 +21,35 @@ import BusinessOverview from './business/BusinessOverview';
  * 4. Label/Roster - Manage artist roster (for labels/agents)
  */
 export default function BusinessCenter({ user, userData }) {
-    const [activeTab, setActiveTab] = useState('overview');
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    // Get active tab from URL path
+    const getTabFromPath = (path) => {
+        const parts = path.split('/').filter(Boolean);
+        if (parts[0] === 'business' && parts[1]) {
+            return parts[1];
+        }
+        return 'overview';
+    };
+
+    const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
+
+    // Sync URL with active tab
+    useEffect(() => {
+        const currentPath = activeTab === 'overview' ? '/business' : `/business/${activeTab}`;
+        if (location.pathname !== currentPath) {
+            navigate(currentPath, { replace: true });
+        }
+    }, [activeTab]);
+
+    // Update tab when URL changes
+    useEffect(() => {
+        const tabFromPath = getTabFromPath(location.pathname);
+        if (tabFromPath !== activeTab) {
+            setActiveTab(tabFromPath);
+        }
+    }, [location.pathname]);
 
     // Determine which features the user has access to
     const isStudio = userData?.accountTypes?.includes('Studio');

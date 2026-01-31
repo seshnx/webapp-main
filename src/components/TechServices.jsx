@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Wrench, Settings } from 'lucide-react';
 import ServiceJobBoard from './tech/ServiceJobBoard';
 import TechDirectory from './tech/TechDirectory';
@@ -7,8 +8,36 @@ import TechGearDatabase from './tech/TechGearDatabase';
 import TechProfileEditor from './tech/TechProfileEditor';
 
 export default function TechServices({ user, userData, openPublicProfile }) {
-    const [activeTab, setActiveTab] = useState('board');
+    const location = useLocation();
+    const navigate = useNavigate();
+
+    // Get active tab from URL path
+    const getTabFromPath = (path) => {
+        const parts = path.split('/').filter(Boolean);
+        if (parts[0] === 'tech' && parts[1]) {
+            return parts[1];
+        }
+        return 'board';
+    };
+
+    const [activeTab, setActiveTab] = useState(() => getTabFromPath(location.pathname));
     const isTech = userData?.accountTypes?.includes('Technician');
+
+    // Sync URL with active tab
+    useEffect(() => {
+        const currentPath = `/tech/${activeTab}`;
+        if (location.pathname !== currentPath) {
+            navigate(currentPath, { replace: true });
+        }
+    }, [activeTab]);
+
+    // Update tab when URL changes
+    useEffect(() => {
+        const tabFromPath = getTabFromPath(location.pathname);
+        if (tabFromPath !== activeTab) {
+            setActiveTab(tabFromPath);
+        }
+    }, [location.pathname]);
 
     return (
         <div className="max-w-6xl mx-auto gap-fluid pb-20 container-fluid">
