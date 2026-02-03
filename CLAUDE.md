@@ -17,18 +17,20 @@ npm run preview      # Preview production build locally
 
 SeshNx is a React 18 + Vite PWA for music creators, studios, and industry professionals. It uses a **hybrid backend architecture**:
 
-- **Supabase**: Primary database (PostgreSQL), authentication (PKCE flow), file storage
+- **Neon**: Primary database (PostgreSQL serverless)
 - **Convex**: Real-time features (chat messages, presence, read receipts)
+- **Clerk**: Authentication (PKCE flow)
+- **Vercel Blob**: File storage (images, videos, documents)
 - **Stripe**: Payment processing (test mode key in constants.js)
 - **Vercel**: Deployment with SPA routing
 
-Firebase has been fully migrated away - legacy imports are mapped to empty adapters in vite.config.js.
+Firebase and Supabase have been fully migrated away - legacy imports are mapped to empty adapters in vite.config.js.
 
 ## Directory Structure
 
 ```
 src/
-├── config/           # Supabase/Convex clients, constants.js (role schemas, account types)
+├── config/           # Neon/Convex/Clerk clients, constants.js (role schemas, account types)
 ├── components/
 │   ├── shared/       # Reusable components (ErrorBoundary, AnimatedNumber, UserAvatar)
 │   ├── ui/           # Basic primitives
@@ -42,7 +44,7 @@ src/
 ├── hooks/            # Custom hooks (useAppData, useFollowSystem, useNotifications, etc.)
 ├── utils/            # Utilities (permissions.js, eduPermissions.js, moderation.js)
 ├── routes/           # AppRoutes.jsx, RouteWrapper.jsx
-└── adapters/         # Empty Firebase shims
+└── adapters/         # Firebase/Supabase shims (for legacy compatibility)
 ```
 
 ## Key Patterns

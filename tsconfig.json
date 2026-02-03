@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting - Start lenient, tighten over time */
+    "strict": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noFallthroughCasesInSwitch": false,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+
+    /* Path Aliases (matching vite.config.js) */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "convex/_generated/api": ["./convex/_generated/api-browser.js"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["node_modules", "dist", "convex"],
+  "references": [{ "path": "./tsconfig.node.json" }]
+}

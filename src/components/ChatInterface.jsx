@@ -18,7 +18,7 @@ export default function ChatInterface({ user, userData, subProfiles = {}, openPu
     const [showDetails, setShowDetails] = useState(false);
     const [profilePhotos, setProfilePhotos] = useState({});
 
-    // Normalize user ID - Supabase uses 'id', Firebase uses 'uid'
+    // Normalize user ID for backward compatibility
     const userId = user?.id || user?.uid;
 
     // Initialize presence tracking for current user
