@@ -1335,6 +1335,66 @@ export async function getTechMetrics(userId: string): Promise<TechMetricsData> {
 }
 
 /**
+ * Get label metrics for Business Overview
+ *
+ * @param userId - Label user ID
+ * @returns Array with label metrics
+ */
+export async function getLabelMetrics(userId: string): Promise<any[]> {
+  return await executeQuery(
+    `SELECT
+      COUNT(DISTINCT lr.artist_id) as total_artists,
+      COUNT(DISTINCT CASE WHEN r.status = 'live' THEN r.id END) as active_releases,
+      COALESCE(SUM(CASE WHEN r.status = 'live' THEN r.revenue ELSE 0 END), 0) as total_revenue,
+      COALESCE(SUM(CASE WHEN r.status = 'live' THEN r.streams ELSE 0 END), 0) as total_streams
+     FROM label_roster lr
+     LEFT JOIN releases r ON r.artist_id = lr.artist_id
+     WHERE lr.label_id = $1`,
+    [userId],
+    'getLabelMetrics'
+  );
+}
+
+/**
+ * Get studio metrics for Business Overview
+ *
+ * @param userId - Studio user ID
+ * @returns Array with studio metrics
+ */
+export async function getStudioMetrics(userId: string): Promise<any[]> {
+  return await executeQuery(
+    `SELECT
+      COUNT(DISTINCT sr.id) as total_rooms,
+      COUNT(DISTINCT CASE WHEN b.status = 'pending' THEN b.id END) as pending_bookings,
+      COUNT(DISTINCT CASE WHEN b.status = 'completed' THEN b.id END) as completed_bookings
+     FROM studio_rooms sr
+     LEFT JOIN bookings b ON b.room_id = sr.id
+     WHERE sr.studio_id = $1`,
+    [userId],
+    'getStudioMetrics'
+  );
+}
+
+/**
+ * Get distribution metrics for Business Overview
+ *
+ * @param userId - User ID
+ * @returns Array with distribution metrics
+ */
+export async function getDistributionMetrics(userId: string): Promise<any[]> {
+  return await executeQuery(
+    `SELECT
+      COUNT(DISTINCT r.id) as total_releases,
+      COUNT(DISTINCT CASE WHEN r.status = 'live' THEN r.id END) as live_releases,
+      COUNT(DISTINCT CASE WHEN r.status = 'draft' THEN r.id END) as draft_releases
+     FROM releases r
+     WHERE r.created_by = $1`,
+    [userId],
+    'getDistributionMetrics'
+  );
+}
+
+/**
  * Get service requests for a technician
  *
  * @param userId - Technician user ID
@@ -1810,4 +1870,233 @@ export async function getWalletBalance(userId: string): Promise<number> {
   );
 
   return parseFloat(result[0]?.balance || '0');
+}
+
+// =====================================================
+// EQUIPMENT SUBMISSIONS
+// =====================================================
+
+/**
+ * Get pending equipment submissions
+ *
+ * @param limit - Maximum number of submissions to return
+ * @returns Array of pending submissions
+ */
+export async function getPendingSubmissions(limit: number = 20): Promise<any[]> {
+  return await executeQuery(
+    `SELECT id, brand, model, category, sub_category, specs, submitted_by, submitter_name, votes, timestamp
+     FROM equipment_submissions
+     WHERE status = 'pending'
+     ORDER BY timestamp DESC
+     LIMIT $1`,
+    [limit],
+    'getPendingSubmissions'
+  );
+}
+
+/**
+ * Update submission votes
+ *
+ * @param submissionId - Submission ID
+ * @param votes - Updated votes object
+ * @returns void
+ */
+export async function updateSubmissionVotes(
+  submissionId: string,
+  votes: { yes: string[]; fake: string[]; duplicate: string[] }
+): Promise<void> {
+  await executeQuery(
+    `UPDATE equipment_submissions
+     SET votes = $2::jsonb
+     WHERE id = $1`,
+    [submissionId, JSON.stringify(votes)],
+    'updateSubmissionVotes'
+  );
+}
+
+/**
+ * Approve equipment submission and add to database
+ *
+ * @param submissionId - Submission ID to approve
+ * @param reviewerId - User ID of reviewer
+ * @returns void
+ */
+export async function approveEquipmentSubmission(
+  submissionId: string,
+  reviewerId: string
+): Promise<void> {
+  // First, get the submission details
+  const submission = await executeQuery(
+    `SELECT brand, model, category, sub_category, specs, submitted_by
+     FROM equipment_submissions
+     WHERE id = $1`,
+    [submissionId],
+    'approveEquipmentSubmission-get'
+  );
+
+  if (submission.length === 0) {
+    throw new Error('Submission not found');
+  }
+
+  const sub = submission[0];
+
+  // Insert into equipment_database
+  await executeQuery(
+    `INSERT INTO equipment_database (name, brand, model, category, subcategory, specifications, added_by, verified_by)
+     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, ARRAY[$7])`,
+    [
+      `${sub.brand} ${sub.model}`,
+      sub.brand,
+      sub.model,
+      sub.category,
+      sub.sub_category,
+      sub.specs,
+      sub.submitted_by
+    ],
+    'approveEquipmentSubmission-insert'
+  );
+
+  // Update submission status
+  await executeQuery(
+    `UPDATE equipment_submissions
+     SET status = 'approved'
+     WHERE id = $1`,
+    [submissionId],
+    'approveEquipmentSubmission-update'
+  );
+}
+
+/**
+ * Reject equipment submission
+ *
+ * @param submissionId - Submission ID to reject
+ * @returns void
+ */
+export async function rejectEquipmentSubmission(submissionId: string): Promise<void> {
+  await executeQuery(
+    `UPDATE equipment_submissions
+     SET status = 'rejected'
+     WHERE id = $1`,
+    [submissionId],
+    'rejectEquipmentSubmission'
+  );
+}
+
+/**
+ * Create equipment submission
+ *
+ * @param data - Submission data
+ * @returns Created submission
+ */
+export async function createEquipmentSubmission(data: {
+  brand: string;
+  model: string;
+  category: string;
+  subCategory?: string;
+  specs?: string;
+  submittedBy: string;
+  submitterName?: string;
+}): Promise<any> {
+  const result = await executeQuery(
+    `INSERT INTO equipment_submissions (brand, model, category, sub_category, specs, submitted_by, submitter_name, status, votes, timestamp)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', '{"yes": [], "fake": [], "duplicate": []}'::jsonb, NOW())
+     RETURNING *`,
+    [
+      data.brand,
+      data.model,
+      data.category,
+      data.subCategory || null,
+      data.specs || '{}',
+      data.submittedBy,
+      data.submitterName || null
+    ],
+    'createEquipmentSubmission'
+  );
+
+  return result[0];
+}
+
+/**
+ * Upsert wallet balance (add tokens)
+ *
+ * @param userId - User ID
+ * @param amount - Amount to add (can be negative)
+ * @returns void
+ */
+export async function upsertWallet(userId: string, amount: number): Promise<void> {
+  await executeQuery(
+    `INSERT INTO wallets (user_id, balance, updated_at)
+     VALUES ($1, $2, NOW())
+     ON CONFLICT (user_id) DO UPDATE
+     SET balance = wallets.balance + $2,
+         updated_at = NOW()`,
+    [userId, amount],
+    'upsertWallet'
+  );
+}
+
+// =====================================================
+// EXTERNAL ARTISTS (Label Management)
+// =====================================================
+
+/**
+ * Get external artists for a label
+ *
+ * @param labelId - Label user ID
+ * @returns Array of external artists
+ */
+export async function getExternalArtists(labelId: string): Promise<any[]> {
+  return await executeQuery(
+    `SELECT id, name, email, stage_name, primary_role, genre, contract_type,
+            status, signed_date, notes, created_at, updated_at
+     FROM external_artists
+     WHERE label_id = $1
+     ORDER BY created_at DESC`,
+    [labelId],
+    'getExternalArtists'
+  );
+}
+
+/**
+ * Create external artist
+ *
+ * @param labelId - Label user ID
+ * @param data - Artist data
+ * @returns Created artist
+ */
+export async function createExternalArtist(
+  labelId: string,
+  data: {
+    name: string;
+    email?: string | null;
+    stage_name?: string | null;
+    genre?: string[];
+    primary_role?: string | null;
+    contract_type?: string | null;
+    signed_date?: string;
+    notes?: string | null;
+  }
+): Promise<any> {
+  const result = await executeQuery(
+    `INSERT INTO external_artists (
+       label_id, name, email, stage_name, primary_role,
+       genre, contract_type, signed_date, notes, status
+     )
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'invited')
+     RETURNING *`,
+    [
+      labelId,
+      data.name,
+      data.email || null,
+      data.stage_name || null,
+      data.primary_role || null,
+      data.genre || [],
+      data.contract_type || null,
+      data.signed_date || null,
+      data.notes || null
+    ],
+    'createExternalArtist'
+  );
+
+  return result[0];
 }
