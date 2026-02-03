@@ -993,6 +993,72 @@ export async function upsertSubProfile(
   return result[0][column];
 }
 
+/**
+ * Get all sub-profiles for a user
+ *
+ * @param userId - User ID
+ * @returns Array of sub-profiles with account_type field
+ */
+export async function getSubProfiles(userId: string): Promise<Array<{ account_type: string; [key: string]: any }>> {
+  const result = await executeQuery(
+    `SELECT
+       user_id,
+       talent_info,
+       engineer_info,
+       producer_info,
+       studio_info,
+       education_info,
+       label_info,
+       technician_info
+     FROM profiles
+     WHERE user_id = $1`,
+    [userId],
+    'getSubProfiles'
+  );
+
+  if (result.length === 0) return [];
+
+  const profile = result[0];
+  const subProfiles: Array<{ account_type: string; [key: string]: any }> = [];
+
+  // Map each info column to an account_type
+  if (profile.talent_info && (profile.talent_info as any).display_name) {
+    subProfiles.push({ ...profile.talent_info, account_type: 'Talent' });
+  }
+  if (profile.engineer_info && (profile.engineer_info as any).display_name) {
+    subProfiles.push({ ...profile.engineer_info, account_type: 'Engineer' });
+  }
+  if (profile.producer_info && (profile.producer_info as any).display_name) {
+    subProfiles.push({ ...profile.producer_info, account_type: 'Producer' });
+  }
+  if (profile.studio_info && (profile.studio_info as any).display_name) {
+    subProfiles.push({ ...profile.studio_info, account_type: 'Studio' });
+  }
+  if (profile.education_info && (profile.education_info as any).display_name) {
+    const eduInfo = profile.education_info as any;
+    // Check which EDU role and add appropriate account_type
+    if (eduInfo.role === 'EDUAdmin') {
+      subProfiles.push({ ...eduInfo, account_type: 'EDUAdmin' });
+    } else if (eduInfo.role === 'EDUStaff') {
+      subProfiles.push({ ...eduInfo, account_type: 'EDUStaff' });
+    } else if (eduInfo.role === 'Student') {
+      subProfiles.push({ ...eduInfo, account_type: 'Student' });
+    } else if (eduInfo.role === 'Intern') {
+      subProfiles.push({ ...eduInfo, account_type: 'Intern' });
+    } else {
+      subProfiles.push({ ...eduInfo, account_type: 'Student' }); // Default
+    }
+  }
+  if (profile.label_info && (profile.label_info as any).display_name) {
+    subProfiles.push({ ...profile.label_info, account_type: 'Label' });
+  }
+  if (profile.technician_info && (profile.technician_info as any).display_name) {
+    subProfiles.push({ ...profile.technician_info, account_type: 'Technician' });
+  }
+
+  return subProfiles;
+}
+
 // =====================================================
 // SAVED POSTS QUERIES
 // =====================================================
