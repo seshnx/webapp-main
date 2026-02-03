@@ -935,6 +935,64 @@ export async function getSubProfile(userId: string, role: string): Promise<Recor
   }
 }
 
+/**
+ * Upsert sub-profile data for a specific role
+ *
+ * @param userId - User ID
+ * @param role - Account type/role
+ * @param data - Profile data to upsert
+ * @returns Upserted sub-profile data
+ */
+export async function upsertSubProfile(
+  userId: string,
+  role: string,
+  data: Record<string, any>
+): Promise<Record<string, any>> {
+  // Map role to the appropriate column
+  const columnMap: Record<string, string> = {
+    'Talent': 'talent_info',
+    'Engineer': 'engineer_info',
+    'Producer': 'producer_info',
+    'Studio': 'studio_info',
+    'EDUStaff': 'education_info',
+    'EDUAdmin': 'education_info',
+    'Student': 'education_info',
+    'Intern': 'education_info',
+    'Label': 'label_info',
+    'Agent': 'label_info',
+    'Technician': 'technician_info',
+  };
+
+  const column = columnMap[role];
+  if (!column) {
+    throw new Error(`Invalid role for sub-profile: ${role}`);
+  }
+
+  const result = await executeQuery(
+    `UPDATE profiles
+     SET ${column} = $2::jsonb,
+         updated_at = NOW()
+     WHERE user_id = $1
+     RETURNING ${column}`,
+    [userId, JSON.stringify(data)],
+    'upsertSubProfile'
+  );
+
+  if (result.length === 0) {
+    // If no profile exists, create one
+    const insertResult = await executeQuery(
+      `INSERT INTO profiles (user_id, ${column})
+       VALUES ($1, $2::jsonb)
+       RETURNING ${column}`,
+      [userId, JSON.stringify(data)],
+      'upsertSubProfile-insert'
+    );
+    return insertResult[0][column];
+  }
+
+  return result[0][column];
+}
+
 // =====================================================
 // SAVED POSTS QUERIES
 // =====================================================
