@@ -1744,3 +1744,55 @@ export async function getTechAverageResponseTime(userId: string): Promise<number
 
   return parseFloat(result[0]?.avg_hours || '0');
 }
+
+// =====================================================
+// MARKETPLACE & WALLET QUERIES
+// =====================================================
+
+/**
+ * Get marketplace items with optional filters
+ *
+ * @param options - Query options (type, limit, offset)
+ * @returns Array of marketplace items
+ */
+export async function getMarketplaceItems(
+  options: { type?: string; limit?: number; offset?: number } = {}
+): Promise<any[]> {
+  const { type, limit = 50, offset = 0 } = options;
+
+  let sql = `SELECT mi.*, cu.username, cu.profile_photo_url
+     FROM marketplace_items mi
+     JOIN clerk_users cu ON cu.id = mi.seller_id
+     WHERE mi.deleted_at IS NULL`;
+  const params: any[] = [];
+  let paramIndex = 1;
+
+  if (type) {
+    sql += ` AND mi.item_type = $${paramIndex}`;
+    params.push(type);
+    paramIndex++;
+  }
+
+  sql += ` ORDER BY mi.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+  params.push(limit, offset);
+
+  return await executeQuery(sql, params, 'getMarketplaceItems');
+}
+
+/**
+ * Get wallet balance for a user
+ *
+ * @param userId - User ID
+ * @returns Token balance
+ */
+export async function getWalletBalance(userId: string): Promise<number> {
+  const result = await executeQuery<{ balance: string }>(
+    `SELECT COALESCE(balance, 0) as balance
+     FROM wallets
+     WHERE user_id = $1`,
+    [userId],
+    'getWalletBalance'
+  );
+
+  return parseFloat(result[0]?.balance || '0');
+}
