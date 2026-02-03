@@ -135,6 +135,55 @@ export default function App() {
 
   // --- CLERK AUTH & USER DATA LOADER ---
   useEffect(() => {
+    // =====================================================
+    // LOCALHOST DEV BYPASS - Skip auth on localhost
+    // =====================================================
+    const isLocalhost = window.location.hostname === 'localhost' ||
+                        window.location.hostname === '127.0.0.1' ||
+                        window.location.port === '5173'; // Vite dev server
+
+    if (isLocalhost && import.meta.env.DEV) {
+      console.log('🔓 Running on localhost - bypassing authentication');
+
+      // Create mock developer user with all account types for testing
+      const mockUserData = {
+        id: 'dev-local-user',
+        firstName: 'Dev',
+        lastName: 'User',
+        email: 'dev@localhost.dev',
+        username: 'devuser',
+        accountTypes: ['Technician', 'Studio', 'Label', 'Talent', 'Producer', 'Engineer', 'EDUAdmin', 'Student'],
+        activeProfileRole: 'Technician',
+        preferredRole: 'Technician',
+        photoURL: null,
+        settings: {
+          theme: 'dark',
+          language: 'en',
+          accessibility: {
+            fontSize: 'medium',
+            reducedMotion: false,
+            highContrast: false
+          }
+        },
+        effectiveDisplayName: 'Dev User',
+        zipCode: '90210',
+        // Tech profile
+        specialties: ['Audio Repair', 'Instrument Repair', 'Studio Maintenance'],
+        hourly_rate: 85,
+        availability_status: 'Available',
+        service_radius: 50,
+        location: { city: 'Los Angeles', state: 'CA', zip: '90210' },
+        bio: 'Local development user for testing all features',
+        rating: 4.8,
+        completed_jobs: 50
+      };
+
+      setUserData(mockUserData);
+      setLoading(false);
+      return;
+    }
+    // =====================================================
+
     // Wait for Clerk to load
     if (!clerkLoaded) {
       return;
@@ -265,6 +314,20 @@ export default function App() {
     try {
       console.log('=== APP LOGOUT ===');
 
+      // Check if using dev bypass
+      const isLocalhost = window.location.hostname === 'localhost' ||
+                          window.location.hostname === '127.0.0.1' ||
+                          window.location.port === '5173';
+      const usingDevBypass = isLocalhost && import.meta.env.DEV && userData?.id === 'dev-local-user';
+
+      if (usingDevBypass) {
+        // Just clear state for dev bypass
+        console.log('🔓 Clearing dev bypass user');
+        setUserData(null);
+        navigate('/login', { replace: true });
+        return;
+      }
+
       // Sign out from Clerk - this clears the session
       if (clerk) {
         await clerk.signOut();
@@ -284,7 +347,7 @@ export default function App() {
       setUserData(null);
       navigate('/login', { replace: true });
     }
-  }, [navigate, clerk]);
+  }, [navigate, clerk, userData]);
 
   // Show loading spinner while Clerk loads or userData is being fetched
   if (!clerkLoaded || loading) {
@@ -298,14 +361,20 @@ export default function App() {
   // Check if coming from OAuth signup flow
   const isFromSignup = new URLSearchParams(window.location.search).get('intent') === 'signup';
 
+  // Check if running on localhost with dev bypass
+  const isLocalhost = window.location.hostname === 'localhost' ||
+                      window.location.hostname === '127.0.0.1' ||
+                      window.location.port === '5173';
+  const usingDevBypass = isLocalhost && import.meta.env.DEV && userData?.id === 'dev-local-user';
+
   // === AUTHENTICATION GUARD ===
   const isAuthenticated = isSignedIn && userId;
   const hasUserData = userData && userData.id;
   const isOnLoginPage = location.pathname === '/login';
   const isTestLoginPage = location.pathname === '/test-login';
 
-  // CRITICAL: If no user is logged in with Clerk, show AuthWizard
-  if (!isAuthenticated && !isOnLoginPage && !isTestLoginPage) {
+  // CRITICAL: If no user is logged in with Clerk (and not using dev bypass), show AuthWizard
+  if (!isAuthenticated && !usingDevBypass && !isOnLoginPage && !isTestLoginPage) {
     return (
       <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
         <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
@@ -313,7 +382,7 @@ export default function App() {
     );
   }
 
-  // CRITICAL: If user exists but no userData, show loading
+  // CRITICAL: If user exists but no userData (and not using dev bypass), show loading
   if (isAuthenticated && !hasUserData && !isOnLoginPage && !isTestLoginPage) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
@@ -324,7 +393,7 @@ export default function App() {
 
   // Handle test login page
   if (isTestLoginPage) {
-    if (isAuthenticated && hasUserData) {
+    if ((isAuthenticated && hasUserData) || usingDevBypass) {
       navigate('/debug-report', { replace: true });
       return null;
     }
@@ -337,7 +406,7 @@ export default function App() {
 
   // Handle login page
   if (isOnLoginPage) {
-    if (isAuthenticated && hasUserData) {
+    if ((isAuthenticated && hasUserData) || usingDevBypass) {
       navigate('/', { replace: true });
       return null;
     }
@@ -348,8 +417,8 @@ export default function App() {
     );
   }
 
-  // Handle OAuth onboarding
-  if (isAuthenticated && !hasUserData && isFromSignup) {
+  // Handle OAuth onboarding (skip if using dev bypass)
+  if (isAuthenticated && !hasUserData && isFromSignup && !usingDevBypass) {
     return (
       <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
         <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} />
@@ -357,8 +426,8 @@ export default function App() {
     );
   }
 
-  // Require authentication for all other routes
-  if (!isAuthenticated || !hasUserData) {
+  // Require authentication for all other routes (or dev bypass)
+  if (!isAuthenticated && !usingDevBypass) {
     return (
       <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
         <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
@@ -378,7 +447,7 @@ export default function App() {
           <main className="p-6">
             <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
               <AppRoutes
-                user={{ id: userId, ...user }}
+                user={usingDevBypass ? userData : { id: userId, ...user }}
                 userData={userData}
                 loading={loading}
                 darkMode={darkMode}
@@ -391,7 +460,7 @@ export default function App() {
           // All other routes use MainLayout with Sidebar + Navbar
           <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
             <MainLayout
-              user={{ id: userId, ...user }}
+              user={usingDevBypass ? userData : { id: userId, ...user }}
               userData={userData}
               loading={loading}
               darkMode={darkMode}

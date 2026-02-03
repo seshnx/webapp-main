@@ -446,6 +446,14 @@ export default function Navbar({
               </div>
           )}
 
+          {/* Dev Mode Bypass Indicator */}
+          {user?.id === 'dev-local-user' && import.meta.env.DEV && (
+            <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100 dark:bg-orange-900/30 border border-orange-300 dark:border-orange-700">
+              <div className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse"></div>
+              <span className="text-[10px] font-bold text-orange-700 dark:text-orange-300">DEV BYPASS</span>
+            </div>
+          )}
+
           <button
             onClick={toggleTheme}
             className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
