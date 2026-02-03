@@ -1158,6 +1158,21 @@ export async function checkIsSaved(userId: string, postId: string): Promise<bool
   return result[0]?.exists || false;
 }
 
+/**
+ * Update post save count manually
+ *
+ * @param postId - Post ID to update
+ * @param increment - Amount to increment (positive or negative)
+ * @returns void
+ */
+export async function updatePostSaveCount(postId: string, increment: number): Promise<void> {
+  await executeQuery(
+    'UPDATE posts SET save_count = GREATEST(0, save_count + $1) WHERE id = $2',
+    [increment, postId],
+    'updatePostSaveCount'
+  );
+}
+
 // =====================================================
 // COMMENT SYSTEM QUERIES
 // =====================================================
