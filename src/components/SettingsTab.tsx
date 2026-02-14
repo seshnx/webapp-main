@@ -915,19 +915,33 @@ export default function SettingsTab({
         try {
             // Delete from database tables using Neon
             // Delete from profiles using user_id (not id, since id is a PostgreSQL UUID)
-            await neonQuery(`DELETE FROM profiles WHERE user_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM sub_profiles WHERE user_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM clerk_users WHERE id = $1`, [userId]);
-            await neonQuery(`DELETE FROM reactions WHERE user_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM notifications WHERE user_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM saved_posts WHERE user_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM follows WHERE follower_id = $1 OR following_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM bookings WHERE sender_id = $1 OR target_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM posts WHERE user_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM comments WHERE user_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM marketplace_items WHERE seller_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM distribution_releases WHERE uploader_id = $1`, [userId]);
-            await neonQuery(`DELETE FROM equipment_submissions WHERE submitted_by = $1`, [userId]);
+
+            const deleteQueries = [
+                { name: 'reactions', query: `DELETE FROM reactions WHERE user_id = $1` },
+                { name: 'comments', query: `DELETE FROM comments WHERE user_id = $1` },
+                { name: 'posts', query: `DELETE FROM posts WHERE user_id = $1` },
+                { name: 'saved_posts', query: `DELETE FROM saved_posts WHERE user_id = $1` },
+                { name: 'follows', query: `DELETE FROM follows WHERE follower_id = $1 OR following_id = $1` },
+                { name: 'notifications', query: `DELETE FROM notifications WHERE user_id = $1` },
+                { name: 'marketplace_items', query: `DELETE FROM marketplace_items WHERE seller_id = $1` },
+                { name: 'distribution_releases', query: `DELETE FROM distribution_releases WHERE uploader_id = $1` },
+                { name: 'equipment_submissions', query: `DELETE FROM equipment_submissions WHERE submitted_by = $1` },
+                { name: 'bookings', query: `DELETE FROM bookings WHERE sender_id = $1 OR target_id = $1` },
+                { name: 'sub_profiles', query: `DELETE FROM sub_profiles WHERE user_id = $1` },
+                { name: 'clerk_users', query: `DELETE FROM clerk_users WHERE id = $1` },
+                { name: 'profiles', query: `DELETE FROM profiles WHERE user_id = $1` },
+            ];
+
+            for (const { name, query } of deleteQueries) {
+                try {
+                    console.log(`Deleting from ${name}...`);
+                    await neonQuery(query, [userId]);
+                    console.log(`✓ Deleted from ${name}`);
+                } catch (err: any) {
+                    console.error(`✗ Failed to delete from ${name}:`, err.message);
+                    // Continue with other deletions even if one fails
+                }
+            }
 
             // Note: Clerk user deletion should be handled through Clerk Admin API or Dashboard
             // For security, account deletion requires admin privileges
