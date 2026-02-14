@@ -627,6 +627,12 @@ export async function createClerkUser(userData: Partial<ClerkUser>): Promise<Cle
     zip_code = null,
   } = userData;
 
+  // Convert JavaScript array to PostgreSQL array format
+  // ['Fan', 'Artist'] -> '{Fan,Artist}'
+  const accountTypesArray = Array.isArray(account_types)
+    ? `{${account_types.join(',')}}`
+    : account_types || '{Fan}';
+
   const result = await executeQuery<ClerkUser>(
     `INSERT INTO clerk_users (
       id, email, phone, first_name, last_name, username, profile_photo_url,
@@ -647,7 +653,7 @@ export async function createClerkUser(userData: Partial<ClerkUser>): Promise<Cle
     RETURNING *`,
     [
       id, email, phone, first_name, last_name, username, profile_photo_url,
-      JSON.stringify(account_types), active_role, bio, zip_code
+      accountTypesArray, active_role, bio, zip_code
     ],
     'createClerkUser'
   );
