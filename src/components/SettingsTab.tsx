@@ -1,5 +1,6 @@
 import React, { useState, useEffect, ReactElement, ComponentType } from 'react';
 import { useLocation, useNavigate, Location } from 'react-router-dom';
+import { useClerk } from '@clerk/clerk-react';
 import {
     X, Loader2, Settings, Bell, Shield, Moon, Users, RefreshCw, Star,
     Filter, Lock, AlertTriangle, Key, Mail, CheckCircle, Eye, MapPin,
@@ -361,6 +362,7 @@ export default function SettingsTab({
     const { t, language } = useLanguage();
     const location = useLocation();
     const navigate = useNavigate();
+    const clerk = useClerk();
 
     // Get settings sub-tab from URL path
     const getSettingsTabFromPath = (path: string): SettingsTabId => {
@@ -943,12 +945,25 @@ export default function SettingsTab({
                 }
             }
 
-            // Note: Clerk user deletion should be handled through Clerk Admin API or Dashboard
-            // For security, account deletion requires admin privileges
-            alert("Account data has been deleted. Please contact support to complete account deletion from Clerk.");
+            // All data deleted successfully - now sign out from Clerk
+            // This prevents the app from recreating the user data on reload
+            try {
+                console.log('Signing out from Clerk...');
+                await clerk.signOut();
+                console.log('✓ Signed out from Clerk');
+            } catch (signOutErr) {
+                console.warn('SignOut warning:', signOutErr);
+                // Continue even if signOut fails
+            }
+
+            // Clear local storage and cache
+            clearCache();
+
+            alert("Your account has been deleted successfully.");
 
             setShowDeleteModal(false);
             setDeleteConfirm('');
+            // Navigate to home page (will show AuthWizard since user is signed out)
             window.location.href = '/';
 
         } catch (error) {
