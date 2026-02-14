@@ -182,7 +182,21 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         // However, the React hooks might not update immediately due to batching
         console.log('✅ Login complete, session created');
 
-        // Give Clerk a moment to set the session internally
+        // CRITICAL: Explicitly set the active session to ensure Clerk's React context updates
+        // This is needed because signIn.create() doesn't always trigger React hook updates
+        if (result.createdSessionId) {
+          console.log('Setting active session:', result.createdSessionId);
+          try {
+            await clerk.setActive({
+              session: result.createdSessionId,
+            });
+            console.log('✅ Session activated in Clerk client');
+          } catch (err) {
+            console.warn('Failed to set active session (might already be set):', err.message);
+          }
+        }
+
+        // Give Clerk a moment to propagate the state to React hooks
         await new Promise(resolve => setTimeout(resolve, 500));
 
         // Check if session was created successfully using multiple methods
