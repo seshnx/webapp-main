@@ -178,33 +178,39 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       console.log('Login result:', result);
 
       if (result.status === 'complete') {
-        // Wait for Clerk's auth state to update before calling onSuccess
-        console.log('✅ Login complete, waiting for auth state to update...');
+        // Clerk's signIn.create() automatically sets the active session
+        // However, the React hooks might not update immediately due to batching
+        console.log('✅ Login complete, session created');
 
-        // Wait for Clerk to have a loaded user
-        let retries = 0;
-        const maxRetries = 20; // 2 seconds max
+        // Give Clerk a moment to set the session internally
+        await new Promise(resolve => setTimeout(resolve, 200));
 
-        while (retries < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 100));
+        // Check if session was created successfully
+        const currentAuth = clerk.__internal().getState();
+        console.log('Current auth state:', {
+          hasSession: !!currentAuth.session,
+          hasUser: !!currentAuth.user,
+          userId: currentAuth.userId
+        });
 
-          // Check if Clerk now has a loaded user (indicates auth state updated)
-          if (clerk.loaded && clerk.user) {
-            console.log('✅ Auth state updated, user is signed in:', clerk.user.id);
-            // Success - notify parent component
-            // NO REDIRECT - parent handles navigation
-            if (onSuccess) onSuccess();
-            setIsLoading(false);
-            return;
+        // Even if the hooks haven't updated yet, if we have a session, we're good
+        if (currentAuth.session || currentAuth.user) {
+          console.log('✅ Session created successfully, notifying parent');
+          // Success - notify parent component
+          // The parent (App.jsx) will re-check auth state on its next render
+          if (onSuccess) {
+            await onSuccess();
+            // Add a small delay to ensure the navigation completes
+            await new Promise(resolve => setTimeout(resolve, 100));
           }
-
-          retries++;
-          console.log(`Waiting for auth state... (${retries}/${maxRetries})`);
+          setIsLoading(false);
+          return;
         }
 
-        // If we've waited too long, log a warning but still call onSuccess
-        console.warn('⚠️ Auth state did not update in time, proceeding anyway...');
-        if (onSuccess) onSuccess();
+        // If no session was created, something went wrong
+        console.warn('⚠️ No session created after login');
+        setError('Login completed but session was not created. Please try again.');
+        setIsLoading(false);
       } else if (result.status === 'needs_first_factor') {
         setError('Please check your email for verification.');
       } else {

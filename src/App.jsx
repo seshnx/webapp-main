@@ -196,7 +196,12 @@ export default function App() {
      * Uses Clerk user ID to fetch profile data
      */
     const loadUserData = async () => {
-      if (!userId || !isSignedIn) {
+      // Check both React hooks and internal state
+      const clerkState = clerk.__internal?.()?.getState() ?? {};
+      const actualUserId = userId || clerkState.userId;
+      const actualIsSignedIn = isSignedIn || (clerkState.session || clerkState.user);
+
+      if (!actualUserId || !actualIsSignedIn) {
         if (isMounted) {
           setUserData(null);
           setLoading(false);
@@ -206,12 +211,12 @@ export default function App() {
 
       try {
         // Fetch user with profile from Neon
-        const userWithProfile = await getUserWithProfile(userId);
+        const userWithProfile = await getUserWithProfile(actualUserId);
 
         if (userWithProfile) {
           // Construct userData object compatible with existing components
           const finalUserData = {
-            id: userId,
+            id: actualUserId,
             firstName: user?.firstName || userWithProfile.first_name || 'User',
             lastName: user?.lastName || userWithProfile.last_name || '',
             email: user?.primaryEmailAddress?.emailAddress || userWithProfile.email || '',
@@ -233,7 +238,7 @@ export default function App() {
           // Profile doesn't exist - create minimal userData from Clerk user
           const metadata = user?.publicMetadata || {};
           const minimalUserData = {
-            id: userId,
+            id: actualUserId,
             firstName: user?.firstName || metadata.first_name || 'User',
             lastName: user?.lastName || metadata.last_name || '',
             email: user?.primaryEmailAddress?.emailAddress || '',
@@ -256,7 +261,7 @@ export default function App() {
 
             // First, create the clerk user record
             await createClerkUser({
-              id: userId,
+              id: actualUserId,
               email: user?.primaryEmailAddress?.emailAddress || '',
               phone: user?.primaryPhoneNumber?.phoneNumber || null,
               first_name: user?.firstName || metadata.first_name || null,
@@ -368,7 +373,10 @@ export default function App() {
   const usingDevBypass = isLocalhost && import.meta.env.DEV && userData?.id === 'dev-local-user';
 
   // === AUTHENTICATION GUARD ===
-  const isAuthenticated = isSignedIn && userId;
+  // Check Clerk's internal state as a fallback since React hooks might not update immediately
+  const clerkState = clerk.__internal?.()?.getState() ?? {};
+  const hasClerkSession = clerkState.session || clerkState.user;
+  const isAuthenticated = (isSignedIn && userId) || hasClerkSession;
   const hasUserData = userData && userData.id;
   const isOnLoginPage = location.pathname === '/login';
   const isTestLoginPage = location.pathname === '/test-login';
