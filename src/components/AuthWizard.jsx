@@ -327,24 +327,27 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         // Wait a moment for Clerk to update auth state
         await new Promise(resolve => setTimeout(resolve, 500));
 
-        // Check if user is now signed in
-        if (clerk.loaded && clerk.user) {
-          console.log('✅ User is now signed in:', clerk.user.id);
+        // Check if user is now signed in using internal state (more reliable than hooks)
+        let userSignedIn = false;
+        let clerkUserId = null;
+
+        try {
+          if (clerk.__internal && typeof clerk.__internal === 'function') {
+            const clerkState = clerk.__internal().getState();
+            userSignedIn = !!(clerkState.session || clerkState.user);
+            clerkUserId = clerkState.userId;
+          }
+        } catch (err) {
+          console.warn('Error checking internal state:', err);
+        }
+
+        if (userSignedIn || clerk.loaded && clerk.user) {
+          console.log('✅ User is now signed in:', clerkUserId || clerk.user?.id);
+          console.log('🎯 Switching to onboarding mode...');
           setMode('onboarding');
           setStep(1);
           setIsLoading(false);
           return;
-        } else {
-          console.log('⚠️ Session created but user not signed in yet, waiting...');
-          // Give it more time
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          if (clerk.loaded && clerk.user) {
-            console.log('✅ User is now signed in after delay:', clerk.user.id);
-            setMode('onboarding');
-            setStep(1);
-            setIsLoading(false);
-            return;
-          }
         }
       }
 
