@@ -183,18 +183,46 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         console.log('✅ Login complete, session created');
 
         // Give Clerk a moment to set the session internally
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 500));
 
-        // Check if session was created successfully
-        const currentAuth = clerk.__internal().getState();
-        console.log('Current auth state:', {
-          hasSession: !!currentAuth.session,
-          hasUser: !!currentAuth.user,
-          userId: currentAuth.userId
-        });
+        // Check if session was created successfully using multiple methods
+        let hasSession = false;
+        let actualUserId = null;
 
-        // Even if the hooks haven't updated yet, if we have a session, we're good
-        if (currentAuth.session || currentAuth.user) {
+        try {
+          // Method 1: Check Clerk's internal state (most reliable)
+          if (clerk.__internal && typeof clerk.__internal === 'function') {
+            const currentAuth = clerk.__internal().getState();
+            console.log('Internal state check:', {
+              hasSession: !!currentAuth.session,
+              hasUser: !!currentAuth.user,
+              userId: currentAuth.userId
+            });
+            hasSession = !!(currentAuth.session || currentAuth.user);
+            actualUserId = currentAuth.userId;
+          }
+
+          // Method 2: Check if result has a createdSessionId
+          if (!hasSession && result.createdSessionId) {
+            console.log('Found createdSessionId in result:', result.createdSessionId);
+            hasSession = true;
+          }
+
+          // Method 3: Check the result object itself
+          if (!hasSession && result.session) {
+            console.log('Found session in result');
+            hasSession = true;
+          }
+        } catch (err) {
+          console.warn('Error checking auth state:', err);
+          // If we can't check the state, assume success since result.status === 'complete'
+          hasSession = true;
+        }
+
+        console.log('Final session check:', { hasSession, actualUserId });
+
+        // Even if the hooks haven't updated yet, if we have indication of a session, we're good
+        if (hasSession) {
           console.log('✅ Session created successfully, notifying parent');
           // Success - notify parent component
           // The parent (App.jsx) will re-check auth state on its next render
