@@ -925,13 +925,13 @@ export default function SettingsTab({
                 { name: 'saved_posts', query: `DELETE FROM saved_posts WHERE user_id = $1` },
                 { name: 'follows', query: `DELETE FROM follows WHERE follower_id = $1 OR following_id = $1` },
                 { name: 'notifications', query: `DELETE FROM notifications WHERE user_id = $1` },
-                { name: 'marketplace_items', query: `DELETE FROM marketplace_items WHERE seller_id = $1` },
-                { name: 'distribution_releases', query: `DELETE FROM distribution_releases WHERE uploader_id = $1` },
-                { name: 'equipment_submissions', query: `DELETE FROM equipment_submissions WHERE submitted_by = $1` },
                 { name: 'bookings', query: `DELETE FROM bookings WHERE sender_id = $1 OR target_id = $1` },
                 { name: 'sub_profiles', query: `DELETE FROM sub_profiles WHERE user_id = $1` },
                 { name: 'clerk_users', query: `DELETE FROM clerk_users WHERE id = $1` },
                 { name: 'profiles', query: `DELETE FROM profiles WHERE user_id = $1` },
+                // Skip: marketplace_items (seller_id is UUID, not Clerk user ID)
+                // Skip: distribution_releases (table doesn't exist in current schema)
+                // Skip: equipment_submissions (submitted_by is UUID, not Clerk user ID)
             ];
 
             for (const { name, query } of deleteQueries) {
