@@ -4,6 +4,7 @@ import GearExchange from './marketplace/GearExchange';
 import SeshFxStore from './marketplace/SeshFxStore';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { UserData } from '../types';
+import PageLayout from './shared/PageLayout';
 
 /**
  * Props for Marketplace component
@@ -54,7 +55,7 @@ export default function Marketplace({ user, userData, tokenBalance }: Marketplac
     // Update URL when tab changes
     const handleTabChange = (tab: MarketplaceTab) => {
         setSubTab(tab);
-        navigate(`/marketplace/${tab}`, { replace: true });
+        navigate(`/marketplace/${tab}`); // Allow back button
     };
 
     const tabs: TabConfig[] = [
@@ -63,9 +64,10 @@ export default function Marketplace({ user, userData, tokenBalance }: Marketplac
     ];
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h1 className="text-2xl font-bold dark:text-white">{t('marketplace')}</h1>
+        <PageLayout
+            title={t('marketplace')}
+            subtitle="Discover gear, effects, and more"
+            tabs={
                 <div className="bg-white dark:bg-gray-800 p-1 rounded-lg border dark:border-gray-700 flex gap-1">
                     {tabs.map(tab => (
                         <button
@@ -81,9 +83,9 @@ export default function Marketplace({ user, userData, tokenBalance }: Marketplac
                         </button>
                     ))}
                 </div>
-            </div>
-
-            <div className="tab-content-wrapper">
+            }
+        >
+            <div className="space-y-6">
                 {subTab === 'gear' && (
                     <div key="gear" className="tab-content">
                         <GearExchange user={user} userData={userData} />
@@ -95,6 +97,6 @@ export default function Marketplace({ user, userData, tokenBalance }: Marketplac
                     </div>
                 )}
             </div>
-        </div>
+        </PageLayout>
     );
 }

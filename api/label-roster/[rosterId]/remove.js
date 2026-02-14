@@ -1,5 +1,5 @@
-import { authenticateUser } from '../../../src/utils/apiAuth.js';
-import { deleteRosterEntry } from '../../../src/config/neonQueries.js';
+import { authenticateUser } from '../../../src/utils/apiAuth.ts';
+import { deleteRosterEntry } from '../../../src/config/neonQueries.ts';
 
 /**
  * Remove Artist from Label Roster API

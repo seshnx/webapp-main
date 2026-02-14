@@ -100,7 +100,7 @@ export default function TechServices({ user, userData, openPublicProfile }: Tech
                         onRequestService={handleRequestService}
                     />
                 )}
-                {activeTab === 'database' && <TechGearDatabase user={user} isTech={userData?.accountTypes?.includes('Technician')} />}
+                {activeTab === 'database' && <TechGearDatabase user={user} userData={userData} isTech={userData?.accountTypes?.includes('Technician')} />}
             </div>
 
             {/* Booking Flow Modal */}

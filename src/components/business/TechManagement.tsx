@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3, Inbox, Calendar, DollarSign,
@@ -51,29 +51,45 @@ export default function TechManagement({ user, userData }: TechManagementProps) 
   // Get active tab from URL path
   const getTechTabFromPath = (path: string): TechTabId => {
     const parts = path.split('/').filter(Boolean);
-    if (parts[0] === 'business' && parts[1] === 'tech' && parts[2]) {
+    if (parts[0] === 'business-center' && parts[1] === 'tech' && parts[2]) {
       return parts[2] as TechTabId;
     }
     return 'overview';
   };
 
   const [activeTab, setActiveTab] = useState<TechTabId>(() => getTechTabFromPath(location.pathname));
+  const isUpdatingFromLocation = useRef(false);
 
   // Sync URL with active tab
   useEffect(() => {
-    const currentPath = activeTab === 'overview' ? '/business/tech' : `/business/tech/${activeTab}`;
+    console.log('[TechManagement] Effect 1: activeTab changed', { activeTab, location: location.pathname });
+
+    if (isUpdatingFromLocation.current) {
+      console.log('[TechManagement] Effect 1: Skipping (updating from location)');
+      isUpdatingFromLocation.current = false;
+      return;
+    }
+
+    const currentPath = activeTab === 'overview' ? '/business-center/tech' : `/business-center/tech/${activeTab}`;
+    console.log('[TechManagement] Effect 1: Checking navigation', { currentPath, location: location.pathname, shouldNavigate: location.pathname !== currentPath });
+
     if (location.pathname !== currentPath) {
+      console.log('[TechManagement] Effect 1: Navigating to', currentPath);
       navigate(currentPath, { replace: true });
     }
   }, [activeTab, navigate]);
 
-  // Update tab when URL changes
+  // Update tab when URL changes (location.pathname is the source of truth)
   useEffect(() => {
     const tabFromPath = getTechTabFromPath(location.pathname);
+    console.log('[TechManagement] Effect 2: Location changed', { location: location.pathname, tabFromPath, currentActiveTab: activeTab });
+
     if (tabFromPath !== activeTab) {
+      console.log('[TechManagement] Effect 2: Updating activeTab from location', tabFromPath);
+      isUpdatingFromLocation.current = true;
       setActiveTab(tabFromPath);
     }
-  }, [location.pathname, activeTab]);
+  }, [location.pathname]);
 
   // Tech tabs configuration
   const tabs: TechTab[] = [
@@ -115,7 +131,10 @@ export default function TechManagement({ user, userData }: TechManagementProps) 
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
+              onClick={() => {
+                console.log('[TechManagement] Tab button clicked', { tabId: tab.id, currentActiveTab: activeTab });
+                setActiveTab(tab.id);
+              }}
               className={`
                 flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all
                 ${activeTab === tab.id
@@ -179,6 +198,13 @@ function TechOverview({ userId, setActiveTab }: TechOverviewProps) {
     }).format(value || 0);
   };
 
+  const formatRating = (value: number | string | undefined): string => {
+    if (!value) return '0.0';
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return '0.0';
+    return numValue.toFixed(1);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -231,7 +257,7 @@ function TechOverview({ userId, setActiveTab }: TechOverviewProps) {
             <BarChart3 className="text-yellow-600" size={28} />
           </div>
           <div className="text-3xl font-bold dark:text-white">
-            {metrics?.average_rating ? metrics.average_rating.toFixed(1) : '0.0'}
+            {formatRating(metrics?.average_rating)}
           </div>
           <div className="text-sm text-gray-500 mt-1">Average Rating</div>
         </div>
@@ -263,7 +289,7 @@ function TechOverview({ userId, setActiveTab }: TechOverviewProps) {
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-600 dark:text-gray-400">Average Rating</span>
               <span className="font-bold dark:text-white">
-                {metrics?.average_rating ? `${metrics.average_rating.toFixed(1)} / 5.0` : 'Not rated'}
+                {metrics?.average_rating ? `${formatRating(metrics?.average_rating)} / 5.0` : 'Not rated'}
               </span>
             </div>
             <div className="flex justify-between items-center">

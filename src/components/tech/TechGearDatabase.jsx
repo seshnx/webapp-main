@@ -5,7 +5,7 @@ import {
 import { EQUIP_CATEGORIES } from '../../config/constants';
 import { getPendingSubmissions, updateSubmissionVotes, approveEquipmentSubmission, rejectEquipmentSubmission, upsertWallet, createEquipmentSubmission } from '../../config/neonQueries';
 
-export default function TechGearDatabase({ user, isTech }) {
+export default function TechGearDatabase({ user, userData, isTech }) {
     const [view, setView] = useState('feed');
     const [pendingItems, setPendingItems] = useState([]);
     const [loading, setLoading] = useState(true);

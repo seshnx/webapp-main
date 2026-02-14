@@ -17,7 +17,12 @@
       "Bash(vercel env add:*)",
       "Bash(vercel --prod:*)",
       "WebSearch",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(node:*)",
+      "Bash(grep:*)",
+      "Bash(findstr:*)",
+      "Bash(npm run dev:*)",
+      "Bash(rm:*)"
     ]
   }
 }

@@ -14,6 +14,7 @@ import { MultiSelect, NestedSelect } from './shared/Inputs';
 import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
 import SoftwareAutocomplete from './shared/SoftwareAutocomplete';
 import { updateProfile, upsertSubProfile, getProfile } from '../config/neonQueries';
+import PageLayout from './shared/PageLayout';
 
 // --- Interfaces ---
 interface UserData {
@@ -135,7 +136,7 @@ export default function ProfileManager({
     useEffect(() => {
         const currentTab = activeSubTab === 'details' ? '/profile' : `/profile/${activeSubTab}`;
         if (location.pathname !== currentTab) {
-            navigate(currentTab, { replace: true });
+            navigate(currentTab); // Allow back button for profile tab switching
         }
     }, [activeSubTab]);
 
@@ -298,15 +299,12 @@ export default function ProfileManager({
     );
 
     return (
-        <div className="max-w-5xl mx-auto space-y-6 pb-20">
-            {/* Top Header */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                <h1 className="text-3xl font-bold dark:text-white flex items-center gap-2">
-                    <User className="text-brand-blue"/> {activeSubTab === 'details' ? 'Edit Profile' : 'Account Settings'}
-                </h1>
-
-                <div className="flex gap-3 self-end">
-                    {/* NEW: View Public Profile Button */}
+        <PageLayout
+            title={activeSubTab === 'details' ? 'Edit Profile' : 'Account Settings'}
+            subtitle="Manage your public profile and account settings"
+            headerActions={
+                <>
+                    {/* View Public Profile Button */}
                     <button
                         onClick={() => openPublicProfile?.(user?.id || user?.uid)}
                         className="bg-gray-900 dark:bg-white text-white dark:text-black px-4 py-2 rounded-xl font-bold text-sm flex items-center gap-2 hover:opacity-90 transition shadow-lg"
@@ -318,8 +316,10 @@ export default function ProfileManager({
                         <button onClick={() => setActiveSubTab('details')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${activeSubTab === 'details' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}>Edit Details</button>
                         <button onClick={() => setActiveSubTab('settings')} className={`px-4 py-2 text-xs font-bold rounded-md transition-all flex items-center gap-1 ${activeSubTab === 'settings' ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-sm' : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-300'}`}><Settings size={14}/> Settings</button>
                     </div>
-                </div>
-            </div>
+                </>
+            }
+        >
+            <div className="space-y-6">
 
             {/* Content Area */}
             {activeSubTab === 'details' ? (
@@ -415,7 +415,8 @@ export default function ProfileManager({
             ) : (
                 <div className="animate-in fade-in slide-in-from-right-2"><SettingsTab user={user} userData={userData} handleLogout={handleLogout} onUpdate={handleSettingsUpdate} onRoleSwitch={onRoleSwitch} subProfiles={subProfiles}/></div>
             )}
-        </div>
+            </div>
+        </PageLayout>
     );
 }
 

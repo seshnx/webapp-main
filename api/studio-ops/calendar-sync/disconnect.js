@@ -1,4 +1,4 @@
-import { query } from '../../../src/config/neon.js';
+import { query } from '../../../src/config/neon.ts';
 
 /**
  * Disconnect Google Calendar from Studio

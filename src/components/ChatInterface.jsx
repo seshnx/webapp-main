@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
+import { neonClient } from '../config/neon';
 import ChatSidebar from './chat/ChatSidebar';
 import ChatWindow from './chat/ChatWindow';
 import ChatDetailsPane from './chat/ChatDetailsPane';
@@ -57,7 +58,7 @@ export default function ChatInterface({ user, userData, subProfiles = {}, openPu
     // Fetch fresh profile photos for direct chat users
     useEffect(() => {
         const fetchProfilePhotos = async () => {
-            if (!conversationsData || !supabase) return;
+            if (!conversationsData) return;
 
             // Get unique other user IDs from direct chats
             const otherUserIds = conversationsData
@@ -67,17 +68,20 @@ export default function ChatInterface({ user, userData, subProfiles = {}, openPu
 
             if (otherUserIds.length === 0) return;
 
-            const { data: profiles } = await supabase
-                .from('profiles')
-                .select('id, avatar_url')
-                .in('id', otherUserIds);
+            try {
+                // Fetch profile photos from Neon using clerk_users
+                const query = `SELECT id, profile_photo_url as avatar_url FROM clerk_users WHERE id = ANY($1)`;
+                const profiles = await neonClient(query, [otherUserIds]);
 
-            if (profiles) {
-                const photosMap = {};
-                profiles.forEach(p => {
-                    photosMap[p.id] = p.avatar_url;
-                });
-                setProfilePhotos(photosMap);
+                if (profiles && profiles.length > 0) {
+                    const photosMap = {};
+                    profiles.forEach(p => {
+                        photosMap[p.id] = p.avatar_url;
+                    });
+                    setProfilePhotos(photosMap);
+                }
+            } catch (error) {
+                console.error('Failed to fetch profile photos:', error);
             }
         };
 

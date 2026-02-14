@@ -1,8 +1,6 @@
-/* prettier-ignore-start */
-
 /* eslint-disable */
 /**
- * Generated data model.
+ * Generated data model types.
  *
  * THIS CODE IS AUTOMATICALLY GENERATED.
  *
@@ -10,82 +8,53 @@
  * @module
  */
 
-import type { DataModelFromSchemaDefinition } from "convex/server";
-import type { GenericId, Id } from "./server";
-import type { DocumentByName, TableNames } from "./server";
+import type {
+  DataModelFromSchemaDefinition,
+  DocumentByName,
+  TableNamesInDataModel,
+  SystemTableNames,
+} from "convex/server";
+import type { GenericId } from "convex/values";
+import schema from "../schema.js";
 
 /**
  * The names of all of your Convex tables.
  */
-export type TableNames = "chatMembers" | "conversations" | "messages" | "presence" | "readReceipts";
+export type TableNames = TableNamesInDataModel<DataModel>;
 
 /**
  * The type of a document stored in Convex.
+ *
+ * @typeParam TableName - A string literal type of the table name (like "users").
  */
-export type Doc<TableName extends TableNames> = DocumentByName<DataModel, TableName>;
+export type Doc<TableName extends TableNames> = DocumentByName<
+  DataModel,
+  TableName
+>;
 
 /**
- * The type of a document ID.
+ * An identifier for a document in Convex.
+ *
+ * Convex documents are uniquely identified by their `Id`, which is accessible
+ * on the `_id` field. To learn more, see [Document IDs](https://docs.convex.dev/using/document-ids).
+ *
+ * Documents can be loaded using `db.get(id)` in query and mutation functions.
+ *
+ * IDs are just strings at runtime, but this type can be used to distinguish them from other
+ * strings when type checking.
+ *
+ * @typeParam TableName - A string literal type of the table name (like "users").
  */
-export type Id<TableName extends TableNames> = GenericId<TableName>;
+export type Id<TableName extends TableNames | SystemTableNames> =
+  GenericId<TableName>;
 
 /**
- * The type of your Convex data model.
+ * A type describing your Convex data model.
+ *
+ * This type includes information about what tables you have, the type of
+ * documents stored in those tables, and the indexes defined on them.
+ *
+ * This type is used to parameterize methods like `queryGeneric` and
+ * `mutationGeneric` to make them type-safe.
  */
-export type DataModel = DataModelFromSchemaDefinition<{
-  chatMembers: {
-    chatId: string;
-    joinedAt: number;
-    role: "admin" | "member";
-    userId: string;
-  };
-  conversations: {
-    chatId: string;
-    chatName?: string;
-    chatPhoto?: string;
-    chatType: "direct" | "group";
-    lastMessage?: string;
-    lastMessageTime?: number;
-    lastSenderId?: string;
-    otherUserId?: string;
-    unreadCount: number;
-    userId: string;
-  };
-  messages: {
-    chatId: string;
-    content?: string;
-    deleted?: boolean;
-    deletedForAll?: boolean;
-    edited?: boolean;
-    editedAt?: number;
-    media?: {
-      thumbnail?: string;
-      type: string;
-      url: string;
-    };
-    reactions?: Record<string, string[]>;
-    replyTo?: {
-      messageId: string;
-      sender: string;
-      text: string;
-    };
-    senderId: string;
-    senderName: string;
-    senderPhoto?: string;
-    timestamp: number;
-  };
-  presence: {
-    lastSeen: number;
-    online: boolean;
-    userId: string;
-  };
-  readReceipts: {
-    chatId: string;
-    messageId: GenericId<"messages">;
-    readAt: number;
-    userId: string;
-  };
-}>;
-
-/* prettier-ignore-end */
-
+export type DataModel = DataModelFromSchemaDefinition<typeof schema>;

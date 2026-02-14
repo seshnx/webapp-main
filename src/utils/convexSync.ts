@@ -5,6 +5,9 @@
  * This keeps Convex in sync with the primary database (Neon)
  */
 
+import { fetchMutation } from "convex/nextjs";
+import { api } from "../../convex/_generated/api";
+
 const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL || '';
 
 /**
@@ -152,5 +155,179 @@ export async function markAllNotificationsReadInConvex(userId: string): Promise<
     console.debug('Mark all notifications as read in Convex:', userId);
   } catch (error) {
     console.error('Failed to mark all notifications as read in Convex:', error);
+  }
+}
+
+// =====================================================
+// SOCIAL FEED SYNC FUNCTIONS
+// =====================================================
+
+/**
+ * Comment data for syncing
+ */
+export interface SyncComment {
+  commentId: string;
+  postId: string;
+  userId: string;
+  content: string;
+  displayName?: string;
+  authorPhoto?: string;
+  parentId?: string;
+  reactionCount?: number;
+  createdAt: number;
+  updatedAt?: number;
+}
+
+/**
+ * Reaction data for syncing
+ */
+export interface SyncReaction {
+  targetId: string;
+  targetType: "post" | "comment";
+  userId: string;
+  emoji: string;
+  timestamp: number;
+}
+
+/**
+ * Sync comment to Convex for real-time updates
+ *
+ * @param comment - Comment data from Neon
+ */
+export async function syncCommentToConvex(comment: SyncComment): Promise<void> {
+  if (!CONVEX_URL) {
+    console.warn('Convex URL not configured');
+    return;
+  }
+
+  try {
+    await fetchMutation(api.comments.syncComment, {
+      commentId: comment.commentId,
+      postId: comment.postId,
+      userId: comment.userId,
+      content: comment.content,
+      displayName: comment.displayName,
+      authorPhoto: comment.authorPhoto,
+      parentId: comment.parentId,
+      reactionCount: comment.reactionCount,
+      createdAt: comment.createdAt,
+      updatedAt: comment.updatedAt,
+    });
+    console.debug('Synced comment to Convex:', comment.commentId);
+  } catch (error) {
+    console.error('Failed to sync comment to Convex:', error);
+  }
+}
+
+/**
+ * Remove comment from Convex
+ *
+ * @param commentId - Comment ID
+ */
+export async function removeCommentFromConvex(commentId: string): Promise<void> {
+  if (!CONVEX_URL) return;
+  try {
+    await fetchMutation(api.comments.deleteComment, { commentId });
+    console.debug('Removed comment from Convex:', commentId);
+  } catch (error) {
+    console.error('Failed to remove comment from Convex:', error);
+  }
+}
+
+/**
+ * Update comment reaction count in Convex
+ *
+ * @param commentId - Comment ID
+ * @param reactionCount - New reaction count
+ */
+export async function updateCommentReactionCountInConvex(
+  commentId: string,
+  reactionCount: number
+): Promise<void> {
+  if (!CONVEX_URL) return;
+  try {
+    await fetchMutation(api.comments.updateReactionCount, {
+      commentId,
+      reactionCount,
+    });
+    console.debug('Updated comment reaction count in Convex:', commentId, reactionCount);
+  } catch (error) {
+    console.error('Failed to update comment reaction count in Convex:', error);
+  }
+}
+
+/**
+ * Sync reaction to Convex for real-time updates
+ *
+ * @param reaction - Reaction data from Neon
+ */
+export async function syncReactionToConvex(reaction: SyncReaction): Promise<void> {
+  if (!CONVEX_URL) return;
+  try {
+    await fetchMutation(api.reactions.syncReaction, {
+      targetId: reaction.targetId,
+      targetType: reaction.targetType,
+      userId: reaction.userId,
+      emoji: reaction.emoji,
+      timestamp: reaction.timestamp,
+    });
+    console.debug('Synced reaction to Convex:', reaction.targetId, reaction.emoji);
+  } catch (error) {
+    console.error('Failed to sync reaction to Convex:', error);
+  }
+}
+
+/**
+ * Remove reaction from Convex
+ *
+ * @param targetId - Target ID (post or comment)
+ * @param targetType - Target type
+ * @param userId - User who reacted
+ */
+export async function removeReactionFromConvex(
+  targetId: string,
+  targetType: "post" | "comment",
+  userId: string
+): Promise<void> {
+  if (!CONVEX_URL) return;
+  try {
+    await fetchMutation(api.reactions.removeReaction, {
+      targetId,
+      targetType,
+      userId,
+    });
+    console.debug('Removed reaction from Convex:', targetId, userId);
+  } catch (error) {
+    console.error('Failed to remove reaction from Convex:', error);
+  }
+}
+
+/**
+ * Bulk sync comments to Convex (for initial sync)
+ *
+ * @param comments - Array of comments to sync
+ */
+export async function bulkSyncCommentsToConvex(comments: SyncComment[]): Promise<void> {
+  if (!CONVEX_URL) return;
+  try {
+    await fetchMutation(api.comments.bulkSyncComments, { comments });
+    console.debug('Bulk synced comments to Convex:', comments.length);
+  } catch (error) {
+    console.error('Failed to bulk sync comments to Convex:', error);
+  }
+}
+
+/**
+ * Bulk sync reactions to Convex (for initial sync)
+ *
+ * @param reactions - Array of reactions to sync
+ */
+export async function bulkSyncReactionsToConvex(reactions: SyncReaction[]): Promise<void> {
+  if (!CONVEX_URL) return;
+  try {
+    await fetchMutation(api.reactions.bulkSyncReactions, { reactions });
+    console.debug('Bulk synced reactions to Convex:', reactions.length);
+  } catch (error) {
+    console.error('Failed to bulk sync reactions to Convex:', error);
   }
 }

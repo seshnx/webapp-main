@@ -1,5 +1,5 @@
-import { query } from '../../../src/config/neon.js';
-import { syncBookingToConvex } from '../../../src/utils/convexSync.js';
+import { query } from '../../../src/config/neon.ts';
+import { syncBookingToConvex } from '../../../src/utils/convexSync.ts';
 
 /**
  * Studio Bookings API

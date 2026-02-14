@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Send, Trash2 } from 'lucide-react';
 import { getComments, createComment, deleteComment, updatePostCommentCount } from '../../config/neonQueries';
 import { createNotification } from '../../hooks/useNotifications';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import UserAvatar from '../shared/UserAvatar';
 import type { UserData } from '../../types';
 
@@ -49,29 +51,47 @@ export default function CommentSection({
     blockedUsers = [],
     onCountChange
 }: CommentSectionProps) {
+    // Real-time comments from Convex
+    const convexComments = useQuery(api.comments.list, { postId: post.id });
     const [comments, setComments] = useState<CommentData[]>([]);
     const [text, setText] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
 
+    // Sync Convex comments to local state (with blocking filter)
+    useEffect(() => {
+        if (convexComments) {
+            // Map Convex comments to our CommentData format
+            const mapped = convexComments.map((c: any) => ({
+                id: c.commentId,
+                user_id: c.userId,
+                text: c.content,
+                displayName: c.displayName,
+                userPhoto: c.authorPhoto,
+                timestamp: new Date(c.createdAt).toISOString(),
+            }));
+
+            // Filter out blocked users
+            const filtered = mapped.filter((c) => !blockedUsers?.includes(c.user_id));
+            setComments(filtered);
+            onCountChange?.(filtered.length);
+        }
+    }, [convexComments, blockedUsers, onCountChange]);
+
+    // Initial load from Neon if Convex is empty (fallback)
     useEffect(() => {
         if (!post.id) return;
 
-        // Initial fetch
-        loadComments();
+        // Only fetch from Neon if Convex has no data yet
+        if (!convexComments || convexComments.length === 0) {
+            loadCommentsFromNeon();
+        }
+    }, [post.id]);
 
-        // Set up polling to replace real-time subscription (every 30 seconds)
-        const interval = setInterval(loadComments, 30000);
-
-        return () => {
-            clearInterval(interval);
-        };
-    }, [post.id, blockedUsers]);
-
-    const loadComments = async () => {
+    const loadCommentsFromNeon = async () => {
         try {
             const data = await getComments(post.id);
 
-            if (data) {
+            if (data && data.length > 0) {
                 // Client-side block filtering
                 const filtered = data.filter((c) => !blockedUsers?.includes(c.user_id));
                 setComments(filtered as unknown as CommentData[]);

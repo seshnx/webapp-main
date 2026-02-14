@@ -1,5 +1,5 @@
-import { query } from '../../../src/config/neon.js';
-import { syncBookingToConvex, removeBookingFromConvex } from '../../../src/utils/convexSync.js';
+import { query } from '../../../src/config/neon.ts';
+import { syncBookingToConvex, removeBookingFromConvex } from '../../../src/utils/convexSync.ts';
 
 /**
  * Individual Booking API

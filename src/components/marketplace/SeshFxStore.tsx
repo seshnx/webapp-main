@@ -107,6 +107,10 @@ export default function SeshFxStore({ user, userData, tokenBalance }: SeshFxStor
     // Use profile UUID from userData instead of Clerk user ID
     const userId = userData?.id || user?.id || user?.uid;
 
+    // Local state (must be declared before hooks)
+    const [filter, setFilter] = useState<FilterType>('All');
+    const [search, setSearch] = useState<string>('');
+
     // Fetch marketplace items with polling
     const { data: rawItems, loading } = useMarketplaceItems({ type: filter === 'All' ? undefined : filter });
 
@@ -115,9 +119,6 @@ export default function SeshFxStore({ user, userData, tokenBalance }: SeshFxStor
 
     // Mutation functions
     const { purchaseItem } = useMarketplaceMutations();
-
-    const [filter, setFilter] = useState<FilterType>('All');
-    const [search, setSearch] = useState<string>('');
 
     // UI State
     const [showSellModal, setShowSellModal] = useState<boolean>(false);

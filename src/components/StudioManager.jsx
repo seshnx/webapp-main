@@ -3,6 +3,8 @@ import {
     Home, LayoutGrid, Image, Clock, FileText, Calendar,
     Package, Settings, ChevronRight, Briefcase, Users, TrendingUp
 } from 'lucide-react';
+// Import database functions
+import { getBookings } from '../config/neonQueries';
 // Import sub-components
 import StudioOverview from './studio/StudioOverview';
 import StudioRooms from './studio/StudioRooms';
@@ -49,27 +51,24 @@ export default function StudioManager({ user, userData }) {
             const userId = userData?.id || user?.id || user?.uid;
 
             try {
-                // Fetch bookings where user is the studio owner
-                const response = await fetch(`/api/studio-ops/bookings?studioId=${userId}`);
-                const result = await response.json();
+                // Fetch bookings where user is the studio owner using direct database call
+                const bookings = await getBookings(userId, { limit: 100 });
 
-                if (!response.ok) {
-                    throw new Error(result.error || 'Failed to fetch stats');
-                }
-
-                const bookings = result.data || [];
-
-                const pending = bookings.filter(b => b.status === 'Pending').length;
+                const pending = bookings.filter(b => b.status === 'Pending' || b.status === 'pending').length;
                 const recent = bookings
                     .filter(b => {
-                        const bookingDate = new Date(b.date);
+                        const bookingDate = b.date ? new Date(b.date) : new Date(b.created_at);
                         return bookingDate >= new Date();
                     })
-                    .sort((a, b) => new Date(a.date) - new Date(b.date))
+                    .sort((a, b) => {
+                        const dateA = a.date ? new Date(a.date) : new Date(a.created_at);
+                        const dateB = b.date ? new Date(b.date) : new Date(b.created_at);
+                        return dateA - dateB;
+                    })
                     .slice(0, 5);
                 const revenue = bookings
-                    .filter(b => b.status === 'Completed')
-                    .reduce((sum, b) => sum + (b.totalPrice || b.offer_amount || 0), 0);
+                    .filter(b => b.status === 'Completed' || b.status === 'completed')
+                    .reduce((sum, b) => sum + (Number(b.total_price) || Number(b.offer_amount) || 0), 0);
 
                 setStats({
                     pendingBookings: pending,

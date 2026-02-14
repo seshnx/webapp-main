@@ -1,5 +1,5 @@
-import { authenticateUser } from '../../../src/utils/apiAuth.js';
-import { query } from '../../../src/config/neon.js';
+import { authenticateUser } from '../../../src/utils/apiAuth.ts';
+import { query } from '../../../src/config/neon.ts';
 
 /**
  * Update Internship Log Status API

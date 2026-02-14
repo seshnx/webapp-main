@@ -129,12 +129,15 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
       <Route path="/bookings/my-bookings" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings/calendar" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings/find-talent" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/bookings/find-bookings" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings/broadcast-list" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/marketplace" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/tech" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/payments" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/profile" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/business-center" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/business-center/:tab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/business-center/tech/:subtab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/legal" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-student" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-intern" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />

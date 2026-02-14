@@ -11,7 +11,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
 import { useNotifications } from '../hooks/useNotifications';
-import { getMarketplaceItems } from '../config/neonQueries';
+import { getMarketplaceItems, getTrendPercentage, hasHistoricalData, recordUserMetrics } from '../config/neonQueries';
 import { motion, AnimatePresence } from 'framer-motion';
 import AnimatedNumber from './shared/AnimatedNumber';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -123,6 +123,9 @@ export default function Dashboard({
     const [trendingItem, setTrendingItem] = useState<TrendingItem | null>(null);
     const [profileSchemas, setProfileSchemas] = useState<Record<string, ProfileSchema[]> | null>(null);
     const [bookingThreshold, setBookingThreshold] = useState<number>(60);
+    const [tokenBalanceTrend, setTokenBalanceTrend] = useState<string | null>(null);
+    const [profileViewsTrend, setProfileViewsTrend] = useState<string | null>(null);
+    const [hasTrendData, setHasTrendData] = useState<boolean>(false);
 
     // Real-time notifications from Supabase
     const { notifications, unreadCount } = useNotifications(user?.id || user?.uid);
@@ -392,6 +395,43 @@ export default function Dashboard({
         };
     }, []);
 
+    // Fetch trend data
+    useEffect(() => {
+        const fetchTrends = async () => {
+            const userId = user?.id || user?.uid;
+            if (!userId) return;
+
+            try {
+                // Check if we have historical data first
+                const hasHistory = await hasHistoricalData(userId);
+                setHasTrendData(hasHistory);
+
+                if (hasHistory) {
+                    // Fetch trends only if we have historical data
+                    const [tokenTrend, viewsTrend] = await Promise.all([
+                        getTrendPercentage(userId, 'token_balance', 30),
+                        getTrendPercentage(userId, 'profile_views', 30)
+                    ]);
+
+                    setTokenBalanceTrend(tokenTrend);
+                    setProfileViewsTrend(viewsTrend);
+                }
+
+                // Record current metrics for future trend calculations
+                await recordUserMetrics(userId);
+            } catch (error) {
+                console.warn('Failed to fetch trend data:', error);
+            }
+        };
+
+        fetchTrends();
+
+        // Record metrics daily (in production, use cron job)
+        const dailyInterval = setInterval(fetchTrends, 24 * 60 * 60 * 1000);
+
+        return () => clearInterval(dailyInterval);
+    }, [user?.id, user?.uid]);
+
     const formatNotificationTime = (ts: Date | number): string => {
         if (!ts) return 'Just now';
         let date: Date;
@@ -499,8 +539,10 @@ export default function Dashboard({
                             icon={<Zap size={20} className="text-white" fill="currentColor" />}
                             gradient="bg-gradient-to-br from-amber-500/90 to-orange-600/90 backdrop-blur-sm"
                             onClick={() => setActiveTab('payments')}
-                            trend="+12%"
-                            trendUp={true}
+                            {...(hasTrendData && tokenBalanceTrend && {
+                                trend: tokenBalanceTrend,
+                                trendUp: !tokenBalanceTrend.startsWith('-')
+                            })}
                         />
                         <GlassStatCard
                             title="Pending Bookings"
@@ -522,8 +564,10 @@ export default function Dashboard({
                             icon={<Eye size={20} className="text-white" />}
                             gradient="bg-gradient-to-br from-pink-500/90 to-rose-600/90 backdrop-blur-sm"
                             onClick={() => setActiveTab('profile')}
-                            trend="+8%"
-                            trendUp={true}
+                            {...(hasTrendData && profileViewsTrend && {
+                                trend: profileViewsTrend,
+                                trendUp: !profileViewsTrend.startsWith('-')
+                            })}
                         />
                     </motion.div>
                 </div>

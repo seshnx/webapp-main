@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { query } from '../../config/neon';
+import { getTrendPercentage, hasHistoricalData, recordUserMetrics } from '../../config/neonQueries';
 import {
     Users,
     Disc,
@@ -91,6 +92,8 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
         revenueGrowth: 0,
         totalStreams: 0
     });
+    const [revenueTrend, setRevenueTrend] = useState<string | null>(null);
+    const [hasTrendData, setHasTrendData] = useState<boolean>(false);
     const [rosterData, setRosterData] = useState<ArtistRosterData[]>([]);
     const [upcomingReleases, setUpcomingReleases] = useState<ReleaseData[]>([]);
     const [artistView, setArtistView] = useState<'platform' | 'external'>('platform');
@@ -112,7 +115,7 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                 query(`
                   SELECT COUNT(*) as count
                   FROM label_roster
-                  WHERE label_id = $1 AND status = 'active'
+                  WHERE label_id::text = $1 AND status = 'active'
                 `, [userId]).catch((e: Error) => {
                     console.warn('label_roster table not available:', e.message);
                     return [{ count: 0 }];
@@ -122,7 +125,7 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                 query(`
                   SELECT COUNT(*) as count
                   FROM releases
-                  WHERE label_id = $1 AND status IN ('distributed', 'submitted')
+                  WHERE label_id::text = $1 AND status IN ('distributed', 'submitted')
                 `, [userId]).catch((e: Error) => {
                     console.warn('releases table not available:', e.message);
                     return [{ count: 0 }];
@@ -134,8 +137,8 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                     COALESCE(SUM(lifetime_earnings), 0) as total_revenue,
                     COALESCE(SUM(lifetime_streams), 0) as total_streams
                   FROM distribution_stats
-                  WHERE user_id IN (
-                    SELECT artist_id FROM label_roster WHERE label_id = $1
+                  WHERE user_id::text IN (
+                    SELECT artist_id::text FROM label_roster WHERE label_id::text = $1
                   )
                 `, [userId]).catch((e: Error) => {
                     console.warn('distribution_stats table not available:', e.message);
@@ -144,33 +147,54 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
             ]);
 
             // Set metrics
+            const monthlyRevenue = parseFloat(revenueResult[0]?.total_revenue || 0);
             setMetrics({
                 totalArtists: parseInt(artistsResult[0]?.count || 0),
                 activeReleases: parseInt(releasesResult[0]?.count || 0),
-                monthlyRevenue: parseFloat(revenueResult[0]?.total_revenue || 0),
+                monthlyRevenue: monthlyRevenue,
                 upcomingReleases: parseInt(releasesResult[0]?.count || 0),
-                revenueGrowth: 12.5, // Placeholder - would need historical data
+                revenueGrowth: 0, // Will be updated from real trend data
                 totalStreams: parseInt(revenueResult[0]?.total_streams || 0)
             });
+
+            // Fetch real trend data
+            try {
+                const hasHistory = await hasHistoricalData(userId);
+                setHasTrendData(hasHistory);
+
+                if (hasHistory) {
+                    const trend = await getTrendPercentage(userId, 'revenue', 30);
+                    setRevenueTrend(trend);
+                    // Update revenueGrowth for display
+                    const trendValue = parseFloat(trend.replace('%', ''));
+                    setMetrics(prev => ({ ...prev, revenueGrowth: Math.abs(trendValue) }));
+                }
+
+                // Record current metrics for future trend calculations
+                await recordUserMetrics(userId);
+            } catch (error) {
+                console.warn('Failed to fetch trend data:', error);
+            }
 
             // Fetch roster with performance data
             const rosterResult = await query(`
                 SELECT
                   lr.id,
                   lr.artist_id,
-                  lr.name,
-                  lr.email,
-                  lr.photo_url,
+                  cu.first_name || ' ' || cu.last_name as name,
+                  cu.email,
+                  cu.profile_photo_url as photo_url,
                   lr.status,
                   lr.signed_date,
                   COALESCE(SUM(ds.lifetime_streams), 0) as streams,
                   COALESCE(SUM(ds.lifetime_earnings), 0) as earnings,
                   MAX(r.created_at) as last_release
                 FROM label_roster lr
-                LEFT JOIN distribution_stats ds ON ds.user_id = lr.artist_id
-                LEFT JOIN releases r ON r.artist_id = lr.artist_id
-                WHERE lr.label_id = $1
-                GROUP BY lr.id, lr.artist_id, lr.name, lr.email, lr.photo_url, lr.status, lr.signed_date
+                LEFT JOIN clerk_users cu ON cu.id = lr.artist_id
+                LEFT JOIN distribution_stats ds ON ds.user_id::text = lr.artist_id::text
+                LEFT JOIN releases r ON r.artist_id::text = lr.artist_id::text
+                WHERE lr.label_id::text = $1
+                GROUP BY lr.id, lr.artist_id, cu.first_name, cu.last_name, cu.email, cu.profile_photo_url, lr.status, lr.signed_date
                 ORDER BY lr.signed_date DESC
                 LIMIT 10
             `, [userId]).catch((e: Error) => {
@@ -190,8 +214,8 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                   r.cover_art_url,
                   p.display_name as artist_name
                 FROM releases r
-                LEFT JOIN profiles p ON p.user_id = r.artist_id
-                WHERE r.label_id = $1
+                LEFT JOIN profiles p ON p.user_id::text = r.artist_id::text
+                WHERE r.label_id::text = $1
                   AND r.release_date >= CURRENT_DATE
                 ORDER BY r.release_date ASC
                 LIMIT 5
@@ -302,10 +326,10 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                             <p className="text-3xl font-bold text-gray-900 dark:text-white mt-2">
                                 {formatCurrency(metrics.monthlyRevenue)}
                             </p>
-                            {metrics.revenueGrowth > 0 && (
-                                <p className="text-sm text-green-600 dark:text-green-400 mt-1 flex items-center">
+                            {hasTrendData && revenueTrend && metrics.monthlyRevenue > 0 && (
+                                <p className={`text-sm mt-1 flex items-center ${revenueTrend.startsWith('-') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                                     <TrendingUp className="h-4 w-4 mr-1" />
-                                    +{metrics.revenueGrowth}%
+                                    {revenueTrend}
                                 </p>
                             )}
                         </div>

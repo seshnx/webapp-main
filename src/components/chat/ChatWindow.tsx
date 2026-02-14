@@ -48,7 +48,7 @@ export interface ChatWindowProps {
     conversations?: any[];
     onBack?: () => void;
     toggleDetails?: () => void;
-    openPublicProfile?: (user: any) => void;
+    openPublicProfile?: (uid: string, name?: string) => void;
 }
 
 /**
@@ -415,7 +415,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
 
                 <div
                     className="flex items-center gap-3 flex-1 min-w-0 cursor-pointer"
-                    onClick={() => openPublicProfile?.(otherUserId ? { uid: otherUserId } : null)}
+                    onClick={() => otherUserId && openPublicProfile?.(otherUserId, chatName)}
                 >
                     <UserAvatar
                         src={activeChat?.photo || activeChat?.n?.photo || ''}
@@ -515,7 +515,7 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                                 onDelete={(forEveryone: boolean) => handleDelete(message.id, forEveryone)}
                                 onForward={() => setForwardingMessage(message)}
                                 onSeshNxLinkClick={(data: any) => setEmbedModal({ isOpen: true, url: '', previewData: data })}
-                                onUserClick={() => openPublicProfile?.({ uid: message.s })}
+                                onUserClick={() => message.s && openPublicProfile?.(message.s, message.n)}
                             />
                         );
                     })

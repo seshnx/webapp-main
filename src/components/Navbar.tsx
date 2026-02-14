@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, MouseEvent, FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon } from 'lucide-react';
+import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical } from 'lucide-react';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
 import UserAvatar, { UserAvatarProps } from './shared/UserAvatar';
@@ -124,9 +124,13 @@ export default function Navbar({
   const [showRoleMenu, setShowRoleMenu] = useState<boolean>(false);
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showOverflowMenu, setShowOverflowMenu] = useState<boolean>(false);
+  const [overflowItems, setOverflowItems] = useState<string[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
   const roleRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const overflowRef = useRef<HTMLDivElement>(null);
+  const navContentRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
 
   // Use the new notifications system
@@ -210,11 +214,14 @@ export default function Navbar({
       if (roleRef.current && !roleRef.current.contains(event.target as Node)) {
         setShowRoleMenu(false);
       }
+      if (overflowRef.current && !overflowRef.current.contains(event.target as Node)) {
+        setShowOverflowMenu(false);
+      }
     }
 
     document.addEventListener("mousedown", handleClickOutside as any);
     return () => document.removeEventListener("mousedown", handleClickOutside as any);
-  }, [notifRef, roleRef]);
+  }, [notifRef, roleRef, overflowRef]);
 
   const handleNotifUserClick = (userId: string): void => {
       setShowNotifs(false);
@@ -297,6 +304,44 @@ export default function Navbar({
       return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  // Dynamic overflow menu - detects when items don't fit
+  useEffect(() => {
+    const navElement = navContentRef.current;
+    if (!navElement) return;
+
+    const checkOverflow = () => {
+      const navWidth = navElement.offsetWidth;
+      const children = Array.from(navElement.children) as HTMLElement[];
+      const totalWidth = children.reduce((acc, child) => acc + child.offsetWidth, 0);
+
+      // Determine which items to hide based on available space
+      const itemsToHide: string[] = [];
+      const rightSectionItems = ['eduToggle', 'roleSwitcher', 'themeToggle', 'notifications', 'avatar'];
+
+      if (totalWidth > navWidth - 100) { // 100px buffer
+        // Hide items in reverse order of priority
+        if (roles.length > 1) itemsToHide.push('roleSwitcher');
+        if (hasEduAccess) itemsToHide.push('eduToggle');
+      }
+
+      setOverflowItems(itemsToHide);
+    };
+
+    // Initial check
+    checkOverflow();
+
+    // Use ResizeObserver to detect width changes
+    const resizeObserver = new ResizeObserver(() => {
+      checkOverflow();
+    });
+
+    resizeObserver.observe(navElement);
+
+    return () => {
+      resizeObserver.disconnect();
+    };
+  }, [roles.length, hasEduAccess]);
+
   const formatTime = (timestamp: string | Date | number | { toMillis(): number }): string => {
       if (!timestamp) return '';
 
@@ -334,8 +379,8 @@ export default function Navbar({
         `}
       ></div>
 
-      <nav className="h-16 bg-white dark:bg-dark-card border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 shrink-0 z-20 sticky top-0">
-        <div className="flex items-center gap-3 min-w-[180px]">
+      <nav className="h-16 bg-white dark:bg-dark-card border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-0 shrink-0 z-20 sticky top-0 w-full" ref={navContentRef}>
+        <div className="flex items-center gap-3 min-w-[180px] pl-4">
           <button
               onClick={onMenuClick}
               className="p-2 -ml-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden"
@@ -383,9 +428,85 @@ export default function Navbar({
           </form>
         </div>
 
-        <div className="flex items-center gap-3 md:gap-4">
+        <div className="flex items-center gap-3 md:gap-4 pr-4">
 
-          {hasEduAccess && (
+          {/* Overflow Menu Button */}
+          {overflowItems.length > 0 && (
+            <div className="relative" ref={overflowRef}>
+              <button
+                onClick={() => setShowOverflowMenu(!showOverflowMenu)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition"
+                aria-label="More options"
+              >
+                <MoreVertical size={20} />
+              </button>
+
+              {showOverflowMenu && (
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-[#2c2e36] border dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="p-2 border-b dark:border-gray-700 bg-gray-50 dark:bg-[#23262f]">
+                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-2">More</span>
+                  </div>
+                  <div className="p-1">
+                    {/* EDU Toggle */}
+                    {overflowItems.includes('eduToggle') && hasEduAccess && (
+                      <div className="px-3 py-2">
+                        <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border dark:border-gray-700">
+                          <button
+                            onClick={() => {
+                              setActiveTab('dashboard');
+                              setShowOverflowMenu(false);
+                            }}
+                            className={`flex-1 px-2 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition-all ${!isEduTab ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-blue dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                          >
+                            <Layout size={12}/> Studio
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleEduClick();
+                              setShowOverflowMenu(false);
+                            }}
+                            className={`flex-1 px-2 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition-all ${isEduTab ? 'bg-white dark:bg-gray-600 shadow-sm text-indigo-600 dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'}`}
+                          >
+                            <GraduationCap size={12}/> Education
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Role Switcher */}
+                    {overflowItems.includes('roleSwitcher') && roles.length > 1 && (
+                      <>
+                        <div className="px-3 py-2 text-xs text-gray-500 font-medium">
+                          Posting as: {currentDisplayName}
+                        </div>
+                        {roles.map(role => {
+                          const name = getDisplayName(role);
+                          return (
+                            <button
+                              key={role}
+                              onClick={() => {
+                                handleRoleSelect(role);
+                                setShowOverflowMenu(false);
+                              }}
+                              className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-between ${activeRole === role ? 'bg-blue-50 dark:bg-blue-900/20 text-brand-blue' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
+                            >
+                              <div className="flex flex-col">
+                                <span>{name}</span>
+                                <span className="text-[10px] opacity-70 font-normal uppercase">{role}</span>
+                              </div>
+                              {activeRole === role && <div className="w-1.5 h-1.5 rounded-full bg-brand-blue"></div>}
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {hasEduAccess && !overflowItems.includes('eduToggle') && (
               <div className="hidden md:flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border dark:border-gray-700">
                   <button
                       onClick={() => setActiveTab('dashboard')}
@@ -402,7 +523,7 @@ export default function Navbar({
               </div>
           )}
 
-          {roles.length > 1 && (
+          {roles.length > 1 && !overflowItems.includes('roleSwitcher') && (
               <div className="relative hidden sm:flex items-center gap-3" ref={roleRef}>
                   <button
                       onClick={() => setShowRoleMenu(!showRoleMenu)}

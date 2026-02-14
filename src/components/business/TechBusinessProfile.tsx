@@ -81,11 +81,11 @@ export default function TechBusinessProfile({ user, userData }: TechBusinessProf
             service_radius: data.service_radius?.toString() || '50',
             availability_status: data.availability_status || 'Available',
             bio: data.bio || '',
-            skills: (data.skills || []).join(', '),
+            skills: '', // Not in database, keeping empty
             business_policies: {
-              cancellation_policy: data.business_policies?.cancellation_policy || '',
-              payment_terms: data.business_policies?.payment_terms || '',
-              response_time: data.business_policies?.response_time || ''
+              cancellation_policy: '', // Not in database, keeping empty
+              payment_terms: '',
+              response_time: ''
             }
           });
         }
@@ -118,13 +118,7 @@ export default function TechBusinessProfile({ user, userData }: TechBusinessProf
         },
         service_radius: parseInt(formData.service_radius),
         availability_status: formData.availability_status,
-        bio: formData.bio || undefined,
-        skills: formData.skills ? formData.skills.split(',').map(s => s.trim()).filter(Boolean) : undefined,
-        business_policies: {
-          cancellation_policy: formData.business_policies.cancellation_policy,
-          payment_terms: formData.business_policies.payment_terms,
-          response_time: formData.business_policies.response_time
-        }
+        bio: formData.bio || undefined
       };
 
       await updateTechnicianProfile(userId, updates);

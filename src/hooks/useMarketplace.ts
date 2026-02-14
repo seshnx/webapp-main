@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 // Placeholder imports - queries to be implemented in neonQueries
 // import { getGearListings, getGearListingById, createGearListing, ... } from '../config/neonQueries';
@@ -26,18 +26,22 @@ function usePolling<T>(
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
+  // Use a ref to store the latest fetchFn to avoid dependency issues
+  const fetchFnRef = useRef(fetchFn);
+  fetchFnRef.current = fetchFn;
+
   const fetchData = useCallback(async () => {
     if (!enabled) return;
     setLoading(true);
     try {
-      const result = await fetchFn();
+      const result = await fetchFnRef.current();
       setData(result);
     } catch (error) {
       console.error('Polling error:', error);
     } finally {
       setLoading(false);
     }
-  }, [fetchFn, enabled]);
+  }, [enabled]);
 
   useEffect(() => {
     fetchData();

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { SchoolProvider } from '../contexts/SchoolContext';
-import { updateProfile, getSubProfiles, getWalletBalance } from '../config/neonQueries';
+import { updateProfile, getSubProfiles, getWalletBalance, getBookingCount } from '../config/neonQueries';
 import { Loader2 } from 'lucide-react';
 import ErrorBoundary from './shared/ErrorBoundary';
 import MobileBottomNav from './MobileBottomNav';
@@ -115,6 +115,7 @@ interface MainLayoutProps {
   darkMode: boolean;
   toggleTheme: () => void;
   handleLogout: () => void;
+  onRoleSwitch?: (newRole: string) => void;
 }
 
 export default function MainLayout({
@@ -123,7 +124,8 @@ export default function MainLayout({
   loading,
   darkMode,
   toggleTheme,
-  handleLogout
+  handleLogout,
+  onRoleSwitch
 }: MainLayoutProps) {
   // CRITICAL: Call hooks first before using them in state initializers
   const navigate = useNavigate();
@@ -152,6 +154,7 @@ export default function MainLayout({
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [subProfiles, setSubProfiles] = useState<Record<string, SubProfile>>({});
   const [tokenBalance, setTokenBalance] = useState<number>(0);
+  const [bookingCount, setBookingCount] = useState<number>(0);
   const [viewingProfile, setViewingProfile] = useState<ViewingProfile | null>(null);
   const [pendingChatTarget, setPendingChatTarget] = useState<PendingChatTarget | null>(null);
 
@@ -161,12 +164,15 @@ export default function MainLayout({
   const fromPathnameRef = useRef<boolean>(false);
   // Track previous pathname to detect actual changes
   const prevPathnameRef = useRef<string>(location.pathname);
+  // Track current pathname in a ref to avoid stale closures
+  const currentPathnameRef = useRef<string>(location.pathname);
   // Track if user is currently navigating (to prevent pathname sync from overriding)
   const isNavigatingRef = useRef<boolean>(false);
 
   // Sync activeTab with route (pathname is source of truth)
   useEffect(() => {
     const path = location.pathname;
+    currentPathnameRef.current = path;
 
     // Only sync if pathname actually changed (not just a re-render)
     if (prevPathnameRef.current === path) {
@@ -209,7 +215,7 @@ export default function MainLayout({
       return;
     }
 
-    // Skip navigation if the change came from pathname sync
+    // Skip navigation if the change came from pathname sync (back button, initial load, etc)
     if (fromPathnameRef.current) {
       fromPathnameRef.current = false; // Reset flag
       return;
@@ -235,13 +241,15 @@ export default function MainLayout({
     };
 
     const route = tabRoutes[activeTab];
+    const currentPath = currentPathnameRef.current; // Use ref to avoid stale closures
+
     // Only navigate if route exists and pathname doesn't start with the route
     // This allows nested routes to persist (e.g., /bookings/calendar stays as is)
-    if (route && !location.pathname.startsWith(route)) {
+    if (route && !currentPath.startsWith(route)) {
       isNavigatingRef.current = true; // Mark that we're navigating
-      navigate(route, { replace: true });
+      navigate(route); // Allow back button to work
     }
-  }, [activeTab, navigate, location.pathname]);
+  }, [activeTab, navigate]);
 
   // Load sub-profiles (optional - doesn't block the app if it fails)
   const loadSubProfiles = useCallback(async () => {
@@ -286,23 +294,43 @@ export default function MainLayout({
     loadBalance();
   }, [userData?.id, user?.id]);
 
+  // Load booking count (optional - doesn't block the app if it fails)
+  useEffect(() => {
+    if (!userData?.id && !user?.id) return;
+
+    const loadBookingCount = async () => {
+      try {
+        // Use profile UUID from userData, or fall back to user.id
+        const userId = userData?.id || user?.id;
+        const count = await getBookingCount(userId);
+        setBookingCount(count);
+      } catch (err) {
+        console.warn('Failed to load booking count (non-critical):', err?.message || err);
+        setBookingCount(0);
+      }
+    };
+
+    loadBookingCount();
+  }, [userData?.id, user?.id]);
+
   const handleRoleSwitch = async (newRole: string) => {
     if (!user?.id) return;
 
     try {
-      // Update active_role in Neon database
+      // For dev bypass user, just update local state via callback
+      if (user.id === 'dev-local-user') {
+        console.log(`🔓 Dev bypass: Role switch to ${newRole}`);
+        onRoleSwitch?.(newRole);
+        return;
+      }
+
+      // For production users, update active_role in clerk_users table
       await updateProfile(user.id, {
         active_role: newRole
       });
 
-      // Update local state
-      setUserData(prev => {
-        if (!prev) return null;
-        return {
-          ...prev,
-          activeProfileRole: newRole
-        };
-      });
+      // Notify parent of role change
+      onRoleSwitch?.(newRole);
 
       console.log(`✅ Role switched to: ${newRole}`);
     } catch (e) {
@@ -317,6 +345,13 @@ export default function MainLayout({
   const clearPendingChatTarget = useCallback(() => {
     setPendingChatTarget(null);
   }, []);
+
+  // Loading fallback component (defined outside renderContent for use throughout)
+  const LoadingFallback = () => (
+    <div className="flex-1 flex items-center justify-center">
+      <Loader2 className="animate-spin text-brand-blue" size={32} />
+    </div>
+  );
 
 
   // Determine which content to render based on activeTab
@@ -334,12 +369,6 @@ export default function MainLayout({
       );
     }
 
-    const LoadingFallback = () => (
-      <div className="flex-1 flex items-center justify-center">
-        <Loader2 className="animate-spin text-brand-blue" size={32} />
-      </div>
-    );
-
     switch (activeTab) {
       case 'dashboard':
         return (
@@ -353,7 +382,7 @@ export default function MainLayout({
                   user={user}
                   userData={userData}
                   setActiveTab={setActiveTab}
-                  bookingCount={0}
+                  bookingCount={bookingCount}
                   subProfiles={subProfiles}
                   tokenBalance={tokenBalance}
                 />
@@ -560,38 +589,42 @@ export default function MainLayout({
 
   return (
     <SchoolProvider user={user} userData={userData}>
-      <div className="flex h-screen overflow-hidden bg-gray-50 dark:bg-[#1a1d21]">
+      <div className="relative h-screen overflow-hidden bg-gray-50 dark:bg-[#1a1d21]">
+        {/* Full-width Navbar */}
+        <div className="fixed top-0 left-0 right-0 z-50">
+          <Suspense fallback={<LoadingFallback />}>
+            <Navbar
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+              darkMode={darkMode}
+              toggleTheme={toggleTheme}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onMenuClick={() => setSidebarOpen(!sidebarOpen)}
+              onRoleSwitch={handleRoleSwitch}
+              openPublicProfile={openPublicProfile}
+              showBreadcrumbs={userData?.settings?.ui?.showBreadcrumbs === true}
+            />
+          </Suspense>
+        </div>
+
         {/* Sidebar */}
-        <Suspense fallback={<LoadingFallback />}>
-          <Sidebar
-            userData={userData}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            handleLogout={handleLogout}
-          />
-        </Suspense>
+        <div className="fixed left-0 top-16 bottom-0 z-40">
+          <Suspense fallback={<LoadingFallback />}>
+            <Sidebar
+              userData={userData}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              sidebarOpen={sidebarOpen}
+              setSidebarOpen={setSidebarOpen}
+              handleLogout={handleLogout}
+            />
+          </Suspense>
+        </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Navbar */}
-        <Suspense fallback={<LoadingFallback />}>
-          <Navbar
-            user={user}
-            userData={userData}
-            subProfiles={subProfiles}
-            darkMode={darkMode}
-            toggleTheme={toggleTheme}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            onMenuClick={() => setSidebarOpen(!sidebarOpen)}
-            onRoleSwitch={handleRoleSwitch}
-            openPublicProfile={openPublicProfile}
-            showBreadcrumbs={userData?.settings?.ui?.showBreadcrumbs === true}
-          />
-        </Suspense>
-
+      <div className="flex-1 flex flex-col pt-16 h-full lg:pl-64">
         {/* Content */}
         <main className="flex-1 overflow-y-auto pb-16 lg:pb-0 px-fluid pt-4">
           {renderContent()}

@@ -3,6 +3,7 @@ import { Check, Plus, Zap, TrendingUp, DollarSign, Loader2, Shield, Star, Lock, 
 import { SUBSCRIPTION_PLAN_KEYS } from '../config/constants';
 import { useDynamicConfig } from '../hooks/useDynamicConfig';
 import { handlePayout } from '../utils/paymentUtils';
+import PageLayout from './shared/PageLayout';
 
 export default function PaymentsManager({ user, userData }) {
   const [activeTab, setActiveTab] = useState('store'); 
@@ -129,7 +130,7 @@ export default function PaymentsManager({ user, userData }) {
       }
   };
 
-  const sortedPlans = Object.values(tierData)
+  const sortedPlans = Object.values(tierData || {})
       .sort((a, b) => {
           if (a.id === currentTierId) return -1;
           if (b.id === currentTierId) return 1;
@@ -144,15 +145,10 @@ export default function PaymentsManager({ user, userData }) {
   };
 
   return (
-      <div className="max-w-6xl mx-auto p-4 pb-24">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-6">
-              <div>
-                  <h2 className="text-3xl font-extrabold dark:text-white flex items-center gap-2">
-                      <DollarSign size={32} className="text-green-500" /> My Wallet
-                  </h2>
-                  <p className="text-gray-500 dark:text-gray-400 mt-1">Manage tokens, subscriptions, and earnings.</p>
-              </div>
-              
+      <PageLayout
+          title="My Wallet"
+          subtitle="Manage tokens, subscriptions, and earnings"
+          headerActions={
               <div className="flex gap-4">
                   <div className="bg-white dark:bg-[#2c2e36] px-5 py-3 rounded-2xl border dark:border-gray-700 shadow-sm flex items-center gap-3">
                       <div className="p-2 bg-yellow-500/10 rounded-full">
@@ -167,17 +163,18 @@ export default function PaymentsManager({ user, userData }) {
                   {isTalent && (
                       <div className="bg-white dark:bg-[#2c2e36] px-5 py-3 rounded-2xl border dark:border-gray-700 shadow-sm flex items-center gap-3">
                           <div className="p-2 bg-green-500/10 rounded-full">
-                              <DollarSign className="text-green-500" size={20}/>
+                              <TrendingUp fill="currentColor" className="text-green-500" size={20}/>
                           </div>
                           <div>
-                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Available USD</div>
+                              <div className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Earnings</div>
                               <div className="font-mono font-extrabold text-xl dark:text-white leading-none">${walletData.payoutBalance.toFixed(2)}</div>
                           </div>
                       </div>
                   )}
               </div>
-          </div>
-
+          }
+      >
+          <div className="space-y-8">
           <div className="flex gap-4 border-b dark:border-gray-700 mb-8 overflow-x-auto">
              <button onClick={() => setActiveTab('store')} className={`pb-3 px-4 text-sm font-bold border-b-2 transition whitespace-nowrap ${activeTab === 'store' ? 'border-brand-blue text-brand-blue' : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}>
                  Token Store
@@ -206,7 +203,7 @@ export default function PaymentsManager({ user, userData }) {
                       <div className="text-center py-20"><Loader2 className="animate-spin text-brand-blue mx-auto" size={32}/></div>
                   ) : (
                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {tokenPackages.map(pack => (
+                          {(tokenPackages || []).map(pack => (
                               <div key={pack.id} className={`relative bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${pack.highlight ? 'border-yellow-500 ring-2 ring-yellow-500/20' : 'dark:border-gray-700'}`}>
                                   {pack.highlight && (
                                       <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-500 text-black text-[10px] font-extrabold px-3 py-1 rounded-full tracking-wide shadow-sm">
@@ -384,6 +381,7 @@ export default function PaymentsManager({ user, userData }) {
                   </div>
               </div>
           )}
-      </div>
+          </div>
+      </PageLayout>
   );
 }

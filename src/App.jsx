@@ -466,6 +466,16 @@ export default function App() {
               darkMode={darkMode}
               toggleTheme={toggleTheme}
               handleLogout={handleLogout}
+              onRoleSwitch={(newRole) => {
+                setUserData(prev => {
+                  if (!prev) return null;
+                  return {
+                    ...prev,
+                    activeProfileRole: newRole,
+                    preferredRole: newRole
+                  };
+                });
+              }}
             />
           </Suspense>
         )}

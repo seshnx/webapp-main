@@ -387,7 +387,7 @@ export default function SettingsTab({
         if (tabFromPath !== activeTab) {
             setActiveTab(tabFromPath);
         }
-    }, [location.pathname, activeTab]);
+    }, [location.pathname]);
 
     const [localSettings, setLocalSettings] = useState<ExtendedSettings>(() => {
         const defaults: ExtendedSettings = {

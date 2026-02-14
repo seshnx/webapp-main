@@ -49,7 +49,8 @@ export default function BusinessCenter({ user, userData }: BusinessCenterProps) 
     // Get active tab from URL path
     const getTabFromPath = (path: string): string => {
         const parts = path.split('/').filter(Boolean);
-        if (parts[0] === 'business' && parts[1]) {
+        if (parts[0] === 'business-center' && parts[1]) {
+            // Return the first tab segment, ignore sub-tabs (like tech/requests)
             return parts[1];
         }
         return 'overview';
@@ -57,13 +58,22 @@ export default function BusinessCenter({ user, userData }: BusinessCenterProps) 
 
     const [activeTab, setActiveTab] = useState<string>(() => getTabFromPath(location.pathname));
 
-    // Sync URL with active tab
+    // Sync URL with active tab (skip if pathname already matches or has sub-tabs)
     useEffect(() => {
-        const currentPath = activeTab === 'overview' ? '/business' : `/business/${activeTab}`;
+        // Don't navigate if there are sub-tabs (e.g., /business-center/tech/requests)
+        const pathParts = location.pathname.split('/').filter(Boolean);
+        const hasSubTabs = pathParts.length > 2 && pathParts[0] === 'business-center';
+
+        if (hasSubTabs) {
+            // Skip navigation when child component is managing sub-tabs
+            return;
+        }
+
+        const currentPath = activeTab === 'overview' ? '/business-center' : `/business-center/${activeTab}`;
         if (location.pathname !== currentPath) {
             navigate(currentPath, { replace: true });
         }
-    }, [activeTab, navigate]);
+    }, [activeTab, navigate, location.pathname]);
 
     // Update tab when URL changes
     useEffect(() => {
@@ -71,7 +81,7 @@ export default function BusinessCenter({ user, userData }: BusinessCenterProps) 
         if (tabFromPath !== activeTab) {
             setActiveTab(tabFromPath);
         }
-    }, [location.pathname, activeTab]);
+    }, [location.pathname]);
 
     // Determine which features the user has access to
     const isStudio = userData?.accountTypes?.includes('Studio');

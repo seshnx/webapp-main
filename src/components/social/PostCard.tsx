@@ -1,8 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check } from 'lucide-react';
-import { updatePost, deletePost, checkIsSaved, savePost, unsavePost, updatePostSaveCount } from '../../config/neonQueries';
+import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check, Repeat2 } from 'lucide-react';
+import { updatePost, deletePost, checkIsSaved, savePost, unsavePost, updatePostSaveCount, toggleReaction } from '../../config/neonQueries';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import CommentSection from './CommentSection';
+import RepostModal from './RepostModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createNotification } from '../../hooks/useNotifications';
 import FollowButton, { FollowButtonCompact } from './FollowButton';
@@ -81,7 +84,7 @@ const cardVariants = {
     exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } }
 };
 
-export default function PostCard({
+const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCard({
     post,
     currentUser,
     currentUserData,
@@ -91,24 +94,52 @@ export default function PostCard({
     isFollowingAuthor,
     onToggleFollow,
     autoPlayVideos = false
-}: PostCardProps) {
+}, ref) {
     const [showComments, setShowComments] = useState<boolean>(false);
     const [commentCount, setCommentCount] = useState<number>(post.commentCount || 0);
     const [isSaved, setIsSaved] = useState<boolean>(false);
     const [showReactionMenu, setShowReactionMenu] = useState<boolean>(false);
     const [showMoreMenu, setShowMoreMenu] = useState<boolean>(false);
+    const [showShareMenu, setShowShareMenu] = useState<boolean>(false);
+    const [showRepostModal, setShowRepostModal] = useState<boolean>(false);
     const [linkCopied, setLinkCopied] = useState<boolean>(false);
     const [savingPost, setSavingPost] = useState<boolean>(false);
     const menuRef = useRef<HTMLDivElement>(null);
     const moreMenuRef = useRef<HTMLDivElement>(null);
+    const shareMenuRef = useRef<HTMLDivElement>(null);
 
     const userId = currentUser?.id || currentUser?.uid;
     const isOwnPost = post.userId === userId;
-    const myReaction = post.reactions?.[userId];
-    const reactionCounts: ReactionCounts = post.reactions ? Object.values(post.reactions).reduce((acc: ReactionCounts, emoji: string) => {
-        acc[emoji] = (acc[emoji] || 0) + 1;
-        return acc;
-    }, {}) : {};
+
+    // Real-time reactions from Convex (with fallback for when not configured)
+    const convexReactions = useQuery(api.reactions.list, { targetId: post.id, targetType: 'post' as const });
+    const convexReactionsSummary = useQuery(api.reactions.getSummary, { targetId: post.id, targetType: 'post' as const });
+    const myReactionConvex = useQuery(api.reactions.getUserReaction, {
+        targetId: post.id,
+        targetType: 'post' as const,
+        userId: userId || ''
+    });
+
+    // Check if Convex is available (not in error state and loaded)
+    const convexAvailable = convexReactionsSummary !== undefined && !convexReactionsSummary;
+
+    // Use Convex data if available, otherwise fall back to post data
+    const myReaction = convexAvailable && userId
+        ? (myReactionConvex?.emoji || null)
+        : (post.reactions?.[userId]);
+
+    // Calculate reaction counts from Convex summary or post data
+    const reactionCounts: ReactionCounts = convexAvailable && Object.keys(convexReactionsSummary || {}).length > 0
+        ? Object.fromEntries(
+            Object.entries(convexReactionsSummary || {}).map(([emoji, data]: [string, any]) => [emoji, data.count])
+          )
+        : (post.reactions
+            ? Object.values(post.reactions).reduce((acc: ReactionCounts, emoji: string) => {
+                acc[emoji] = (acc[emoji] || 0) + 1;
+                return acc;
+              }, {})
+            : {});
+
     const totalReactions = Object.values(reactionCounts).reduce((a: number, b: number) => a + b, 0);
 
     // Check if post is saved on mount
@@ -136,6 +167,9 @@ export default function PostCard({
             if (moreMenuRef.current && !moreMenuRef.current.contains(event.target as Node)) {
                 setShowMoreMenu(false);
             }
+            if (shareMenuRef.current && !shareMenuRef.current.contains(event.target as Node)) {
+                setShowShareMenu(false);
+            }
         };
         document.addEventListener("mousedown", handleClickOutside);
         return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -146,33 +180,20 @@ export default function PostCard({
         if (!userId) return;
 
         try {
-            const wasReacted = !!myReaction;
-            const currentReactions = post.reactions || {};
-
+            // Check if this is removing the current reaction or adding a new one
             if (myReaction === emoji) {
                 // Remove reaction
-                const newReactions = { ...currentReactions };
-                delete newReactions[userId];
-
-                await updatePost(post.id, {
-                    reactions: newReactions,
-                    reaction_count: Math.max((post.reactionCount || 0) - 1, 0)
-                });
+                await toggleReaction(userId, 'post', post.id, emoji);
             } else {
                 // Add/change reaction
-                const newReactions = { ...currentReactions, [userId]: emoji };
-                const increment = !myReaction ? 1 : 0;
-
-                await updatePost(post.id, {
-                    reactions: newReactions,
-                    reaction_count: (post.reactionCount || 0) + increment
-                });
+                const wasReacted = !!myReaction;
+                await toggleReaction(userId, 'post', post.id, emoji);
 
                 // Send notification (only for new reactions, not changes)
                 if (!wasReacted && !isOwnPost) {
                     createNotification({
                         targetUserId: post.userId,
-                        type: 'like',
+                        type: 'reaction',
                         fromUserId: userId,
                         fromUserName: currentUserData?.effectiveDisplayName || currentUserData?.firstName || 'Someone',
                         fromUserPhoto: currentUserData?.photoURL,
@@ -234,24 +255,24 @@ export default function PostCard({
         setSavingPost(false);
     };
 
-    const handleShare = async () => {
-        const shareUrl = `${window.location.origin}/post/${post.id}`;
+    const handleShare = () => {
+        // Show share menu instead of directly sharing
+        setShowShareMenu(!showShareMenu);
+    };
 
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: `Post by ${post.displayName}`,
-                    text: post.text?.substring(0, 100) || 'Check out this post',
-                    url: shareUrl
-                });
-            } catch (e: any) {
-                if (e.name !== 'AbortError') {
-                    copyLink(shareUrl);
-                }
-            }
-        } else {
-            copyLink(shareUrl);
+    const handleRepost = () => {
+        setShowShareMenu(false);
+        if (!userId) {
+            toast.error('Please log in to repost');
+            return;
         }
+        setShowRepostModal(true);
+    };
+
+    const handleCopyLink = () => {
+        const shareUrl = `${window.location.origin}/post/${post.id}`;
+        copyLink(shareUrl);
+        setShowShareMenu(false);
     };
 
     const copyLink = (url: string) => {
@@ -284,6 +305,7 @@ export default function PostCard({
 
     return (
         <motion.div
+            ref={ref}
             variants={cardVariants}
             initial="hidden"
             animate="show"
@@ -524,14 +546,44 @@ export default function PostCard({
                     </motion.button>
 
                     {/* Share Button */}
-                    <motion.button
-                        whileTap={{ scale: 0.95 }}
-                        onClick={handleShare}
-                        className={`flex items-center gap-1.5 sm:gap-2 text-sm font-medium transition px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 ${linkCopied ? 'text-green-500' : 'text-gray-500 hover:text-green-500'}`}
-                    >
-                        {linkCopied ? <Check size={18} /> : <Share2 size={18} />}
-                        <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Share'}</span>
-                    </motion.button>
+                    <div className="relative">
+                        <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={handleShare}
+                            className={`flex items-center gap-1.5 sm:gap-2 text-sm font-medium transition px-2 py-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 ${linkCopied ? 'text-green-500' : 'text-gray-500 hover:text-green-500'}`}
+                        >
+                            {linkCopied ? <Check size={18} /> : <Share2 size={18} />}
+                            <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Share'}</span>
+                        </motion.button>
+
+                        {/* Share Dropdown Menu */}
+                        <AnimatePresence>
+                            {showShareMenu && (
+                                <motion.div
+                                    ref={shareMenuRef}
+                                    initial={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                                    exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                                    className="absolute bottom-full left-0 mb-2 bg-white dark:bg-gray-800 shadow-xl rounded-lg py-2 min-w-[160px] z-50 border dark:border-gray-600 origin-bottom-left"
+                                >
+                                    <button
+                                        onClick={handleRepost}
+                                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                                    >
+                                        <Repeat2 size={16} className="text-primary" />
+                                        <span>Repost</span>
+                                    </button>
+                                    <button
+                                        onClick={handleCopyLink}
+                                        className="w-full px-4 py-2 text-left text-sm hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-3 transition-colors"
+                                    >
+                                        <Link2 size={16} />
+                                        <span>Copy link</span>
+                                    </button>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+                    </div>
                 </div>
 
                 {/* Save Button */}
@@ -565,6 +617,20 @@ export default function PostCard({
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Repost Modal */}
+            <RepostModal
+                post={post}
+                userId={userId}
+                isOpen={showRepostModal}
+                onClose={() => setShowRepostModal(false)}
+                onSuccess={(repostId) => {
+                    // Optionally refresh the feed or do something with the new repost
+                    console.log('Repost created:', repostId);
+                }}
+            />
         </motion.div>
     );
-}
+});
+
+export default PostCard;

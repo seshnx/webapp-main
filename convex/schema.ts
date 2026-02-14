@@ -132,4 +132,31 @@ export default defineSchema({
     metadata: v.optional(v.any()), // Additional update info
   })
     .index("by_user", ["userId", "updatedAt"]),
+
+  // Comments table - for real-time comment updates
+  comments: defineTable({
+    postId: v.string(), // Post ID from Neon
+    commentId: v.string(), // Comment ID from Neon (for sync purposes)
+    userId: v.string(),
+    content: v.string(),
+    displayName: v.optional(v.string()),
+    authorPhoto: v.optional(v.string()),
+    parentId: v.optional(v.string()), // For nested replies
+    reactionCount: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_post", ["postId", "createdAt"])
+    .index("by_comment_id", ["commentId"]),
+
+  // Reactions table - for real-time reaction updates
+  reactions: defineTable({
+    targetId: v.string(), // Post ID or Comment ID from Neon
+    targetType: v.union(v.literal("post"), v.literal("comment")),
+    userId: v.string(),
+    emoji: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_target", ["targetId", "targetType"])
+    .index("by_user_target", ["userId", "targetId", "targetType"]),
 });

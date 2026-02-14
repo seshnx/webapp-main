@@ -29,9 +29,11 @@ export default function TechOverviewCard({ data, onNavigate }: TechOverviewCardP
     }).format(value || 0);
   };
 
-  const formatRating = (value: number | undefined): string => {
+  const formatRating = (value: number | string | undefined): string => {
     if (!value) return '0.0';
-    return value.toFixed(1);
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return '0.0';
+    return numValue.toFixed(1);
   };
 
   return (

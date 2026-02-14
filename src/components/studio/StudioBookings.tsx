@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getBookings, getBlockedDates, updateBookingStatus } from '../../config/neonQueries';
+import type { BlockedDate } from '../../config/neonQueries';
 import RecurringBookingModal from './RecurringBookingModal';
 import MultiRoomBookingModal from './MultiRoomBookingModal';
 import UnifiedCalendar from '../shared/UnifiedCalendar';
@@ -171,24 +173,15 @@ export default function StudioBookings({ user, userData, onNavigateToChat }: Stu
         if (!userData?.id) return;
         setLoading(true);
         try {
-            const response = await fetch(`/api/studio-ops/bookings?studioId=${userData?.id}`);
+            // Use direct database call instead of API
+            const bookingsData = await getBookings(userData.id, { limit: 100 });
 
-            if (!response.ok) {
-                throw new Error('Failed to fetch bookings');
-            }
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Parse dates for all bookings
-                const bookingsWithDates = (data.data || []).map((b: Booking) => ({
-                    ...b,
-                    date: parseBookingDate(b.date)
-                }));
-                setBookings(bookingsWithDates);
-            } else {
-                throw new Error(data.error || 'Failed to load bookings');
-            }
+            // Parse dates for all bookings
+            const bookingsWithDates = bookingsData.map((b: Booking) => ({
+                ...b,
+                date: parseBookingDate(b.date)
+            }));
+            setBookings(bookingsWithDates);
         } catch (error) {
             console.error('Error fetching bookings:', error);
             toast.error('Failed to load bookings');
@@ -215,19 +208,9 @@ export default function StudioBookings({ user, userData, onNavigateToChat }: Stu
     const loadBlockedDates = async (): Promise<void> => {
         if (!userData?.id) return;
         try {
-            const response = await fetch(`/api/studio-ops/blocked-dates?studioId=${userData?.id}`);
-
-            if (!response.ok) {
-                throw new Error('Failed to fetch blocked dates');
-            }
-
-            const data = await response.json();
-
-            if (data.success) {
-                setBlockedDates(data.data || []);
-            } else {
-                throw new Error(data.error || 'Failed to load blocked dates');
-            }
+            // Use direct database call instead of API
+            const blockedDatesData = await getBlockedDates(userData.id);
+            setBlockedDates(blockedDatesData);
         } catch (error) {
             console.error('Error fetching blocked dates:', error);
             toast.error('Failed to load blocked dates');
