@@ -914,7 +914,11 @@ export default function SettingsTab({
 
         try {
             // Delete from database tables using Neon
-            await neonQuery(`DELETE FROM profiles WHERE id = $1`, [userId]);
+            // Delete from profiles using user_id (not id, since id is a PostgreSQL UUID)
+            await neonQuery(`DELETE FROM profiles WHERE user_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM sub_profiles WHERE user_id = $1`, [userId]);
+            await neonQuery(`DELETE FROM clerk_users WHERE id = $1`, [userId]);
+            await neonQuery(`DELETE FROM reactions WHERE user_id = $1`, [userId]);
             await neonQuery(`DELETE FROM notifications WHERE user_id = $1`, [userId]);
             await neonQuery(`DELETE FROM saved_posts WHERE user_id = $1`, [userId]);
             await neonQuery(`DELETE FROM follows WHERE follower_id = $1 OR following_id = $1`, [userId]);
