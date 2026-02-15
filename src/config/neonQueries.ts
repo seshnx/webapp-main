@@ -809,7 +809,17 @@ export async function updateProfile(
       // Handle search_terms array conversion
       if (key === 'search_terms' && Array.isArray(value)) {
         fields.push(`${key} = $${paramIndex}`);
-        values.push(`{${value.join(',')}}`);
+        // Properly escape PostgreSQL array elements
+        // Elements with spaces, quotes, commas, or braces need to be wrapped in quotes
+        // and internal quotes need to be doubled
+        const escapedArray = value.map((item: string) => {
+          // If element contains special characters, wrap in quotes and escape internal quotes
+          if (item && /[\s{}",]/.test(item)) {
+            return `"${item.replace(/"/g, '""')}"`;
+          }
+          return item || '';
+        });
+        values.push(`{${escapedArray.join(',')}}`);
         paramIndex++;
       } else {
         fields.push(`${key} = $${paramIndex}`);
