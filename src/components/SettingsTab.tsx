@@ -691,8 +691,7 @@ export default function SettingsTab({
         setSaving(true);
         try {
             await updateProfile(user.id, {
-                settings: localSettings,
-                updated_at: new Date().toISOString()
+                settings: localSettings
             });
 
             // Update parent component's userData
