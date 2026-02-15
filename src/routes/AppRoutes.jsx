@@ -113,7 +113,7 @@ function Redirect({ to, replace = true }) {
  * Now uses Clerk authentication instead of Supabase
  * Note: / is now a redirect to /dashboard for better breadcrumb navigation
  */
-export default function AppRoutes({ user, userData, loading, darkMode, toggleTheme, handleLogout }) {
+export default function AppRoutes({ user, userData, loading, darkMode, toggleTheme, handleLogout, onUserDataUpdate }) {
   const { userId } = useAuth();
 
   return (
@@ -172,16 +172,22 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
               <SettingsTab
               user={user}
               userData={userData}
-              onUpdate={async (newSettings) => {
-                // Save settings to database using Neon
-                if (userId) {
-                  try {
-                    await updateProfile(userId, {
-                      settings: newSettings,
-                    });
-                    console.log('Settings saved successfully');
-                  } catch (err) {
-                    console.error('Settings save failed:', err);
+              onUpdate={async (newData) => {
+                // Handle both settings updates (object) and userData updates (UserData object)
+                if (onUserDataUpdate && newData) {
+                  // If it's a settings object (has settings property), save to DB
+                  if (newData.settings && userId) {
+                    try {
+                      await updateProfile(userId, {
+                        settings: newData.settings,
+                      });
+                      console.log('Settings saved successfully');
+                    } catch (err) {
+                      console.error('Settings save failed:', err);
+                    }
+                  } else {
+                    // It's a full userData update (from role changes)
+                    onUserDataUpdate(newData);
                   }
                 }
               }}

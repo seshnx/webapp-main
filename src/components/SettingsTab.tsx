@@ -9,7 +9,7 @@ import {
     Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
     FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save, Trash2, LucideIcon
 } from 'lucide-react';
-import { updateProfile, getProfile, getSubProfile } from '../config/neonQueries';
+import { updateProfile, getProfile, getSubProfile, getUserWithProfile } from '../config/neonQueries';
 import { query as neonQuery } from '../config/neon';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { useSettings } from '../hooks/useSettings';
@@ -757,13 +757,18 @@ export default function SettingsTab({
                 active_role: newActiveRole,
             });
 
-            // Update parent component's userData with new roles
-            if (onUpdate && userData) {
+            // Reload fresh user data from database to update all components
+            const freshUserData = await getUserWithProfile(userId);
+
+            // Update parent component's userData with fresh data
+            if (onUpdate && userData && freshUserData) {
                 const updatedUserData: UserData = {
                     ...userData,
-                    accountTypes: roles,
-                    activeProfileRole: newActiveRole,
-                    defaultProfileRole: validDefaultRole,
+                    accountTypes: freshUserData.account_types || roles,
+                    activeProfileRole: freshUserData.active_role || newActiveRole,
+                    preferredRole: freshUserData.preferred_role || newActiveRole,
+                    // Merge with fresh data from database
+                    ...freshUserData,
                 };
                 onUpdate(updatedUserData);
             }

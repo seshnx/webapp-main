@@ -315,6 +315,10 @@ export default function App() {
     };
   }, [userId, isSignedIn, clerkLoaded, user]);
 
+  const handleUserDataUpdate = useCallback((updatedUserData: any) => {
+    setUserData(updatedUserData);
+  }, []);
+
   const handleLogout = useCallback(async () => {
     try {
       console.log('=== APP LOGOUT ===');
@@ -461,6 +465,7 @@ export default function App() {
                 darkMode={darkMode}
                 toggleTheme={toggleTheme}
                 handleLogout={handleLogout}
+                onUserDataUpdate={handleUserDataUpdate}
               />
             </Suspense>
           </main>
