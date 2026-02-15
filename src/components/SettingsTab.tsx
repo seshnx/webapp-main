@@ -674,8 +674,7 @@ export default function SettingsTab({
             // Auto-save to database using Neon
             if (user?.id) {
                 updateProfile(user.id, {
-                    settings: updated,
-                    default_profile_role: defaultProfileRole
+                    settings: updated
                 })
                     .catch(err => console.error('Auto-save failed:', err));
             }
@@ -693,7 +692,6 @@ export default function SettingsTab({
         try {
             await updateProfile(user.id, {
                 settings: localSettings,
-                default_profile_role: defaultProfileRole,
                 updated_at: new Date().toISOString()
             });
 
@@ -758,7 +756,6 @@ export default function SettingsTab({
             await updateProfile(userId, {
                 account_types: roles,
                 active_role: newActiveRole,
-                default_profile_role: validDefaultRole,
             });
 
             // Update parent component's userData with new roles
