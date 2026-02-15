@@ -266,8 +266,8 @@ export async function getProfile(userId: string): Promise<Profile | null> {
         : user?.username || user?.first_name || 'New User';
 
       const insertResult = await executeQuery<Profile>(
-        `INSERT INTO profiles (user_id, display_name, profile_visibility) VALUES ($1, $2, $3) RETURNING *`,
-        [userId, displayName, 'public'],
+        `INSERT INTO profiles (user_id, display_name) VALUES ($1, $2) RETURNING *`,
+        [userId, displayName],
         'getProfile-create'
       );
       console.log(`[getProfile] Successfully created profile for user ${userId}`);
