@@ -701,7 +701,19 @@ export async function updateProfile(
   let paramIndex = 1;
 
   // Handle clerk_users fields separately - they go in clerk_users table, not profiles
-  const { active_role, account_types, preferred_role, zip_code, first_name, last_name, email, ...profileUpdates } = updates as any;
+  const {
+    active_role,
+    account_types,
+    preferred_role,
+    zip_code,
+    first_name,
+    last_name,
+    email,
+    use_legal_name_only,
+    use_user_name_only,
+    effective_display_name,
+    ...profileUpdates
+  } = updates as any;
 
   if (active_role !== undefined) {
     await executeQuery(
@@ -763,19 +775,47 @@ export async function updateProfile(
     );
   }
 
+  if (use_legal_name_only !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET use_legal_name_only = $1 WHERE id = $2',
+      [use_legal_name_only, userId],
+      'updateProfile-use_legal_name_only'
+    );
+  }
+
+  if (use_user_name_only !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET use_user_name_only = $1 WHERE id = $2',
+      [use_user_name_only, userId],
+      'updateProfile-use_user_name_only'
+    );
+  }
+
+  if (effective_display_name !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET effective_display_name = $1 WHERE id = $2',
+      [effective_display_name, userId],
+      'updateProfile-effective_display_name'
+    );
+  }
+
   // Fields that don't exist in either table - ignore them
   const ignoredFields = [
-    'username', 'profile_photo_url', 'zip',
-    'use_legal_name_only', 'use_user_name_only',
-    'effective_display_name', 'search_terms',
-    'hourly_rate', 'hourlyRate'
+    'username', 'profile_photo_url', 'zip', 'hourlyRate'
   ];
 
   for (const [key, value] of Object.entries(profileUpdates)) {
     if (!ignoredFields.includes(key)) {
-      fields.push(`${key} = $${paramIndex}`);
-      values.push(value);
-      paramIndex++;
+      // Handle search_terms array conversion
+      if (key === 'search_terms' && Array.isArray(value)) {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(`{${value.join(',')}}`);
+        paramIndex++;
+      } else {
+        fields.push(`${key} = $${paramIndex}`);
+        values.push(value);
+        paramIndex++;
+      }
     }
   }
 
