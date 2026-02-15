@@ -315,7 +315,7 @@ export default function App() {
     };
   }, [userId, isSignedIn, clerkLoaded, user]);
 
-  const handleUserDataUpdate = useCallback((updatedUserData: any) => {
+  const handleUserDataUpdate = useCallback((updatedUserData) => {
     setUserData(updatedUserData);
   }, []);
 
