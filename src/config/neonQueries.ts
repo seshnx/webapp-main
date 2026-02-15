@@ -739,8 +739,37 @@ export async function updateProfile(
     );
   }
 
-  // Fields that don't exist in profiles table - ignore them
-  const ignoredFields = ['first_name', 'last_name', 'email', 'username', 'profile_photo_url', 'zip'];
+  if (first_name !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET first_name = $1 WHERE id = $2',
+      [first_name, userId],
+      'updateProfile-first_name'
+    );
+  }
+
+  if (last_name !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET last_name = $1 WHERE id = $2',
+      [last_name, userId],
+      'updateProfile-last_name'
+    );
+  }
+
+  if (email !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET email = $1 WHERE id = $2',
+      [email, userId],
+      'updateProfile-email'
+    );
+  }
+
+  // Fields that don't exist in either table - ignore them
+  const ignoredFields = [
+    'username', 'profile_photo_url', 'zip',
+    'use_legal_name_only', 'use_user_name_only',
+    'effective_display_name', 'search_terms',
+    'hourly_rate', 'hourlyRate'
+  ];
 
   for (const [key, value] of Object.entries(profileUpdates)) {
     if (!ignoredFields.includes(key)) {
