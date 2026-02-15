@@ -700,14 +700,34 @@ export async function updateProfile(
   const values: any[] = [];
   let paramIndex = 1;
 
-  // Handle active_role separately - it goes in clerk_users table, not profiles
-  const { active_role, first_name, last_name, email, ...profileUpdates } = updates as any;
+  // Handle clerk_users fields separately - they go in clerk_users table, not profiles
+  const { active_role, account_types, preferred_role, first_name, last_name, email, ...profileUpdates } = updates as any;
 
   if (active_role !== undefined) {
     await executeQuery(
       'UPDATE clerk_users SET active_role = $1 WHERE id = $2',
       [active_role, userId],
       'updateProfile-active_role'
+    );
+  }
+
+  if (account_types !== undefined) {
+    // Convert JavaScript array to PostgreSQL array format
+    const accountTypesArray = Array.isArray(account_types)
+      ? `{${account_types.join(',')}}`
+      : account_types;
+    await executeQuery(
+      'UPDATE clerk_users SET account_types = $1 WHERE id = $2',
+      [accountTypesArray, userId],
+      'updateProfile-account_types'
+    );
+  }
+
+  if (preferred_role !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET preferred_role = $1 WHERE id = $2',
+      [preferred_role, userId],
+      'updateProfile-preferred_role'
     );
   }
 
