@@ -701,7 +701,7 @@ export async function updateProfile(
   let paramIndex = 1;
 
   // Handle clerk_users fields separately - they go in clerk_users table, not profiles
-  const { active_role, account_types, preferred_role, first_name, last_name, email, ...profileUpdates } = updates as any;
+  const { active_role, account_types, preferred_role, zip_code, first_name, last_name, email, ...profileUpdates } = updates as any;
 
   if (active_role !== undefined) {
     await executeQuery(
@@ -731,8 +731,16 @@ export async function updateProfile(
     );
   }
 
+  if (zip_code !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET zip_code = $1 WHERE id = $2',
+      [zip_code, userId],
+      'updateProfile-zip_code'
+    );
+  }
+
   // Fields that don't exist in profiles table - ignore them
-  const ignoredFields = ['first_name', 'last_name', 'email', 'username', 'profile_photo_url'];
+  const ignoredFields = ['first_name', 'last_name', 'email', 'username', 'profile_photo_url', 'zip'];
 
   for (const [key, value] of Object.entries(profileUpdates)) {
     if (!ignoredFields.includes(key)) {
