@@ -706,6 +706,7 @@ export async function updateProfile(
     account_types,
     preferred_role,
     zip_code,
+    zip, // Alias for zip_code (from ProfileManager)
     first_name,
     last_name,
     email,
@@ -714,6 +715,9 @@ export async function updateProfile(
     effective_display_name,
     ...profileUpdates
   } = updates as any;
+
+  // Map zip to zip_code (ProfileManager uses zip, DB uses zip_code)
+  const finalZipCode = zip_code !== undefined ? zip_code : zip;
 
   if (active_role !== undefined) {
     await executeQuery(
@@ -743,10 +747,10 @@ export async function updateProfile(
     );
   }
 
-  if (zip_code !== undefined) {
+  if (finalZipCode !== undefined) {
     await executeQuery(
       'UPDATE clerk_users SET zip_code = $1 WHERE id = $2',
-      [zip_code, userId],
+      [finalZipCode, userId],
       'updateProfile-zip_code'
     );
   }
@@ -801,7 +805,7 @@ export async function updateProfile(
 
   // Fields that don't exist in either table - ignore them
   const ignoredFields = [
-    'username', 'profile_photo_url', 'zip', 'hourlyRate'
+    'username', 'profile_photo_url', 'hourlyRate'
   ];
 
   for (const [key, value] of Object.entries(profileUpdates)) {
