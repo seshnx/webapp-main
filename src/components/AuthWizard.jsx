@@ -822,7 +822,9 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                           account_types: ['Fan'],
                           active_role: 'Fan',
                           preferred_role: 'Fan',
+                          default_profile_role: 'Fan',
                           effective_display_name: displayName,
+                          search_terms: [form.firstName, form.lastName, displayName].filter(Boolean).map(s => s?.toLowerCase()),
                         });
 
                         // Success - navigate to home
@@ -930,7 +932,9 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                           account_types: finalRoles,
                           active_role: finalRoles[0],
                           preferred_role: finalRoles[0],
+                          default_profile_role: finalRoles[0],
                           effective_display_name: displayName,
+                          search_terms: [form.firstName, form.lastName, displayName].filter(Boolean).map(s => s?.toLowerCase()),
                         });
 
                         // Success - navigate to home
