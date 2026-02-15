@@ -806,21 +806,16 @@ export async function updateProfile(
 
   for (const [key, value] of Object.entries(profileUpdates)) {
     if (!ignoredFields.includes(key)) {
-      // Handle search_terms array conversion
+      // Handle search_terms array conversion using ARRAY[] constructor
       if (key === 'search_terms' && Array.isArray(value)) {
-        fields.push(`${key} = $${paramIndex}`);
-        // Properly escape PostgreSQL array elements
-        // Elements with spaces, quotes, commas, or braces need to be wrapped in quotes
-        // and internal quotes need to be doubled
-        const escapedArray = value.map((item: string) => {
-          // If element contains special characters, wrap in quotes and escape internal quotes
-          if (item && /[\s{}",]/.test(item)) {
-            return `"${item.replace(/"/g, '""')}"`;
-          }
-          return item || '';
+        // Build ARRAY[] syntax with parameters: ARRAY[$1, $2, $3, ...]
+        const arrayParams = value.map((_, idx) => `$${paramIndex + idx}`);
+        fields.push(`${key} = ARRAY[${arrayParams.join(',')}]`);
+        // Add each array element as a separate parameter
+        value.forEach((item: string) => {
+          values.push(item || '');
         });
-        values.push(`{${escapedArray.join(',')}}`);
-        paramIndex++;
+        paramIndex += value.length;
       } else {
         fields.push(`${key} = $${paramIndex}`);
         values.push(value);
