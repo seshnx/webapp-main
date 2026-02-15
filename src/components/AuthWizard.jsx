@@ -797,6 +797,49 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                 >
                   Continue to Roles
                 </button>
+                <div className="space-y-2 pt-2">
+                  <button
+                    className="w-full text-gray-400 text-sm hover:text-gray-600 dark:hover:text-gray-300 transition py-2"
+                    onClick={async () => {
+                      // Skip onboarding - create minimal profile as Fan
+                      setIsLoading(true);
+                      setError('');
+
+                      try {
+                        if (!userId) {
+                          setError('Authentication required. Please sign in first.');
+                          setIsLoading(false);
+                          return;
+                        }
+
+                        // Create minimal profile as Fan
+                        const displayName = `${form.firstName || 'User'} ${form.lastName || ''}`.trim() || 'User';
+                        await updateProfile(userId, {
+                          email: form.email,
+                          first_name: form.firstName || null,
+                          last_name: form.lastName || null,
+                          zip_code: form.zip || null,
+                          account_types: ['Fan'],
+                          active_role: 'Fan',
+                          preferred_role: 'Fan',
+                          default_profile_role: 'Fan',
+                          effective_display_name: displayName,
+                          search_terms: [form.firstName, form.lastName, displayName].filter(Boolean).map(s => s?.toLowerCase()),
+                        });
+
+                        // Success - navigate to home
+                        if (onSuccess) onSuccess();
+                      } catch (err) {
+                        console.error('Profile update error:', err);
+                        setError('Failed to skip onboarding. Please try again.');
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                  >
+                    Skip for now →
+                  </button>
+                </div>
               </div>
             )}
 
@@ -859,9 +902,52 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                   <button
                     className="w-full bg-brand-blue hover:bg-blue-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 transition shadow-lg"
                     onClick={handleCompleteSignup}
-                    disabled={isLoading || form.roles.length === 0}
+                    disabled={isLoading}
                   >
-                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
+                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : form.roles.length === 0 ? 'Complete Setup as Fan' : 'Complete Setup'}
+                  </button>
+                  <button
+                    className="w-full text-gray-400 text-sm hover:text-gray-600 dark:hover:text-gray-300 transition py-2"
+                    onClick={async () => {
+                      // Skip role selection - continue as Fan
+                      setIsLoading(true);
+                      setError('');
+
+                      try {
+                        if (!userId) {
+                          setError('Authentication required. Please sign in first.');
+                          setIsLoading(false);
+                          return;
+                        }
+
+                        // Set roles to ['Fan'] if empty, or keep existing selection
+                        const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
+                        const displayName = `${form.firstName || 'User'} ${form.lastName || ''}`.trim() || 'User';
+
+                        await updateProfile(userId, {
+                          email: form.email,
+                          first_name: form.firstName || null,
+                          last_name: form.lastName || null,
+                          zip_code: form.zip || null,
+                          account_types: finalRoles,
+                          active_role: finalRoles[0],
+                          preferred_role: finalRoles[0],
+                          default_profile_role: finalRoles[0],
+                          effective_display_name: displayName,
+                          search_terms: [form.firstName, form.lastName, displayName].filter(Boolean).map(s => s?.toLowerCase()),
+                        });
+
+                        // Success - navigate to home
+                        if (onSuccess) onSuccess();
+                      } catch (err) {
+                        console.error('Profile update error:', err);
+                        setError('Failed to complete setup. Please try again.');
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                  >
+                    {form.roles.length === 0 ? 'Skip role selection →' : 'Continue with selected roles →'}
                   </button>
                   <button
                     className="w-full text-gray-400 text-sm hover:text-gray-600 dark:hover:text-gray-300 transition py-2"
