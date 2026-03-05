@@ -4,8 +4,8 @@ import { mutation, query } from "./_generated/server";
 /**
  * Convex Reactions Module
  *
- * Real-time reaction sync layer that mirrors the Neon reactions table.
- * Neon remains the source of truth, Convex provides real-time subscriptions.
+ * Real-time reaction sync layer that mirrors the MongoDB reactions collection.
+ * MongoDB is the source of truth, Convex provides real-time subscriptions.
  */
 
 /**

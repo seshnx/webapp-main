@@ -908,7 +908,7 @@ export async function createPost(postData: Partial<Post>): Promise<Post> {
 
   const result = await executeQuery<Post>(
     `INSERT INTO posts (user_id, text, media_urls) VALUES ($1, $2, $3) RETURNING *`,
-    [user_id, text, JSON.stringify(media_urls)],
+    [user_id, text, media_urls],
     'createPost'
   );
 
@@ -928,9 +928,10 @@ export async function updatePost(postId: string, updates: Partial<Post>): Promis
   let paramIndex = 1;
 
   for (const [key, value] of Object.entries(updates)) {
-    if (key === 'media_urls' && Array.isArray(value)) {
+    // For PostgreSQL array columns, pass arrays directly (not JSON.stringify)
+    if (['media_urls', 'hashtags', 'mentions'].includes(key) && Array.isArray(value)) {
       fields.push(`${key} = $${paramIndex}`);
-      values.push(JSON.stringify(value));
+      values.push(value);
     } else {
       fields.push(`${key} = $${paramIndex}`);
       values.push(value);

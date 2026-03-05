@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Repeat2 } from 'lucide-react';
-import { repostPost, hasUserReposted } from '../../config/neonQueries';
+import { repostPost, hasUserReposted } from '../../config/mongoSocial';
 import toast from 'react-hot-toast';
 
 /**

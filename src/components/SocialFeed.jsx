@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2, RefreshCw, Users, Compass, UserPlus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getPosts, createPost, getProfilesByIds, ensureUserInDatabase } from '../config/neonQueries';
+import { getPosts, createPost } from '../services/socialApi';
+import { getProfilesByIds, ensureUserInDatabase } from '../config/neonQueries';
 
 import PostCard from './social/PostCard';
 import CreatePostWidget from './social/CreatePostWidget';

@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   getSavedPosts,
-  getPosts,
-  savePost as savePostToDb,
-  unsavePost as unsavePostFromDb
-} from '../config/neonQueries';
+  savePost as savePostToMongo,
+  unsavePost as unsavePostFromMongo,
+} from '../config/mongoSocial';
+import { getPosts } from '../config/mongoSocial';
 
 /**
  * Saved post data from database
  */
 export interface SavedPostData {
+  _id?: string;
   id: string;
   postId?: string;
   userId: string;
@@ -18,6 +19,7 @@ export interface SavedPostData {
   preview?: string;
   has_media?: boolean;
   savedAt: string | Date;
+  created_at: Date;
   [key: string]: any;
 }
 
@@ -154,12 +156,7 @@ export function useSavedPosts(
     if (!userId) return false;
 
     try {
-      await savePostToDb(userId, postId, {
-        author_id: postData.authorId || postData.userId,
-        author_name: postData.authorName || postData.displayName,
-        preview: postData.preview || postData.content,
-        has_media: postData.hasMedia || false
-      });
+      await savePostToMongo(userId, postId);
 
       // Refresh saved posts
       const saved = await getSavedPosts(userId, fetchLimit);
@@ -179,7 +176,7 @@ export function useSavedPosts(
     if (!userId) return false;
 
     try {
-      await unsavePostFromDb(userId, postId);
+      await unsavePostFromMongo(userId, postId);
 
       // Refresh saved posts
       const saved = await getSavedPosts(userId, fetchLimit);
@@ -204,7 +201,7 @@ export function useSavedPosts(
 
       if (postIds.length === 0) return [];
 
-      // Use Neon getPosts function
+      // Use MongoDB getPosts function
       const posts = await getPosts({ limit: 100 });
       const filteredPosts = posts.filter(p => postIds.includes(p.id));
 
@@ -217,11 +214,11 @@ export function useSavedPosts(
           return {
             ...post,
             id: post.id,
-            userId: post.user_id || post.userId,
-            displayName: post.display_name || post.displayName,
-            authorPhoto: post.author_photo,
-            timestamp: post.created_at || post.timestamp,
-            savedAt: saved.savedAt
+            userId: post.author_id,
+            displayName: post.author_id, // Will be resolved from profile
+            authorPhoto: undefined, // Will be resolved from profile
+            timestamp: post.created_at,
+            savedAt: saved.created_at
           };
         }
         // Return minimal data if post was deleted
@@ -230,7 +227,7 @@ export function useSavedPosts(
           deleted: true,
           authorName: saved.author_name,
           preview: saved.preview,
-          savedAt: saved.savedAt
+          savedAt: saved.created_at
         };
       });
 

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check, Repeat2 } from 'lucide-react';
-import { updatePost, deletePost, checkIsSaved, savePost, unsavePost, updatePostSaveCount, toggleReaction } from '../../config/neonQueries';
+import { updatePost, deletePost, checkIsSaved, savePost, unsavePost, updatePostSaveCount, toggleReaction } from '../../services/socialApi';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Send, Trash2 } from 'lucide-react';
-import { getComments, createComment, deleteComment, updatePostCommentCount } from '../../config/neonQueries';
+import { getComments, createComment, deleteComment, updatePostCommentCount } from '../../services/socialApi';
 import { createNotification } from '../../hooks/useNotifications';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';

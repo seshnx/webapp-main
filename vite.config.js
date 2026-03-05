@@ -48,6 +48,7 @@ export default defineConfig({
       "firebase/storage": path.resolve(__dirname, "./src/adapters/firebase/storage.js"),
       "firebase/functions": path.resolve(__dirname, "./src/adapters/firebase/functions.js"),
       "firebase/database": path.resolve(__dirname, "./src/adapters/firebase/database.js"),
+      "mongodb": path.resolve(__dirname, "./src/adapters/mongodb.js"),
     },
   },
   build: {
@@ -95,7 +96,7 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['convex/server'],
+    exclude: ['convex/server', 'mongodb'],
     include: [
       'react',
       'react-dom',

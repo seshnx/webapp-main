@@ -6,12 +6,12 @@ import {
   searchUsers,
   getTrendingHashtags,
   getPostsByHashtag
-} from '../../config/neonQueries';
+} from '../../config/mongoSocial';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '../shared/UserAvatar';
 import PostCard from './PostCard';
-import type { ClerkUser } from '../../config/neonQueries';
-import type { Post } from '../../config/neonQueries';
+import type { ClerkUser } from '../../config/mongoSocial';
+import type { Post } from '../../config/mongoSocial';
 
 /**
  * SearchPanel Props

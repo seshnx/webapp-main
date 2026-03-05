@@ -22,7 +22,14 @@
       "Bash(grep:*)",
       "Bash(findstr:*)",
       "Bash(npm run dev:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(git revert:*)",
+      "Bash(sed:*)",
+      "Bash(npm run:*)",
+      "Bash(where vercel:*)",
+      "Bash(vercel ls:*)",
+      "Bash(tasklist:*)",
+      "Bash(curl:*)"
     ]
   }
 }

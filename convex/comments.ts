@@ -4,8 +4,8 @@ import { mutation, query } from "./_generated/server";
 /**
  * Convex Comments Module
  *
- * Real-time comment sync layer that mirrors the Neon comments table.
- * Neon remains the source of truth, Convex provides real-time subscriptions.
+ * Real-time comment sync layer that mirrors the MongoDB comments collection.
+ * MongoDB is the source of truth, Convex provides real-time subscriptions.
  */
 
 /**
@@ -61,7 +61,7 @@ export const count = query({
 });
 
 /**
- * Sync a comment from Neon to Convex (called from backend/action)
+ * Sync a comment from MongoDB to Convex (called from backend/action)
  * This is typically called via a Convex action or server-side sync job
  */
 export const syncComment = mutation({

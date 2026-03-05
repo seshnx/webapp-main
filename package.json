@@ -12,7 +12,13 @@
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",
     "preview": "vite preview",
-    "migrate:neon": "node scripts/migrate-to-neon.js"
+    "migrate:neon": "node scripts/migrate-to-neon.js",
+    "migrate-social-to-mongodb": "node scripts/migrate-social-to-mongodb.js",
+    "verify-mongo-migration": "node scripts/verify-mongo-migration.js",
+    "update-social-imports": "node scripts/update-social-imports.js",
+    "pull-env": "node scripts/pull-env-vercel.js",
+    "pull-env:vercel": "vercel env pull .env",
+    "fix-env": "node scripts/fix-env-vars.js"
   },
   "dependencies": {
     "@clerk/backend": "^2.29.3",
@@ -29,6 +35,7 @@
     "framer-motion": "^11.0.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.344.0",
+    "mongodb": "^6.21.0",
     "pannellum": "^2.5.6",
     "pg": "^8.11.0",
     "react": "^18.2.0",
@@ -48,6 +55,7 @@
     "@eslint/js": "^9.17.0",
     "@sentry/vite-plugin": "^4.6.1",
     "@types/leaflet": "^1.9.21",
+    "@types/mongodb": "^4.0.7",
     "@types/node": "^20.19.30",
     "@types/react": "^18.2.56",
     "@types/react-big-calendar": "^1.16.3",

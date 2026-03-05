@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { X, DollarSign, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { createBooking } from '../services/bookingService';
+import * as Sentry from '@sentry/react';
 import type { UserData } from '../types';
 
 /**

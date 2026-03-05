@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   getFollowing,
   getFollowers,
-  followUser as followUserQuery,
-  unfollowUser as unfollowUserQuery,
+  followUser as followUserInMongo,
+  unfollowUser as unfollowUserInMongo,
   getFollowingCount,
   getFollowersCount,
-  getProfilesByIds
-} from '../config/neonQueries';
+  isFollowing as checkIsFollowing,
+} from '../config/mongoSocial';
+import { getProfilesByIds } from '../config/neonQueries';
 
 /**
  * User profile interface for follow system
@@ -37,7 +38,7 @@ export interface FollowResult {
 }
 
 /**
- * Hook for managing the social follow system (Neon Version)
+ * Hook for managing the social follow system (MongoDB Version)
  *
  * @param currentUserId - The authenticated user's ID
  * @returns Follow system state and operations
@@ -143,7 +144,7 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
     }
 
     try {
-      await followUserQuery(currentUserId, targetUserId);
+      await followUserInMongo(currentUserId, targetUserId);
 
       // Optimistic update
       loadData();
@@ -160,7 +161,7 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
     }
 
     try {
-      await unfollowUserQuery(currentUserId, targetUserId);
+      await unfollowUserInMongo(currentUserId, targetUserId);
 
       // Optimistic update
       loadData();
