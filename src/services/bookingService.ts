@@ -4,11 +4,13 @@
  * Handles booking operations across Neon (PostgreSQL) and MongoDB.
  * - Neon: Core booking data (transactions, payments, audit trail)
  * - MongoDB: Flexible metadata (custom fields, notes, attachments)
+ * - Convex: Real-time sync for live updates
  */
 
 import { createBooking as createNeonBooking, updateBookingStatus as updateNeonBookingStatus } from '../config/neonQueries';
 import { mongoCollections, isMongoDbAvailable } from '../config/mongodb';
 import * as Sentry from '@sentry/react';
+import { syncBookingToConvex } from '../utils/convexSync';
 import type {
   Booking,
   BookingMetadata,
@@ -69,6 +71,15 @@ export async function createBooking(
       }
     }
 
+    // 3. Sync to Convex for real-time updates (async, non-blocking)
+    syncBookingToConvex(booking).catch(syncError => {
+      console.error('Failed to sync booking to Convex:', syncError);
+      Sentry.captureException(syncError, {
+        tags: { service: 'booking', database: 'convex' },
+        extra: { bookingId: booking.id }
+      });
+    });
+
     return booking;
   } catch (error) {
     console.error('Failed to create booking:', error);
@@ -118,6 +129,20 @@ export async function updateBookingStatus(
         });
       }
     }
+
+    // 3. Sync updated booking to Convex (async, non-blocking)
+    // Note: We fetch the updated booking to sync
+    syncBookingToConvex({
+      id: bookingId,
+      status,
+      // The Convex sync will handle the rest
+    } as any).catch(syncError => {
+      console.error('Failed to sync booking status to Convex:', syncError);
+      Sentry.captureException(syncError, {
+        tags: { service: 'booking', database: 'convex' },
+        extra: { bookingId, status }
+      });
+    });
   } catch (error) {
     console.error('Failed to update booking status:', error);
     Sentry.captureException(error, {

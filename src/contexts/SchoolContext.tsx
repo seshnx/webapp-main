@@ -1,38 +1,64 @@
 // src/contexts/SchoolContext.tsx
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import type { UserData } from '../types';
+import * as eduService from '../services/eduService';
 
 /**
  * School data interface
- * TODO: Define based on Neon schools table schema
  */
 export interface SchoolData {
   id: string;
   name: string;
+  short_name?: string;
+  description?: string;
+  address?: any;
+  phone?: string;
+  email?: string;
+  website?: string;
+  logo_url?: string;
+  cover_image_url?: string;
+  type?: string;
+  is_active?: boolean;
   [key: string]: any;
 }
 
 /**
  * Student profile interface
- * TODO: Define based on Neon students table schema
  */
 export interface StudentProfile {
   id: string;
   user_id: string;
   school_id: string;
+  student_id?: string;
+  enrollment_date?: string;
+  graduation_date?: string;
+  status?: string;
+  program?: string;
+  cohort?: string;
+  gpa?: number;
+  credits_earned?: number;
+  internship_studio_id?: string;
+  username?: string;
+  profile_photo_url?: string;
   [key: string]: any;
 }
 
 /**
  * Staff profile interface
- * TODO: Define based on Neon school_staff table schema
  */
 export interface StaffProfile {
   id: string;
   user_id: string;
   school_id: string;
-  role: string;
-  permissions: string[];
+  role_id?: string;
+  title?: string;
+  department?: string;
+  hire_date?: string;
+  status?: string;
+  permissions?: any;
+  role_name?: string;
+  username?: string;
+  profile_photo_url?: string;
   [key: string]: any;
 }
 
@@ -60,6 +86,7 @@ export interface SchoolContextValue {
   checkIn: () => Promise<CheckInOutResult>;
   checkOut: () => Promise<CheckInOutResult>;
   loading: boolean;
+  refresh: () => Promise<void>;
 }
 
 /**
@@ -83,7 +110,8 @@ const defaultContextValue: SchoolContextValue = {
   isStaff: false,
   checkIn: async () => ({ success: false }),
   checkOut: async () => ({ success: false }),
-  loading: false
+  loading: false,
+  refresh: async () => {}
 };
 
 const SchoolContext = createContext<SchoolContextValue>(defaultContextValue);
@@ -111,8 +139,8 @@ export function useSchool(): SchoolContextValue {
 
 /**
  * School Context Provider
- * TODO: Migrate all EDU school queries to Neon
- * Currently provides basic context structure without database queries
+ *
+ * Loads school data, student/staff profiles, and provides EDU functionality
  *
  * @param props - Provider props
  * @returns School context provider
@@ -135,24 +163,76 @@ export function SchoolProvider({ children, user, userData }: SchoolProviderProps
   const [loading, setLoading] = useState<boolean>(false);
 
   const schoolId: string | null | undefined = userData?.schoolId || null;
+  const userId = user?.id || userData?.id;
 
-  // TODO: Implement Neon queries for:
-  // - schools table (school data)
-  // - students table (student profile)
-  // - school_staff table (staff profile, permissions)
-  // - internships table (internship studio assignments)
-  // - attendance/check-in system
+  /**
+   * Load school and profile data
+   */
+  const loadSchoolData = async () => {
+    if (!schoolId || !userId) {
+      setSchoolData(null);
+      setStudentProfile(null);
+      setStaffProfile(null);
+      setMyPermissions([]);
+      setInternshipStudio(null);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Load school data
+      const school = await eduService.fetchSchool(schoolId);
+      setSchoolData(school);
+
+      // Try to load student profile
+      const student = await eduService.fetchStudentByUserAndSchool(userId, schoolId);
+      if (student) {
+        setStudentProfile(student);
+        setInternshipStudio(student.internship_studio_id || null);
+      } else {
+        setStudentProfile(null);
+        setInternshipStudio(null);
+      }
+
+      // Try to load staff profile
+      const staff = await eduService.fetchStaffByUserAndSchool(userId, schoolId);
+      if (staff) {
+        setStaffProfile(staff);
+        // Extract permissions from staff record
+        const permissions = staff.permissions || {};
+        const permissionList = Object.keys(permissions).filter(key => permissions[key] === true);
+        setMyPermissions(permissionList);
+      } else {
+        setStaffProfile(null);
+        setMyPermissions([]);
+      }
+    } catch (error) {
+      console.error('Failed to load school data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Load school data when schoolId or userId changes
+  useEffect(() => {
+    loadSchoolData();
+  }, [schoolId, userId]);
 
   const checkIn = async (): Promise<CheckInOutResult> => {
-    // TODO: Implement Neon query for attendance tracking
-    console.warn('School check-in not yet implemented with Neon');
-    return { success: false };
+    if (!userId || !schoolId) {
+      return { success: false, error: 'User or school not found' };
+    }
+
+    return await eduService.checkInStudent(userId, schoolId);
   };
 
   const checkOut = async (): Promise<CheckInOutResult> => {
-    // TODO: Implement Neon query for attendance tracking
-    console.warn('School check-out not yet implemented with Neon');
-    return { success: false };
+    if (!userId || !schoolId) {
+      return { success: false, error: 'User or school not found' };
+    }
+
+    return await eduService.checkOutStudent(userId, schoolId);
   };
 
   const value: SchoolContextValue = {
@@ -166,7 +246,8 @@ export function SchoolProvider({ children, user, userData }: SchoolProviderProps
     isStaff: !!staffProfile,
     checkIn,
     checkOut,
-    loading
+    loading,
+    refresh: loadSchoolData
   };
 
   return (

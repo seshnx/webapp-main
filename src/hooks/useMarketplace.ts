@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-
-// Placeholder imports - queries to be implemented in neonQueries
-// import { getGearListings, getGearListingById, createGearListing, ... } from '../config/neonQueries';
+import * as marketplaceService from '../services/marketplaceService';
 
 // Polling interval for real-time updates (milliseconds)
 const POLL_INTERVAL = 30000;
@@ -64,8 +62,7 @@ function usePolling<T>(
 export function useGearListings(options: { limit?: number; status?: string } = {}): PollingResult<any> {
   return usePolling(
     async () => {
-      // TODO: Implement getGearListings query
-      return [];
+      return await marketplaceService.fetchGearListings(options);
     },
     [options.limit, options.status]
   );
@@ -87,8 +84,8 @@ export function useGearListing(listingId: string | null) {
     const fetchListing = async () => {
       setLoading(true);
       try {
-        // TODO: Implement getGearListingById query
-        setListing(null);
+        const result = await marketplaceService.fetchGearListing(listingId);
+        setListing(result);
       } catch (error) {
         console.error('Error fetching listing:', error);
       } finally {
@@ -108,8 +105,8 @@ export function useGearListing(listingId: string | null) {
 export function useGearOrders(userId: string | null, status?: string | null): PollingResult<any> {
   return usePolling(
     async () => {
-      // TODO: Implement getGearOrders query
-      return [];
+      if (!userId) return [];
+      return await marketplaceService.fetchGearOrders({ userId, status: status || undefined });
     },
     [userId, status],
     !!userId
@@ -122,8 +119,8 @@ export function useGearOrders(userId: string | null, status?: string | null): Po
 export function useGearOffers(options: { listingId?: string | null; userId?: string | null } = {}): PollingResult<any> {
   return usePolling(
     async () => {
-      // TODO: Implement getGearOffers query
-      return [];
+      if (!options.listingId && !options.userId) return [];
+      return await marketplaceService.fetchGearOffers(options);
     },
     [options.listingId, options.userId],
     !!(options.listingId || options.userId)
@@ -140,8 +137,8 @@ export function useGearOffers(options: { listingId?: string | null; userId?: str
 export function useSafeExchangeTransactions(userId: string | null, status?: string | null): PollingResult<any> {
   return usePolling(
     async () => {
-      // TODO: Implement getSafeExchangeTransactions query
-      return [];
+      if (!userId) return [];
+      return await marketplaceService.fetchSafeExchangeTransactions({ userId, status: status || undefined });
     },
     [userId, status],
     !!userId
@@ -164,8 +161,8 @@ export function useSafeExchangeTransaction(transactionId: string | null) {
     const fetchTransaction = async () => {
       setLoading(true);
       try {
-        // TODO: Implement getSafeExchangeTransactionById query
-        setTransaction(null);
+        const result = await marketplaceService.fetchSafeExchangeTransaction(transactionId);
+        setTransaction(result);
       } catch (error) {
         console.error('Error fetching transaction:', error);
       } finally {
@@ -189,8 +186,7 @@ export function useSafeExchangeTransaction(transactionId: string | null) {
 export function useMarketplaceItems(options: { type?: string } = {}): PollingResult<any> {
   return usePolling(
     async () => {
-      // TODO: Implement getMarketplaceItems query
-      return [];
+      return await marketplaceService.fetchMarketplaceItems(options);
     },
     [options.type]
   );
@@ -212,8 +208,8 @@ export function useMarketplaceItem(itemId: string | null) {
     const fetchItem = async () => {
       setLoading(true);
       try {
-        // TODO: Implement getMarketplaceItemById query
-        setItem(null);
+        const result = await marketplaceService.fetchMarketplaceItem(itemId);
+        setItem(result);
       } catch (error) {
         console.error('Error fetching marketplace item:', error);
       } finally {
@@ -233,8 +229,8 @@ export function useMarketplaceItem(itemId: string | null) {
 export function useUserLibrary(userId: string | null): PollingResult<any> {
   return usePolling(
     async () => {
-      // TODO: Implement getUserLibrary query
-      return [];
+      if (!userId) return [];
+      return await marketplaceService.fetchUserLibrary(userId);
     },
     [userId],
     !!userId
@@ -248,12 +244,15 @@ export function useItemOwnership(userId: string | null, itemId: string | null): 
   const [isOwned, setIsOwned] = useState<boolean>(false);
 
   useEffect(() => {
-    if (!userId || !itemId) return;
+    if (!userId || !itemId) {
+      setIsOwned(false);
+      return;
+    }
 
     const checkOwnership = async () => {
       try {
-        // TODO: Implement checkItemOwnership query
-        setIsOwned(false);
+        const result = await marketplaceService.checkOwnership(userId, itemId);
+        setIsOwned(result);
       } catch (error) {
         console.error('Error checking ownership:', error);
       }
@@ -275,8 +274,8 @@ export function useItemOwnership(userId: string | null, itemId: string | null): 
 export function useDistributionReleases(userId: string | null): PollingResult<any> {
   return usePolling(
     async () => {
-      // TODO: Implement getDistributionReleases query
-      return [];
+      if (!userId) return [];
+      return await marketplaceService.fetchDistributionReleases(userId);
     },
     [userId],
     !!userId
@@ -299,8 +298,8 @@ export function useDistributionRelease(releaseId: string | null) {
     const fetchRelease = async () => {
       setLoading(true);
       try {
-        // TODO: Implement getDistributionReleaseById query
-        setRelease(null);
+        const result = await marketplaceService.fetchDistributionRelease(releaseId);
+        setRelease(result);
       } catch (error) {
         console.error('Error fetching release:', error);
       } finally {
@@ -324,26 +323,54 @@ export function useDistributionRelease(releaseId: string | null) {
  */
 export function useMarketplaceMutations() {
   return {
-    // Gear mutations (placeholders)
-    createListing: async (data: any) => { /* TODO */ },
-    updateListingStatus: async (id: string, status: string) => { /* TODO */ },
-    createOrder: async (data: any) => { /* TODO */ },
-    updateOrderStatus: async (id: string, status: string) => { /* TODO */ },
-    createOffer: async (data: any) => { /* TODO */ },
-    respondToOffer: async (id: string, response: string) => { /* TODO */ },
+    // Gear mutations
+    createListing: async (data: any) => {
+      return await marketplaceService.createListing(data);
+    },
+    updateListingStatus: async (id: string, status: string) => {
+      return await marketplaceService.updateListingStatus(id, status);
+    },
+    createOrder: async (data: any) => {
+      return await marketplaceService.createOrder(data);
+    },
+    updateOrderStatus: async (id: string, status: string) => {
+      return await marketplaceService.updateOrderStatus(id, status);
+    },
+    createOffer: async (data: any) => {
+      return await marketplaceService.createOffer(data);
+    },
+    respondToOffer: async (id: string, response: string) => {
+      return await marketplaceService.respondToOffer(id, response);
+    },
 
-    // Safe exchange mutations (placeholders)
-    createTransaction: async (data: any) => { /* TODO */ },
-    updateTransaction: async (id: string, data: any) => { /* TODO */ },
-    addPhoto: async (transactionId: string, photoUrl: string) => { /* TODO */ },
+    // Safe exchange mutations
+    createTransaction: async (data: any) => {
+      return await marketplaceService.createTransaction(data);
+    },
+    updateTransaction: async (id: string, data: any) => {
+      return await marketplaceService.updateTransaction(id, data);
+    },
+    addPhoto: async (transactionId: string, photoUrl: string) => {
+      return await marketplaceService.addPhoto(transactionId, photoUrl);
+    },
 
-    // SeshFx mutations (placeholders)
-    createMarketplaceItem: async (data: any) => { /* TODO */ },
-    purchaseItem: async (userId: string, itemId: string) => { /* TODO */ },
+    // SeshFx mutations
+    createMarketplaceItem: async (data: any) => {
+      return await marketplaceService.createMarketplaceItem(data);
+    },
+    purchaseItem: async (userId: string, itemId: string) => {
+      return await marketplaceService.purchaseItem(userId, itemId);
+    },
 
-    // Distribution mutations (placeholders)
-    createRelease: async (data: any) => { /* TODO */ },
-    updateRelease: async (id: string, data: any) => { /* TODO */ },
-    deleteRelease: async (id: string) => { /* TODO */ },
+    // Distribution mutations
+    createRelease: async (data: any) => {
+      return await marketplaceService.createRelease(data);
+    },
+    updateRelease: async (id: string, data: any) => {
+      return await marketplaceService.updateRelease(id, data);
+    },
+    deleteRelease: async (id: string) => {
+      return await marketplaceService.deleteRelease(id);
+    },
   };
 }

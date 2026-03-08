@@ -2,6 +2,7 @@
 // Dynamic role assignment based on school enrollment/roster data
 
 import type { AccountType } from '../types';
+import * as eduService from '../services/eduService';
 
 /**
  * EDU role types
@@ -10,8 +11,6 @@ export type EDURole = 'Student' | 'Intern' | 'EDUStaff' | 'EDUAdmin';
 
 /**
  * Get user's assigned schools based on their role
- * TODO: Migrate all EDU role queries to Neon schools tables
- * Currently returns empty array to prevent app crashes
  *
  * @param userId - User ID
  * @param accountTypes - User's account types
@@ -21,86 +20,122 @@ export async function getUserAssignedSchools(
   userId: string,
   accountTypes: AccountType[] = []
 ): Promise<string[]> {
-  // TODO: Implement Neon queries for:
-  // - students table (for Student role)
-  // - school_staff table (for Intern, EDUStaff roles)
-  // - schools table (for EDUAdmin role - check admins array)
+  const schoolIds = new Set<string>();
 
-  console.warn('EDU role assignment not yet implemented with Neon');
-  return [];
+  // Check each EDU role type
+  const eduRoles: EDURole[] = ['Student', 'Intern', 'EDUStaff', 'EDUAdmin'];
+
+  for (const role of eduRoles) {
+    if (accountTypes.includes(role as AccountType)) {
+      const schools = await eduService.fetchSchoolsByRole(userId, role);
+      schools.forEach(id => schoolIds.add(id));
+    }
+  }
+
+  return Array.from(schoolIds);
 }
 
 /**
  * Get schools for a specific role
- * TODO: Implement Neon query
  */
 export async function getSchoolsForRole(userId: string, role: EDURole): Promise<string[]> {
-  // TODO: Query appropriate table based on role
-  // Student: SELECT school_id FROM students WHERE user_id = $1
-  // Intern: SELECT school_id FROM school_staff WHERE user_id = $1 AND status = 'Active Internship'
-  // EDUStaff: SELECT school_id FROM school_staff WHERE user_id = $1 AND status = 'Active'
-  // EDUAdmin: SELECT id FROM schools WHERE $1 = ANY(admins)
-
-  return [];
+  return await eduService.fetchSchoolsByRole(userId, role);
 }
 
 /**
  * Check if user has specific EDU role at a school
- * TODO: Implement Neon query
  */
 export async function hasEduRoleAtSchool(
   userId: string,
   schoolId: string,
   role: EDURole
 ): Promise<boolean> {
-  // TODO: Implement Neon query
-  return false;
+  return await eduService.checkRoleAtSchool(userId, schoolId, role);
 }
 
 /**
  * Get user's EDU role at a specific school
- * TODO: Implement Neon query
+ * Returns the highest priority role (EDUAdmin > EDUStaff > Intern > Student)
  */
 export async function getEduRoleAtSchool(
   userId: string,
   schoolId: string
 ): Promise<EDURole | null> {
-  // TODO: Implement Neon query to check all EDU role tables
+  // Check in order of priority
+  const roles: EDURole[] = ['EDUAdmin', 'EDUStaff', 'Intern', 'Student'];
+
+  for (const role of roles) {
+    const hasRole = await eduService.checkRoleAtSchool(userId, schoolId, role);
+    if (hasRole) {
+      return role;
+    }
+  }
+
   return null;
 }
 
 /**
  * Check if user is a student in school
- * TODO: Implement Neon query
  */
 export async function isStudentInSchool(userId: string, schoolId: string): Promise<boolean> {
-  // TODO: SELECT 1 FROM students WHERE user_id = $1 AND school_id = $2
-  return false;
+  return await eduService.checkRoleAtSchool(userId, schoolId, 'Student');
 }
 
 /**
  * Check if user is an intern in school
- * TODO: Implement Neon query
  */
 export async function isInternInSchool(userId: string, schoolId: string): Promise<boolean> {
-  // TODO: SELECT 1 FROM school_staff WHERE user_id = $1 AND school_id = $2 AND status = 'Active Internship'
-  return false;
+  return await eduService.checkRoleAtSchool(userId, schoolId, 'Intern');
 }
 
 /**
  * Check if user is staff in school
- * TODO: Implement Neon query
  */
 export async function isStaffInSchool(userId: string, schoolId: string): Promise<boolean> {
-  // TODO: SELECT 1 FROM school_staff WHERE user_id = $1 AND school_id = $2 AND status = 'Active'
-  return false;
+  return await eduService.checkRoleAtSchool(userId, schoolId, 'EDUStaff');
 }
 
 /**
  * Check if user is admin in school
- * TODO: Implement Neon query
  */
 export async function isAdminInSchool(userId: string, schoolId: string): Promise<boolean> {
-  // TODO: SELECT 1 FROM schools WHERE $1 = ANY(admins) AND id = $2
-  return false;
+  return await eduService.checkRoleAtSchool(userId, schoolId, 'EDUAdmin');
+}
+
+/**
+ * Get all EDU roles for a user at a specific school
+ * User can have multiple roles (e.g., be both a Student and an Intern)
+ */
+export async function getAllEduRolesAtSchool(
+  userId: string,
+  schoolId: string
+): Promise<EDURole[]> {
+  const roles: EDURole[] = [];
+  const allRoles: EDURole[] = ['Student', 'Intern', 'EDUStaff', 'EDUAdmin'];
+
+  for (const role of allRoles) {
+    const hasRole = await eduService.checkRoleAtSchool(userId, schoolId, role);
+    if (hasRole) {
+      roles.push(role);
+    }
+  }
+
+  return roles;
+}
+
+/**
+ * Check if user has any EDU role at any school
+ */
+export async function hasAnyEduRole(userId: string): Promise<boolean> {
+  const schoolIds = await getUserAssignedSchools(userId);
+  return schoolIds.length > 0;
+}
+
+/**
+ * Get user's primary school (first school found)
+ * Useful for UI navigation when user has multiple schools
+ */
+export async function getPrimarySchool(userId: string): Promise<string | null> {
+  const schoolIds = await getUserAssignedSchools(userId);
+  return schoolIds.length > 0 ? schoolIds[0] : null;
 }

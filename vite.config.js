@@ -116,6 +116,14 @@ export default defineConfig({
     hmr: {
       overlay: true, // Show errors in browser overlay
     },
+    proxy: {
+      // Proxy API requests to development server
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   plugins: [
     react(),

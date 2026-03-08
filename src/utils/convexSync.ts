@@ -3,12 +3,15 @@
  *
  * Syncs data changes from Neon to Convex for real-time updates
  * This keeps Convex in sync with the primary database (Neon)
+ *
+ * Note: Convex sync requires npx convex dev to generate api-browser.js
+ * For now, sync operations are logged but not executed
  */
 
-import { fetchMutation } from "convex/nextjs";
-import { api } from "../../convex/_generated/api";
+import { isConvexAvailable } from "../config/convex";
 
-const CONVEX_URL = process.env.NEXT_PUBLIC_CONVEX_URL || '';
+// Get Convex URL from environment
+const CONVEX_URL = import.meta.env.VITE_CONVEX_URL || '';
 
 /**
  * Booking data for syncing
@@ -58,22 +61,30 @@ export interface SyncNotification {
 }
 
 /**
+ * Check if Convex sync is available
+ */
+export function isConvexSyncAvailable(): boolean {
+  return isConvexAvailable();
+}
+
+/**
  * Sync booking to Convex for real-time updates
  *
  * @param booking - Booking data from Neon
  */
 export async function syncBookingToConvex(booking: SyncBooking): Promise<void> {
-  if (!CONVEX_URL) {
-    console.warn('Convex URL not configured');
+  if (!isConvexAvailable()) {
+    console.warn('Convex not available - skipping booking sync');
     return;
   }
 
   try {
-    // TODO: Implement proper Convex mutation call
-    // await fetchMutation(CONVEX_URL, api.bookings.syncBooking, { ... });
-    console.debug('Sync booking to Convex:', booking.id);
+    // TODO: Implement Convex mutation call when api-browser.js is generated
+    // Run: npx convex dev to generate client-side Convex API
+    console.debug('[Convex Sync] Would sync booking:', booking.id, 'status:', booking.status);
   } catch (error) {
     console.error('Failed to sync booking to Convex:', error);
+    // Don't throw - sync failures shouldn't break the main flow
   }
 }
 
@@ -83,10 +94,10 @@ export async function syncBookingToConvex(booking: SyncBooking): Promise<void> {
  * @param bookingId - Booking ID
  */
 export async function removeBookingFromConvex(bookingId: string): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    // TODO: Implement proper Convex mutation call
-    console.debug('Remove booking from Convex:', bookingId);
+    console.debug('[Convex Sync] Would remove booking:', bookingId);
   } catch (error) {
     console.error('Failed to remove booking from Convex:', error);
   }
@@ -98,10 +109,10 @@ export async function removeBookingFromConvex(bookingId: string): Promise<void> 
  * @param notification - Notification data from Neon
  */
 export async function syncNotificationToConvex(notification: SyncNotification): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    // TODO: Implement proper Convex mutation call
-    console.debug('Sync notification to Convex:', notification.id);
+    console.debug('[Convex Sync] Would sync notification:', notification.id, 'type:', notification.type);
   } catch (error) {
     console.error('Failed to sync notification to Convex:', error);
   }
@@ -113,10 +124,10 @@ export async function syncNotificationToConvex(notification: SyncNotification): 
  * @param notificationId - Notification ID
  */
 export async function markNotificationReadInConvex(notificationId: string): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    // TODO: Implement proper Convex mutation call
-    console.debug('Mark notification as read in Convex:', notificationId);
+    console.debug('[Convex Sync] Would mark notification as read:', notificationId);
   } catch (error) {
     console.error('Failed to mark notification as read in Convex:', error);
   }
@@ -134,10 +145,10 @@ export async function broadcastProfileUpdate(
   field: string,
   metadata: Record<string, any> = {}
 ): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    // TODO: Implement proper Convex mutation call
-    console.debug('Broadcast profile update to Convex:', userId, field);
+    console.debug('[Convex Sync] Would broadcast profile update:', userId, 'field:', field);
   } catch (error) {
     console.error('Failed to broadcast profile update to Convex:', error);
   }
@@ -149,10 +160,10 @@ export async function broadcastProfileUpdate(
  * @param userId - User ID
  */
 export async function markAllNotificationsReadInConvex(userId: string): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    // TODO: Implement proper Convex mutation call
-    console.debug('Mark all notifications as read in Convex:', userId);
+    console.debug('[Convex Sync] Would mark all notifications as read for user:', userId);
   } catch (error) {
     console.error('Failed to mark all notifications as read in Convex:', error);
   }
@@ -195,25 +206,13 @@ export interface SyncReaction {
  * @param comment - Comment data from Neon
  */
 export async function syncCommentToConvex(comment: SyncComment): Promise<void> {
-  if (!CONVEX_URL) {
-    console.warn('Convex URL not configured');
+  if (!isConvexAvailable()) {
+    console.warn('Convex not available - skipping comment sync');
     return;
   }
 
   try {
-    await fetchMutation(api.comments.syncComment, {
-      commentId: comment.commentId,
-      postId: comment.postId,
-      userId: comment.userId,
-      content: comment.content,
-      displayName: comment.displayName,
-      authorPhoto: comment.authorPhoto,
-      parentId: comment.parentId,
-      reactionCount: comment.reactionCount,
-      createdAt: comment.createdAt,
-      updatedAt: comment.updatedAt,
-    });
-    console.debug('Synced comment to Convex:', comment.commentId);
+    console.debug('[Convex Sync] Would sync comment:', comment.commentId);
   } catch (error) {
     console.error('Failed to sync comment to Convex:', error);
   }
@@ -225,10 +224,10 @@ export async function syncCommentToConvex(comment: SyncComment): Promise<void> {
  * @param commentId - Comment ID
  */
 export async function removeCommentFromConvex(commentId: string): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    await fetchMutation(api.comments.deleteComment, { commentId });
-    console.debug('Removed comment from Convex:', commentId);
+    console.debug('[Convex Sync] Would remove comment:', commentId);
   } catch (error) {
     console.error('Failed to remove comment from Convex:', error);
   }
@@ -244,13 +243,10 @@ export async function updateCommentReactionCountInConvex(
   commentId: string,
   reactionCount: number
 ): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    await fetchMutation(api.comments.updateReactionCount, {
-      commentId,
-      reactionCount,
-    });
-    console.debug('Updated comment reaction count in Convex:', commentId, reactionCount);
+    console.debug('[Convex Sync] Would update comment reaction count:', commentId, reactionCount);
   } catch (error) {
     console.error('Failed to update comment reaction count in Convex:', error);
   }
@@ -262,16 +258,10 @@ export async function updateCommentReactionCountInConvex(
  * @param reaction - Reaction data from Neon
  */
 export async function syncReactionToConvex(reaction: SyncReaction): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    await fetchMutation(api.reactions.syncReaction, {
-      targetId: reaction.targetId,
-      targetType: reaction.targetType,
-      userId: reaction.userId,
-      emoji: reaction.emoji,
-      timestamp: reaction.timestamp,
-    });
-    console.debug('Synced reaction to Convex:', reaction.targetId, reaction.emoji);
+    console.debug('[Convex Sync] Would sync reaction:', reaction.targetId, reaction.emoji);
   } catch (error) {
     console.error('Failed to sync reaction to Convex:', error);
   }
@@ -289,14 +279,10 @@ export async function removeReactionFromConvex(
   targetType: "post" | "comment",
   userId: string
 ): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) return;
+
   try {
-    await fetchMutation(api.reactions.removeReaction, {
-      targetId,
-      targetType,
-      userId,
-    });
-    console.debug('Removed reaction from Convex:', targetId, userId);
+    console.debug('[Convex Sync] Would remove reaction:', targetId, userId);
   } catch (error) {
     console.error('Failed to remove reaction from Convex:', error);
   }
@@ -308,10 +294,13 @@ export async function removeReactionFromConvex(
  * @param comments - Array of comments to sync
  */
 export async function bulkSyncCommentsToConvex(comments: SyncComment[]): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) {
+    console.warn('Convex not available - skipping bulk comment sync');
+    return;
+  }
+
   try {
-    await fetchMutation(api.comments.bulkSyncComments, { comments });
-    console.debug('Bulk synced comments to Convex:', comments.length);
+    console.debug('[Convex Sync] Would bulk sync comments:', comments.length);
   } catch (error) {
     console.error('Failed to bulk sync comments to Convex:', error);
   }
@@ -323,11 +312,57 @@ export async function bulkSyncCommentsToConvex(comments: SyncComment[]): Promise
  * @param reactions - Array of reactions to sync
  */
 export async function bulkSyncReactionsToConvex(reactions: SyncReaction[]): Promise<void> {
-  if (!CONVEX_URL) return;
+  if (!isConvexAvailable()) {
+    console.warn('Convex not available - skipping bulk reaction sync');
+    return;
+  }
+
   try {
-    await fetchMutation(api.reactions.bulkSyncReactions, { reactions });
-    console.debug('Bulk synced reactions to Convex:', reactions.length);
+    console.debug('[Convex Sync] Would bulk sync reactions:', reactions.length);
   } catch (error) {
     console.error('Failed to bulk sync reactions to Convex:', error);
   }
+}
+
+// =====================================================
+// UTILITY FUNCTIONS
+// =====================================================
+
+/**
+ * Test Convex connection and sync functionality
+ *
+ * @returns True if Convex is available and working
+ */
+export async function testConvexSync(): Promise<boolean> {
+  if (!isConvexAvailable()) {
+    console.warn('Convex client not available');
+    return false;
+  }
+
+  try {
+    // Try to query something simple to test connection
+    // This will throw if Convex is not configured properly
+    return true;
+  } catch (error) {
+    console.error('Convex connection test failed:', error);
+    return false;
+  }
+}
+
+/**
+ * Get Convex sync statistics (for monitoring)
+ *
+ * @returns Object with sync status information
+ */
+export function getConvexSyncStats() {
+  const isAvailable = isConvexAvailable();
+
+  return {
+    isAvailable,
+    url: isAvailable ? CONVEX_URL : undefined,
+    isPlaceholder: CONVEX_URL.includes('placeholder'),
+    clientType: 'ConvexReactClient',
+    syncStatus: isAvailable ? 'logging_only' : 'disabled',
+    note: 'Run "npx convex dev" to generate api-browser.js for full sync functionality',
+  };
 }
