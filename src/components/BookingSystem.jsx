@@ -283,19 +283,6 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
                 </Suspense>
             )}
             
-            {/* Calendar Tab */}
-            {activeTab === 'calendar' && (
-                <div className="flex-1">
-                    <BookingCalendar
-                        events={calendarEvents}
-                        onSelectEvent={(event) => setSelectedBooking(event.resource)}
-                        onSelectSlot={(slotInfo) => {
-                            // Could open booking modal for new booking
-                            console.log('New booking slot:', slotInfo);
-                        }}
-                    />
-                </div>
-            )}
             
             {/* Find Talent Tab */}
             {activeTab === 'find-talent' && (
