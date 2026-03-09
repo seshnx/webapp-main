@@ -1,6 +1,6 @@
 import React, { useState, useEffect, ReactElement, ComponentType } from 'react';
 import { useLocation, useNavigate, Location } from 'react-router-dom';
-import { useClerk } from '@clerk/clerk-react';
+import { useClerk } from '@clerk/react';
 import {
     X, Loader2, Settings, Bell, Shield, Moon, Users, RefreshCw, Star,
     Filter, Lock, AlertTriangle, Key, Mail, CheckCircle, Eye, MapPin,
