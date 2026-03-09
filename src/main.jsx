@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { ConvexProvider } from "convex/react"
-import { ClerkProvider } from '@clerk/clerk-react'
+import { ClerkProvider } from '@clerk/react'
 import * as Sentry from '@sentry/react'
 import App from './App.jsx'
 import { convex } from './config/convex'
