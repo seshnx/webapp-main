@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useAuth, useUser, useSignIn, useSignUp, ClerkProvider } from '@clerk/clerk-react';
+import { useAuth, useUser, useSignIn, useSignUp, ClerkProvider } from '@clerk/react';
 import { SignIn, SignUp } from '@clerk/clerk-react';
 import { Loader2, AlertCircle, Check, Sun, Moon, MapPin, Crosshair, X } from 'lucide-react';
 import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
