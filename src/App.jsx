@@ -8,7 +8,7 @@ import { LanguageProvider } from './contexts/LanguageContext';
 import { getUserWithProfile, updateProfile, createClerkUser } from './config/neonQueries';
 
 // Lazy load components to avoid initialization order issues
-const AuthWizard = lazy(() => import('./components/AuthWizard'));
+const AuthWizard = lazy(() => import('./components/AuthWizard.clerk'));
 const AppRoutes = lazy(() => import('./routes/AppRoutes'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
 
