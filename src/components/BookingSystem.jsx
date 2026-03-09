@@ -62,7 +62,6 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
         { id: 'find-talent', label: t('findTalent'), icon: Search },
         { id: 'find-bookings', label: 'Find Bookings', icon: Zap },
         { id: 'my-bookings', label: t('myBookings'), icon: Calendar },
-        { id: 'calendar', label: t('calendar'), icon: Calendar },
     ];
     
     // Fetch all bookings for the user
