@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useUser } from '@clerk/clerk-react';
+import { useAuth, useUser } from '@clerk/react';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
