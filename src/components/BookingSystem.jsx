@@ -88,15 +88,6 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
         };
 
         loadBookings();
-
-        // Poll for changes instead of real-time subscription
-        const interval = setInterval(() => {
-            loadBookings();
-        }, 30000); // Poll every 30 seconds
-
-        return () => {
-            clearInterval(interval);
-        };
     }, [user?.id, user?.uid]);
     
     // Filter bookings based on status and type
