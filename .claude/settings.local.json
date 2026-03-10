@@ -29,7 +29,16 @@
       "Bash(where vercel:*)",
       "Bash(vercel ls:*)",
       "Bash(tasklist:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(npm outdated:*)",
+      "Bash(npm audit:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npm view:*)",
+      "Bash(npx convex:*)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(pkill:*)",
+      "Bash(npx vercel:*)"
     ]
   }
 }

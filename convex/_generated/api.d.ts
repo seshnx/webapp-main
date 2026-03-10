@@ -11,6 +11,8 @@
 import type * as bookings from "../bookings.js";
 import type * as comments from "../comments.js";
 import type * as conversations from "../conversations.js";
+import type * as enhancedPresence from "../enhancedPresence.js";
+import type * as enhancedSchema from "../enhancedSchema.js";
 import type * as messages from "../messages.js";
 import type * as notifications from "../notifications.js";
 import type * as presence from "../presence.js";
@@ -29,6 +31,8 @@ declare const fullApi: ApiFromModules<{
   bookings: typeof bookings;
   comments: typeof comments;
   conversations: typeof conversations;
+  enhancedPresence: typeof enhancedPresence;
+  enhancedSchema: typeof enhancedSchema;
   messages: typeof messages;
   notifications: typeof notifications;
   presence: typeof presence;

@@ -5,10 +5,10 @@
  * to work with Clerk throughout the application. These helpers wrap common Clerk
  * operations and provide additional functionality specific to SeshNx.
  *
- * Dependencies: @clerk/clerk-react
+ * Dependencies: @clerk/react
  */
 
-import { useAuth, useUser, useSignIn, useSignUp } from '@clerk/clerk-react';
+import { useAuth, useUser, useSignIn, useSignUp } from '@clerk/react';
 import { getClerkUserMetadata, getUserDisplayName } from './clerk';
 import type { AccountType } from '../types';
 

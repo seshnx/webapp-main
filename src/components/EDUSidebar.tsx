@@ -5,7 +5,7 @@ import {
     Activity, Settings, LogOut, ArrowLeft, LayoutDashboard,
     BookOpen, Target, LucideIcon
 } from 'lucide-react';
-import { useClerk } from '@clerk/clerk-react';
+import { useClerk } from '@clerk/react';
 
 /**
  * Navigation link interface

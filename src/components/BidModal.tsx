@@ -33,12 +33,13 @@ export interface BidModalProps {
 
 /**
  * BidModal - Modal for submitting bids on broadcast opportunities
- * TODO: Migrate booking submission to Neon database
+ * Now fully functional with Neon + MongoDB hybrid storage
  */
 export default function BidModal({ user, userData, broadcast, onClose }: BidModalProps) {
     const [bidRate, setBidRate] = useState<number>(Math.floor(((broadcast.offer_amount || broadcast.offerAmount) || 0) / ((broadcast.duration || 1))));
     const [message, setMessage] = useState<string>('');
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+    const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
 
     // Calculate total based on rate * duration
     const totalBid = bidRate * ((broadcast.duration || 1));
@@ -46,21 +47,80 @@ export default function BidModal({ user, userData, broadcast, onClose }: BidModa
     const isOverBudget = totalBid > maxBudget;
 
     const handleSubmit = async () => {
-        if (!bidRate || !message) return alert("Please enter a rate and a message.");
-        if (isOverBudget) return alert("Your bid exceeds the client's budget.");
+        if (!bidRate || !message) {
+            // Use toast notification instead of alert
+            const toast = (await import('react-hot-toast')).default;
+            toast.error('Please enter a rate and a message');
+            return;
+        }
 
-        // TODO: Implement Neon booking submission
-        console.warn('Bid submission not yet implemented with Neon database');
-        console.log('Bid data:', { bidRate, totalBid, message, broadcast });
+        if (isOverBudget) {
+            const toast = (await import('react-hot-toast')).default;
+            toast.error('Your bid exceeds the client\'s budget');
+            return;
+        }
+
+        // Validate user is logged in
+        const userId = user?.id || userData?.id;
+        if (!userId) {
+            const toast = (await import('react-hot-toast')).default;
+            toast.error('Please log in to submit a bid');
+            return;
+        }
 
         setIsSubmitting(true);
 
-        // Placeholder for future implementation
-        setTimeout(() => {
-            alert("Bid submission temporarily disabled during migration.");
+        try {
+            // Create booking using the hybrid booking service
+            const booking = await createBooking({
+                sender_id: userId,
+                sender_name: userData?.displayName || user?.displayName || 'User',
+                target_id: broadcast.sender_id || broadcast.senderId || '',
+                studio_owner_id: broadcast.sender_id || broadcast.senderId,
+                status: 'Pending',
+                service_type: broadcast.service_type || broadcast.serviceType || 'Session',
+                date: new Date().toISOString().split('T')[0], // Today's date
+                time: new Date().toTimeString().split(' ')[0], // Current time
+                duration: broadcast.duration || 1,
+                offer_amount: totalBid,
+                message: message,
+            });
+
+            // Success!
+            setSubmitSuccess(true);
+
+            const toast = (await import('react-hot-toast')).default;
+            toast.success('Bid submitted successfully!');
+
+            // Log for debugging
+            console.log('Booking created successfully:', booking);
+
+            // Close modal after a short delay
+            setTimeout(() => {
+                onClose?.();
+                // Reset success state for next time
+                setTimeout(() => setSubmitSuccess(false), 500);
+            }, 1500);
+
+        } catch (error: any) {
+            console.error('Bid submission failed:', error);
+
+            const toast = (await import('react-hot-toast')).default;
+            toast.error(error.message || 'Failed to submit bid. Please try again.');
+
+            // Send error to Sentry
+            Sentry.captureException(error, {
+                tags: { component: 'BidModal', action: 'submit_bid' },
+                extra: {
+                    userId,
+                    broadcastId: broadcast.id,
+                    bidRate,
+                    totalBid
+                }
+            });
+        } finally {
             setIsSubmitting(false);
-            onClose?.();
-        }, 1000);
+        }
     };
 
     return (
@@ -108,10 +168,25 @@ export default function BidModal({ user, userData, broadcast, onClose }: BidModa
 
                     <button
                         onClick={handleSubmit}
-                        disabled={isSubmitting || isOverBudget}
+                        disabled={isSubmitting || isOverBudget || submitSuccess}
                         className="w-full bg-brand-blue text-white py-3.5 rounded-xl font-bold shadow-lg hover:bg-blue-600 transition flex items-center justify-center gap-2 disabled:opacity-50 disabled:shadow-none"
                     >
-                        {isSubmitting ? <Loader2 className="animate-spin"/> : "Submit Proposal"}
+                        {isSubmitting ? (
+                            <>
+                                <Loader2 className="animate-spin"/>
+                                Submitting...
+                            </>
+                        ) : submitSuccess ? (
+                            <>
+                                <CheckCircle/>
+                                Submitted!
+                            </>
+                        ) : (
+                            <>
+                                <DollarSign size={18}/>
+                                Submit Proposal
+                            </>
+                        )}
                     </button>
                 </div>
             </div>
