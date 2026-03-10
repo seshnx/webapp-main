@@ -15,9 +15,10 @@
  */
 
 import type { AccountType } from '../types';
+import { cleanEnv } from '../utils/env';
 
-// Validate required environment variables
-const clerkPubKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+// Validate required environment variables (clean any extra quotes, newlines, etc.)
+const clerkPubKey = cleanEnv(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
 
 if (!clerkPubKey) {
   if (import.meta.env.DEV) {
@@ -84,6 +85,10 @@ export interface ClerkAppearance {
 export const clerkConfig = {
   // Enable Clerk DevTools in development
   publishableKey: clerkPubKey,
+
+  // Use virtual routing (default) - allows SignIn/SignUp components to work without path routing
+  // This is simpler for single-page apps using React Router
+  router: 'virtual',
 
   // Appearance customization
   appearance: {
@@ -163,7 +168,7 @@ export const CLERK_WEBHOOK_EVENTS = {
 /**
  * JWT Template Configuration for Neon
  */
-export const CLERK_JWT_TEMPLATE = import.meta.env.VITE_CLERK_JWT_TEMPLATE || 'neon-jwt';
+export const CLERK_JWT_TEMPLATE = cleanEnv(import.meta.env.VITE_CLERK_JWT_TEMPLATE) || 'neon-jwt';
 
 /**
  * Clerk user metadata interface
@@ -344,7 +349,7 @@ export const CLERK_OAUTH_PROVIDERS = {
  * Format: VITE_CLERK_OAUTH_PROVIDERS=google,apple,github
  */
 export function getEnabledOAuthProviders(): string[] {
-  const providers = import.meta.env.VITE_CLERK_OAUTH_PROVIDERS?.split(',') || [];
+  const providers = cleanEnv(import.meta.env.VITE_CLERK_OAUTH_PROVIDERS)?.split(',') || [];
   return providers
     .filter(Boolean)
     .map(p => `oauth_${p.toLowerCase().trim()}`);

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { useAuth, useUser, useSignIn, useSignUp, useClerk } from '@clerk/react';
-import { Loader2, AlertCircle, Check, Sun, Moon, MapPin, Crosshair, X } from 'lucide-react';
+import { useAuth, useUser, useClerk, SignIn, SignUp } from '@clerk/react';
+import { Loader2, AlertCircle, Sun, Moon, MapPin, Crosshair, X, Check } from 'lucide-react';
 import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ACCOUNT_TYPES, TALENT_SUBROLES } from '../config/constants';
 import { fetchZipLocation } from '../utils/geocode';
 import { updateProfile, upsertSubProfile } from '../config/neonQueries';
 import AuthWizardBackground from './AuthWizardBackground';
-import type { AccountType, TalentSubRole } from '../types';
+import type { AccountType } from '../types';
 
 // Lazy load LegalDocs
 const LegalDocs = lazy(() => import('./LegalDocs'));
@@ -108,31 +108,20 @@ export interface AuthWizardProps {
   isNewUser: boolean;
 }
 
+type AuthMode = 'login' | 'signup' | 'onboarding';
+
 /**
  * Clerk-based AuthWizard Component
  *
- * Uses custom forms with Clerk hooks for authentication,
- * avoiding automatic redirects.
+ * Uses Clerk's stock SignIn and SignUp components for authentication,
+ * with custom onboarding flow for profile setup.
  */
 export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isNewUser }: AuthWizardProps) {
-  const { isLoaded: clerkLoaded, userId, isSignedIn } = useAuth();
+  const { isLoaded: clerkLoaded, isSignedIn } = useAuth();
   const { user: clerkUser } = useUser();
-  const { signIn } = useSignIn();
-  const { signUp } = useSignUp();
   const clerk = useClerk();
 
-  // Debug logging for Clerk initialization
-  console.log('=== AUTH WIZARD RENDER ===');
-  console.log('clerkLoaded:', clerkLoaded);
-  console.log('isSignedIn:', isSignedIn);
-  console.log('userId:', userId);
-  console.log('clerkUser:', clerkUser);
-  console.log('signIn available:', !!signIn);
-  console.log('signUp available:', !!signUp);
-
-  type AuthMode = 'login' | 'signup' | 'onboarding';
-
-  const [mode, setMode] = useState<AuthMode>('login');
+  const [mode, setMode] = useState<AuthMode>(isNewUser ? 'onboarding' : 'login');
   const [step, setStep] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
@@ -144,8 +133,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
   interface FormState {
     email: string;
-    password: string;
-    signupPassword: string;
     firstName: string;
     lastName: string;
     zip: string;
@@ -155,8 +142,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
   const [form, setForm] = useState<FormState>({
     email: '',
-    password: '',
-    signupPassword: '',
     firstName: '',
     lastName: '',
     zip: '',
@@ -164,7 +149,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     talentSubRole: ''
   });
 
-  // Initialization Logic
+  // Initialize form from Clerk user when available
   useEffect(() => {
     if (isNewUser && clerkUser && clerkUser.id) {
       setMode('onboarding');
@@ -181,6 +166,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     }
   }, [clerkUser, isNewUser]);
 
+  // Dynamic card height based on content
   useEffect(() => {
     if (!contentRef.current) return;
     const resizeObserver = new ResizeObserver(() => {
@@ -195,263 +181,18 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
   useEffect(() => { setError(''); }, [step]);
 
-  // === HANDLERS ===
-
-  // Custom Login Handler - NO REDIRECT
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('=== LOGIN CLICKED ===');
-    console.log('signIn available?', !!signIn);
-    console.log('Email:', form.email);
-    setIsLoading(true);
-    setError('');
-
-    try {
-      if (!signIn) {
-        console.error('❌ signIn is not available!');
-        setError('Authentication not ready. Please refresh the page.');
-        setIsLoading(false);
-        return;
-      }
-
-      console.log('Calling signIn.create()...');
-      const result = await signIn.create({
-        identifier: form.email,
-        password: form.password,
-      });
-
-      console.log('Login result status:', result.status);
-      console.log('Login result:', result);
-
-      if (result.status === 'complete') {
-        // Wait for Clerk's auth state to update before calling onSuccess
-        console.log('✅ Login complete, waiting for auth state to update...');
-
-        // Wait for Clerk to have a loaded user
-        let retries = 0;
-        const maxRetries = 20; // 2 seconds max
-
-        while (retries < maxRetries) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-
-          // Check if Clerk now has a loaded user (indicates auth state updated)
-          if (clerk.loaded && clerk.user) {
-            console.log('✅ Auth state updated, user is signed in:', clerk.user.id);
-            // Success - notify parent component
-            // NO REDIRECT - parent handles navigation
-            if (onSuccess) onSuccess();
-            setIsLoading(false);
-            return;
-          }
-
-          retries++;
-          console.log(`Waiting for auth state... (${retries}/${maxRetries})`);
-        }
-
-        // If we've waited too long, log a warning but still call onSuccess
-        console.warn('⚠️ Auth state did not update in time, proceeding anyway...');
-        if (onSuccess) onSuccess();
-      } else if (result.status === 'needs_first_factor') {
-        setError('Please check your email for verification.');
-      } else {
-        setError('Authentication failed. Please try again.');
-      }
-    } catch (err: any) {
-      console.error('Login error:', err);
-      if (err.errors?.[0]?.message) {
-        setError(err.errors[0].message);
-      } else {
-        setError('Invalid email or password.');
-      }
-    } finally {
-      setIsLoading(false);
-      console.log('=== LOGIN END ===');
-    }
-  };
-
-  // Custom Signup Handler - NO REDIRECT
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log('=== SIGNUP CLICKED ===');
-    console.log('signUp available?', !!signUp);
-    console.log('Form data:', { email: form.email, hasPassword: !!form.signupPassword, firstName: form.firstName, lastName: form.lastName });
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      if (!signUp) {
-        console.error('❌ signUp is not available!');
-        setError('Sign up not available. Please refresh the page.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Validate password
-      if (form.signupPassword.length < 8) {
-        setError('Password must be at least 8 characters.');
-        setIsLoading(false);
-        return;
-      }
-
-      console.log('Creating Clerk signup with email:', form.email);
-
-      // Create signup with email/password only
-      // Name will be collected and saved during onboarding
-      const result = await signUp.create({
-        emailAddress: form.email,
-        password: form.signupPassword,
-      });
-
-      console.log('Signup result status:', result.status);
-      console.log('Signup result:', result);
-      console.log('Created user ID:', result.createdUserId);
-      console.log('Created session ID:', result.createdSessionId);
-
-      // Handle different signup statuses
-      if (result.status === 'complete') {
-        // User is fully created
-        console.log('✅ Signup complete');
-
-        // IMPORTANT: Set the active session if one was created
-        if (result.createdSessionId) {
-          console.log('Setting active session:', result.createdSessionId);
-          await clerk.setActive({
-            session: result.createdSessionId,
-          });
-          console.log('✅ Session activated');
-        }
-
-        // Wait a moment for Clerk to update auth state
-        await new Promise(resolve => setTimeout(resolve, 500));
-
-        // Check if user is now signed in
-        if (clerk.loaded && clerk.user) {
-          console.log('✅ User is now signed in:', clerk.user.id);
-          setMode('onboarding');
-          setStep(1);
-          setIsLoading(false);
-          return;
-        } else {
-          console.log('⚠️ Session created but user not signed in yet, waiting...');
-          // Give it more time
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          if (clerk.loaded && clerk.user) {
-            console.log('✅ User is now signed in after delay:', clerk.user.id);
-            setMode('onboarding');
-            setStep(1);
-            setIsLoading(false);
-            return;
-          }
-        }
-      }
-
-      if (result.status === 'missing_requirements') {
-        console.log('⚠️ Signup has missing requirements');
-        console.log('Unverified fields:', result.unverifiedFields);
-        console.log('Missing fields:', result.missingFields);
-
-        // Even with email verification OFF, we might need to handle this
-        // Try to prepare verification to complete the signup
-        if (result.unverifiedFields?.includes('email_address')) {
-          console.log('Preparing email verification...');
-          try {
-            await signUp.prepareVerification({
-              strategy: 'email_code',
-              emailAddress: form.email,
-            });
-            console.log('✅ Verification prepared');
-
-            // Now try to complete with a placeholder verification
-            // This allows the signup to complete without actual email verification
-            const updatedResult = await signUp.attemptVerification({
-              strategy: 'email_code',
-              code: '000000', // Placeholder - Clerk should bypass this when verification is disabled
-            });
-
-            console.log('Verification attempt result:', updatedResult.status);
-
-            if (updatedResult.status === 'complete') {
-              console.log('✅ User created after verification attempt');
-
-              // Set the active session if one was created
-              if (updatedResult.createdSessionId) {
-                await clerk.setActive({
-                  session: updatedResult.createdSessionId,
-                });
-              }
-
-              setMode('onboarding');
-              setStep(1);
-              setIsLoading(false);
-              return;
-            }
-          } catch (verificationError: any) {
-            console.log('Verification attempt failed (expected):', verificationError.message);
-            // Even if verification fails, the user might be created
-            // Check if we have a createdUserId now
-          }
-        }
-
-        // If we got here, check if user was created anyway
-        if (result.createdUserId || signUp.createdUserId) {
-          console.log('✅ User was created, moving to onboarding');
-          setMode('onboarding');
-          setStep(1);
-          setIsLoading(false);
-          return;
-        }
-
-        // If still not complete, show a helpful message
-        console.log('⚠️ Signup not complete, showing error to user');
-        setError('Signup could not be completed. Please try again or contact support.');
-        setIsLoading(false);
-        return;
-      }
-
-      // Fallback - shouldn't reach here but handle it
-      console.log('⚠️ Unexpected signup status:', result.status);
-      setError('Please try signing in.');
-      setMode('login');
-      setIsLoading(false);
-
-    } catch (err: any) {
-      console.error('Signup error:', err);
-      console.error('Full error details:', JSON.stringify(err, null, 2));
-
-      // Better error messages from Clerk
-      if (err.errors && err.errors.length > 0) {
-        const firstError = err.errors[0];
-        console.error('Clerk error code:', firstError.code);
-        console.error('Clerk error message:', firstError.message);
-        console.error('Clerk error long message:', firstError.longMessage);
-
-        if (firstError.code === 'form_identifier_exists') {
-          setError('An account with this email already exists. Please sign in.');
-        } else if (firstError.code === 'form_password_length_too_short') {
-          setError('Password must be at least 8 characters.');
-        } else if (firstError.code === 'form_password_pwned') {
-          setError('This password has been compromised. Please choose a different one.');
-        } else {
-          setError(firstError.message || firstError.longMessage || 'Signup failed. Please try again.');
-        }
-      } else {
-        setError('Signup failed. Please try again.');
-      }
-      setIsLoading(false);
-    } finally {
-      console.log('=== SIGNUP END ===');
-    }
-  };
-
+  // Complete signup handler
   const handleCompleteSignup = async () => {
-    if (form.roles.length === 0) return setError("Please select a role.");
+    if (form.roles.length === 0) {
+      setError("Please select at least one role.");
+      return;
+    }
 
     setIsLoading(true);
     setError('');
 
     try {
-      if (!userId) {
+      if (!clerkUser?.id) {
         setError('Authentication required. Please sign in first.');
         setIsLoading(false);
         return;
@@ -462,7 +203,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
       const displayName = `${form.firstName} ${form.lastName}`;
       const activeRole = finalRoles[0];
 
-      await updateProfile(userId, {
+      await updateProfile(clerkUser.id, {
         email: form.email,
         first_name: form.firstName,
         last_name: form.lastName,
@@ -480,22 +221,32 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         displayName: displayName,
       };
 
-      // Add talent subrole if selected
       if (form.talentSubRole && finalRoles.includes('Talent')) {
-        profileData.talentSubRole = form.talentSubRole;
+        (profileData as any).talentSubRole = form.talentSubRole;
       }
 
-      // Upsert sub-profile for each role (using the same data for now)
       for (const role of finalRoles) {
         try {
-          await upsertSubProfile(userId, role, profileData);
+          await upsertSubProfile(clerkUser.id, role, profileData);
         } catch (err: any) {
           console.warn(`Failed to create sub-profile for ${role}:`, err);
-          // Continue even if one fails
         }
       }
 
-      // Success - NO REDIRECT
+      // Update Clerk metadata
+      try {
+        await clerk.user.update({
+          unsafeMetadata: {
+            account_types: finalRoles,
+            active_role: activeRole,
+            onboarding_completed: true,
+          }
+        });
+      } catch (metadataErr) {
+        console.warn('Failed to update Clerk metadata:', metadataErr);
+      }
+
+      // Success
       if (onSuccess) onSuccess();
 
     } catch (err: any) {
@@ -505,7 +256,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     }
   };
 
-  // Location Helper
+  // Location helper
   const handleUseLocation = () => {
     if (!navigator.geolocation) return setError("Geolocation not supported.");
     setLocating(true);
@@ -526,7 +277,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
     );
   };
 
-  // === LOGIN / SIGNUP MODE ===
+  // === LOGIN / SIGNUP MODE (using Clerk stock components) ===
   if (mode === 'login' || mode === 'signup') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
@@ -560,77 +311,40 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             </div>
           )}
 
-          {/* Custom Login Form */}
-          {mode === 'login' && (
-            <form onSubmit={handleLogin} className="space-y-4">
-              <input
-                type="email"
-                className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                placeholder="Email"
-                value={form.email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, email: e.target.value }))}
-                required
+          {/* Clerk's Stock Components */}
+          {mode === 'login' ? (
+            <>
+              <SignIn
+                afterSignInUrl="/"
+                signUpUrl="#"
+                redirectUrl="/"
               />
-              <input
-                type="password"
-                className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                placeholder="Password"
-                value={form.password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, password: e.target.value }))}
-                required
-              />
-              <button
-                type="submit"
-                className="w-full bg-brand-blue hover:bg-blue-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 transition"
-                disabled={isLoading}
-              >
-                {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Sign In"}
-              </button>
-              <div className="text-center">
+              <div className="mt-4 pt-4 border-t dark:border-gray-700 text-center">
                 <button
-                  type="button"
                   onClick={() => {
                     setMode('signup');
                     setError('');
                   }}
                   className="text-sm text-brand-blue hover:underline"
                 >
-                  Don't have an account? Sign up
+                  Don&apos;t have an account? Sign up
                 </button>
               </div>
-            </form>
-          )}
-
-          {/* Custom Signup Form */}
-          {mode === 'signup' && (
-            <form onSubmit={handleSignup} className="space-y-4">
-              <input
-                type="email"
-                className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                placeholder="Email"
-                value={form.email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, email: e.target.value }))}
-                required
+              <div className="mt-4 text-center">
+                <button onClick={() => setShowLegalOverlay(true)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  Terms of Service • Privacy Policy
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <SignUp
+                afterSignUpUrl="/"
+                signInUrl="#"
+                redirectUrl="/"
               />
-              <input
-                type="password"
-                className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
-                placeholder="Password (min 8 characters)"
-                value={form.signupPassword}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, signupPassword: e.target.value }))}
-                required
-                minLength={8}
-              />
-              <button
-                type="submit"
-                className="w-full bg-brand-blue hover:bg-blue-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 transition"
-                disabled={isLoading}
-              >
-                {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Create Account"}
-              </button>
-              <div className="text-center">
+              <div className="mt-4 pt-4 border-t dark:border-gray-700 text-center">
                 <button
-                  type="button"
                   onClick={() => {
                     setMode('login');
                     setError('');
@@ -640,14 +354,13 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                   Already have an account? Sign in
                 </button>
               </div>
-            </form>
+              <div className="mt-4 text-center">
+                <button onClick={() => setShowLegalOverlay(true)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                  Terms of Service • Privacy Policy
+                </button>
+              </div>
+            </>
           )}
-
-          <div className="mt-6 pt-4 border-t dark:border-gray-700 text-center">
-            <button onClick={() => setShowLegalOverlay(true)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
-              Terms of Service • Privacy Policy
-            </button>
-          </div>
         </div>
 
         {showLegalOverlay && (
@@ -709,7 +422,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
               </div>
             )}
 
-            {/* ONBOARDING STEPS */}
             {/* Progress Indicator */}
             <div className="flex items-center justify-center gap-2 mb-6">
               <div className={`h-1 flex-1 rounded-full transition-colors ${step >= 1 ? 'bg-brand-blue' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
@@ -720,6 +432,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
               <span className={step === 2 ? 'font-bold text-brand-blue' : ''}>Roles</span>
             </div>
 
+            {/* Step 1: Basic Info */}
             {step === 1 && (
               <div className="space-y-4">
                 <h3 className="text-xl font-bold dark:text-white text-center mb-2">
@@ -795,6 +508,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
               </div>
             )}
 
+            {/* Step 2: Roles */}
             {step === 2 && (
               <div className="space-y-5">
                 <h3 className="text-xl font-bold dark:text-white text-center mb-2">
@@ -846,7 +560,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
                 <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
                   <p className="text-xs text-purple-800 dark:text-purple-200">
-                    <strong>Pro tip:</strong> Don't worry if you're unsure! You can add or remove roles anytime from your settings.
+                    <strong>Pro tip:</strong> Don&apos;t worry if you&apos;re unsure! You can add or remove roles anytime from your settings.
                   </p>
                 </div>
 
