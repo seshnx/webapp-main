@@ -1,14 +1,56 @@
-import React, { lazy, Suspense, useEffect } from 'react';
+import React, { lazy, Suspense, useEffect, ComponentType, LazyExoticComponent } from 'react';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
 import { Loader2 } from 'lucide-react';
 import { updateProfile } from '../config/neonQueries';
+import type { UserData, AccountType } from '../types';
 
-// Retry wrapper for lazy loading to handle network errors and failed imports
-const retryLazyLoad = (importFn, retries = 3, delay = 100) => {
+// =====================================================
+// TYPES
+// =====================================================
+
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  loading: boolean;
+}
+
+interface RedirectProps {
+  to: string;
+  replace?: boolean;
+}
+
+interface AppRoutesProps {
+  user: {
+    id?: string;
+    [key: string]: any;
+  };
+  userData: UserData | null;
+  loading: boolean;
+  darkMode: boolean;
+  toggleTheme: () => void;
+  handleLogout: () => void;
+  onUserDataUpdate?: (data: UserData | Partial<UserData>) => void;
+}
+
+// =====================================================
+// RETRY LAZY LOAD UTILITIES
+// =====================================================
+
+/**
+ * Retry wrapper for lazy loading to handle network errors and failed imports
+ * @param importFn - Function that returns a dynamic import promise
+ * @param retries - Number of retry attempts (default: 3)
+ * @param delay - Base delay between retries in ms (default: 100)
+ * @returns A lazy-loaded component with retry logic
+ */
+const retryLazyLoad = <T extends ComponentType<any>>(
+  importFn: () => Promise<{ default: T }>,
+  retries = 3,
+  delay = 100
+): LazyExoticComponent<T> => {
   return lazy(() => {
     return new Promise((resolve, reject) => {
-      const attempt = (attemptNumber) => {
+      const attempt = (attemptNumber: number): void => {
         // Wrap in try-catch to handle synchronous errors
         try {
           const promise = importFn();
@@ -29,7 +71,7 @@ const retryLazyLoad = (importFn, retries = 3, delay = 100) => {
                 }
               });
           } else {
-            resolve(promise);
+            resolve(promise as any);
           }
         } catch (error) {
           // Handle synchronous errors (like circular dependencies)
@@ -47,6 +89,10 @@ const retryLazyLoad = (importFn, retries = 3, delay = 100) => {
   });
 };
 
+// =====================================================
+// LAZY LOADED COMPONENTS
+// =====================================================
+
 // Lazy load components to avoid circular dependencies with retry mechanism
 // Note: Dashboard is handled by MainLayout, not needed here
 const DebugReport = retryLazyLoad(() => import('../components/DebugReport'));
@@ -54,13 +100,17 @@ const ProfileManager = retryLazyLoad(() => import('../components/ProfileManager'
 const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
 const ClientPortal = retryLazyLoad(() => import('../components/studio/portal/ClientPortal'));
 
+// =====================================================
+// COMPONENTS
+// =====================================================
+
 /**
  * Protected Route Wrapper
  *
  * Protects routes and redirects to login if user is not authenticated
  * Uses Clerk auth instead of Supabase
  */
-function ProtectedRoute({ children, loading }) {
+function ProtectedRoute({ children, loading }: ProtectedRouteProps): React.ReactNode {
   const { isLoaded, isSignedIn } = useAuth();
   const navigate = useNavigate();
 
@@ -86,7 +136,7 @@ function ProtectedRoute({ children, loading }) {
     return null;
   }
 
-  return children;
+  return <>{children}</>;
 }
 
 /**
@@ -94,7 +144,7 @@ function ProtectedRoute({ children, loading }) {
  *
  * Uses useNavigate hook instead of Navigate component to avoid initialization issues
  */
-function Redirect({ to, replace = true }) {
+function Redirect({ to, replace = true }: RedirectProps): null {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -113,7 +163,15 @@ function Redirect({ to, replace = true }) {
  * Now uses Clerk authentication instead of Supabase
  * Note: / is now a redirect to /dashboard for better breadcrumb navigation
  */
-export default function AppRoutes({ user, userData, loading, darkMode, toggleTheme, handleLogout, onUserDataUpdate }) {
+export default function AppRoutes({
+  user,
+  userData,
+  loading,
+  darkMode,
+  toggleTheme,
+  handleLogout,
+  onUserDataUpdate
+}: AppRoutesProps): JSX.Element {
   const { userId } = useAuth();
 
   return (
@@ -172,11 +230,11 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
               <SettingsTab
               user={user}
               userData={userData}
-              onUpdate={async (newData) => {
+              onUpdate={async (newData: UserData | Partial<UserData>) => {
                 // Handle both settings updates (object) and userData updates (UserData object)
                 if (onUserDataUpdate && newData) {
                   // If it's a settings object (has settings property), save to DB
-                  if (newData.settings && userId) {
+                  if ('settings' in newData && newData.settings && userId) {
                     try {
                       await updateProfile(userId, {
                         settings: newData.settings,
@@ -191,7 +249,7 @@ export default function AppRoutes({ user, userData, loading, darkMode, toggleThe
                   }
                 }
               }}
-              onRoleSwitch={async (newRole) => {
+              onRoleSwitch={async (newRole: AccountType) => {
                 // Role switch - update active role in database using Neon
                 if (userId) {
                   try {
