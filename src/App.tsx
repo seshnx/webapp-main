@@ -24,20 +24,16 @@ export default function App(): JSX.Element {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [darkMode, setDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('theme') === 'dark' || 
+    return localStorage.getItem('theme') === 'dark' ||
            (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
-
-  // --- DEV OVERRIDE TOGGLE ---
-  // Set VITE_DEV_AUTH_OVERRIDE=true in Vercel settings to bypass auth
-  const isDevOverrideEnabled = import.meta.env.VITE_DEV_AUTH_OVERRIDE === 'true';
 
   // 1. Initial Theme & Settings Setup
   useEffect(() => {
     const stored = initializeSettingsFromStorage();
     if (stored?.theme) {
-      const isDark = stored.theme === 'system' 
-        ? window.matchMedia('(prefers-color-scheme: dark)').matches 
+      const isDark = stored.theme === 'system'
+        ? window.matchMedia('(prefers-color-scheme: dark)').matches
         : stored.theme === 'dark';
       setDarkMode(isDark);
     }
@@ -50,30 +46,16 @@ export default function App(): JSX.Element {
 
   const toggleTheme = () => setDarkMode(!darkMode);
 
-  // 2. Auth Guard & Routing (Bypassed if Override is active)
+  // 2. Auth Guard & Routing
   useEffect(() => {
-    if (isDevOverrideEnabled) {
-      setUserData({
-        id: 'dev-admin',
-        firstName: 'Dev',
-        lastName: 'Override',
-        email: 'admin@local.dev',
-        accountTypes: ['Technician', 'Studio', 'Producer'],
-        activeProfileRole: 'Technician',
-        settings: { theme: 'dark', language: 'en' }
-      });
-      setLoading(false);
-      return;
-    }
-
     if (clerkLoaded && !isSignedIn && location.pathname !== '/login') {
       navigate('/login', { replace: true });
     }
-  }, [clerkLoaded, isSignedIn, isDevOverrideEnabled, navigate, location.pathname]);
+  }, [clerkLoaded, isSignedIn, navigate, location.pathname]);
 
   // 3. User Data Sync (Neon DB)
   useEffect(() => {
-    if (isDevOverrideEnabled || !isSignedIn || !userId) return;
+    if (!isSignedIn || !userId) return;
 
     let mounted = true;
     const syncUser = async () => {
@@ -108,20 +90,16 @@ export default function App(): JSX.Element {
 
     syncUser();
     return () => { mounted = false; };
-  }, [userId, isSignedIn, user, isDevOverrideEnabled]);
+  }, [userId, isSignedIn, user]);
 
   const handleLogout = useCallback(async () => {
-    if (isDevOverrideEnabled) {
-      window.location.href = '/login';
-      return;
-    }
     await clerk?.signOut();
     navigate('/login');
-  }, [clerk, isDevOverrideEnabled, navigate]);
+  }, [clerk, navigate]);
 
   // --- RENDER LOGIC ---
 
-  if ((!clerkLoaded && !isDevOverrideEnabled) || (loading && !isDevOverrideEnabled)) {
+  if (!clerkLoaded || loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
         <Loader2 className="animate-spin text-brand-blue" size={48} />
@@ -130,7 +108,7 @@ export default function App(): JSX.Element {
   }
 
   // Show Login Wizard if not authenticated
-  if (!isSignedIn && !isDevOverrideEnabled) {
+  if (!isSignedIn) {
     return (
       <Suspense fallback={<Loader2 className="animate-spin" />}>
         <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
@@ -144,7 +122,7 @@ export default function App(): JSX.Element {
         <Toaster position="bottom-right" />
         <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /></div>}>
           <MainLayout
-            user={isDevOverrideEnabled ? userData! : { id: userId, ...user }}
+            user={{ id: userId, ...user }}
             userData={userData}
             loading={loading}
             darkMode={darkMode}
