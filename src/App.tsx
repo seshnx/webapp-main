@@ -55,7 +55,14 @@ export default function App(): JSX.Element {
 
   // 3. User Data Sync (Neon DB)
   useEffect(() => {
-    if (!isSignedIn || !userId) return;
+    // If not signed in, just stop loading and return
+    if (!isSignedIn) {
+      setLoading(false);
+      return;
+    }
+
+    // If signed in but no userId yet, wait
+    if (!userId) return;
 
     let mounted = true;
     const syncUser = async () => {
