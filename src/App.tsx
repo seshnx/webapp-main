@@ -11,7 +11,7 @@ import { getUserWithProfile, createClerkUser } from './config/neonQueries';
 import { UserData, AccountType } from './types';
 
 // Components
-const AuthWizard = lazy(() => import('./components/AuthWizard.clerk'));
+const AuthWizard = lazy(() => import('./components/AuthWizard'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
 
 export default function App(): JSX.Element {
