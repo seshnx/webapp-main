@@ -3,109 +3,388 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useUser, useClerk } from '@clerk/react';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
-
-// Config & Contexts
-import { initializeSettingsFromStorage } from './hooks/useSettings';
+import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { getUserWithProfile, createClerkUser } from './config/neonQueries';
-import { UserData, AccountType } from './types';
+import { getUserWithProfile, updateProfile, createClerkUser } from './config/neonQueries';
+import type { UserData, AccountType, UserSettings } from './types';
 
-// Components
+// =====================================================
+// LAZY LOADED COMPONENTS
+// =====================================================
+
+// Lazy load components to avoid initialization order issues
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
+const AppRoutes = lazy(() => import('./routes/AppRoutes'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
 
+// =====================================================
+// MAIN APP COMPONENT
+// =====================================================
+
+/**
+ * Main Application Component
+ *
+ * Handles authentication, user data loading, and routing.
+ * Supports localhost dev bypass for faster local development.
+ */
 export default function App(): JSX.Element {
+  // Clerk authentication hooks
   const { isLoaded: clerkLoaded, isSignedIn, userId } = useAuth();
   const { user } = useUser();
   const clerk = useClerk();
-  const navigate = useNavigate();
-  const location = useLocation();
 
   const [userData, setUserData] = useState<UserData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // These hooks must be called unconditionally at the top level
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Dark Mode - now synced with user settings
   const [darkMode, setDarkMode] = useState<boolean>(() => {
-    return localStorage.getItem('theme') === 'dark' ||
-           (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('theme') === 'dark' ||
+        (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    }
+    return false;
   });
 
-  // 1. Initial Theme & Settings Setup
+  // =====================================================
+  // THEME & SETTINGS
+  // =====================================================
+
+  // Initialize settings from storage on mount
   useEffect(() => {
-    const stored = initializeSettingsFromStorage();
-    if (stored?.theme) {
-      const isDark = stored.theme === 'system'
-        ? window.matchMedia('(prefers-color-scheme: dark)').matches
-        : stored.theme === 'dark';
-      setDarkMode(isDark);
+    const storedSettings = initializeSettingsFromStorage();
+    if (storedSettings) {
+      // Apply stored settings immediately
+      const root = document.documentElement;
+
+      // Apply theme
+      if (storedSettings.theme === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (prefersDark) {
+          root.classList.add('dark');
+          setDarkMode(true);
+        } else {
+          root.classList.remove('dark');
+          setDarkMode(false);
+        }
+      } else if (storedSettings.theme === 'dark') {
+        root.classList.add('dark');
+        setDarkMode(true);
+      } else {
+        root.classList.remove('dark');
+        setDarkMode(false);
+      }
     }
   }, []);
 
+  // Apply settings from userData when it loads
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', darkMode);
-    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+    if (userData?.settings) {
+      const settings: UserSettings = userData.settings;
+      const root = document.documentElement;
+
+      // Apply theme
+      if (settings.theme) {
+        if (settings.theme === 'system') {
+          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (prefersDark) {
+            root.classList.add('dark');
+            setDarkMode(true);
+          } else {
+            root.classList.remove('dark');
+            setDarkMode(false);
+          }
+        } else if (settings.theme === 'dark') {
+          root.classList.add('dark');
+          setDarkMode(true);
+        } else {
+          root.classList.remove('dark');
+          setDarkMode(false);
+        }
+      }
+
+      // Apply font size
+      if (settings.accessibility?.fontSize) {
+        const fontSizes: Record<string, string> = {
+          small: '14px',
+          medium: '16px',
+          large: '18px',
+          xlarge: '20px',
+        };
+        root.style.fontSize = fontSizes[settings.accessibility.fontSize] || fontSizes.medium;
+      }
+
+      // Apply reduced motion
+      if (settings.accessibility?.reducedMotion) {
+        root.classList.add('reduce-motion');
+        root.style.setProperty('--motion-duration', '0s');
+      } else {
+        root.classList.remove('reduce-motion');
+        root.style.removeProperty('--motion-duration');
+      }
+
+      // Apply high contrast
+      if (settings.accessibility?.highContrast) {
+        root.classList.add('high-contrast');
+      } else {
+        root.classList.remove('high-contrast');
+      }
+
+      // Apply language
+      if (settings.language) {
+        document.documentElement.lang = settings.language;
+      }
+    }
+  }, [userData?.settings]);
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
   }, [darkMode]);
 
-  const toggleTheme = () => setDarkMode(!darkMode);
+  const toggleTheme = (): void => setDarkMode(!darkMode);
 
-  // 2. Auth Guard & Routing
-  useEffect(() => {
-    if (clerkLoaded && !isSignedIn && location.pathname !== '/login') {
-      navigate('/login', { replace: true });
-    }
-  }, [clerkLoaded, isSignedIn, navigate, location.pathname]);
+  // =====================================================
+  // CLERK AUTH & USER DATA LOADER
+  // =====================================================
 
-  // 3. User Data Sync (Neon DB)
   useEffect(() => {
-    // If not signed in, just stop loading and return
-    if (!isSignedIn) {
+    // =====================================================
+    // LOCALHOST DEV BYPASS - Skip auth on localhost
+    // =====================================================
+    const isLocalhost = window.location.hostname === 'localhost' ||
+      window.location.hostname === '127.0.0.1' ||
+      window.location.port === '5173'; // Vite dev server
+
+    if (isLocalhost && import.meta.env.DEV) {
+      console.log('🔓 Running on localhost - bypassing authentication');
+
+      // Create mock developer user with all account types for testing
+      const mockUserData: UserData = {
+        id: 'dev-local-user',
+        firstName: 'Dev',
+        lastName: 'User',
+        email: 'dev@localhost.dev',
+        username: 'devuser',
+        accountTypes: ['Technician', 'Studio', 'Label', 'Talent', 'Producer', 'Engineer', 'EDUAdmin', 'Student'],
+        activeProfileRole: 'Technician',
+        preferredRole: 'Technician',
+        photoURL: null,
+        settings: {
+          theme: 'dark',
+          language: 'en',
+          accessibility: {
+            fontSize: 'medium',
+            reducedMotion: false,
+            highContrast: false
+          }
+        },
+        effectiveDisplayName: 'Dev User',
+        zipCode: '90210',
+        // Tech profile
+        specialties: ['Audio Repair', 'Instrument Repair', 'Studio Maintenance'],
+        hourly_rate: 85,
+        availability_status: 'Available',
+        service_radius: 50,
+        location: { city: 'Los Angeles', state: 'CA', zip: '90210' },
+        bio: 'Local development user for testing all features',
+        rating: 4.8,
+        completed_jobs: 50
+      };
+
+      setUserData(mockUserData);
       setLoading(false);
       return;
     }
+    // =====================================================
 
-    // If signed in but no userId yet, wait
-    if (!userId) return;
+    // Wait for Clerk to load
+    if (!clerkLoaded) {
+      return;
+    }
 
-    let mounted = true;
-    const syncUser = async () => {
+    let isMounted = true;
+
+    /**
+     * Load user data from Neon database
+     * Uses Clerk user ID to fetch profile data
+     */
+    const loadUserData = async (): Promise<void> => {
+      // Check both React hooks and internal state
+      const clerkState = clerk.__internal?.()?.getState() ?? {};
+      const actualUserId = userId || clerkState.userId;
+      const actualIsSignedIn = isSignedIn || (clerkState.session || clerkState.user);
+
+      if (!actualUserId || !actualIsSignedIn) {
+        if (isMounted) {
+          setUserData(null);
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
-        const profile = await getUserWithProfile(userId);
-        if (profile && mounted) {
-          setUserData({
-            id: userId,
-            firstName: user?.firstName || profile.first_name || 'User',
-            lastName: user?.lastName || profile.last_name || '',
-            email: user?.primaryEmailAddress?.emailAddress || profile.email || '',
-            accountTypes: profile.account_types || ['Fan'],
-            activeProfileRole: profile.active_role || 'Fan',
-            ...profile
-          });
-        } else if (mounted) {
-          // If profile missing in Neon, create it
-          await createClerkUser({
-            id: userId,
+        // Fetch user with profile from Neon
+        const userWithProfile = await getUserWithProfile(actualUserId);
+
+        if (userWithProfile) {
+          // Construct userData object compatible with existing components
+          const finalUserData: UserData = {
+            id: actualUserId,
+            firstName: user?.firstName || userWithProfile.first_name || 'User',
+            lastName: user?.lastName || userWithProfile.last_name || '',
+            email: user?.primaryEmailAddress?.emailAddress || userWithProfile.email || '',
+            accountTypes: userWithProfile.account_types || ['Fan'],
+            activeProfileRole: userWithProfile.active_role || userWithProfile.account_types?.[0] || 'Fan',
+            preferredRole: userWithProfile.preferred_role || userWithProfile.account_types?.[0] || 'Fan',
+            photoURL: user?.imageUrl || userWithProfile.photo_url || userWithProfile.avatar_url || null,
+            settings: userWithProfile.settings || {},
+            effectiveDisplayName: userWithProfile.effective_display_name || user?.firstName || userWithProfile.first_name || 'User',
+            zipCode: userWithProfile.zip_code,
+            // Additional profile fields
+            ...userWithProfile
+          };
+
+          if (isMounted) {
+            setUserData(finalUserData);
+          }
+        } else {
+          // Profile doesn't exist - create minimal userData from Clerk user
+          const metadata = user?.publicMetadata || {};
+          const minimalUserData: UserData = {
+            id: actualUserId,
+            firstName: user?.firstName || metadata.first_name || 'User',
+            lastName: user?.lastName || metadata.last_name || '',
             email: user?.primaryEmailAddress?.emailAddress || '',
-            first_name: user?.firstName,
-            last_name: user?.lastName,
-          });
-          setUserData({ id: userId, firstName: user?.firstName || 'User', settings: {} });
+            accountTypes: metadata.account_types || ['Fan'],
+            activeProfileRole: metadata.active_role || 'Fan',
+            photoURL: user?.imageUrl || null,
+            settings: {},
+            effectiveDisplayName: user?.firstName || metadata.first_name || 'User'
+          };
+
+          if (isMounted) {
+            setUserData(minimalUserData);
+          }
+
+          // Create user in Neon database if they don't exist
+          try {
+            console.log('📝 Creating user in Neon database...');
+
+            const metadata = user?.publicMetadata || {};
+
+            // First, create the clerk user record
+            await createClerkUser({
+              id: actualUserId,
+              email: user?.primaryEmailAddress?.emailAddress || '',
+              phone: user?.primaryPhoneNumber?.phoneNumber || null,
+              first_name: user?.firstName || metadata.first_name || null,
+              last_name: user?.lastName || metadata.last_name || null,
+              username: user?.username || metadata.username || null,
+              profile_photo_url: user?.imageUrl || null,
+              account_types: metadata.account_types || ['Fan'],
+              active_role: metadata.active_role || 'Fan',
+              bio: metadata.bio || null,
+              zip_code: metadata.zip_code || null,
+            });
+
+            console.log('✅ User created in Neon database');
+
+            // Then, try to create the extended profile (if needed)
+            // Note: This is optional and will only create the profiles table record
+            // The clerk_users table is the critical one that was just created
+          } catch (err) {
+            console.error("❌ Failed to create user in Neon:", err);
+            // Don't block the app - user can still function with Clerk data
+          }
+        }
+
+        if (isMounted) {
+          setLoading(false);
         }
       } catch (err) {
-        console.error("Neon Sync Error:", err);
-      } finally {
-        if (mounted) setLoading(false);
+        console.error("Error loading user data:", err);
+        // Set minimal userData on error to prevent crashes
+        if (isMounted) {
+          const metadata = user?.publicMetadata || {};
+          setUserData({
+            id: userId,
+            firstName: user?.firstName || metadata.first_name || 'User',
+            lastName: user?.lastName || metadata.last_name || '',
+            email: user?.primaryEmailAddress?.emailAddress || '',
+            accountTypes: metadata.account_types || ['Fan'],
+            activeProfileRole: metadata.active_role || 'Fan',
+            photoURL: user?.imageUrl || null,
+            settings: {}
+          });
+          setLoading(false);
+        }
       }
     };
 
-    syncUser();
-    return () => { mounted = false; };
-  }, [userId, isSignedIn, user]);
+    loadUserData();
 
-  const handleLogout = useCallback(async () => {
-    await clerk?.signOut();
-    navigate('/login');
-  }, [clerk, navigate]);
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, isSignedIn, clerkLoaded, user]);
 
-  // --- RENDER LOGIC ---
+  const handleUserDataUpdate = useCallback((updatedUserData: UserData): void => {
+    setUserData(updatedUserData);
+  }, []);
 
+  const handleLogout = useCallback(async (): Promise<void> => {
+    try {
+      console.log('=== APP LOGOUT ===');
+
+      // Check if using dev bypass
+      const isLocalhost = window.location.hostname === 'localhost' ||
+        window.location.hostname === '127.0.0.1' ||
+        window.location.port === '5173';
+      const usingDevBypass = isLocalhost && import.meta.env.DEV && userData?.id === 'dev-local-user';
+
+      if (usingDevBypass) {
+        // Just clear state for dev bypass
+        console.log('🔓 Clearing dev bypass user');
+        setUserData(null);
+        navigate('/login', { replace: true });
+        return;
+      }
+
+      // Sign out from Clerk - this clears the session
+      if (clerk) {
+        await clerk.signOut();
+        console.log('✅ Clerk signOut successful');
+      }
+
+      // Clear local state
+      setUserData(null);
+      console.log('✅ Local state cleared');
+
+      // Navigate to login
+      navigate('/login', { replace: true });
+      console.log('✅ Navigated to login');
+    } catch (err) {
+      console.error("Logout error:", err);
+      // Even if signOut fails, clear state and redirect
+      setUserData(null);
+      navigate('/login', { replace: true });
+    }
+  }, [navigate, clerk, userData]);
+
+  // =====================================================
+  // RENDER LOGIC
+  // =====================================================
+
+  // Show loading spinner while Clerk loads or userData is being fetched
   if (!clerkLoaded || loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
@@ -114,32 +393,131 @@ export default function App(): JSX.Element {
     );
   }
 
-  // Show Login Wizard if not authenticated
-  if (!isSignedIn) {
+  // Check if coming from OAuth signup flow
+  const isFromSignup = new URLSearchParams(window.location.search).get('intent') === 'signup';
+
+  // Check if running on localhost with dev bypass
+  const isLocalhost = window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1' ||
+    window.location.port === '5173';
+  const usingDevBypass = isLocalhost && import.meta.env.DEV && userData?.id === 'dev-local-user';
+
+  // === AUTHENTICATION GUARD ===
+  // Check Clerk's internal state as a fallback since React hooks might not update immediately
+  const clerkState = clerk.__internal?.()?.getState() ?? {};
+  const hasClerkSession = clerkState.session || clerkState.user;
+  const isAuthenticated = (isSignedIn && userId) || hasClerkSession;
+  const hasUserData = userData && userData.id;
+  const isOnLoginPage = location.pathname === '/login';
+  const isTestLoginPage = location.pathname === '/test-login';
+
+  // CRITICAL: If no user is logged in with Clerk (and not using dev bypass), show AuthWizard
+  if (!isAuthenticated && !usingDevBypass && !isOnLoginPage && !isTestLoginPage) {
     return (
-      <Suspense fallback={<Loader2 className="animate-spin" />}>
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
         <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
       </Suspense>
     );
   }
 
+  // CRITICAL: If user exists but no userData (and not using dev bypass), show loading
+  if (isAuthenticated && !hasUserData && !isOnLoginPage && !isTestLoginPage) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
+        <Loader2 className="animate-spin text-brand-blue" size={48} />
+      </div>
+    );
+  }
+
+  // Handle test login page
+  if (isTestLoginPage) {
+    if ((isAuthenticated && hasUserData) || usingDevBypass) {
+      navigate('/debug-report', { replace: true });
+      return null;
+    }
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} isNewUser={false} />
+      </Suspense>
+    );
+  }
+
+  // Handle login page
+  if (isOnLoginPage) {
+    if ((isAuthenticated && hasUserData) || usingDevBypass) {
+      navigate('/', { replace: true });
+      return null;
+    }
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
+      </Suspense>
+    );
+  }
+
+  // Handle OAuth onboarding (skip if using dev bypass)
+  if (isAuthenticated && !hasUserData && isFromSignup && !usingDevBypass) {
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard user={user} isNewUser={true} darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/debug-report')} />
+      </Suspense>
+    );
+  }
+
+  // Require authentication for all other routes (or dev bypass)
+  if (!isAuthenticated && !usingDevBypass) {
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
+      </Suspense>
+    );
+  }
+
+  // Render app with full layout (Sidebar + Navbar + Content)
   return (
     <LanguageProvider userData={userData}>
-      <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21] transition-colors duration-300">
-        <Toaster position="bottom-right" />
-        <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /></div>}>
-          <MainLayout
-            user={{ id: userId, ...user }}
-            userData={userData}
-            loading={loading}
-            darkMode={darkMode}
-            toggleTheme={toggleTheme}
-            handleLogout={handleLogout}
-            onRoleSwitch={(newRole: AccountType) => {
-              setUserData(prev => prev ? { ...prev, activeProfileRole: newRole } : null);
-            }}
-          />
-        </Suspense>
+      <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
+        <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
+
+        {/* Check if we're on a special route that needs different layout */}
+        {location.pathname === '/settings' || location.pathname === '/debug-report' ? (
+          // Settings and Debug Report use simple layout
+          <main className="p-6">
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+              <AppRoutes
+                user={usingDevBypass ? userData : { id: userId, ...user }}
+                userData={userData}
+                loading={loading}
+                darkMode={darkMode}
+                toggleTheme={toggleTheme}
+                handleLogout={handleLogout}
+                onUserDataUpdate={handleUserDataUpdate}
+              />
+            </Suspense>
+          </main>
+        ) : (
+          // All other routes use MainLayout with Sidebar + Navbar
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+            <MainLayout
+              user={usingDevBypass ? userData : { id: userId, ...user }}
+              userData={userData}
+              loading={loading}
+              darkMode={darkMode}
+              toggleTheme={toggleTheme}
+              handleLogout={handleLogout}
+              onRoleSwitch={(newRole: AccountType) => {
+                setUserData(prev => {
+                  if (!prev) return null;
+                  return {
+                    ...prev,
+                    activeProfileRole: newRole,
+                    preferredRole: newRole
+                  };
+                });
+              }}
+            />
+          </Suspense>
+        )}
       </div>
     </LanguageProvider>
   );
