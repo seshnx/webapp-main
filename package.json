@@ -34,6 +34,7 @@
     "@sentry/react": "^8.0.0",
     "@stripe/react-stripe-js": "^2.5.0",
     "@stripe/stripe-js": "^3.0.7",
+    "@vercel/analytics": "^2.0.0",
     "@vercel/blob": "^2.3.1",
     "clsx": "^2.1.0",
     "convex": "^1.32.0",
