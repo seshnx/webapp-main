@@ -939,3 +939,55 @@ export async function unrepostPost(repostId: string): Promise<boolean> {
 
   return false;
 }
+
+// ============================================================================
+// PROFILE SEARCH
+// ============================================================================
+
+/**
+ * Search profiles by skills, location, or text
+ */
+export async function searchProfiles(query: {
+  skills?: string[];
+  location?: { coordinates: [number, number]; maxDistance?: number };
+  searchText?: string;
+  limit?: number;
+}): Promise<any[]> {
+  if (!isMongoDbAvailable()) return [];
+
+  const db = getMongoDb();
+  if (!db) return [];
+
+  const { skills, location, searchText, limit = 20 } = query;
+  const filter: any = {};
+
+  // Skills filter
+  if (skills && skills.length > 0) {
+    filter.skills = { $in: skills };
+  }
+
+  // Location filter (geospatial)
+  if (location) {
+    filter['location.coordinates'] = {
+      $near: {
+        $geometry: {
+          type: 'Point',
+          coordinates: location.coordinates,
+        },
+        $maxDistance: location.maxDistance || 50000, // 50km default
+      }
+    };
+  }
+
+  // Text search
+  if (searchText) {
+    filter.$text = { $search: searchText };
+  }
+
+  return await db
+    .collection('profiles')
+    .find(filter)
+    .sort({ 'stats.followersCount': -1 })
+    .limit(limit)
+    .toArray();
+}
