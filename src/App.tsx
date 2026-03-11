@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useUser, useClerk } from '@clerk/react';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
+import { Analytics } from '@vercel/analytics/react';
 import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { getUserWithProfile, updateProfile, createClerkUser } from './config/neonQueries';
@@ -478,6 +479,7 @@ export default function App(): JSX.Element {
     <LanguageProvider userData={userData}>
       <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
         <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
+        <Analytics />
 
         {/* Check if we're on a special route that needs different layout */}
         {location.pathname === '/settings' || location.pathname === '/debug-report' ? (
