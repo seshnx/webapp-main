@@ -2,7 +2,7 @@
  * Social Comments API
  */
 
-import { initMongoDB } from '../../../src/config/mongodb';
+import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodb';
 import {
   getComments,
   createComment,
@@ -12,11 +12,20 @@ import {
 } from '../../../src/config/mongoSocial';
 
 let mongoInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 async function ensureMongo() {
   if (!mongoInitialized) {
-    await initMongoDB();
-    mongoInitialized = true;
+    if (!initPromise) {
+      initPromise = initMongoDB().then(() => {
+        mongoInitialized = true;
+        console.log('✅ MongoDB initialized for comments API');
+      }).catch((error) => {
+        console.error('❌ Failed to initialize MongoDB:', error);
+        throw error;
+      });
+    }
+    await initPromise;
   }
 }
 
@@ -47,7 +56,7 @@ export async function GET(request) {
   } catch (error) {
     console.error('Error fetching comments:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error.message, mongoAvailable: isMongoDbAvailable() }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
@@ -85,40 +94,7 @@ export async function POST(request) {
   } catch (error) {
     console.error('Error creating comment:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-}
-
-/**
- * PATCH /api/social/comments
- * Update a comment (deprecated - use PUT)
- */
-export async function PATCH(request) {
-  try {
-    await ensureMongo();
-
-    const body = await request.json();
-    const { id, content } = body;
-
-    if (!id || !content) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'id and content are required' }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const comment = await updateComment(id, content);
-
-    return new Response(
-      JSON.stringify({ success: true, comment }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
-  } catch (error) {
-    console.error('Error updating comment:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error.message, mongoAvailable: isMongoDbAvailable() }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
@@ -153,7 +129,7 @@ export async function PUT(request) {
   } catch (error) {
     console.error('Error updating comment:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error.message, mongoAvailable: isMongoDbAvailable() }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
@@ -186,7 +162,7 @@ export async function DELETE(request) {
   } catch (error) {
     console.error('Error deleting comment:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ success: false, error: error.message, mongoAvailable: isMongoDbAvailable() }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

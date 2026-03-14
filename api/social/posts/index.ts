@@ -3,22 +3,32 @@
  * Server-side MongoDB operations for social posts
  */
 
-import { initMongoDB } from '../../../src/config/mongodb';
+import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodb';
 import {
   getPosts,
   createPost,
   updatePost,
   deletePost,
   getPostById,
+  hasUserReposted
 } from '../../../src/config/mongoSocial';
 
 // Initialize MongoDB on first call
 let mongoInitialized = false;
+let initPromise: Promise<void> | null = null;
 
 async function ensureMongo() {
   if (!mongoInitialized) {
-    await initMongoDB();
-    mongoInitialized = true;
+    if (!initPromise) {
+      initPromise = initMongoDB().then(() => {
+        mongoInitialized = true;
+        console.log('✅ MongoDB initialized for posts API');
+      }).catch((error) => {
+        console.error('❌ Failed to initialize MongoDB:', error);
+        throw error;
+      });
+    }
+    await initPromise;
   }
 }
 
@@ -41,7 +51,6 @@ export async function GET(request) {
 
     // Check if user has reposted a post
     if (checkRepost === 'true' && userId && postId) {
-      const { hasUserReposted } = await import('../../../src/config/mongoSocial');
       const reposted = await hasUserReposted(userId, postId);
       return new Response(JSON.stringify({ reposted }), {
         status: 200,
@@ -49,13 +58,15 @@ export async function GET(request) {
       });
     }
 
-
-    const filter = {};
+    const filter = {
+      limit,
+      skip
+    } as any;
+    
     if (authorId) filter.author_id = authorId;
     if (category) filter.category = category;
-    filter.limit = limit;
-    filter.skip = skip;
 
+    console.log('Fetching posts with filter:', filter);
     const posts = await getPosts(filter);
 
     return new Response(JSON.stringify({ success: true, posts }), {
@@ -64,8 +75,14 @@ export async function GET(request) {
     });
   } catch (error) {
     console.error('Error fetching posts:', error);
+    console.error('Error stack:', error.stack);
+    
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        mongoAvailable: isMongoDbAvailable()
+      }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -115,7 +132,11 @@ export async function POST(request) {
   } catch (error) {
     console.error('Error creating post:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        mongoAvailable: isMongoDbAvailable()
+      }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -125,7 +146,7 @@ export async function POST(request) {
 }
 
 /**
- * PATCH /api/social/posts
+ * PUT /api/social/posts
  * Update a post
  */
 export async function PUT(request) {
@@ -164,7 +185,11 @@ export async function PUT(request) {
   } catch (error) {
     console.error('Error updating post:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        mongoAvailable: isMongoDbAvailable()
+      }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
@@ -203,7 +228,11 @@ export async function DELETE(request) {
   } catch (error) {
     console.error('Error deleting post:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error.message }),
+      JSON.stringify({ 
+        success: false, 
+        error: error.message,
+        mongoAvailable: isMongoDbAvailable()
+      }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
