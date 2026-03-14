@@ -168,12 +168,33 @@ npm run dev:full
 npm run dev:socket
 ```
 
-### Production
+### Production (Vercel Deployment)
 
+**IMPORTANT**: Vercel is serverless and cannot run long-running WebSocket servers. Socket.io is **automatically disabled in production** on Vercel. The app gracefully falls back to:
+
+1. **React Query polling** for data updates (5-minute cache, intelligent refetching)
+2. **Client-side polling** for real-time features (30-second intervals)
+
+For production real-time features, consider:
+- **Pusher** (recommended for serverless)
+- **Ably** (real-time messaging)
+- **Supabase Realtime** (if using Supabase)
+- **Separate Socket.io server** (deployed on Railway, Fly.io, or Heroku)
+
+To deploy Socket.io separately:
+1. Deploy `server.js` to a service that supports WebSockets
+2. Set `VITE_SOCKET_URL` to your deployed server URL
+3. Set `SOCKET_ENABLED=true` in your environment
+
+**Self-hosted Socket.io server deployment:**
 ```bash
-# Socket server runs on port 3001
-# Make sure to set SOCKET_PORT environment variable
+# On Railway, Fly.io, or similar
+git clone your-repo
+cd your-repo
+npm install
+npm run build
 export SOCKET_PORT=3001
+export NODE_ENV=production
 node server.js
 ```
 

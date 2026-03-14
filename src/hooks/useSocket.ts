@@ -11,8 +11,11 @@ import { io, Socket } from 'socket.io-client';
 // Socket.io configuration
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ||
   (import.meta.env.NODE_ENV === 'production'
-    ? 'https://api.seshnx.com'
+    ? null // Disable Socket.io in production on Vercel (serverless)
     : 'http://localhost:3001');
+
+// Check if Socket.io should be enabled
+const SOCKET_ENABLED = SOCKET_URL !== null;
 
 interface SocketHookReturn {
   socket: Socket | null;
@@ -55,79 +58,88 @@ export function useSocket(
 
   // Initialize socket connection
   useEffect(() => {
-    if (!enabled || !userId) {
+    // Check if Socket.io is enabled and available
+    if (!enabled || !userId || !SOCKET_ENABLED || !SOCKET_URL) {
+      if (!SOCKET_ENABLED) {
+        console.log('📡 Socket.io disabled - using polling instead');
+      }
       return;
     }
 
-    // Create socket connection
-    const socket = io(SOCKET_URL, {
-      auth: {
-        userId
-      },
-      reconnection: true,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      reconnectionAttempts: 5,
-      timeout: 10000,
-      autoConnect: true
-    });
+    try {
+      // Create socket connection
+      const socket = io(SOCKET_URL, {
+        auth: {
+          userId
+        },
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 5000,
+        reconnectionAttempts: 3, // Reduce attempts in production
+        timeout: 5000, // Shorter timeout
+        autoConnect: true
+      });
 
-    socketRef.current = socket;
+      socketRef.current = socket;
 
-    // Connection event handlers
-    socket.on('connect', () => {
-      console.log('🔌 Socket connected:', socket.id);
-      isConnectedRef.current = true;
+      // Connection event handlers
+      socket.on('connect', () => {
+        console.log('🔌 Socket connected:', socket.id);
+        isConnectedRef.current = true;
 
-      // Authenticate with user ID
-      socket.emit('authenticate', { userId });
-    });
+        // Authenticate with user ID
+        socket.emit('authenticate', { userId });
+      });
 
-    socket.on('authenticated', (data) => {
-      if (data.success) {
-        console.log('✅ Socket authenticated:', data.socketId);
-      }
-    });
+      socket.on('authenticated', (data) => {
+        if (data.success) {
+          console.log('✅ Socket authenticated:', data.socketId);
+        }
+      });
 
-    socket.on('disconnect', (reason) => {
-      console.log('🔌 Socket disconnected:', reason);
-      isConnectedRef.current = false;
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error('❌ Socket connection error:', error);
-      isConnectedRef.current = false;
-    });
-
-    socket.on('reconnect', (attemptNumber) => {
-      console.log('🔄 Socket reconnected after', attemptNumber, 'attempts');
-      isConnectedRef.current = true;
-
-      // Re-authenticate on reconnect
-      socket.emit('authenticate', { userId });
-    });
-
-    socket.on('reconnect_attempt', (attemptNumber) => {
-      console.log('🔄 Socket reconnection attempt:', attemptNumber);
-    });
-
-    socket.on('reconnect_error', (error) => {
-      console.error('❌ Socket reconnection error:', error);
-    });
-
-    socket.on('reconnect_failed', () => {
-      console.error('❌ Socket reconnection failed');
-      isConnectedRef.current = false;
-    });
-
-    // Cleanup on unmount
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
+      socket.on('disconnect', (reason) => {
+        console.log('🔌 Socket disconnected:', reason);
         isConnectedRef.current = false;
-      }
-    };
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('❌ Socket connection error:', error.message);
+        isConnectedRef.current = false;
+      });
+
+      socket.on('reconnect', (attemptNumber) => {
+        console.log('🔄 Socket reconnected after', attemptNumber, 'attempts');
+        isConnectedRef.current = true;
+
+        // Re-authenticate on reconnect
+        socket.emit('authenticate', { userId });
+      });
+
+      socket.on('reconnect_attempt', (attemptNumber) => {
+        console.log('🔄 Socket reconnection attempt:', attemptNumber);
+      });
+
+      socket.on('reconnect_error', (error) => {
+        console.error('❌ Socket reconnection error:', error.message);
+      });
+
+      socket.on('reconnect_failed', () => {
+        console.error('❌ Socket reconnection failed - falling back to polling');
+        isConnectedRef.current = false;
+      });
+
+      // Cleanup on unmount
+      return () => {
+        if (socketRef.current) {
+          socketRef.current.disconnect();
+          socketRef.current = null;
+          isConnectedRef.current = false;
+        }
+      };
+    } catch (error) {
+      console.error('Failed to initialize Socket.io:', error);
+      isConnectedRef.current = false;
+    }
   }, [userId, enabled]);
 
   /**
