@@ -155,6 +155,13 @@ export async function POST(request) {
       repost_of: repost_of_post_id,
     });
 
+    // Broadcast real-time update if Socket.io server is available
+    if (global.broadcastNewPost) {
+      global.broadcastNewPost(newPost).catch(err =>
+        console.error('Failed to broadcast new post:', err)
+      );
+    }
+
     return new Response(JSON.stringify(newPost), {
       status: 201,
       headers: { 'Content-Type': 'application/json' },

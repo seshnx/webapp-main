@@ -12,6 +12,7 @@ import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
 import { usePosts, useCreatePost } from '../hooks/useSocialQueries';
+import { useSocket } from '../hooks/useSocket';
 import type { UserData } from '../types';
 
 // =====================================================
@@ -128,6 +129,8 @@ export default function SocialFeed({
   }, [feedMode, followingIds]);
 
   // React Query for posts - replaces manual polling and useState
+  const queryClient = useQueryClient();
+
   const {
     data: fetchedPosts = [],
     isLoading: postsLoading,
@@ -135,6 +138,40 @@ export default function SocialFeed({
     refetch: refetchPosts,
     isRefetching
   } = usePosts(queryFilters, 20, feedMode !== FEED_MODES.DISCOVER);
+
+  // Socket.io for real-time post updates
+  const { socket: socketConnection, isConnected: socketConnected, on: socketOn } = useSocket(userId, feedMode !== FEED_MODES.DISCOVER);
+
+  // Real-time post updates via Socket.io
+  React.useEffect(() => {
+    if (!socketConnection || !socketConnected) {
+      return;
+    }
+
+    const handleNewPost = (data: any) => {
+      const newPost = data.post;
+      if (!newPost) return;
+
+      // Add new post to cache optimistically
+      queryClient.setQueryData(['posts', queryFilters], (old: any[] = []) => {
+        // Check if post already exists
+        if (old.some(post => post.id === newPost.id)) {
+          return old;
+        }
+
+        // Add new post to the beginning
+        return [newPost, ...old];
+      });
+    };
+
+    socketOn('new_post', handleNewPost);
+
+    return () => {
+      if (socketConnection) {
+        socketConnection.off('new_post', handleNewPost);
+      }
+    };
+  }, [socketConnection, socketConnected, socketOn, queryClient, queryFilters]);
 
   // React Query mutation for creating posts - replaces manual API call
   const createPostMutation = useCreatePost();
