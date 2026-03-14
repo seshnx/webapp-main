@@ -316,7 +316,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             <>
               <SignIn
                 afterSignInUrl="/"
-                signUpUrl="#"
                 redirectUrl="/"
               />
               <div className="mt-4 pt-4 border-t dark:border-gray-700 text-center">
@@ -340,7 +339,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             <>
               <SignUp
                 afterSignUpUrl="/"
-                signInUrl="#"
                 redirectUrl="/"
               />
               <div className="mt-4 pt-4 border-t dark:border-gray-700 text-center">

@@ -24,7 +24,6 @@ export default function SimpleClerkAuth() {
         {/* Sign In Component */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
           <SignIn
-            signUpUrl="/sign-up"
             appearance={{
               baseTheme: dark,
               elements: {
@@ -71,7 +70,6 @@ export function SimpleClerkSignUp() {
         {/* Sign Up Component */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8">
           <SignUp
-            signInUrl="/sign-in"
             appearance={{
               baseTheme: dark,
               elements: {
