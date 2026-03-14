@@ -3,13 +3,13 @@
  * MongoDB post comments
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodb.js';
+import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodbApi.js';
 import {
   getComments as getCommentsFromDb,
   createComment as createCommentInDb,
   updateComment as updateCommentInDb,
   deleteComment as deleteCommentInDb,
-} from '../../../../src/config/mongoSocial.js';
+} from '../../../../src/config/mongoSocialApi.js';
 
 let mongoInitialized = false;
 let initPromise = null;

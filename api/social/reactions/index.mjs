@@ -3,12 +3,12 @@
  * MongoDB likes and emoji reactions
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodb.js';
+import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodbApi.js';
 import {
   toggleReaction as toggleReactionInDb,
   getReactions as getReactionsFromDb,
   getUserReaction,
-} from '../../../../src/config/mongoSocial.js';
+} from '../../../../src/config/mongoSocialApi.js';
 
 let mongoInitialized = false;
 let initPromise = null;

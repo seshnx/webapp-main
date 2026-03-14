@@ -3,7 +3,7 @@
  * Server-side MongoDB operations for social posts
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodb.js';
+import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodbApi.js';
 import {
   getPosts,
   createPost,
@@ -11,7 +11,7 @@ import {
   deletePost,
   getPostById,
   hasUserReposted
-} from '../../../src/config/mongoSocial.js';
+} from '../../../src/config/mongoSocialApi.js';
 
 // Initialize MongoDB on first call
 let mongoInitialized = false;

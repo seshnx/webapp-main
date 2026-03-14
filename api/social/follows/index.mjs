@@ -3,13 +3,13 @@
  * MongoDB social follows
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodb.js';
+import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodbApi.js';
 import {
   followUser as followUserInDb,
   unfollowUser as unfollowUserInDb,
   getFollowers as getFollowersFromDb,
   getFollowing as getFollowingFromDb,
-} from '../../../../src/config/mongoSocial.js';
+} from '../../../../src/config/mongoSocialApi.js';
 
 let mongoInitialized = false;
 let initPromise = null;
