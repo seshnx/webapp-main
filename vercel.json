@@ -47,9 +47,7 @@
     }
   ],
   "env": {
-    "MONGODB_URI": "@mongodb-uri",
-    "MONGODB_DB_NAME": "sesh-nx",
-    "VITE_CONVEX_URL": "@convex-url",
-    "CONVEX_DEPLOY_KEY": "@convex-deploy-key"
+    "MONGODB_URI": "@mongodb_uri",
+    "MONGODB_DB_NAME": "sesh-nx"
   }
 }
