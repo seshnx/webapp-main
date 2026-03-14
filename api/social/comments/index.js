@@ -9,7 +9,7 @@ const {
   updateComment,
   deleteComment,
   getCommentReplies,
-} = require('../../../src/config/mongoSocial.ts');
+} = require('../../../src/config/mongoSocial');
 
 let mongoInitialized = false;
 let initPromise = null;

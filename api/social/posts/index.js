@@ -3,7 +3,7 @@
  * Server-side MongoDB operations for social posts
  */
 
-const { initMongoDB, isMongoDbAvailable } = require('../../../src/config/mongodb.ts');
+const { initMongoDB, isMongoDbAvailable } = require('../../../src/config/mongodb');
 const {
   getPosts,
   createPost,
@@ -11,7 +11,7 @@ const {
   deletePost,
   getPostById,
   hasUserReposted
-} = require('../../../src/config/mongoSocial.ts');
+} = require('../../../src/config/mongoSocial');
 
 // Initialize MongoDB on first call
 let mongoInitialized = false;
