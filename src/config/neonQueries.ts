@@ -3906,3 +3906,8 @@ export async function hasHistoricalData(userId: string): Promise<boolean> {
 
   return parseInt(result[0]?.count || '0', 10) >= 2;
 }
+
+
+// Alias for unifiedUserData.ts compatibility
+export { getUserWithProfile as getCoreUserProfile };
+
