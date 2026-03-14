@@ -1,4 +1,4 @@
-import { query as neonQuery } from '../../src/config/neon.js';
+import { query as neonQuery } from '../../_config/neon.js';
 
 /**
  * Search Public Profiles API

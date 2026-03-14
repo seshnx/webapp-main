@@ -3,7 +3,7 @@
  * Should be called periodically (e.g., every hour) via Vercel Cron or similar
  */
 import { neon } from '@neondatabase/serverless';
-import { query as neonQuery } from '../../src/config/neon.js';
+import { query as neonQuery } from '../../_config/neon.js';
 
 const databaseUrl = process.env.VITE_NEON_DATABASE_URL || process.env.NEON_DATABASE_URL;
 const sql = neon(databaseUrl);
