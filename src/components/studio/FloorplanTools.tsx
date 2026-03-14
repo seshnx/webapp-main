@@ -54,6 +54,8 @@ export interface FloorplanToolsProps {
     setScale: (scale: number) => void;
     onBackgroundImageUpload?: (e: React.ChangeEvent<HTMLInputElement>) => void;
     onAddRoomTemplate?: (template: RoomTemplate) => void;
+    showMeasurements?: boolean;
+    toggleMeasurements?: () => void;
 }
 
 /**
@@ -89,7 +91,9 @@ export default function FloorplanTools({
     scale,
     setScale,
     onBackgroundImageUpload,
-    onAddRoomTemplate
+    onAddRoomTemplate,
+    showMeasurements,
+    toggleMeasurements
 }: FloorplanToolsProps) {
     const tools: ToolDefinition[] = [
         { id: 'select', icon: Move, label: 'Select', group: 'basic' },
@@ -116,6 +120,7 @@ export default function FloorplanTools({
                     title="Undo (Ctrl+Z)"
                 >
                     <RotateCw size={18} className="rotate-180" />
+                    <span className="sr-only">Undo (Ctrl+Z)</span>
                 </button>
                 <button
                     onClick={onRedo}
@@ -124,6 +129,7 @@ export default function FloorplanTools({
                     title="Redo (Ctrl+Shift+Z)"
                 >
                     <RotateCw size={18} />
+                    <span className="sr-only">Redo (Ctrl+Shift+Z)</span>
                 </button>
             </div>
 
@@ -292,6 +298,20 @@ export default function FloorplanTools({
                     <Grid size={16} />
                     <span className="text-xs">Grid</span>
                 </button>
+                {toggleMeasurements && (
+                    <button
+                        onClick={toggleMeasurements}
+                        className={`w-full p-2 rounded flex items-center gap-2 text-sm ${
+                            showMeasurements
+                                ? 'bg-brand-blue text-white'
+                                : 'hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
+                        }`}
+                        title="Toggle Measurements (M)"
+                    >
+                        <Ruler size={16} />
+                        <span className="text-xs">Meas</span>
+                    </button>
+                )}
             </div>
 
             {/* Export */}

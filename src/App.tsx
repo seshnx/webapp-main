@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth, useUser, useClerk } from '@clerk/react';
+import { QueryClientProvider } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { Analytics } from '@vercel/analytics/react';
 import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { getUserWithProfile, updateProfile, createClerkUser } from './config/neonQueries';
+import { queryClient } from './config/queryClient';
 import type { UserData, AccountType, UserSettings } from './types';
 
 // =====================================================
@@ -476,51 +478,53 @@ export default function App(): JSX.Element {
 
   // Render app with full layout (Sidebar + Navbar + Content)
   return (
-    <LanguageProvider userData={userData}>
-      <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
-        <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
-        <Analytics />
+    <QueryClientProvider client={queryClient}>
+      <LanguageProvider userData={userData}>
+        <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
+          <Toaster position="bottom-right" toastOptions={{ style: { background: '#333', color: '#fff' } }} />
+          <Analytics />
 
-        {/* Check if we're on a special route that needs different layout */}
-        {location.pathname === '/settings' || location.pathname === '/debug-report' ? (
-          // Settings and Debug Report use simple layout
-          <main className="p-6">
+          {/* Check if we're on a special route that needs different layout */}
+          {location.pathname === '/settings' || location.pathname === '/debug-report' ? (
+            // Settings and Debug Report use simple layout
+            <main className="p-6">
+              <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+                <AppRoutes
+                  user={usingDevBypass ? userData : { id: userId, ...user }}
+                  userData={userData}
+                  loading={loading}
+                  darkMode={darkMode}
+                  toggleTheme={toggleTheme}
+                  handleLogout={handleLogout}
+                  onUserDataUpdate={handleUserDataUpdate}
+                />
+              </Suspense>
+            </main>
+          ) : (
+            // All other routes use MainLayout with Sidebar + Navbar
             <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
-              <AppRoutes
+              <MainLayout
                 user={usingDevBypass ? userData : { id: userId, ...user }}
                 userData={userData}
                 loading={loading}
                 darkMode={darkMode}
                 toggleTheme={toggleTheme}
                 handleLogout={handleLogout}
-                onUserDataUpdate={handleUserDataUpdate}
+                onRoleSwitch={(newRole: AccountType) => {
+                  setUserData(prev => {
+                    if (!prev) return null;
+                    return {
+                      ...prev,
+                      activeProfileRole: newRole,
+                      preferredRole: newRole
+                    };
+                  });
+                }}
               />
             </Suspense>
-          </main>
-        ) : (
-          // All other routes use MainLayout with Sidebar + Navbar
-          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
-            <MainLayout
-              user={usingDevBypass ? userData : { id: userId, ...user }}
-              userData={userData}
-              loading={loading}
-              darkMode={darkMode}
-              toggleTheme={toggleTheme}
-              handleLogout={handleLogout}
-              onRoleSwitch={(newRole: AccountType) => {
-                setUserData(prev => {
-                  if (!prev) return null;
-                  return {
-                    ...prev,
-                    activeProfileRole: newRole,
-                    preferredRole: newRole
-                  };
-                });
-              }}
-            />
-          </Suspense>
-        )}
-      </div>
-    </LanguageProvider>
+          )}
+        </div>
+      </LanguageProvider>
+    </QueryClientProvider>
   );
 }

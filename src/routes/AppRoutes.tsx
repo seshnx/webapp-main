@@ -100,6 +100,7 @@ const ProfileManager = retryLazyLoad(() => import('../components/ProfileManager'
 const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
 const ClientPortal = retryLazyLoad(() => import('../components/studio/portal/ClientPortal'));
 const PublicLegalPage = retryLazyLoad(() => import('../components/PublicLegalPage'));
+const StudioKiosk = retryLazyLoad(() => import('../components/studio/kiosk/StudioKiosk'));
 
 // =====================================================
 // COMPONENTS
@@ -206,6 +207,17 @@ export default function AppRoutes({
           </Suspense>
         }
       />
+
+      {/* Public Kiosk Route - Accessible without authentication */}
+      <Route
+        path="/kiosk/:studioId"
+        element={
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+            <StudioKiosk />
+          </Suspense>
+        }
+      />
+
       <Route path="/edu-student" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-intern" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-overview" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />

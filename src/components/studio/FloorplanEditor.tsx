@@ -9,6 +9,7 @@ import DoorComponent from './DoorComponent';
 import WindowComponent from './WindowComponent';
 import FurnitureComponent from './FurnitureComponent';
 import { useUndoRedo } from '../../hooks/useUndoRedo';
+import { useKeyboardShortcuts, commonShortcuts } from '../../hooks/useKeyboardShortcuts';
 import { calculateDistance, calculateArea, formatMeasurement, exportSVG, exportPNG, snapToGrid, snapToObject, generateId } from '../../utils/floorplanUtils';
 import toast from 'react-hot-toast';
 
@@ -304,6 +305,7 @@ export default function FloorplanEditor({
     const [scale, setScale] = useState<number>(10); // pixels per foot
     const [measurementUnit, setMeasurementUnit] = useState<'ft' | 'm'>('ft');
     const [snapToObjects, setSnapToObjects] = useState<boolean>(true);
+    const [showMeasurements, setShowMeasurements] = useState<boolean>(true);
 
     // --- UNDO/REDO ---
     const floorplanState = {
@@ -314,14 +316,35 @@ export default function FloorplanEditor({
         furniture,
         textLabels
     };
-    const { state: historyState, setState: setHistoryState, undo, redo, canUndo, canRedo } = useUndoRedo(floorplanState);
+    const { state: historyState, setState: setHistoryState, undo, redo, canUndo, canRedo, clearHistory } = useUndoRedo(floorplanState, 100);
+
+    // Sync historyState back to individual state variables when undo/redo is triggered
+    useEffect(() => {
+        if (historyState && historyState !== floorplanState) {
+            setWalls(historyState.walls || []);
+            setStructures(historyState.structures || []);
+            setDoors(historyState.doors || []);
+            setWindows(historyState.windows || []);
+            setFurniture(historyState.furniture || []);
+            setTextLabels(historyState.textLabels || []);
+        }
+    }, [historyState]);
 
     const width = 800;
     const height = 600;
 
     // Sync props to state when they change externally (e.g. initial load)
-    useEffect(() => { setWalls(propWalls || []); }, [propWalls]);
-    useEffect(() => { setStructures(propStructures || []); }, [propStructures]);
+    useEffect(() => {
+        if (propWalls && propWalls !== walls) {
+            setWalls(propWalls);
+            clearHistory(); // Clear history when loading new data to avoid inconsistent state
+        }
+    }, [propWalls]);
+    useEffect(() => {
+        if (propStructures && propStructures !== structures) {
+            setStructures(propStructures);
+        }
+    }, [propStructures]);
 
     // Utility function to get position relative to the SVG container
     const getCoords = (e: React.MouseEvent | React.TouchEvent | MouseEvent | TouchEvent, applyZoom = true): Point => {
@@ -469,58 +492,43 @@ export default function FloorplanEditor({
         handleDelete();
     }, [handleCopy, handleDelete]);
 
-    // Keyboard Shortcuts Listener
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            // Undo/Redo
-            if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-                e.preventDefault();
-                undo();
-                return;
-            }
-            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
-                e.preventDefault();
-                redo();
-                return;
-            }
+    const handleDeselect = useCallback(() => {
+        setActiveRoomId(null);
+        setActiveStructureId(null);
+        setActiveWallId(null);
+        setActiveDoorId(null);
+        setActiveWindowId(null);
+        setActiveFurnitureId(null);
+        setSelectedItems(new Set());
+        setShowPropertyPanel(false);
+    }, []);
 
-            // Delete
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                handleDelete();
-            }
-            // Copy (Ctrl+C / Cmd+C)
-            if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-                e.preventDefault();
-                handleCopy();
-            }
-            // Paste (Ctrl+V / Cmd+V)
-            if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-                e.preventDefault();
-                handlePaste();
-            }
-            // Cut (Ctrl+X / Cmd+X)
-            if ((e.ctrlKey || e.metaKey) && e.key === 'x') {
-                e.preventDefault();
-                handleCut();
-            }
-            // Zoom
-            if ((e.ctrlKey || e.metaKey) && e.key === '=') {
-                e.preventDefault();
-                handleZoomIn();
-            }
-            if ((e.ctrlKey || e.metaKey) && e.key === '-') {
-                e.preventDefault();
-                handleZoomOut();
-            }
-            if ((e.ctrlKey || e.metaKey) && e.key === '0') {
-                e.preventDefault();
-                handleFitToView();
-            }
-        };
+    const handleDuplicate = useCallback(() => {
+        handleCopy();
+        setTimeout(() => handlePaste(), 0);
+    }, [handleCopy, handlePaste]);
 
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [handleDelete, handleCopy, handlePaste, handleCut, undo, redo]);
+    const handleSave = useCallback(() => {
+        // Trigger save callback or show toast
+        toast.success('Floor plan saved to history');
+    }, []);
+
+    // Keyboard Shortcuts using useKeyboardShortcuts hook
+    useKeyboardShortcuts([
+        commonShortcuts.undo(undo),
+        commonShortcuts.redo(redo),
+        commonShortcuts.save(handleSave),
+        commonShortcuts.copy(handleCopy),
+        commonShortcuts.paste(handlePaste),
+        commonShortcuts.cut(handleCut),
+        commonShortcuts.duplicate(handleDuplicate),
+        commonShortcuts.delete(handleDelete),
+        commonShortcuts.backspace(handleDelete),
+        commonShortcuts.escape(handleDeselect),
+        commonShortcuts.zoomIn(handleZoomIn),
+        commonShortcuts.zoomOut(handleZoomOut),
+        commonShortcuts.zoomReset(handleFitToView),
+    ]);
 
 
     // --- ROOM HANDLERS ---
@@ -1080,6 +1088,11 @@ export default function FloorplanEditor({
     const WallSegment = ({ wall }: { wall: Wall }) => {
         const isPreview = wall.id === 'preview';
         const isSelected = activeWallId === wall.id;
+        const distance = calculateDistance(wall.x1, wall.y1, wall.x2, wall.y2);
+        const measurementText = formatMeasurement(distance, scale, measurementUnit);
+        const midX = (wall.x1 + wall.x2) / 2;
+        const midY = (wall.y1 + wall.y2) / 2;
+
         return (
             <g onClick={(e) => selectWall(e, wall.id)} style={{ cursor: 'pointer' }}>
                 {/* Invisible hit area for easier selection */}
@@ -1095,6 +1108,20 @@ export default function FloorplanEditor({
                     strokeLinecap="round"
                     opacity={isPreview ? 0.7 : 1}
                 />
+                {/* Measurement label */}
+                {showMeasurements && !isPreview && (
+                    <text
+                        x={midX}
+                        y={midY - 10}
+                        textAnchor="middle"
+                        fontSize="12"
+                        fill="#6B7280"
+                        className="pointer-events-none select-none dark:fill-gray-400"
+                        style={{ textShadow: '0 0 3px white, 0 0 3px white' }}
+                    >
+                        {measurementText}
+                    </text>
+                )}
                 {!isPreview && (
                     <>
                         {/* Start Handle */}
@@ -1326,6 +1353,8 @@ export default function FloorplanEditor({
                 setScale={setScale}
                 onBackgroundImageUpload={handleBackgroundImageUpload}
                 onAddRoomTemplate={(template) => addRoom(template)}
+                showMeasurements={showMeasurements}
+                toggleMeasurements={() => setShowMeasurements(!showMeasurements)}
             />
 
             <div className="flex flex-col flex-1">

@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { Loader2, RefreshCw, Users, Compass, UserPlus, Search, LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getPosts, createPost } from '../services/socialApi';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProfilesByIds, ensureUserInDatabase } from '../config/neonQueries';
 import PostCard from './social/PostCard';
 import CreatePostWidget from './social/CreatePostWidget';
@@ -11,6 +11,7 @@ import { useFollowSystem } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
+import { usePosts, useCreatePost } from '../hooks/useSocialQueries';
 import type { UserData } from '../types';
 
 // =====================================================
@@ -93,13 +94,10 @@ export default function SocialFeed({
   subProfiles = {},
   openPublicProfile
 }: SocialFeedProps): JSX.Element {
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
   const [reportTarget, setReportTarget] = useState<Post | null>(null);
   const [feedMode, setFeedMode] = useState<FeedMode>(FEED_MODES.FOR_YOU);
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
-  const [hasNewPosts, setHasNewPosts] = useState<boolean>(false);
 
   // Get feed algorithm from settings
   const { t } = useLanguage();
@@ -121,8 +119,84 @@ export default function SocialFeed({
   // Memoize following IDs for feed filtering
   const followingIds = useMemo(() => getFollowingIds(), [following]);
 
+  // Determine query filters based on feed mode
+  const queryFilters = useMemo(() => {
+    if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
+      return { user_id: followingIds[0] }; // Will filter client-side for all following
+    }
+    return {};
+  }, [feedMode, followingIds]);
+
+  // React Query for posts - replaces manual polling and useState
+  const {
+    data: fetchedPosts = [],
+    isLoading: postsLoading,
+    error: postsError,
+    refetch: refetchPosts,
+    isRefetching
+  } = usePosts(queryFilters, 20, feedMode !== FEED_MODES.DISCOVER);
+
+  // React Query mutation for creating posts - replaces manual API call
+  const createPostMutation = useCreatePost();
+
+  // Process and filter posts
+  const posts = useMemo(() => {
+    let processedPosts = fetchedPosts.map((post: any) => ({
+      id: post.id,
+      ...post,
+      userId: post.user_id,
+      displayName: post.display_name ||
+                     post.username ||
+                     (post.first_name && post.last_name ? `${post.first_name} ${post.last_name}` : null) ||
+                     post.first_name ||
+                     post.last_name ||
+                     'Unknown User',
+      authorPhoto: post.photo_url || post.profile_photo_url,
+      username: post.username,
+      text: post.content,
+      attachments: post.media,
+      timestamp: post.created_at,
+      commentCount: post.comment_count || 0,
+      reactionCount: post.reaction_count || 0,
+      saveCount: post.save_count || 0
+    }));
+
+    // Apply feed algorithm based on settings (only for "For You" feed)
+    if (feedMode === FEED_MODES.FOR_YOU) {
+      if (feedAlgorithm === 'following') {
+        if (followingIds.length > 0) {
+          processedPosts = processedPosts.filter((p: Post) => followingIds.includes(p.userId));
+        } else {
+          processedPosts = [];
+        }
+      } else if (feedAlgorithm === 'chronological') {
+        // Already sorted by created_at desc, no changes needed
+      } else {
+        // Recommended algorithm (default) - prioritize posts with more engagement
+        processedPosts.sort((a: Post, b: Post) => {
+          const aScore = (a.reactionCount || 0) * 2 + (a.commentCount || 0) * 3 + (a.saveCount || 0);
+          const bScore = (b.reactionCount || 0) * 2 + (b.commentCount || 0) * 3 + (b.saveCount || 0);
+          return bScore - aScore;
+        });
+      }
+    }
+
+    // Client-side filtering for Following feed
+    if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
+      const currentUserId = user?.id || user?.uid;
+      processedPosts = processedPosts.filter((post: Post) =>
+        followingIds.includes(post.userId) || post.userId === currentUserId
+      );
+    }
+
+    return processedPosts;
+  }, [fetchedPosts, feedMode, feedAlgorithm, followingIds, user?.id, user?.uid]);
+
+  // Combined loading state
+  const loading = postsLoading || followLoading;
+
   // Load suggested users when on Following tab with no follows
-  useEffect(() => {
+  React.useEffect(() => {
     const userId = user?.id || user?.uid;
     if (feedMode === FEED_MODES.FOLLOWING && followingIds.length === 0 && userId) {
       loadSuggestedUsers();
@@ -205,109 +279,8 @@ export default function SocialFeed({
     );
   };
 
-  // Main feed loader
-  useEffect(() => {
-    setLoading(true);
-
-    const loadFeed = async (): Promise<void> => {
-      try {
-        // Set limit based on feed mode
-        const limitCount = (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) ? 50 : 20;
-
-        // Fetch posts from Neon
-        const response = await getPosts({ limit: limitCount });
-        const fetchedPosts = response.posts || [];
-
-        let newPosts: Post[] = fetchedPosts.map(post => ({
-          id: post.id,
-          ...post,
-          userId: post.user_id,
-          displayName: post.display_name ||
-                         post.username ||
-                         (post.first_name && post.last_name ? `${post.first_name} ${post.last_name}` : null) ||
-                         post.first_name ||
-                         post.last_name ||
-                         'Unknown User',
-          authorPhoto: post.photo_url || post.profile_photo_url,
-          username: post.username,
-          text: post.content, // Map 'content' to 'text' for PostCard compatibility
-          attachments: post.media, // Map 'media' to 'attachments' for PostCard compatibility
-          timestamp: post.created_at,
-          commentCount: post.comment_count || 0,
-          reactionCount: post.reaction_count || 0,
-          saveCount: post.save_count || 0
-        }));
-
-        // Apply feed algorithm based on settings (only for "For You" feed)
-        if (feedMode === FEED_MODES.FOR_YOU) {
-          if (feedAlgorithm === 'following') {
-            // Show only following posts
-            if (followingIds.length > 0) {
-              newPosts = newPosts.filter(p => followingIds.includes(p.userId));
-            } else {
-              newPosts = [];
-            }
-          } else if (feedAlgorithm === 'chronological') {
-            // Already sorted by created_at desc, no changes needed
-          } else {
-            // Recommended algorithm (default) - prioritize posts with more engagement
-            newPosts.sort((a, b) => {
-              const aScore = (a.reactionCount || 0) * 2 + (a.commentCount || 0) * 3 + (a.saveCount || 0);
-              const bScore = (b.reactionCount || 0) * 2 + (b.commentCount || 0) * 3 + (b.saveCount || 0);
-              return bScore - aScore;
-            });
-          }
-        }
-
-        // Client-side filtering for Following feed
-        if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
-          const userId = user?.id || user?.uid;
-          newPosts = newPosts.filter(post =>
-            followingIds.includes(post.userId) || post.userId === userId
-          );
-        }
-
-        setPosts(newPosts);
-        setLoading(false);
-      } catch (error) {
-        console.error("Feed error:", error);
-        setLoading(false);
-      }
-    };
-
-    loadFeed();
-
-    // Set up polling to check for new posts (every 30 seconds)
-    const pollInterval = setInterval(async () => {
-      try {
-        const fetchedPosts = await getPosts({ limit: 10 });
-        const currentUserId = user?.id || user?.uid;
-
-        // Check if there are new posts from other users
-        const newPostsFromOthers = fetchedPosts.some(p => {
-          const isNew = !posts.find(existingPost => existingPost.id === p.id);
-          const isFromOther = p.user_id !== currentUserId;
-
-          if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
-            return isNew && isFromOther && followingIds.includes(p.user_id);
-          } else if (feedMode === FEED_MODES.FOR_YOU) {
-            return isNew && isFromOther;
-          }
-          return false;
-        });
-
-        if (newPostsFromOthers) {
-          setHasNewPosts(true);
-        }
-      } catch (error) {
-        console.error("Polling error:", error);
-      }
-    }, 30000);
-
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, [feedMode, followingIds, feedAlgorithm, user?.id, user?.uid]);
+  // React Query automatically handles polling with refetchInterval
+  // No need for manual polling logic anymore
 
   const handlePost = async (postPayload: PostPayload): Promise<void> => {
     if (!user) return;
@@ -354,7 +327,8 @@ export default function SocialFeed({
       const mentions = (postPayload.text?.match(/@(\w+)/g) || []).map(m => m.substring(1));
       const hashtags = (postPayload.text?.match(/#(\w+)/g) || []).map(h => h.substring(1));
 
-      await createPost({
+      // Use React Query mutation for optimistic updates
+      createPostMutation.mutate({
         author_id: userId,
         text: postPayload.text || '',
         media_urls: media,
@@ -467,26 +441,12 @@ export default function SocialFeed({
         </button>
       </div>
 
-      {/* New Posts Banner */}
-      <AnimatePresence>
-        {hasNewPosts && feedMode !== FEED_MODES.DISCOVER && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="mb-4"
-          >
-            <button
-              onClick={() => window.location.reload()}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-brand-blue to-blue-600 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all"
-            >
-              <RefreshCw size={18} />
-              <span>There Are New Posts.</span>
-              <span className="underline underline-offset-2">Refresh?</span>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Refresh Button - replaces "New Posts" banner */}
+      {isRefetching && (
+        <div className="mb-4 flex justify-center">
+          <Loader2 className="animate-spin text-brand-blue" size={24} />
+        </div>
+      )}
 
       {/* Feed Content */}
       {feedMode === FEED_MODES.DISCOVER ? (

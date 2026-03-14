@@ -96,7 +96,7 @@ export default defineSchema({
     senderName: v.optional(v.string()),
     senderPhoto: v.optional(v.string()),
     targetId: v.string(), // Studio owner or service provider
-    status: v.string(), // Pending, Confirmed, Completed, Cancelled
+    status: v.string(), // Pending, Confirmed, Completed, Cancelled, InProgress
     serviceType: v.optional(v.string()),
     date: v.optional(v.string()), // ISO date string
     time: v.optional(v.string()),
@@ -105,10 +105,19 @@ export default defineSchema({
     message: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    // Kiosk-specific fields
+    roomId: v.optional(v.string()), // Room ID for multi-room studios
+    roomName: v.optional(v.string()), // Human-readable room name
+    // EDU mode fields
+    isClassBooking: v.optional(v.boolean()),
+    className: v.optional(v.string()),
+    professorName: v.optional(v.string()),
+    lessonPlan: v.optional(v.string()),
   })
     .index("by_target_status", ["targetId", "status"])
     .index("by_sender", ["senderId"])
-    .index("by_booking_id", ["id"]),
+    .index("by_booking_id", ["id"])
+    .index("by_studio_date", ["targetId", "date"]),
 
   // Notifications table - for real-time notification updates
   notifications: defineTable({

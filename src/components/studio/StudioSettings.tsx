@@ -29,6 +29,11 @@ const settingsSchema = z.object({
     hours: z.string().optional(),
     amenities: z.array(z.string()).optional(),
     hideAddress: z.boolean().optional(),
+    // Kiosk settings
+    kioskModeEnabled: z.boolean().optional(),
+    kioskEduMode: z.boolean().optional(),
+    kioskAuthorizedNetworks: z.string().optional(),
+    kioskNetworkName: z.string().optional(),
 });
 
 /**
@@ -89,6 +94,10 @@ export default function StudioSettings({ user, userData, onUpdate }: StudioSetti
             hours: userData?.hours || '',
             amenities: userData?.amenities || [],
             hideAddress: userData?.hideAddress || false,
+            kioskModeEnabled: userData?.kiosk_mode_enabled || false,
+            kioskEduMode: userData?.kiosk_edu_mode || false,
+            kioskAuthorizedNetworks: userData?.kiosk_authorized_networks || '',
+            kioskNetworkName: userData?.kiosk_network_name || '',
         }
     });
 
@@ -129,7 +138,11 @@ export default function StudioSettings({ user, userData, onUpdate }: StudioSetti
                     website: data.website,
                     hours: data.hours,
                     amenities: data.amenities,
-                    hideAddress: data.hideAddress
+                    hideAddress: data.hideAddress,
+                    kiosk_mode_enabled: data.kioskModeEnabled,
+                    kiosk_edu_mode: data.kioskEduMode,
+                    kiosk_authorized_networks: data.kioskAuthorizedNetworks,
+                    kiosk_network_name: data.kioskNetworkName,
                 })
             });
 
@@ -329,6 +342,123 @@ export default function StudioSettings({ user, userData, onUpdate }: StudioSetti
                             {amenity}
                         </button>
                     ))}
+                </div>
+            </div>
+
+            {/* Kiosk Mode Settings */}
+            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700">
+                <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2">
+                    <Settings size={18} className="text-brand-blue" />
+                    Kiosk Mode Settings
+                </h3>
+
+                {/* Enable Kiosk Mode */}
+                <div className="mb-6">
+                    <label className="flex items-center gap-3 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            {...register("kioskModeEnabled")}
+                            className="w-5 h-5 text-brand-blue rounded"
+                        />
+                        <div>
+                            <span className="text-gray-700 dark:text-gray-300 font-medium">
+                                Enable Kiosk Mode
+                            </span>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Display live booking status and floor plan on lobby/room displays
+                            </p>
+                        </div>
+                    </label>
+                </div>
+
+                {/* EDU Mode */}
+                {(userData?.accountType === 'EDUAdmin' || userData?.accountType === 'EDUStaff') && (
+                    <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                {...register("kioskEduMode")}
+                                className="w-5 h-5 text-brand-blue rounded"
+                            />
+                            <div>
+                                <span className="text-gray-700 dark:text-gray-300 font-medium">
+                                    Campus Mode
+                                </span>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Show class schedules instead of commercial bookings
+                                </p>
+                            </div>
+                        </label>
+                    </div>
+                )}
+
+                {/* Authorized Networks */}
+                <div className="mb-6">
+                    <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">
+                        Authorized Wi-Fi Networks (CIDR notation)
+                    </label>
+                    <textarea
+                        {...register("kioskAuthorizedNetworks")}
+                        className={inputClass()}
+                        placeholder="192.168.1.0/24&#10;10.0.0.0/8"
+                        rows={3}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                        Enter one network per line in CIDR notation (e.g., 192.168.1.0/24). Kiosk will auto-unlock when connected to these networks.
+                    </p>
+                </div>
+
+                {/* Network Name */}
+                <div className="mb-6">
+                    <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">
+                        Network Name (Optional)
+                    </label>
+                    <input
+                        {...register("kioskNetworkName")}
+                        className={inputClass()}
+                        placeholder="Studio Lobby Wi-Fi"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                        Display name for authorized network (shown in kiosk footer)
+                    </p>
+                </div>
+
+                {/* Kiosk URL Display */}
+                <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4">
+                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Kiosk Display URL
+                    </p>
+                    <div className="flex items-center gap-2 mb-4">
+                        <code className="flex-1 bg-white dark:bg-gray-800 px-3 py-2 rounded-lg text-sm border dark:border-gray-600">
+                            {typeof window !== 'undefined' ? `${window.location.origin}/kiosk/${userData?.id || ''}` : '/kiosk/[studio-id]'}
+                        </code>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                const url = typeof window !== 'undefined' ? `${window.location.origin}/kiosk/${userData?.id || ''}` : '';
+                                navigator.clipboard.writeText(url);
+                                toast.success('URL copied to clipboard');
+                            }}
+                            className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium"
+                        >
+                            Copy
+                        </button>
+                    </div>
+
+                    {/* QR Code Placeholder */}
+                    <div className="bg-white dark:bg-gray-800 p-4 rounded-lg border dark:border-gray-600 flex items-center gap-4">
+                        <div className="w-24 h-24 bg-gray-200 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                            <span className="text-xs text-gray-500 text-center">QR Code</span>
+                        </div>
+                        <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                QR Code
+                            </p>
+                            <p className="text-xs text-gray-500">
+                                Display this QR code in your lobby for easy kiosk access on mobile devices
+                            </p>
+                        </div>
+                    </div>
                 </div>
             </div>
 
