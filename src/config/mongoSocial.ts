@@ -31,6 +31,88 @@ function generateId(): string {
 }
 
 // ============================================================================
+// PROFILES (MongoDB - Flexible/Social Data)
+// ============================================================================
+
+/**
+ * Get user profile from MongoDB
+ * Contains: displayName, username, bio, headline, skills, specialties, genres,
+ *          instruments, software, location, portfolioUrls, stats, settings, avatarUrl, bannerUrl
+ */
+export async function getProfile(userId: string): Promise<any> {
+  if (!isMongoDbAvailable()) {
+    console.warn('MongoDB not available');
+    return null;
+  }
+
+  try {
+    const db = getMongoDb();
+    if (!db) return null;
+
+    const profile = await db.collection('profiles').findOne({ _id: userId });
+    return profile;
+  } catch (error) {
+    console.error('Error getting profile from MongoDB:', error);
+    return null;
+  }
+}
+
+/**
+ * Create or update user profile in MongoDB
+ */
+export async function upsertProfile(userId: string, updates: any): Promise<any> {
+  if (!isMongoDbAvailable()) {
+    console.warn('MongoDB not available');
+    return null;
+  }
+
+  try {
+    const db = getMongoDb();
+    if (!db) return null;
+
+    const result = await db.collection('profiles').updateOne(
+      { _id: userId },
+      {
+        $set: {
+          ...updates,
+          updatedAt: new Date()
+        }
+      },
+      { upsert: true }
+    );
+
+    // Return the updated profile
+    return await getProfile(userId);
+  } catch (error) {
+    console.error('Error upserting profile in MongoDB:', error);
+    return null;
+  }
+}
+
+/**
+ * Update user's last active timestamp
+ */
+export async function updateLastActive(userId: string): Promise<void> {
+  if (!isMongoDbAvailable()) {
+    console.warn('MongoDB not available');
+    return;
+  }
+
+  try {
+    const db = getMongoDb();
+    if (!db) return;
+
+    await db.collection('profiles').updateOne(
+      { _id: userId },
+      { $set: { lastActiveAt: new Date() } }
+    );
+  } catch (error) {
+    console.error('Error updating last active:', error);
+  }
+}
+
+
+// ============================================================================
 // POSTS
 // ============================================================================
 
@@ -990,4 +1072,26 @@ export async function searchProfiles(query: {
     .sort({ 'stats.followersCount': -1 })
     .limit(limit)
     .toArray();
+}
+
+/**
+ * Get multiple profiles by IDs (batch operation)
+ */
+export async function getProfilesByIds(userIds: string[]): Promise<any[]> {
+  if (!isMongoDbAvailable() || userIds.length === 0) return [];
+
+  try {
+    const db = getMongoDb();
+    if (!db) return [];
+
+    const profiles = await db
+      .collection('profiles')
+      .find({ _id: { $in: userIds } })
+      .toArray();
+
+    return profiles;
+  } catch (error) {
+    console.error('Error getting profiles by IDs:', error);
+    return [];
+  }
 }

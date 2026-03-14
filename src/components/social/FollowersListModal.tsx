@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Users, UserCheck, Search, Loader2 } from 'lucide-react';
 import { getFollowers, getFollowing } from '../../services/socialApi';
-import { getProfilesByIds } from '../../config/neonQueries';
+import { getProfilesByIds } from '../../config/mongoSocial';
 import { motion, AnimatePresence } from 'framer-motion';
 import UserAvatar from '../shared/UserAvatar';
 import FollowButton, { FollowButtonProps } from './FollowButton';
