@@ -99,6 +99,7 @@ const DebugReport = retryLazyLoad(() => import('../components/DebugReport'));
 const ProfileManager = retryLazyLoad(() => import('../components/ProfileManager'));
 const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
 const ClientPortal = retryLazyLoad(() => import('../components/studio/portal/ClientPortal'));
+const PublicLegalPage = retryLazyLoad(() => import('../components/PublicLegalPage'));
 
 // =====================================================
 // COMPONENTS
@@ -196,7 +197,15 @@ export default function AppRoutes({
       <Route path="/business-center" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/business-center/:tab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/business-center/tech/:subtab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/legal" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      {/* Public Legal Page - Accessible without authentication */}
+      <Route
+        path="/legal"
+        element={
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+            <PublicLegalPage />
+          </Suspense>
+        }
+      />
       <Route path="/edu-student" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-intern" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-overview" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
