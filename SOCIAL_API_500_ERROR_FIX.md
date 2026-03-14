@@ -4,20 +4,41 @@
 The social feed API is returning 500 errors: "FUNCTION_INVOCATION_FAILED"
 
 ## Root Cause
-1. The API routes had a `require()` call which doesn't work with ES modules
-2. MongoDB environment variable names may be inconsistent between client and server
+Vercel serverless functions written in TypeScript (.ts files) with ES module imports are not compiled properly in the api/ directory, causing module resolution errors:
+
+```
+Error [ERR_MODULE_NOT_FOUND]: Cannot find module '/var/task/src/config/mongodb'
+```
 
 ## What Was Fixed
-1. ✅ Removed `require()` calls from api/social/posts/index.ts
-2. ✅ Improved error handling to show MongoDB connection status
-3. ✅ Added proper MongoDB initialization promise handling
+1. ✅ Converted ALL social API endpoints from TypeScript (.ts) to JavaScript (.js) with CommonJS syntax
+2. ✅ Updated import statements from ES modules to CommonJS `require()`
+3. ✅ Added proper MongoDB initialization promise handling to prevent race conditions
+4. ✅ Added database availability checks (503 Service Unavailable if MongoDB not connected)
+
+### Files Converted:
+- `api/social/posts/index.ts` → `index.js`
+- `api/social/comments/index.ts` → `index.js`
+- `api/social/reactions/index.ts` → `index.js`
+- `api/social/follows/index.ts` → `index.js`
+- `api/social/saved/index.ts` → `index.js`
+- `api/social/health.ts` → `health.js`
+
+### Pattern Applied:
+```javascript
+// BEFORE (TypeScript with ES modules - BROKEN):
+import { initMongoDB } from '../../../src/config/mongodb';
+
+// AFTER (JavaScript with CommonJS - WORKING):
+const { initMongoDB, isMongoDbAvailable } = require('../../../src/config/mongodb');
+```
 
 ## Required Fix for MongoDB Connection
 
 The MongoDB configuration needs to properly handle environment variables:
 
-**Server-side (API routes):** `MONGODB_URI` or `MONGO_URL`
-**Client-side (browser):** `VITE_MONGODB_CONNECTION_STRING`
+**Server-side (API routes):** `MONGODB_URI` and `MONGODB_DB_NAME`
+**Client-side (browser):** `VITE_MONGODB_CONNECTION_STRING` and `VITE_MONGODB_DB_NAME`
 
 ## Environment Variables to Set in Vercel
 
@@ -38,7 +59,13 @@ After setting environment variables:
 1. Redeploy the app
 2. Check browser console for MongoDB connection messages
 3. Look for "✅ MongoDB connected successfully" in Vercel logs
-4. Test social feed: /api/social/posts?limit=20
+4. Test all social API endpoints:
+   - GET /api/social/posts?limit=20
+   - GET /api/social/comments?post_id=xxx
+   - GET /api/social/reactions?target_id=xxx&target_type=post
+   - GET /api/social/follows?user_id=xxx&type=followers
+   - GET /api/social/saved?user_id=xxx
+   - GET /api/social/health
 
 ## Debug Mode
 

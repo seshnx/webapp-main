@@ -24,6 +24,12 @@ let mongoDb: Db | null = null;
  * Get MongoDB connection string from environment variables
  */
 function getMongoConnectionString(): string {
+  // Server-side: use process.env (for API routes)
+  if (typeof process !== 'undefined' && process.env?.MONGODB_URI) {
+    return process.env.MONGODB_URI;
+  }
+
+  // Client-side: use import.meta.env (for browser)
   const connectionString = import.meta.env.VITE_MONGODB_CONNECTION_STRING;
 
   if (!connectionString) {
@@ -38,6 +44,12 @@ function getMongoConnectionString(): string {
  * Get MongoDB database name
  */
 function getMongoDbName(): string {
+  // Server-side: use process.env
+  if (typeof process !== 'undefined' && process.env?.MONGODB_DB_NAME) {
+    return process.env.MONGODB_DB_NAME;
+  }
+
+  // Client-side: use import.meta.env
   return import.meta.env.VITE_MONGODB_DB_NAME || 'seshnx';
 }
 

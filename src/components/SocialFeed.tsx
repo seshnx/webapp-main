@@ -215,7 +215,8 @@ export default function SocialFeed({
         const limitCount = (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) ? 50 : 20;
 
         // Fetch posts from Neon
-        const fetchedPosts = await getPosts({ limit: limitCount });
+        const response = await getPosts({ limit: limitCount });
+        const fetchedPosts = response.posts || [];
 
         let newPosts: Post[] = fetchedPosts.map(post => ({
           id: post.id,

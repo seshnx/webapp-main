@@ -3,19 +3,19 @@
  * Server-side MongoDB operations for social posts
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodb';
-import {
+const { initMongoDB, isMongoDbAvailable } = require('../../../src/config/mongodb.ts');
+const {
   getPosts,
   createPost,
   updatePost,
   deletePost,
   getPostById,
   hasUserReposted
-} from '../../../src/config/mongoSocial';
+} = require('../../../src/config/mongoSocial.ts');
 
 // Initialize MongoDB on first call
 let mongoInitialized = false;
-let initPromise: Promise<void> | null = null;
+let initPromise = null;
 
 async function ensureMongo() {
   if (!mongoInitialized) {
@@ -61,7 +61,7 @@ export async function GET(request) {
     const filter = {
       limit,
       skip
-    } as any;
+    };
     
     if (authorId) filter.author_id = authorId;
     if (category) filter.category = category;
@@ -71,11 +71,10 @@ export async function GET(request) {
 
     return new Response(JSON.stringify({ success: true, posts }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error fetching posts:', error);
-    console.error('Error stack:', error.stack);
     
     return new Response(
       JSON.stringify({ 
@@ -85,7 +84,7 @@ export async function GET(request) {
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { { 'Content-Type': 'application/json' },
       }
     );
   }
@@ -107,7 +106,7 @@ export async function POST(request) {
         JSON.stringify({ success: false, error: 'author_id and content are required' }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { { 'Content-Type': 'application/json' },
         }
       );
     }
@@ -139,7 +138,7 @@ export async function POST(request) {
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { { 'Content-Type': 'application/json' },
       }
     );
   }
@@ -161,7 +160,7 @@ export async function PUT(request) {
         JSON.stringify({ success: false, error: 'id is required' }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { { 'Content-Type': 'application/json' },
         }
       );
     }
@@ -173,14 +172,14 @@ export async function PUT(request) {
         JSON.stringify({ success: false, error: 'Post not found' }),
         {
           status: 404,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { { 'Content-Type': 'application/json' },
         }
       );
     }
 
     return new Response(JSON.stringify({ success: true, post }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error updating post:', error);
@@ -192,7 +191,16 @@ export async function PUT(request) {
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        <details>
+          <summary>📦 Vercel Information</summary>
+          <div className="text-sm">
+            <strong>Project:</strong> seshnx-webapp<br/>
+            <strong>Framework:</strong> Vite + React<br/>
+            <strong>Build Command:</strong> <code>npm run build:vercel</code><br/>
+            <strong>Serverless Functions:</strong> Located in <code>api/</code> folder<br/>
+            <strong>Issue:</strong> TypeScript files in <code>api/</code> not being compiled<br/>
+          </div>
+        </details>
       }
     );
   }
@@ -214,7 +222,7 @@ export async function DELETE(request) {
         JSON.stringify({ success: false, error: 'id is required' }),
         {
           status: 400,
-          headers: { 'Content-Type': 'application/json' },
+          headers: { { 'Content-Type': 'application/json' },
         }
       );
     }
@@ -223,7 +231,7 @@ export async function DELETE(request) {
 
     return new Response(JSON.stringify({ success: true, deleted }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error deleting post:', error);
@@ -235,7 +243,7 @@ export async function DELETE(request) {
       }),
       {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { { 'Content-Type': 'application/json' },
       }
     );
   }

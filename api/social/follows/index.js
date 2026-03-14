@@ -3,17 +3,42 @@
  * MongoDB social follows
  */
 
-import { initMongoDB } from '../../../../src/config/mongodb';
-import {
+const { initMongoDB, isMongoDbAvailable } = require('../../../../src/config/mongodb');
+const {
   followUser as followUserInDb,
   unfollowUser as unfollowUserInDb,
   getFollowers as getFollowersFromDb,
   getFollowing as getFollowingFromDb,
-} from '../../../../src/config/mongoSocial';
+} = require('../../../../src/config/mongoSocial');
 
-export async function GET(request: Request) {
+let mongoInitialized = false;
+let initPromise = null;
+
+async function ensureMongo() {
+  if (!mongoInitialized) {
+    if (!initPromise) {
+      initPromise = initMongoDB().then(() => {
+        mongoInitialized = true;
+        console.log('✅ MongoDB initialized for follows API');
+      }).catch((error) => {
+        console.error('❌ Failed to initialize MongoDB:', error);
+        throw error;
+      });
+    }
+    await initPromise;
+  }
+}
+
+export async function GET(request) {
   try {
-    await initMongoDB();
+    await ensureMongo();
+
+    if (!isMongoDbAvailable()) {
+      return new Response(JSON.stringify({ error: 'Database not available' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const url = new URL(request.url);
     const userId = url.searchParams.get('user_id');
@@ -46,9 +71,16 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request) {
   try {
-    await initMongoDB();
+    await ensureMongo();
+
+    if (!isMongoDbAvailable()) {
+      return new Response(JSON.stringify({ error: 'Database not available' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const body = await request.json();
     const { follower_id, following_id } = body;
@@ -73,9 +105,16 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request) {
   try {
-    await initMongoDB();
+    await ensureMongo();
+
+    if (!isMongoDbAvailable()) {
+      return new Response(JSON.stringify({ error: 'Database not available' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const url = new URL(request.url);
     const follower_id = url.searchParams.get('follower_id');

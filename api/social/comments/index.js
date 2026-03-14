@@ -2,17 +2,17 @@
  * Social Comments API
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodb';
-import {
+const { initMongoDB, isMongoDbAvailable } = require('../../../src/config/mongodb');
+const {
   getComments,
   createComment,
   updateComment,
   deleteComment,
   getCommentReplies,
-} from '../../../src/config/mongoSocial';
+} = require('../../../src/config/mongoSocial.ts');
 
 let mongoInitialized = false;
-let initPromise: Promise<void> | null = null;
+let initPromise = null;
 
 async function ensureMongo() {
   if (!mongoInitialized) {
@@ -130,7 +130,7 @@ export async function PUT(request) {
     console.error('Error updating comment:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message, mongoAvailable: isMongoDbAvailable() }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
+      { { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }
@@ -160,7 +160,7 @@ export async function DELETE(request) {
       { status: 200, headers: { 'Content-Type': 'application/json' } }
     );
   } catch (error) {
-    console.error('Error deleting comment:', error);
+    console.error('Error Error deleting comment:', error);
     return new Response(
       JSON.stringify({ success: false, error: error.message, mongoAvailable: isMongoDbAvailable() }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }

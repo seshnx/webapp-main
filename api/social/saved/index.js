@@ -3,17 +3,42 @@
  * MongoDB saved posts (bookmarks)
  */
 
-import { initMongoDB } from '../../../../src/config/mongodb';
-import {
+const { initMongoDB, isMongoDbAvailable } = require('../../../../src/config/mongodb');
+const {
   savePost as savePostToDb,
   unsavePost as unsavePostFromDb,
   getSavedPosts as getSavedPostsFromDb,
   isPostSaved,
-} from '../../../../src/config/mongoSocial';
+} = require('../../../../src/config/mongoSocial');
 
-export async function GET(request: Request) {
+let mongoInitialized = false;
+let initPromise = null;
+
+async function ensureMongo() {
+  if (!mongoInitialized) {
+    if (!initPromise) {
+      initPromise = initMongoDB().then(() => {
+        mongoInitialized = true;
+        console.log('✅ MongoDB initialized for saved posts API');
+      }).catch((error) => {
+        console.error('❌ Failed to initialize MongoDB:', error);
+        throw error;
+      });
+    }
+    await initPromise;
+  }
+}
+
+export async function GET(request) {
   try {
-    await initMongoDB();
+    await ensureMongo();
+
+    if (!isMongoDbAvailable()) {
+      return new Response(JSON.stringify({ error: 'Database not available' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const url = new URL(request.url);
     const userId = url.searchParams.get('user_id');
@@ -49,9 +74,16 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+export async function POST(request) {
   try {
-    await initMongoDB();
+    await ensureMongo();
+
+    if (!isMongoDbAvailable()) {
+      return new Response(JSON.stringify({ error: 'Database not available' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const body = await request.json();
     const { user_id, post_id } = body;
@@ -76,9 +108,16 @@ export async function POST(request: Request) {
   }
 }
 
-export async function DELETE(request: Request) {
+export async function DELETE(request) {
   try {
-    await initMongoDB();
+    await ensureMongo();
+
+    if (!isMongoDbAvailable()) {
+      return new Response(JSON.stringify({ error: 'Database not available' }), {
+        status: 503,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
 
     const url = new URL(request.url);
     const userId = url.searchParams.get('user_id');

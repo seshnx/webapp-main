@@ -1,8 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check, Repeat2 } from 'lucide-react';
-import { updatePost, deletePost, checkIsSaved, savePost, unsavePost, updatePostSaveCount, toggleReaction } from '../../services/socialApi';
-import { useQuery } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { updatePost, deletePost, checkIsSaved, savePost, unsavePost, updatePostSaveCount, toggleReaction, getReactions } from '../../services/socialApi';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import CommentSection from './CommentSection';
 import RepostModal from './RepostModal';
@@ -111,33 +109,52 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
     const userId = currentUser?.id || currentUser?.uid;
     const isOwnPost = post.userId === userId;
 
-    // Real-time reactions from Convex (with fallback for when not configured)
-    const convexReactions = useQuery(api.reactions.list, { targetId: post.id, targetType: 'post' as const });
-    const convexReactionsSummary = useQuery(api.reactions.getSummary, { targetId: post.id, targetType: 'post' as const });
-    const myReactionConvex = useQuery(api.reactions.getUserReaction, {
-        targetId: post.id,
-        targetType: 'post' as const,
-        userId: userId || ''
-    });
+    // Reactions from MongoDB
+    const [reactionsData, setReactionsData] = useState<Record<string, string[]> | null>(null);
+    const [myReaction, setMyReaction] = useState<string | null>(
+        userId && post.reactions?.[userId]
+            ? post.reactions[userId]
+            : null
+    );
 
-    // Check if Convex is available (not in error state and loaded)
-    const convexAvailable = convexReactionsSummary !== undefined && !convexReactionsSummary;
+    // Fetch reactions on mount
+    useEffect(() => {
+        const loadReactions = async () => {
+            try {
+                const data = await getReactions(post.id, 'post');
+                // Convert array format to Record<emoji, userIds[]>
+                const reactionsMap: Record<string, string[]> = {};
+                data.forEach(reaction => {
+                    if (!reactionsMap[reaction.emoji]) {
+                        reactionsMap[reaction.emoji] = [];
+                    }
+                    reactionsMap[reaction.emoji].push(reaction.user_id);
+                });
+                setReactionsData(reactionsMap);
 
-    // Use Convex data if available, otherwise fall back to post data
-    const myReaction = convexAvailable && userId
-        ? (myReactionConvex?.emoji || null)
-        : (post.reactions?.[userId]);
+                // Set my reaction
+                if (userId) {
+                    const myReactionData = data.find(r => r.user_id === userId);
+                    setMyReaction(myReactionData?.emoji || null);
+                }
+            } catch (error) {
+                console.error('Failed to load reactions:', error);
+            }
+        };
+        loadReactions();
+    }, [post.id, userId]);
 
-    // Calculate reaction counts from Convex summary or post data
-    const reactionCounts: ReactionCounts = convexAvailable && Object.keys(convexReactionsSummary || {}).length > 0
-        ? Object.fromEntries(
-            Object.entries(convexReactionsSummary || {}).map(([emoji, data]: [string, any]) => [emoji, data.count])
-          )
+    // Calculate reaction counts from MongoDB data
+    const reactionCounts: ReactionCounts = reactionsData
+        ? Object.keys(reactionsData).reduce((acc: ReactionCounts, emoji) => {
+            acc[emoji] = reactionsData[emoji].length;
+            return acc;
+          }, {} as ReactionCounts)
         : (post.reactions
             ? Object.values(post.reactions).reduce((acc: ReactionCounts, emoji: string) => {
                 acc[emoji] = (acc[emoji] || 0) + 1;
                 return acc;
-              }, {})
+              }, {} as ReactionCounts)
             : {});
 
     const totalReactions = Object.values(reactionCounts).reduce((a: number, b: number) => a + b, 0);
@@ -183,11 +200,37 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
             // Check if this is removing the current reaction or adding a new one
             if (myReaction === emoji) {
                 // Remove reaction
-                await toggleReaction(userId, 'post', post.id, emoji);
+                await toggleReaction(post.id, 'post', emoji, userId);
+                
+                // Update local state
+                setMyReaction(null);
+                // Refresh reactions
+                const data = await getReactions(post.id, 'post');
+                const reactionsMap: Record<string, string[]> = {};
+                data.forEach(reaction => {
+                    if (!reactionsMap[reaction.emoji]) {
+                        reactionsMap[reaction.emoji] = [];
+                    }
+                    reactionsMap[reaction.emoji].push(reaction.user_id);
+                });
+                setReactionsData(reactionsMap);
             } else {
                 // Add/change reaction
                 const wasReacted = !!myReaction;
-                await toggleReaction(userId, 'post', post.id, emoji);
+                await toggleReaction(post.id, 'post', emoji, userId);
+                
+                // Update local state
+                setMyReaction(emoji);
+                // Refresh reactions
+                const data = await getReactions(post.id, 'post');
+                const reactionsMap: Record<string, string[]> = {};
+                data.forEach(reaction => {
+                    if (!reactionsMap[reaction.emoji]) {
+                        reactionsMap[reaction.emoji] = [];
+                    }
+                    reactionsMap[reaction.emoji].push(reaction.user_id);
+                });
+                setReactionsData(reactionsMap);
 
                 // Send notification (only for new reactions, not changes)
                 if (!wasReacted && !isOwnPost) {
