@@ -47,7 +47,7 @@ Go to: Vercel Dashboard → Project Settings → Environment Variables
 Add these:
 ```
 MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/?retryWrites=true&w=majority
-MONGODB_DB_NAME=seshnx
+MONGODB_DB_NAME=sesh-nx
 ```
 
 **IMPORTANT:** Use the SAME connection string for both `MONGODB_URI` and `VITE_MONGODB_CONNECTION_STRING`
@@ -105,7 +105,7 @@ You should see these in Vercel logs when it works:
 ```
 🔄 Connecting to MongoDB...
 ✅ MongoDB connected successfully
-   Database: seshnx
+   Database: sesh-nx
 ✅ MongoDB connection verified
 ✅ MongoDB initialized for posts API
 ```

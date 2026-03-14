@@ -50,7 +50,7 @@ function getMongoDbName(): string {
   }
 
   // Client-side: use import.meta.env
-  return import.meta.env.VITE_MONGODB_DB_NAME || 'seshnx';
+  return import.meta.env.VITE_MONGODB_DB_NAME || 'sesh-nx';
 }
 
 /**
