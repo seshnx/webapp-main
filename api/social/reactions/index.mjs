@@ -96,6 +96,21 @@ export async function POST(request) {
 
     const result = await toggleReactionInDb(target_id, target_type, emoji, user_id);
 
+    // Broadcast real-time update if Socket.io server is available
+    if (global.broadcastReactionUpdate) {
+      global.broadcastReactionUpdate(target_id, target_type, {
+        id: `${target_id}_${user_id}`,
+        target_id,
+        target_type,
+        emoji,
+        user_id,
+        created_at: new Date(),
+        action: result.action
+      }).catch(err =>
+        console.error('Failed to broadcast reaction update:', err)
+      );
+    }
+
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
     });

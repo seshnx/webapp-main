@@ -93,6 +93,14 @@ export async function POST(request) {
     }
 
     await followUserInDb(follower_id, following_id);
+
+    // Broadcast real-time update if Socket.io server is available
+    if (global.broadcastFollowEvent) {
+      global.broadcastFollowEvent(follower_id, following_id).catch(err =>
+        console.error('Failed to broadcast follow event:', err)
+      );
+    }
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     });

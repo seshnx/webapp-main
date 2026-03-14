@@ -101,6 +101,7 @@ export async function GET(request) {
       });
     }
 
+    console.log(`✅ Successfully fetched ${posts.length} posts`);
     return new Response(JSON.stringify(posts), {
       headers: { 'Content-Type': 'application/json' },
     });

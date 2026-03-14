@@ -73,10 +73,14 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { post_id, author_id, text, parent_id } = body;
+    const { post_id, author_id, text, content, parent_id } = body;
 
-    if (!post_id || !author_id || !text) {
-      return new Response(JSON.stringify({ error: 'Missing required fields' }), {
+    // Accept both 'text' and 'content' for compatibility
+    const commentContent = text || content;
+
+    if (!post_id || !author_id || !commentContent) {
+      console.error('Missing required fields for comment:', { post_id, author_id, commentContent });
+      return new Response(JSON.stringify({ error: 'Missing required fields: post_id, author_id, and text/content are required' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
@@ -85,9 +89,16 @@ export async function POST(request) {
     const newComment = await createCommentInDb({
       post_id,
       author_id,
-      content: text,
+      content: commentContent,
       parent_id,
     });
+
+    // Broadcast real-time update if Socket.io server is available
+    if (global.broadcastNewComment) {
+      global.broadcastNewComment(newComment).catch(err =>
+        console.error('Failed to broadcast new comment:', err)
+      );
+    }
 
     return new Response(JSON.stringify(newComment), {
       status: 201,
@@ -114,16 +125,19 @@ export async function PUT(request) {
     }
 
     const body = await request.json();
-    const { comment_id, author_id, text } = body;
+    const { comment_id, author_id, text, content } = body;
 
-    if (!comment_id || !author_id || !text) {
+    // Accept both 'text' and 'content' for compatibility
+    const commentContent = text || content;
+
+    if (!comment_id || !author_id || !commentContent) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    const updatedComment = await updateCommentInDb(comment_id, text);
+    const updatedComment = await updateCommentInDb(comment_id, commentContent);
 
     return new Response(JSON.stringify(updatedComment), {
       headers: { 'Content-Type': 'application/json' },
