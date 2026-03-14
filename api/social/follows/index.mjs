@@ -1,15 +1,15 @@
 /**
- * Saved Posts API Endpoint
- * MongoDB saved posts (bookmarks)
+ * Follows API Endpoint
+ * MongoDB social follows
  */
 
-const { initMongoDB, isMongoDbAvailable } = require('../../../../src/config/mongodb');
-const {
-  savePost as savePostToDb,
-  unsavePost as unsavePostFromDb,
-  getSavedPosts as getSavedPostsFromDb,
-  isPostSaved,
-} = require('../../../../src/config/mongoSocial');
+import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodb.js';
+import {
+  followUser as followUserInDb,
+  unfollowUser as unfollowUserInDb,
+  getFollowers as getFollowersFromDb,
+  getFollowing as getFollowingFromDb,
+} from '../../../../src/config/mongoSocial.js';
 
 let mongoInitialized = false;
 let initPromise = null;
@@ -19,7 +19,7 @@ async function ensureMongo() {
     if (!initPromise) {
       initPromise = initMongoDB().then(() => {
         mongoInitialized = true;
-        console.log('✅ MongoDB initialized for saved posts API');
+        console.log('✅ MongoDB initialized for follows API');
       }).catch((error) => {
         console.error('❌ Failed to initialize MongoDB:', error);
         throw error;
@@ -42,32 +42,29 @@ export async function GET(request) {
 
     const url = new URL(request.url);
     const userId = url.searchParams.get('user_id');
-    const postId = url.searchParams.get('post_id');
-    const check = url.searchParams.get('check');
+    const type = url.searchParams.get('type');
 
-    // Check if post is saved
-    if (check === 'true' && userId && postId) {
-      const saved = await isPostSaved(userId, postId);
-      return new Response(JSON.stringify({ saved }), {
+    if (type === 'followers' && userId) {
+      const followers = await getFollowersFromDb(userId);
+      return new Response(JSON.stringify(followers), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // Get all saved posts for user
-    if (userId) {
-      const savedPosts = await getSavedPostsFromDb(userId);
-      return new Response(JSON.stringify(savedPosts), {
+    if (type === 'following' && userId) {
+      const following = await getFollowingFromDb(userId);
+      return new Response(JSON.stringify(following), {
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    return new Response(JSON.stringify({ error: 'Missing user_id' }), {
+    return new Response(JSON.stringify({ error: 'Invalid request' }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in saved GET:', error);
-    return new Response(JSON.stringify({ error: 'Failed to get saved posts' }), {
+    console.error('Error in follows GET:', error);
+    return new Response(JSON.stringify({ error: 'Failed to get follows' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -86,22 +83,22 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { user_id, post_id } = body;
+    const { follower_id, following_id } = body;
 
-    if (!user_id || !post_id) {
+    if (!follower_id || !following_id) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    await savePostToDb(user_id, post_id);
+    await followUserInDb(follower_id, following_id);
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in saved POST:', error);
-    return new Response(JSON.stringify({ error: 'Failed to save post' }), {
+    console.error('Error in follows POST:', error);
+    return new Response(JSON.stringify({ error: 'Failed to follow user' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -120,23 +117,23 @@ export async function DELETE(request) {
     }
 
     const url = new URL(request.url);
-    const userId = url.searchParams.get('user_id');
-    const postId = url.searchParams.get('post_id');
+    const follower_id = url.searchParams.get('follower_id');
+    const following_id = url.searchParams.get('following_id');
 
-    if (!userId || !postId) {
+    if (!follower_id || !following_id) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    await unsavePostFromDb(userId, postId);
+    await unfollowUserInDb(follower_id, following_id);
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('Error in saved DELETE:', error);
-    return new Response(JSON.stringify({ error: 'Failed to unsave post' }), {
+    console.error('Error in follows DELETE:', error);
+    return new Response(JSON.stringify({ error: 'Failed to unfollow user' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
