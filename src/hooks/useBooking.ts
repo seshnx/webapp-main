@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { getCompleteBooking, addBookingNote, submitFormResponse, getFormSchema } from '../services/bookingService';
-import { isMongoDbAvailable } from '../config/mongodb';
+import { isMongoDbAvailable } from '../config/mongodb.js';
 import * as Sentry from '@sentry/react';
 import type { CompleteBooking, FormSchema } from '../types';
 

@@ -2,7 +2,7 @@
  * Social Components Debug Utility
  */
 
-import { isMongoDbAvailable } from '../config/mongodb';
+import { isMongoDbAvailable } from '../config/mongodb.js';
 
 const DEBUG_SOCIAL = import.meta.env.DEBUG_SOCIAL === 'true' || 
                       typeof window !== 'undefined' && localStorage.getItem('DEBUG_SOCIAL') === 'true';

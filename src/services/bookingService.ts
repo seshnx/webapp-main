@@ -8,7 +8,7 @@
  */
 
 import { createBooking as createNeonBooking, updateBookingStatus as updateNeonBookingStatus } from '../config/neonQueries';
-import { mongoCollections, isMongoDbAvailable } from '../config/mongodb';
+import { mongoCollections, isMongoDbAvailable } from '../config/mongodb.js';
 import * as Sentry from '@sentry/react';
 import { syncBookingToConvex } from '../utils/convexSync';
 import type {

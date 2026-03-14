@@ -5,7 +5,7 @@
  * Complements Neon (PostgreSQL) for legal identity data.
  */
 
-import { mongoCollections, isMongoDbAvailable } from './mongodb';
+import { mongoCollections, isMongoDbAvailable } from './mongodb.js';
 import * as Sentry from '@sentry/react';
 import type {
   MongoUserProfile,

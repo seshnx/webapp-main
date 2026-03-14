@@ -15,7 +15,7 @@ import {
   getMongoUserProfile,
   createMongoUserProfile,
   updateMongoUserProfile,
-} from '../config/mongodb';
+} from '../config/mongodb.js';
 import { api } from '../../convex/_generated';
 import { useQuery, useMutation } from 'convex/react';
 import type {

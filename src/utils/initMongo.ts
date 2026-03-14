@@ -5,7 +5,7 @@
  * Should be called during application startup.
  */
 
-import { initMongoDB, ensureMongoIndexes, isMongoDbAvailable } from '../config/mongodb';
+import { initMongoDB, ensureMongoIndexes, isMongoDbAvailable } from '../config/mongodb.js';
 import * as Sentry from '@sentry/react';
 
 /**
@@ -51,7 +51,7 @@ export async function seedSampleFormSchemas(): Promise<void> {
   }
 
   try {
-    const { mongoCollections } = await import('../config/mongodb');
+    const { mongoCollections } = await import('../config/mongodb.js');
 
     // Sample recording studio form schema
     const recordingStudioSchema = {

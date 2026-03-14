@@ -8,7 +8,7 @@
  * Convex syncs from MongoDB for real-time updates.
  */
 
-import { getMongoDb, isMongoDbAvailable } from './mongodb';
+import { getMongoDb, isMongoDbAvailable } from './mongodb.js';
 import type {
   MongoPost,
   MongoComment,
@@ -21,7 +21,7 @@ import type {
   CreatePostParams,
   CreateCommentParams,
   ReactionToggleResult,
-} from '../types/mongoSocial';
+} from '../types/mongoSocial.js';
 
 /**
  * Generate UUID for new documents
