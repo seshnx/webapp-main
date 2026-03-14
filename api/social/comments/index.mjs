@@ -47,13 +47,7 @@ export async function GET(request) {
     const limit = parseInt(url.searchParams.get('limit') || '50');
     const skip = parseInt(url.searchParams.get('skip') || '0');
 
-    const comments = await getCommentsFromDb({
-      post_id,
-      parent_id,
-      author_id,
-      limit,
-      skip,
-    });
+    const comments = await getCommentsFromDb(post_id);
 
     return new Response(JSON.stringify(comments), {
       headers: { 'Content-Type': 'application/json' },
@@ -91,7 +85,7 @@ export async function POST(request) {
     const newComment = await createCommentInDb({
       post_id,
       author_id,
-      text,
+      content: text,
       parent_id,
     });
 
@@ -129,7 +123,7 @@ export async function PUT(request) {
       });
     }
 
-    const updatedComment = await updateCommentInDb(comment_id, author_id, { text });
+    const updatedComment = await updateCommentInDb(comment_id, text);
 
     return new Response(JSON.stringify(updatedComment), {
       headers: { 'Content-Type': 'application/json' },
@@ -165,7 +159,7 @@ export async function DELETE(request) {
       });
     }
 
-    await deleteCommentInDb(comment_id, author_id);
+    await deleteCommentInDb(comment_id);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },

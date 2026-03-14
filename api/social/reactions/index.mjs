@@ -47,7 +47,7 @@ export async function GET(request) {
     if (target_id && target_type) {
       if (user_id) {
         // Get specific user's reaction
-        const reaction = await getUserReaction(user_id, target_id, target_type);
+        const reaction = await getUserReaction(target_id, target_type, user_id);
         return new Response(JSON.stringify({ reaction }), {
           headers: { 'Content-Type': 'application/json' },
         });
@@ -94,7 +94,7 @@ export async function POST(request) {
       });
     }
 
-    const result = await toggleReactionInDb(user_id, target_id, target_type, emoji);
+    const result = await toggleReactionInDb(target_id, target_type, emoji, user_id);
 
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },

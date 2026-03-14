@@ -140,11 +140,11 @@ export async function POST(request) {
 
     const newPost = await createPost({
       author_id,
-      text,
+      content: text,
       media_urls,
       category,
       parent_id,
-      repost_of_post_id,
+      repost_of: repost_of_post_id,
     });
 
     return new Response(JSON.stringify(newPost), {
@@ -185,8 +185,8 @@ export async function PUT(request) {
       });
     }
 
-    const updatedPost = await updatePost(post_id, author_id, {
-      text,
+    const updatedPost = await updatePost(post_id, {
+      content: text,
       media_urls,
       category,
     });
@@ -229,7 +229,7 @@ export async function DELETE(request) {
       });
     }
 
-    await deletePost(post_id, author_id);
+    await deletePost(post_id);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
