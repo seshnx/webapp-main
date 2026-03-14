@@ -355,9 +355,9 @@ export default function SocialFeed({
       const hashtags = (postPayload.text?.match(/#(\w+)/g) || []).map(h => h.substring(1));
 
       await createPost({
-        user_id: userId,
-        content: postPayload.text || null,
-        media: media,
+        author_id: userId,
+        text: postPayload.text || '',
+        media_urls: media,
         mentions: mentions,
         hashtags: hashtags,
         visibility: 'public',

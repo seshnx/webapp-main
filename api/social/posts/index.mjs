@@ -131,8 +131,16 @@ export async function POST(request) {
     const body = await request.json();
     const { author_id, text, media_urls, category, parent_id, repost_of_post_id } = body;
 
-    if (!author_id || !text) {
-      return new Response(JSON.stringify({ error: 'Missing required fields: author_id and text' }), {
+    // Validate required fields - text is optional if media is provided
+    if (!author_id) {
+      return new Response(JSON.stringify({ error: 'Missing required field: author_id' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!text && !media_urls && !repost_of_post_id) {
+      return new Response(JSON.stringify({ error: 'Post must have text, media, or be a repost' }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       });
