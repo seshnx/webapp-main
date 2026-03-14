@@ -45,9 +45,5 @@
         }
       ]
     }
-  ],
-  "env": {
-    "MONGODB_URI": "@mongodb_uri",
-    "MONGODB_DB_NAME": "sesh-nx"
-  }
+  ]
 }
