@@ -43,7 +43,16 @@ export default function App(): JSX.Element {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Dark Mode - now synced with user settings
+  // =====================================================
+  // THEME & SETTINGS
+  // =====================================================
+
+  // Apply user settings using the useSettings hook
+  // This handles theme, accessibility, and other user preferences
+  useSettings(userData?.settings || null, userData);
+
+  // Keep darkMode state for backwards compatibility with components
+  // This state is derived from the actual settings
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') === 'dark' ||
@@ -52,18 +61,13 @@ export default function App(): JSX.Element {
     return false;
   });
 
-  // =====================================================
-  // THEME & SETTINGS
-  // =====================================================
-
-  // Initialize settings from storage on mount
+  // Initialize settings from storage on mount (for immediate theme application)
   useEffect(() => {
     const storedSettings = initializeSettingsFromStorage();
     if (storedSettings) {
-      // Apply stored settings immediately
       const root = document.documentElement;
 
-      // Apply theme
+      // Apply theme immediately from localStorage
       if (storedSettings.theme === 'system') {
         const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
         if (prefersDark) {
@@ -76,52 +80,24 @@ export default function App(): JSX.Element {
       } else if (storedSettings.theme === 'dark') {
         root.classList.add('dark');
         setDarkMode(true);
-      } else {
+      } else if (storedSettings.theme === 'light') {
         root.classList.remove('dark');
         setDarkMode(false);
       }
-    }
-  }, []);
-
-  // Apply settings from userData when it loads
-  useEffect(() => {
-    if (userData?.settings) {
-      const settings: UserSettings = userData.settings;
-      const root = document.documentElement;
-
-      // Apply theme
-      if (settings.theme) {
-        if (settings.theme === 'system') {
-          const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-          if (prefersDark) {
-            root.classList.add('dark');
-            setDarkMode(true);
-          } else {
-            root.classList.remove('dark');
-            setDarkMode(false);
-          }
-        } else if (settings.theme === 'dark') {
-          root.classList.add('dark');
-          setDarkMode(true);
-        } else {
-          root.classList.remove('dark');
-          setDarkMode(false);
-        }
-      }
 
       // Apply font size
-      if (settings.accessibility?.fontSize) {
+      if (storedSettings.accessibility?.fontSize) {
         const fontSizes: Record<string, string> = {
           small: '14px',
           medium: '16px',
           large: '18px',
           xlarge: '20px',
         };
-        root.style.fontSize = fontSizes[settings.accessibility.fontSize] || fontSizes.medium;
+        root.style.fontSize = fontSizes[storedSettings.accessibility.fontSize] || fontSizes.medium;
       }
 
       // Apply reduced motion
-      if (settings.accessibility?.reducedMotion) {
+      if (storedSettings.accessibility?.reducedMotion) {
         root.classList.add('reduce-motion');
         root.style.setProperty('--motion-duration', '0s');
       } else {
@@ -130,28 +106,91 @@ export default function App(): JSX.Element {
       }
 
       // Apply high contrast
-      if (settings.accessibility?.highContrast) {
+      if (storedSettings.accessibility?.highContrast) {
         root.classList.add('high-contrast');
       } else {
         root.classList.remove('high-contrast');
       }
 
       // Apply language
-      if (settings.language) {
-        document.documentElement.lang = settings.language;
+      if (storedSettings.language) {
+        document.documentElement.lang = storedSettings.language;
       }
     }
-  }, [userData?.settings]);
+  }, []);
 
+  // Update darkMode state when userData.settings.theme changes
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
+    if (userData?.settings?.theme) {
+      const theme = userData.settings.theme;
+      if (theme === 'dark') {
+        setDarkMode(true);
+      } else if (theme === 'light') {
+        setDarkMode(false);
+      } else {
+        // system theme
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setDarkMode(prefersDark);
+      }
     }
-  }, [darkMode]);
+  }, [userData?.settings?.theme]);
+
+  // Listen for system theme changes when using system theme
+  useEffect(() => {
+    if (userData?.settings?.theme !== 'system') return;
+
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (e: MediaQueryListEvent) => {
+      setDarkMode(e.matches);
+    };
+
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [userData?.settings?.theme]);
+
+  // Apply settings when userData.settings changes (ensures accessibility settings work)
+  useEffect(() => {
+    if (!userData?.settings) return;
+
+    const settings = userData.settings;
+    const root = document.documentElement;
+
+    // Apply font size
+    if (settings.accessibility?.fontSize) {
+      const fontSizes: Record<string, string> = {
+        small: '14px',
+        medium: '16px',
+        large: '18px',
+        xlarge: '20px',
+      };
+      root.style.fontSize = fontSizes[settings.accessibility.fontSize] || fontSizes.medium;
+    }
+
+    // Apply reduced motion
+    if (settings.accessibility?.reducedMotion !== undefined) {
+      if (settings.accessibility.reducedMotion) {
+        root.classList.add('reduce-motion');
+        root.style.setProperty('--motion-duration', '0s');
+      } else {
+        root.classList.remove('reduce-motion');
+        root.style.removeProperty('--motion-duration');
+      }
+    }
+
+    // Apply high contrast
+    if (settings.accessibility?.highContrast !== undefined) {
+      if (settings.accessibility.highContrast) {
+        root.classList.add('high-contrast');
+      } else {
+        root.classList.remove('high-contrast');
+      }
+    }
+
+    // Apply language
+    if (settings.language) {
+      document.documentElement.lang = settings.language;
+    }
+  }, [userData?.settings]);
 
   const toggleTheme = (): void => setDarkMode(!darkMode);
 
