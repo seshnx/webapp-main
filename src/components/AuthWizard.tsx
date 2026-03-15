@@ -198,7 +198,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         return;
       }
 
-      // Update profile with Neon
+      // Update profile with Neon (legal data only)
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
       const displayName = `${form.firstName} ${form.lastName}`;
       const activeRole = finalRoles[0];
@@ -216,7 +216,36 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         search_terms: [form.firstName, form.lastName, displayName].map(s => s?.toLowerCase()).filter(Boolean),
       });
 
-      // Create sub-profiles for each role
+      // Create MongoDB profile with display name and other user-facing data
+      try {
+        const mongoResponse = await fetch('/api/user/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: clerkUser.id,
+            profile: {
+              display_name: displayName,
+              bio: '',
+              website: '',
+              location: ''
+            },
+            subprofiles: finalRoles.map((role: string) => ({
+              role: role,
+              display_name: displayName,
+              created_at: new Date().toISOString()
+            }))
+          })
+        });
+
+        if (!mongoResponse.ok) {
+          console.warn('MongoDB profile creation failed during signup, but Neon update succeeded');
+        }
+      } catch (mongoErr) {
+        console.warn('MongoDB profile creation error during signup:', mongoErr);
+        // Continue anyway - Neon profile is the critical one
+      }
+
+      // Create sub-profiles for each role (legacy - may be deprecated)
       const profileData = {
         displayName: displayName,
       };

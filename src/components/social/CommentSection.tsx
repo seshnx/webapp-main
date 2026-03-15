@@ -108,7 +108,8 @@ export default function CommentSection({
         if (!text.trim() || !userId) return;
         setLoading(true);
 
-        const displayName = currentUserData?.effectiveDisplayName ||
+        const displayName = currentUserData?.displayName ||
+            currentUserData?.effectiveDisplayName ||
             currentUserData?.firstName ||
             currentUser?.displayName ||
             'User';

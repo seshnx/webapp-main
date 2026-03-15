@@ -325,9 +325,17 @@ export default function SocialFeed({
       const userId = user.id || user.uid;
       const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'Fan';
 
-      // Get active profile data from subProfiles
-      const activeProfile = subProfiles?.[activeRole] || {};
-      const displayName = activeProfile?.display_name || userData?.effectiveDisplayName || `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || null;
+      // Get active profile data from MongoDB subprofiles first, then fall back to legacy subProfiles
+      const mongoSubprofile = userData?.subprofiles?.[activeRole];
+      const legacySubprofile = subProfiles?.[activeRole];
+      const activeProfile = mongoSubprofile || legacySubprofile || {};
+
+      // Use display_name from MongoDB structure or displayName from legacy structure
+      const displayName = activeProfile?.display_name ||
+                         activeProfile?.displayName ||
+                         userData?.displayName ||
+                         userData?.effectiveDisplayName ||
+                         `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || null;
       const authorPhoto = activeProfile?.photo_url || userData?.photoURL || user?.imageUrl || null;
 
       // Ensure user exists in database (fallback for webhook sync)

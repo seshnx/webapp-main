@@ -294,7 +294,7 @@ export default function PublicProfileModal({
 
                                 <div className="mb-6">
                                     <h1 className="text-3xl font-extrabold dark:text-white flex items-center gap-2 mb-2">
-                                        {profile.firstName || 'User'} {profile.lastName || ''}
+                                        {profile.displayName || `${profile.firstName || 'User'} ${profile.lastName || ''}`.trim()}
                                         {profile.isVerified && <Shield size={22} className="text-blue-500 fill-blue-500 text-white" />}
                                     </h1>
                                     <div className="flex flex-wrap gap-2 text-sm text-gray-500 dark:text-gray-400 font-medium mb-4">

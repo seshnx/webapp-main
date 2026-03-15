@@ -175,10 +175,17 @@ export default function Navbar({
 
   const getDisplayName = (role: AccountTypeExtended): string => {
       if (!role || role === 'Fan' || role === 'User') {
-          return userData?.effectiveDisplayName || userData?.firstName || 'User';
+          return userData?.displayName || userData?.effectiveDisplayName || userData?.firstName || 'User';
       }
-      const sub = subProfiles?.[role];
-      return sub?.displayName || userData?.effectiveDisplayName || userData?.firstName || 'User';
+      // Check MongoDB subprofiles first, then fall back to legacy subProfiles prop
+      const mongoSub = userData?.subprofiles?.[role];
+      const legacySub = subProfiles?.[role];
+      const sub = mongoSub || legacySub;
+
+      // Use display_name from MongoDB subprofile, or displayName from legacy structure
+      const subDisplayName = mongoSub?.display_name || legacySub?.displayName;
+
+      return subDisplayName || userData?.displayName || userData?.effectiveDisplayName || userData?.firstName || 'User';
   };
 
   const currentDisplayName = getDisplayName(activeRole);
