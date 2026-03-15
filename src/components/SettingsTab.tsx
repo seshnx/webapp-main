@@ -12,7 +12,7 @@ import {
 import { updateProfile, getProfile, getSubProfile, getUserWithProfile } from '../config/neonQueries';
 import { query as neonQuery } from '../config/neon';
 import { ACCOUNT_TYPES } from '../config/constants';
-import { useSettings } from '../hooks/useSettings';
+import { useUserSettings, applySettingsToDom } from '../hooks/useUserSettings';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { AccountType, UserData } from '../types';
 
@@ -391,6 +391,13 @@ export default function SettingsTab({
         }
     }, [location.pathname]);
 
+    // Use MongoDB-based settings for core settings
+    const {
+        settings: mongoSettings,
+        loading: settingsLoading,
+        saveSettings: saveMongoSettings
+    } = useUserSettings(user?.id || user?.uid || null);
+
     const [localSettings, setLocalSettings] = useState<ExtendedSettings>(() => {
         const defaults: ExtendedSettings = {
             // General
@@ -560,8 +567,24 @@ export default function SettingsTab({
             },
         };
 
-        // Merge with existing settings
-        return { ...defaults, ...(userData?.settings || {}) };
+        // Merge with MongoDB settings for core settings
+        const coreSettings = mongoSettings || {};
+        return {
+            ...defaults,
+            // Core settings from MongoDB
+            theme: coreSettings.theme || defaults.theme,
+            language: coreSettings.language || defaults.language,
+            dateFormat: coreSettings.dateFormat || defaults.dateFormat,
+            timeFormat: coreSettings.timeFormat || defaults.timeFormat,
+            timezone: coreSettings.timezone || defaults.timezone,
+            currency: coreSettings.currency || defaults.currency,
+            accessibility: {
+                ...defaults.accessibility,
+                ...(coreSettings.accessibility || {})
+            },
+            // Other settings from userData (for now)
+            ...(userData?.settings || {})
+        };
     });
 
     const [roles, setRoles] = useState<AccountType[]>(userData?.accountTypes || []);
@@ -690,7 +713,27 @@ export default function SettingsTab({
         if (!user) return;
         setSaving(true);
         try {
-            await updateProfile(user.id, {
+            // Save core settings to MongoDB
+            const coreSettings = {
+                theme: localSettings.theme,
+                language: localSettings.language,
+                dateFormat: localSettings.dateFormat,
+                timeFormat: localSettings.timeFormat,
+                timezone: localSettings.timezone,
+                currency: localSettings.currency,
+                accessibility: localSettings.accessibility
+            };
+
+            const userId = user?.id || user?.uid;
+            if (userId) {
+                const mongoSaved = await saveMongoSettings(coreSettings);
+                if (!mongoSaved) {
+                    throw new Error('Failed to save settings to MongoDB');
+                }
+            }
+
+            // Also save to profile (for backwards compatibility and other settings)
+            await updateProfile(userId, {
                 settings: localSettings
             });
 

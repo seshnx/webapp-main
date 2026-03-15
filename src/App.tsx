@@ -6,6 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { Analytics } from '@vercel/analytics/react';
 import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
+import { useUserSettings } from './hooks/useUserSettings';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { getUserWithProfile, updateProfile, createClerkUser } from './config/neonQueries';
 import { queryClient } from './config/queryClient';
@@ -47,12 +48,8 @@ export default function App(): JSX.Element {
   // THEME & SETTINGS
   // =====================================================
 
-  // Apply user settings using the useSettings hook
-  // This handles theme, accessibility, and other user preferences
-  useSettings(userData?.settings || null, userData);
-
   // Keep darkMode state for backwards compatibility with components
-  // This state is derived from the actual settings
+  // This state is derived from the actual settings (now loaded from MongoDB)
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') === 'dark' ||
@@ -191,6 +188,44 @@ export default function App(): JSX.Element {
       document.documentElement.lang = settings.language;
     }
   }, [userData?.settings]);
+
+  // Load MongoDB settings and merge with userData
+  useEffect(() => {
+    const loadMongoSettings = async () => {
+      const userId = userData?.id || userData?.uid;
+      if (!userId) return;
+
+      try {
+        const response = await fetch(`/api/user/settings?user_id=${encodeURIComponent(userId)}`);
+        if (response.ok) {
+          const mongoSettings = await response.json();
+
+          // Merge MongoDB settings with userData
+          setUserData(prev => ({
+            ...prev,
+            settings: {
+              ...prev?.settings,
+              // Core settings from MongoDB take precedence
+              theme: mongoSettings.theme || prev?.settings?.theme,
+              language: mongoSettings.language || prev?.settings?.language,
+              dateFormat: mongoSettings.dateFormat || prev?.settings?.dateFormat,
+              timeFormat: mongoSettings.timeFormat || prev?.settings?.timeFormat,
+              timezone: mongoSettings.timezone || prev?.settings?.timezone,
+              currency: mongoSettings.currency || prev?.settings?.currency,
+              accessibility: {
+                ...prev?.settings?.accessibility,
+                ...mongoSettings.accessibility
+              }
+            }
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load MongoDB settings:', error);
+      }
+    };
+
+    loadMongoSettings();
+  }, [userData?.id, userData?.uid]);
 
   const toggleTheme = (): void => setDarkMode(!darkMode);
 
