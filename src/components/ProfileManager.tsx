@@ -172,7 +172,8 @@ export default function ProfileManager({
     const {
         register,
         handleSubmit,
-        formState: { errors, isDirty }
+        formState: { errors, isDirty },
+        reset
     } = useForm<ProfileFormValues>({
         resolver: zodResolver(mainProfileSchema),
         defaultValues: {
@@ -185,6 +186,46 @@ export default function ProfileManager({
             website: userData?.website || '',
         }
     });
+
+    // Load MongoDB profile data on mount
+    useEffect(() => {
+        const loadMongoProfile = async () => {
+            const userId = user?.id || user?.uid;
+            if (!userId) return;
+
+            try {
+                const response = await fetch(`/api/user/profile?user_id=${encodeURIComponent(userId)}`);
+                if (response.ok) {
+                    const mongoData = await response.json();
+
+                    // Update form with MongoDB profile data
+                    if (mongoData.profile) {
+                        reset({
+                            firstName: userData?.firstName || '',
+                            lastName: userData?.lastName || '',
+                            displayName: mongoData.profile.display_name || userData?.displayName || '',
+                            bio: mongoData.profile.bio || userData?.bio || '',
+                            zip: userData?.zip || '', // Keep zip from userData (from Neon)
+                            hourlyRate: userData?.hourlyRate || 0,
+                            website: mongoData.profile.website || userData?.website || '',
+                        });
+                    }
+
+                    // Store subprofiles for later use
+                    if (mongoData.subprofiles) {
+                        setMongoSubprofiles(mongoData.subprofiles);
+                    }
+                }
+            } catch (error) {
+                console.error('Failed to load MongoDB profile:', error);
+                // Continue with userData from Neon as fallback
+            }
+        };
+
+        loadMongoProfile();
+    }, [user?.id, user?.uid]);
+
+    const [mongoSubprofiles, setMongoSubprofiles] = useState<any>({});
 
     const onMainSubmit = async (data: ProfileFormValues): Promise<void> => {
         setSaving(true);
@@ -204,43 +245,94 @@ export default function ProfileManager({
 
             const userId = user?.id || user?.uid;
 
-            // Build update object - only include fields that have values
-            const profileUpdates: any = {
+            // SEPARATE DATA INTO LEGAL (Neon) AND PROFILE (MongoDB)
+
+            // 1. Legal information only - saved to Neon
+            const legalUpdates: any = {
                 first_name: data.firstName,
                 last_name: data.lastName,
             };
 
+            // 2. Profile information - saved to MongoDB
+            const mongoProfile: any = {};
+
             // Only update display_name if it has a value (don't overwrite with null/empty)
             if (data.displayName && data.displayName.trim()) {
-                profileUpdates.display_name = data.displayName.trim();
+                mongoProfile.display_name = data.displayName.trim();
             }
 
             // Only update bio if it has a value
             if (data.bio && data.bio.trim()) {
-                profileUpdates.bio = data.bio.trim();
-            }
-
-            // Only update zip if it has a value
-            if (data.zip && data.zip.trim()) {
-                profileUpdates.zip = data.zip.trim();
-            }
-
-            // Only update hourlyRate if it has a value (> 0)
-            // Store in talent_info as rate (hourlyRate is ignored by updateProfile)
-            if (data.hourlyRate && data.hourlyRate > 0) {
-                profileUpdates.talent_info = {
-                    ...(userData?.talent_info || {}),
-                    rate: data.hourlyRate.toString()
-                };
+                mongoProfile.bio = data.bio.trim();
             }
 
             // Only update website if it has a value
             if (data.website && data.website.trim()) {
-                profileUpdates.website = data.website.trim();
+                mongoProfile.website = data.website.trim();
             }
 
-            // Update main profile using Neon
-            await updateProfile(userId, profileUpdates);
+            // Only update location if it has a value
+            if (data.location && data.location.trim()) {
+                mongoProfile.location = data.location.trim();
+            }
+
+            // Add photo URL and banner URL if they exist
+            if (userData?.photoURL) {
+                mongoProfile.photo_url = userData.photoURL;
+            }
+            if (userData?.banner_url) {
+                mongoProfile.banner_url = userData.banner_url;
+            }
+
+            // 3. Prepare subprofiles for MongoDB
+            const subprofiles = [];
+
+            // Technician subprofile
+            if (userData?.accountTypes?.includes('Technician')) {
+                subprofiles.push({
+                    role: 'Technician',
+                    specialties: data.specialties || [],
+                    hourly_rate: data.hourlyRate || null,
+                    availability_status: data.availabilityStatus || 'Available',
+                    service_radius: data.serviceRadius || null,
+                    location: data.location ? {
+                        city: data.location.split(',')[0]?.trim() || '',
+                        state: data.location.split(',')[1]?.trim() || '',
+                        zip: data.zip || ''
+                    } : null
+                });
+            }
+
+            // Talent subprofile
+            if (userData?.accountTypes?.includes('Talent')) {
+                subprofiles.push({
+                    role: 'Talent',
+                    genres: data.genres || [],
+                    hourly_rate: data.hourlyRate || null,
+                    bio: data.bio || '',
+                    website: data.website || ''
+                });
+            }
+
+            // Update legal info in Neon (first name, last name only)
+            await updateProfile(userId, legalUpdates);
+
+            // Update profile and subprofiles in MongoDB
+            if (Object.keys(mongoProfile).length > 0 || subprofiles.length > 0) {
+                const mongoResponse = await fetch('/api/user/profile', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: userId,
+                        profile: Object.keys(mongoProfile).length > 0 ? mongoProfile : undefined,
+                        subprofiles: subprofiles.length > 0 ? subprofiles : undefined
+                    })
+                });
+
+                if (!mongoResponse.ok) {
+                    console.warn('MongoDB profile update failed, but Neon update succeeded');
+                }
+            }
                 hourly_rate: data.hourlyRate || null,
                 website: data.website || null,
                 use_legal_name_only: useLegalNameOnly,
@@ -267,11 +359,19 @@ export default function ProfileManager({
         try {
             const url = await uploadImage(file, 'profile-photos');
 
-            // Update profile using Neon
-            await updateProfile(userId, {
-                avatar_url: url,
-                photo_url: url, // Update both fields for compatibility
+            // Update profile photo URL in MongoDB
+            const mongoResponse = await fetch('/api/user/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    profile: { photo_url: url }
+                })
             });
+
+            if (!mongoResponse.ok) {
+                throw new Error('Failed to update profile photo in MongoDB');
+            }
 
             toast.success('Photo updated!', { id: toastId });
         } catch (err) {
@@ -292,10 +392,19 @@ export default function ProfileManager({
             // Upload to Vercel Blob
             const url = await uploadImage(file, 'profile-banners');
 
-            // Update profile using Neon
-            await updateProfile(userId, {
-                banner_url: url,
+            // Update banner URL in MongoDB
+            const mongoResponse = await fetch('/api/user/profile', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    profile: { banner_url: url }
+                })
             });
+
+            if (!mongoResponse.ok) {
+                throw new Error('Failed to update banner in MongoDB');
+            }
 
             toast.success('Cover banner updated!', { id: toastId });
         } catch (err) {
@@ -310,10 +419,19 @@ export default function ProfileManager({
     const handleSettingsUpdate = async (newSettings: any): Promise<void> => {
         const userId = user?.id || user?.uid;
         try {
-            // Update settings using Neon
-            await updateProfile(userId, {
-                settings: newSettings,
+            // Update settings using MongoDB
+            const response = await fetch('/api/user/settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: userId,
+                    settings: newSettings
+                })
             });
+
+            if (!response.ok) {
+                throw new Error('Failed to save settings');
+            }
 
             toast.success("Settings saved.");
         } catch (error) {

@@ -622,9 +622,6 @@ export default function SettingsTab({
         }
     }, [userData?.activeProfileRole]);
 
-    // Apply settings immediately when they change
-    useSettings(localSettings, userData);
-
     // Generic Toggle Handler - applies immediately
     const handleToggle = (category: keyof ExtendedSettings | null, key: string, subKey: string | null = null): void => {
         setLocalSettings(prev => {

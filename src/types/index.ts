@@ -63,14 +63,17 @@ export interface UserData {
   effectiveDisplayName?: string;
   email?: string;
   photoURL?: string | null;
+  banner_url?: string | null; // MongoDB field
   accountTypes?: AccountType[];
   activeProfileRole?: AccountType;
   preferredRole?: AccountType;
   talentSubRole?: TalentSubRole;
 
-  // Profile fields
+  // Profile fields (MongoDB)
   bio?: string;
   profileName?: string;
+  website?: string; // MongoDB field
+  location?: string; // MongoDB field
   genres?: string[];
   instruments?: Record<string, string[]>;
   rates?: number;
@@ -85,6 +88,9 @@ export interface UserData {
 
   // Settings
   settings?: UserSettings;
+
+  // MongoDB subprofiles by role
+  subprofiles?: Record<string, any>;
 
   // Timestamps
   createdAt?: number;

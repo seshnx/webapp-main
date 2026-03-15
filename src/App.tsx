@@ -227,6 +227,39 @@ export default function App(): JSX.Element {
     loadMongoSettings();
   }, [userData?.id, userData?.uid]);
 
+  // Load MongoDB profile data and merge with userData
+  useEffect(() => {
+    const loadMongoProfile = async () => {
+      const userId = userData?.id || userData?.uid;
+      if (!userId) return;
+
+      try {
+        const response = await fetch(`/api/user/profile?user_id=${encodeURIComponent(userId)}`);
+        if (response.ok) {
+          const mongoData = await response.json();
+
+          // Merge MongoDB profile data with userData
+          setUserData(prev => ({
+            ...prev,
+            // Profile data from MongoDB takes precedence
+            displayName: mongoData.profile?.display_name || prev?.displayName,
+            bio: mongoData.profile?.bio || prev?.bio,
+            website: mongoData.profile?.website || prev?.website,
+            photoURL: mongoData.profile?.photo_url || prev?.photoURL,
+            banner_url: mongoData.profile?.banner_url || prev?.banner_url,
+            location: mongoData.profile?.location || prev?.location,
+            // Store subprofiles for role-specific data
+            subprofiles: mongoData.subprofiles || {}
+          }));
+        }
+      } catch (error) {
+        console.error('Failed to load MongoDB profile:', error);
+      }
+    };
+
+    loadMongoProfile();
+  }, [userData?.id, userData?.uid]);
+
   const toggleTheme = (): void => setDarkMode(!darkMode);
 
   // =====================================================
