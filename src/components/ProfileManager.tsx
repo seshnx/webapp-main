@@ -204,13 +204,43 @@ export default function ProfileManager({
 
             const userId = user?.id || user?.uid;
 
-            // Update main profile using Neon
-            await updateProfile(userId, {
+            // Build update object - only include fields that have values
+            const profileUpdates: any = {
                 first_name: data.firstName,
                 last_name: data.lastName,
-                display_name: data.displayName || null,
-                bio: data.bio || null,
-                zip: data.zip || null,
+            };
+
+            // Only update display_name if it has a value (don't overwrite with null/empty)
+            if (data.displayName && data.displayName.trim()) {
+                profileUpdates.display_name = data.displayName.trim();
+            }
+
+            // Only update bio if it has a value
+            if (data.bio && data.bio.trim()) {
+                profileUpdates.bio = data.bio.trim();
+            }
+
+            // Only update zip if it has a value
+            if (data.zip && data.zip.trim()) {
+                profileUpdates.zip = data.zip.trim();
+            }
+
+            // Only update hourlyRate if it has a value (> 0)
+            // Store in talent_info as rate (hourlyRate is ignored by updateProfile)
+            if (data.hourlyRate && data.hourlyRate > 0) {
+                profileUpdates.talent_info = {
+                    ...(userData?.talent_info || {}),
+                    rate: data.hourlyRate.toString()
+                };
+            }
+
+            // Only update website if it has a value
+            if (data.website && data.website.trim()) {
+                profileUpdates.website = data.website.trim();
+            }
+
+            // Update main profile using Neon
+            await updateProfile(userId, profileUpdates);
                 hourly_rate: data.hourlyRate || null,
                 website: data.website || null,
                 use_legal_name_only: useLegalNameOnly,

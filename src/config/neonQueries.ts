@@ -710,6 +710,7 @@ export async function updateProfile(
     first_name,
     last_name,
     email,
+    display_name,
     use_legal_name_only,
     use_user_name_only,
     effective_display_name,
@@ -776,6 +777,14 @@ export async function updateProfile(
       'UPDATE clerk_users SET email = $1 WHERE id = $2',
       [email, userId],
       'updateProfile-email'
+    );
+  }
+
+  if (display_name !== undefined) {
+    await executeQuery(
+      'UPDATE clerk_users SET display_name = $1 WHERE id = $2',
+      [display_name, userId],
+      'updateProfile-display_name'
     );
   }
 
