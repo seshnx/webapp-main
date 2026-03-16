@@ -41,14 +41,6 @@ export default defineConfig({
       // Use browser-safe API for client-side builds
       // The generated api.js imports from convex/server which is server-side only
       "convex/_generated/api": path.resolve(__dirname, "./convex/_generated/api-browser.js"),
-      // Firebase client SDK has been removed; map legacy imports to local shims.
-      "firebase/app": path.resolve(__dirname, "./src/adapters/firebase/app.js"),
-      "firebase/auth": path.resolve(__dirname, "./src/adapters/firebase/auth.js"),
-      "firebase/firestore": path.resolve(__dirname, "./src/adapters/firebase/firestore.js"),
-      "firebase/storage": path.resolve(__dirname, "./src/adapters/firebase/storage.js"),
-      "firebase/functions": path.resolve(__dirname, "./src/adapters/firebase/functions.js"),
-      "firebase/database": path.resolve(__dirname, "./src/adapters/firebase/database.js"),
-      "mongodb": path.resolve(__dirname, "./src/adapters/mongodb.js"),
     },
   },
   build: {
@@ -96,13 +88,12 @@ export default defineConfig({
     },
   },
   optimizeDeps: {
-    exclude: ['convex/server', 'mongodb'],
+    exclude: ['convex/server'],
     include: [
       'react',
       'react-dom',
       'react-router',
       'react-router-dom',
-      '@supabase/supabase-js',
       'convex/react',
       '@sentry/react'
     ],

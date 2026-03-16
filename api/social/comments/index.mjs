@@ -10,6 +10,10 @@ import {
   updateComment as updateCommentInDb,
   deleteComment as deleteCommentInDb,
 } from '../../../../src/config/mongoSocialApi.js';
+import {
+  syncCommentToConvex,
+  updatePostCommentCountConvex
+} from '../../../../src/config/convexSync.js';
 
 let mongoInitialized = false;
 let initPromise = null;
@@ -73,7 +77,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { post_id, author_id, text, content, parent_id } = body;
+    const { post_id, author_id, text, content, parent_id, display_name, author_photo } = body;
 
     // Accept both 'text' and 'content' for compatibility
     const commentContent = text || content;
@@ -91,14 +95,15 @@ export async function POST(request) {
       author_id,
       content: commentContent,
       parent_id,
+      display_name,
+      author_photo,
     });
 
-    // Broadcast real-time update if Socket.io server is available
-    if (global.broadcastNewComment) {
-      global.broadcastNewComment(newComment).catch(err =>
-        console.error('Failed to broadcast new comment:', err)
-      );
-    }
+    // Sync to Convex for real-time updates (replaces Socket.IO)
+    syncCommentToConvex(newComment);
+
+    // Update post comment count in Convex
+    updatePostCommentCountConvex(post_id, -1); // Will be updated by client
 
     return new Response(JSON.stringify(newComment), {
       status: 201,

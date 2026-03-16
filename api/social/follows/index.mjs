@@ -10,6 +10,10 @@ import {
   getFollowers as getFollowersFromDb,
   getFollowing as getFollowingFromDb,
 } from '../../../../src/config/mongoSocialApi.js';
+import {
+  syncFollowToConvex,
+  removeFollowFromConvex
+} from '../../../../src/config/convexSync.js';
 
 let mongoInitialized = false;
 let initPromise = null;
@@ -94,12 +98,8 @@ export async function POST(request) {
 
     await followUserInDb(follower_id, following_id);
 
-    // Broadcast real-time update if Socket.io server is available
-    if (global.broadcastFollowEvent) {
-      global.broadcastFollowEvent(follower_id, following_id).catch(err =>
-        console.error('Failed to broadcast follow event:', err)
-      );
-    }
+    // Sync to Convex for real-time updates (replaces Socket.IO)
+    syncFollowToConvex(follower_id, following_id, new Date().toISOString());
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
@@ -136,6 +136,10 @@ export async function DELETE(request) {
     }
 
     await unfollowUserInDb(follower_id, following_id);
+
+    // Remove from Convex for real-time updates (replaces Socket.IO)
+    removeFollowFromConvex(follower_id, following_id);
+
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     });

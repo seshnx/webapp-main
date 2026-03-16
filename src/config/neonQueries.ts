@@ -710,7 +710,6 @@ export async function updateProfile(
     first_name,
     last_name,
     email,
-    display_name,
     use_legal_name_only,
     use_user_name_only,
     effective_display_name,
@@ -780,14 +779,6 @@ export async function updateProfile(
     );
   }
 
-  if (display_name !== undefined) {
-    await executeQuery(
-      'UPDATE clerk_users SET display_name = $1 WHERE id = $2',
-      [display_name, userId],
-      'updateProfile-display_name'
-    );
-  }
-
   if (use_legal_name_only !== undefined) {
     await executeQuery(
       'UPDATE clerk_users SET use_legal_name_only = $1 WHERE id = $2',
@@ -814,7 +805,7 @@ export async function updateProfile(
 
   // Fields that don't exist in either table - ignore them
   const ignoredFields = [
-    'username', 'profile_photo_url', 'hourlyRate'
+    'username', 'profile_photo_url', 'hourlyRate', 'display_name', 'bio', 'website', 'location', 'photo_url', 'banner_url'
   ];
 
   for (const [key, value] of Object.entries(profileUpdates)) {

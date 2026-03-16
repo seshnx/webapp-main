@@ -59,6 +59,7 @@ export interface PostCardProps {
     post: Post;
     currentUser?: any;
     currentUserData?: any;
+    subProfiles?: Record<string, any>;
     openPublicProfile?: (userId: string) => void;
     onReport?: () => void;
     onDelete?: (postId: string) => void;
@@ -86,6 +87,7 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
     post,
     currentUser,
     currentUserData,
+    subProfiles,
     openPublicProfile,
     onReport,
     onDelete,
@@ -654,6 +656,7 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
                             post={post}
                             currentUser={currentUser}
                             currentUserData={currentUserData}
+                            subProfiles={subProfiles}
                             blockedUsers={[]}
                             onCountChange={setCommentCount}
                         />

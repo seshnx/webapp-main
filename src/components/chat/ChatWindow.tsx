@@ -44,6 +44,7 @@ interface EmbedModalState {
 export interface ChatWindowProps {
     user?: any;
     userData?: any;
+    subProfiles?: Record<string, any>;
     activeChat?: ActiveChat | null;
     conversations?: any[];
     onBack?: () => void;
@@ -71,7 +72,7 @@ interface ChatMessage {
     reactions?: Record<string, string[] | Record<string, boolean>>;
 }
 
-export default function ChatWindow({ user, userData, activeChat, conversations, onBack, toggleDetails, openPublicProfile }: ChatWindowProps) {
+export default function ChatWindow({ user, userData, subProfiles, activeChat, conversations, onBack, toggleDetails, openPublicProfile }: ChatWindowProps) {
     const { t } = useLanguage();
     const [linkPreviewData, setLinkPreviewData] = useState<Record<string, any>>({});
     const [embedModal, setEmbedModal] = useState<EmbedModalState>({ isOpen: false, url: '', previewData: null });
@@ -249,6 +250,24 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
             return;
         }
 
+        // Get active profile data for display name and photo
+        const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'Fan';
+        const mongoSubprofile = userData?.subprofiles?.[activeRole];
+        const legacySubprofile = subProfiles?.[activeRole];
+        const activeProfile = mongoSubprofile || legacySubprofile || {};
+
+        const senderName = activeProfile?.display_name ||
+            activeProfile?.displayName ||
+            userData?.displayName ||
+            userData?.effectiveDisplayName ||
+            userData?.firstName ||
+            'User';
+
+        const senderPhoto = activeProfile?.photo_url ||
+            userData?.photoURL ||
+            user?.imageUrl ||
+            undefined;
+
         const forwardText = message.b || '';
         const forwardMedia = message.media || null;
 
@@ -258,8 +277,8 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
                 await sendMessageMutation({
                     chatId: targetChatId,
                     senderId: userId,
-                    senderName: userData.firstName || 'User',
-                    senderPhoto: userData.photoURL || undefined, // Strict undefined
+                    senderName: senderName,
+                    senderPhoto: senderPhoto, // Strict undefined
                     content: `↪ Forwarded: ${forwardText}`,
                     media: forwardMedia || undefined, // Strict undefined
                 });
@@ -313,13 +332,31 @@ export default function ChatWindow({ user, userData, activeChat, conversations, 
         }
 
         try {
+            // Get active profile data for display name and photo
+            const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'Fan';
+            const mongoSubprofile = userData?.subprofiles?.[activeRole];
+            const legacySubprofile = subProfiles?.[activeRole];
+            const activeProfile = mongoSubprofile || legacySubprofile || {};
+
+            const senderName = activeProfile?.display_name ||
+                activeProfile?.displayName ||
+                userData?.displayName ||
+                userData?.effectiveDisplayName ||
+                userData?.firstName ||
+                'User';
+
+            const senderPhoto = activeProfile?.photo_url ||
+                userData?.photoURL ||
+                user?.imageUrl ||
+                undefined;
+
             // Send message
             // GUARD: Ensure strictly undefined for null/empty optional fields
             await sendMessageMutation({
                 chatId,
                 senderId: userId,
-                senderName: userData.firstName || 'User',
-                senderPhoto: userData.photoURL || undefined, // undefined if null
+                senderName: senderName,
+                senderPhoto: senderPhoto, // undefined if null
                 content: msgText || undefined,               // undefined if empty
                 media: mediaData || undefined,               // undefined if null
                 replyTo: replyingTo ? {

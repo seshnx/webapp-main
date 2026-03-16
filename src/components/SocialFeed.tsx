@@ -12,7 +12,7 @@ import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
 import { usePosts, useCreatePost } from '../hooks/useSocialQueries';
-import { useSocket } from '../hooks/useSocket';
+import { useRealtimePosts } from '../hooks/useRealtimePosts';
 import type { UserData } from '../types';
 
 // =====================================================
@@ -139,39 +139,25 @@ export default function SocialFeed({
     isRefetching
   } = usePosts(queryFilters, 20, feedMode !== FEED_MODES.DISCOVER);
 
-  // Socket.io for real-time post updates
-  const { socket: socketConnection, isConnected: socketConnected, on: socketOn } = useSocket(userId, feedMode !== FEED_MODES.DISCOVER);
+  // Convex for real-time post updates (replaces Socket.io for Vercel compatibility)
+  const { posts: realtimePosts } = useRealtimePosts({
+    enabled: feedMode !== FEED_MODES.DISCOVER,
+    userId,
+    followingIds,
+    feedMode: feedMode === 'following' ? 'following' : 'for_you',
+  });
 
-  // Real-time post updates via Socket.io
+  // Merge real-time posts with React Query posts
   React.useEffect(() => {
-    if (!socketConnection || !socketConnected) {
-      return;
-    }
-
-    const handleNewPost = (data: any) => {
-      const newPost = data.post;
-      if (!newPost) return;
-
-      // Add new post to cache optimistically
+    if (realtimePosts.length > 0) {
+      // Add real-time posts to cache
       queryClient.setQueryData(['posts', queryFilters], (old: any[] = []) => {
-        // Check if post already exists
-        if (old.some(post => post.id === newPost.id)) {
-          return old;
-        }
-
-        // Add new post to the beginning
-        return [newPost, ...old];
+        const existingIds = new Set(old.map((post: any) => post.id));
+        const newPosts = realtimePosts.filter((post: any) => !existingIds.has(post.id));
+        return [...newPosts, ...old];
       });
-    };
-
-    socketOn('new_post', handleNewPost);
-
-    return () => {
-      if (socketConnection) {
-        socketConnection.off('new_post', handleNewPost);
-      }
-    };
-  }, [socketConnection, socketConnected, socketOn, queryClient, queryFilters]);
+    }
+  }, [realtimePosts, queryClient, queryFilters]);
 
   // React Query mutation for creating posts - replaces manual API call
   const createPostMutation = useCreatePost();
@@ -576,6 +562,7 @@ export default function SocialFeed({
                   post={post}
                   currentUser={user}
                   currentUserData={userData}
+                  subProfiles={subProfiles}
                   openPublicProfile={openPublicProfile || (() => {})}
                   onReport={() => setReportTarget(post)}
                   onDelete={(postId) => setPosts(prev => prev.filter(p => p.id !== postId))}

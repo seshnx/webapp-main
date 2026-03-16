@@ -12,6 +12,11 @@ import {
   getPostById,
   hasUserReposted
 } from '../../../src/config/mongoSocialApi.js';
+import {
+  syncPostToConvex,
+  updatePostCommentCountConvex,
+  updatePostReactionCountConvex
+} from '../../../src/config/convexSync.js';
 
 // Initialize MongoDB on first call
 let mongoInitialized = false;
@@ -130,7 +135,7 @@ export async function POST(request) {
     }
 
     const body = await request.json();
-    const { author_id, text, media_urls, category, parent_id, repost_of_post_id } = body;
+    const { author_id, text, media_urls, category, parent_id, repost_of_post_id, display_name, author_photo, posted_as_role } = body;
 
     // Validate required fields - text is optional if media is provided
     if (!author_id) {
@@ -154,14 +159,13 @@ export async function POST(request) {
       category,
       parent_id,
       repost_of: repost_of_post_id,
+      display_name,
+      author_photo,
+      posted_as_role,
     });
 
-    // Broadcast real-time update if Socket.io server is available
-    if (global.broadcastNewPost) {
-      global.broadcastNewPost(newPost).catch(err =>
-        console.error('Failed to broadcast new post:', err)
-      );
-    }
+    // Sync to Convex for real-time updates (replaces Socket.IO)
+    syncPostToConvex(newPost);
 
     return new Response(JSON.stringify(newPost), {
       status: 201,

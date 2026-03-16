@@ -233,6 +233,7 @@ export default function ChatInterface({
           activeChat={activeChat}
           user={user}
           userData={userData}
+          subProfiles={subProfiles}
           conversations={conversations}
           onBack={() => handleChatSelect(null)}
           toggleDetails={() => setShowDetails(!showDetails)}

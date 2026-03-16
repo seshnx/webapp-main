@@ -168,4 +168,34 @@ export default defineSchema({
   })
     .index("by_target", ["targetId", "targetType"])
     .index("by_user_target", ["userId", "targetId", "targetType"]),
+
+  // Posts table - for real-time post feed updates (sync from MongoDB/Neon)
+  posts: defineTable({
+    postId: v.string(), // Post ID from MongoDB/Neon
+    userId: v.string(), // Author ID
+    displayName: v.optional(v.string()),
+    authorPhoto: v.optional(v.string()),
+    username: v.optional(v.string()),
+    content: v.optional(v.string()),
+    media: v.optional(v.array(v.any())), // Media attachments
+    createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
+    commentCount: v.number(),
+    reactionCount: v.number(),
+    saveCount: v.number(),
+    role: v.optional(v.string()), // Posted as role (account type)
+  })
+    .index("by_created", ["createdAt"])
+    .index("by_author", ["userId", "createdAt"])
+    .index("by_post_id", ["postId"]),
+
+  // Follows table - for real-time follow events (sync from MongoDB)
+  follows: defineTable({
+    followerId: v.string(), // User who is following
+    followingId: v.string(), // User being followed
+    createdAt: v.number(),
+  })
+    .index("by_follower", ["followerId", "createdAt"])
+    .index("by_following", ["followingId", "createdAt"])
+    .index("by_pair", ["followerId", "followingId"]),
 });

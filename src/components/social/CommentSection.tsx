@@ -37,6 +37,7 @@ export interface CommentSectionProps {
     post: PostData;
     currentUser?: any;
     currentUserData?: UserData | null;
+    subProfiles?: Record<string, any>;
     blockedUsers?: string[];
     onCountChange?: (count: number) => void;
 }
@@ -48,6 +49,7 @@ export default function CommentSection({
     post,
     currentUser,
     currentUserData,
+    subProfiles = {},
     blockedUsers = [],
     onCountChange
 }: CommentSectionProps) {
@@ -108,11 +110,24 @@ export default function CommentSection({
         if (!text.trim() || !userId) return;
         setLoading(true);
 
-        const displayName = currentUserData?.displayName ||
+        // Get active profile data for display name and photo
+        const activeRole = currentUserData?.activeProfileRole || currentUserData?.accountTypes?.[0] || 'Fan';
+        const mongoSubprofile = currentUserData?.subprofiles?.[activeRole];
+        const legacySubprofile = subProfiles?.[activeRole];
+        const activeProfile = mongoSubprofile || legacySubprofile || {};
+
+        const displayName = activeProfile?.display_name ||
+            activeProfile?.displayName ||
+            currentUserData?.displayName ||
             currentUserData?.effectiveDisplayName ||
             currentUserData?.firstName ||
             currentUser?.displayName ||
             'User';
+
+        const authorPhoto = activeProfile?.photo_url ||
+            currentUserData?.photoURL ||
+            currentUser?.imageUrl ||
+            null;
 
         try {
             // Ensure content is not empty (required by schema)
@@ -123,11 +138,13 @@ export default function CommentSection({
                 return;
             }
 
-            // Create comment using Neon
+            // Create comment using Neon with display name and photo
             await createComment({
                 post_id: post.id,
-                user_id: userId,
+                author_id: userId,
                 content: commentContent,
+                display_name: displayName,
+                author_photo: authorPhoto,
             });
 
             // Update post comment count
@@ -143,7 +160,7 @@ export default function CommentSection({
                     type: 'comment',
                     fromUserId: userId,
                     fromUserName: displayName,
-                    fromUserPhoto: currentUserData?.photoURL,
+                    fromUserPhoto: authorPhoto,
                     postId: post.id,
                     postPreview: post.text?.substring(0, 50),
                     message: 'commented on your post'
