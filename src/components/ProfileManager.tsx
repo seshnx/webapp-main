@@ -333,13 +333,6 @@ export default function ProfileManager({
                     console.warn('MongoDB profile update failed, but Neon update succeeded');
                 }
             }
-                hourly_rate: data.hourlyRate || null,
-                website: data.website || null,
-                use_legal_name_only: useLegalNameOnly,
-                use_user_name_only: useUserNameOnly,
-                effective_display_name: effectiveName,
-                search_terms: searchTerms,
-            });
 
             toast.success('Profile Updated & Synced!', { id: toastId });
         } catch (error) {
@@ -610,21 +603,8 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
             // Upsert sub-profile
             await upsertSubProfile(userId, role, dataToSave);
 
-            // Update main profile if this is the active role
-            if (userData.activeProfileRole === role) {
-                await updateProfile(userId, {
-                    display_name: effectiveName,
-                    effective_display_name: effectiveName,
-                    search_terms: [effectiveName.toLowerCase()],
-                });
-            }
-
-            // Update studio name if applicable
-            if (role === 'Studio' && syncStudioOps) {
-                await updateProfile(userId, {
-                    studio_name: effectiveName,
-                });
-            }
+            // Note: display_name and effective_display_name are now handled by MongoDB
+            // Subprofiles are updated through the MongoDB API in the main profile save function
 
             // Refresh sub-profiles in parent component
             if (onSave) {

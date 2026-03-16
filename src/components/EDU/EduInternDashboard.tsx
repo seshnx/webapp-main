@@ -48,14 +48,8 @@ export default function EduInternDashboard({ user: propUser, userData: propUserD
     // @ts-ignore - supabase is global for legacy support
     const supabase = (window as any).supabase;
 
-    // Use EduAuth hook if available, otherwise fall back to props (backward compatibility)
-    let eduAuth;
-    try {
-        eduAuth = useEduAuth();
-    } catch (e) {
-        // Not wrapped in EduAuthProvider, use props
-        eduAuth = null;
-    }
+    // Use EduAuth hook (returns null if not wrapped in EduAuthProvider)
+    const eduAuth = useEduAuth();
 
     const user = eduAuth?.user || propUser;
     const userData = eduAuth?.userData || propUserData;

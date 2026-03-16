@@ -9,6 +9,10 @@ import {
   getReactions as getReactionsFromDb,
   getUserReaction,
 } from '../../../../src/config/mongoSocialApi.js';
+import {
+  syncReactionToConvex,
+  removeReactionFromConvex
+} from '../../../../src/config/convexSync.js';
 
 let mongoInitialized = false;
 let initPromise = null;
@@ -96,20 +100,19 @@ export async function POST(request) {
 
     const result = await toggleReactionInDb(target_id, target_type, emoji, user_id);
 
-    // Broadcast real-time update if Socket.io server is available
-    if (global.broadcastReactionUpdate) {
-      global.broadcastReactionUpdate(target_id, target_type, {
-        id: `${target_id}_${user_id}`,
+    // Sync to Convex for real-time updates (replaces Socket.IO)
+    if (result.action === 'added') {
+      syncReactionToConvex({
         target_id,
         target_type,
-        emoji,
         user_id,
-        created_at: new Date(),
-        action: result.action
-      }).catch(err =>
-        console.error('Failed to broadcast reaction update:', err)
-      );
+        emoji,
+        created_at: new Date().toISOString()
+      });
+    } else if (result.action === 'removed') {
+      removeReactionFromConvex(target_id, target_type, user_id);
     }
+  }
 
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },

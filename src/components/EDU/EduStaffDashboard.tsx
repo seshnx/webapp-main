@@ -31,14 +31,8 @@ const PERM_TO_TAB: Record<string, string> = {
 };
 
 export default function EduStaffDashboard({ user: propUser, userData: propUserData, currentView }: EduStaffDashboardProps) {
-    // Use EduAuth hook if available, otherwise fall back to props (backward compatibility)
-    let eduAuth: ReturnType<typeof useEduAuth> | null = null;
-    try {
-        eduAuth = useEduAuth();
-    } catch (e) {
-        // Not wrapped in EduAuthProvider, use props
-        eduAuth = null;
-    }
+    // Use EduAuth hook (returns null if not wrapped in EduAuthProvider)
+    const eduAuth = useEduAuth();
 
     const user = eduAuth?.eduUser || propUser;
     const userData = eduAuth?.eduUserData || propUserData;
