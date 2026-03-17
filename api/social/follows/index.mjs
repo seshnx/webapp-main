@@ -3,17 +3,17 @@
  * MongoDB social follows
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodbApi.js';
+import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodbApi.js';
 import {
   followUser as followUserInDb,
   unfollowUser as unfollowUserInDb,
   getFollowers as getFollowersFromDb,
   getFollowing as getFollowingFromDb,
-} from '../../../../src/config/mongoSocialApi.js';
+} from '../../../src/config/mongoSocialApi.js';
 import {
   syncFollowToConvex,
   removeFollowFromConvex
-} from '../../../../src/config/convexSync.js';
+} from '../../../src/config/convexSync.js';
 
 let mongoInitialized = false;
 let initPromise = null;

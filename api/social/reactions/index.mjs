@@ -3,16 +3,16 @@
  * MongoDB likes and emoji reactions
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodbApi.js';
+import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodbApi.js';
 import {
   toggleReaction as toggleReactionInDb,
   getReactions as getReactionsFromDb,
   getUserReaction,
-} from '../../../../src/config/mongoSocialApi.js';
+} from '../../../src/config/mongoSocialApi.js';
 import {
   syncReactionToConvex,
   removeReactionFromConvex
-} from '../../../../src/config/convexSync.js';
+} from '../../../src/config/convexSync.js';
 
 let mongoInitialized = false;
 let initPromise = null;

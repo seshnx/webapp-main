@@ -3,13 +3,13 @@
  * MongoDB saved posts (bookmarks)
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodbApi.js';
+import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodbApi.js';
 import {
   savePost as savePostToDb,
   unsavePost as unsavePostFromDb,
   getSavedPosts as getSavedPostsFromDb,
   isPostSaved,
-} from '../../../../src/config/mongoSocialApi.js';
+} from '../../../src/config/mongoSocialApi.js';
 
 let mongoInitialized = false;
 let initPromise = null;

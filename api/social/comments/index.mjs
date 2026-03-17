@@ -3,17 +3,17 @@
  * MongoDB post comments
  */
 
-import { initMongoDB, isMongoDbAvailable } from '../../../../src/config/mongodbApi.js';
+import { initMongoDB, isMongoDbAvailable } from '../../../src/config/mongodbApi.js';
 import {
   getComments as getCommentsFromDb,
   createComment as createCommentInDb,
   updateComment as updateCommentInDb,
   deleteComment as deleteCommentInDb,
-} from '../../../../src/config/mongoSocialApi.js';
+} from '../../../src/config/mongoSocialApi.js';
 import {
   syncCommentToConvex,
   updatePostCommentCountConvex
-} from '../../../../src/config/convexSync.js';
+} from '../../../src/config/convexSync.js';
 
 let mongoInitialized = false;
 let initPromise = null;

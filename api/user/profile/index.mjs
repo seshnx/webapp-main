@@ -3,7 +3,7 @@
  * MongoDB-based user profiles and subprofiles
  */
 
-import { initMongoDB, isMongoDbAvailable, getMongoDb } from '../../../../src/config/mongodbApi.js';
+import { initMongoDB, isMongoDbAvailable, getMongoDb } from '../../../src/config/mongodbApi.js';
 
 let mongoInitialized = false;
 let initPromise = null;

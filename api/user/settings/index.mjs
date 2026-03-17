@@ -3,7 +3,7 @@
  * MongoDB-based user settings storage
  */
 
-import { initMongoDB, isMongoDbAvailable, getMongoDb } from '../../../../src/config/mongodbApi.js';
+import { initMongoDB, isMongoDbAvailable, getMongoDb } from '../../../src/config/mongodbApi.js';
 
 let mongoInitialized = false;
 let initPromise = null;
