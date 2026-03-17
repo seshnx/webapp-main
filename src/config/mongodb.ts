@@ -11,10 +11,16 @@
  * - SOCIAL FEATURES (posts, comments, reactions, follows, notifications)
  *
  * Core booking data (transactions, payments, audit trail) remains in Neon (PostgreSQL).
+ *
+ * BROWSER COMPATIBILITY: This file uses dynamic import to avoid bundling
+ * the MongoDB Node.js client in the browser, which would cause errors.
  */
 
-import { MongoClient, Db } from 'mongodb';
 import * as Sentry from '@sentry/react';
+
+// Types for MongoDB (browser-safe)
+type MongoClient = any;
+type Db = any;
 
 // MongoDB connection state
 let mongoClient: MongoClient | null = null;
@@ -56,8 +62,16 @@ function getMongoDbName(): string {
 /**
  * Initialize MongoDB connection
  * Should be called once at application startup
+ *
+ * Uses dynamic import to avoid bundling MongoDB in browser builds
  */
 export async function initMongoDB(): Promise<void> {
+  // Check if running in browser environment
+  if (typeof window !== 'undefined') {
+    console.warn('MongoDB direct connection is not available in browser. Use HTTP API instead.');
+    return;
+  }
+
   const connectionString = getMongoConnectionString();
 
   if (!connectionString) {
@@ -66,6 +80,8 @@ export async function initMongoDB(): Promise<void> {
   }
 
   try {
+    // Dynamic import to avoid bundling in browser
+    const { MongoClient } = await import('mongodb');
     mongoClient = new MongoClient(connectionString);
     await mongoClient.connect();
     mongoDb = mongoClient.db(getMongoDbName());
