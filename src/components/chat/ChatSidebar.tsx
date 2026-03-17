@@ -55,10 +55,6 @@ export interface ChatSidebarProps {
 }
 
 export default function ChatSidebar({ user, userData, subProfiles = {}, conversations = [], activeChat, onSelectChat }: ChatSidebarProps) {
-    // TODO: Migrate to Neon/Convex - Supabase legacy code
-    // @ts-ignore - supabase is global for legacy support
-    const supabase = (window as any).supabase;
-
     const { t } = useLanguage();
 
     const [showSearch, setShowSearch] = useState<boolean>(false);
@@ -81,28 +77,26 @@ export default function ChatSidebar({ user, userData, subProfiles = {}, conversa
     const handleUserSearch = async (term: string) => {
         setSearchQuery(term);
         const searchTerm = term.trim();
-        if (searchTerm.length > 1 && supabase) {
-            const userId = user?.id || user?.uid;
+        const userId = user?.id || user?.uid;
+
+        if (searchTerm.length > 1) {
             try {
-                // Search by first name or last name
-                const { data: profiles, error } = await supabase
-                    .from('profiles')
-                    .select('id, first_name, last_name, avatar_url, active_role')
-                    .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%`)
-                    .neq('id', userId)
-                    .limit(20);
+                // Build query parameters
+                const params = new URLSearchParams({
+                    q: searchTerm,
+                    exclude_user_id: userId,
+                    limit: '20',
+                });
 
-                if (error) throw error;
+                // Search using new MongoDB API
+                const response = await fetch(`/api/user/search?${params}`);
 
-                const results = (profiles || []).map((profile: any) => ({
-                    id: profile.id,
-                    firstName: profile.first_name,
-                    lastName: profile.last_name,
-                    photoURL: profile.avatar_url,
-                    role: profile.active_role
-                }));
+                if (!response.ok) {
+                    throw new Error(`Search failed: ${response.statusText}`);
+                }
 
-                setSearchResults(results);
+                const data = await response.json();
+                setSearchResults(data.results || []);
             } catch (e) {
                 console.error("Search error:", e);
                 setSearchResults([]);
