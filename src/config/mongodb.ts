@@ -18,13 +18,38 @@
 
 import * as Sentry from '@sentry/react';
 
+// Extend globalThis to include MongoDB state
+declare global {
+  // eslint-disable-next-line no-var
+  var __MONGODB_STATE__: {
+    mongoClient: any;
+    mongoDb: any;
+  } | undefined;
+}
+
 // Types for MongoDB (browser-safe)
 type MongoClient = any;
 type Db = any;
 
-// MongoDB connection state
-let mongoClient: MongoClient | null = null;
-let mongoDb: Db | null = null;
+// MongoDB connection state - use globalThis to share across module instances in serverless
+// In ES modules, each import creates its own scope, so we need a global reference
+interface MongoState {
+  mongoClient: MongoClient | null;
+  mongoDb: Db | null;
+}
+
+const getGlobalState = (): MongoState => {
+  if (typeof globalThis !== 'undefined') {
+    if (!globalThis.__MONGODB_STATE__) {
+      globalThis.__MONGODB_STATE__ = { mongoClient: null, mongoDb: null };
+    }
+    return globalThis.__MONGODB_STATE__;
+  }
+  // Fallback for browser/dev
+  return { mongoClient: null, mongoDb: null };
+};
+
+const getState = () => getGlobalState();
 
 /**
  * Get MongoDB connection string from environment variables
@@ -82,9 +107,10 @@ export async function initMongoDB(): Promise<void> {
   try {
     // Dynamic import to avoid bundling in browser
     const { MongoClient } = await import('mongodb');
-    mongoClient = new MongoClient(connectionString);
-    await mongoClient.connect();
-    mongoDb = mongoClient.db(getMongoDbName());
+    const state = getState();
+    state.mongoClient = new MongoClient(connectionString);
+    await state.mongoClient.connect();
+    state.mongoDb = state.mongoClient.db(getMongoDbName());
 
     console.log('✅ MongoDB connected successfully');
 
@@ -98,8 +124,9 @@ export async function initMongoDB(): Promise<void> {
     });
 
     // Don't throw - allow app to run without MongoDB
-    mongoClient = null;
-    mongoDb = null;
+    const state = getState();
+    state.mongoClient = null;
+    state.mongoDb = null;
   }
 }
 
@@ -107,14 +134,15 @@ export async function initMongoDB(): Promise<void> {
  * Get MongoDB database instance
  */
 export function getMongoDb(): Db | null {
-  return mongoDb;
+  return getState().mongoDb;
 }
 
 /**
  * Check if MongoDB is available
  */
 export function isMongoDbAvailable(): boolean {
-  return mongoDb !== null && mongoClient !== null;
+  const state = getState();
+  return state.mongoDb !== null && state.mongoClient !== null;
 }
 
 /**
@@ -122,9 +150,10 @@ export function isMongoDbAvailable(): boolean {
  * Should be called when app shuts down
  */
 export async function closeMongoDB(): Promise<void> {
-  if (mongoClient) {
+  const state = getState();
+  if (state.mongoClient) {
     try {
-      await mongoClient.close();
+      await state.mongoClient.close();
       console.log('MongoDB connection closed');
     } catch (error) {
       console.error('Error closing MongoDB connection:', error);
@@ -197,11 +226,12 @@ export const MONGO_COLLECTIONS = {
  * Get a MongoDB collection
  */
 export function getCollection<T = any>(name: string) {
-  if (!mongoDb) {
+  const state = getState();
+  if (!state.mongoDb) {
     throw new Error('MongoDB not initialized. Call initMongoDB() first.');
   }
 
-  return mongoDb.collection<T>(name);
+  return state.mongoDb.collection<T>(name);
 }
 
 /**
@@ -209,102 +239,103 @@ export function getCollection<T = any>(name: string) {
  * Run this during app initialization
  */
 export async function ensureMongoIndexes(): Promise<void> {
-  if (!mongoDb) {
+  const state = getState();
+  if (!state.mongoDb) {
     console.warn('MongoDB not available - skipping index creation');
     return;
   }
 
   try {
     // Booking metadata indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.BOOKING_METADATA).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.BOOKING_METADATA).createIndex(
       { bookingId: 1 },
       { unique: true }
     );
-    await mongoDb.collection(MONGO_COLLECTIONS.BOOKING_METADATA).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.BOOKING_METADATA).createIndex(
       { studioId: 1 }
     );
 
     // Form schemas indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.FORM_SCHEMAS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.FORM_SCHEMAS).createIndex(
       { studioId: 1, isActive: 1 }
     );
-    await mongoDb.collection(MONGO_COLLECTIONS.FORM_SCHEMAS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.FORM_SCHEMAS).createIndex(
       { schemaName: 1 }
     );
 
     // Form responses indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.FORM_RESPONSES).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.FORM_RESPONSES).createIndex(
       { bookingId: 1 },
       { unique: true }
     );
-    await mongoDb.collection(MONGO_COLLECTIONS.FORM_RESPONSES).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.FORM_RESPONSES).createIndex(
       { studioId: 1, submittedAt: -1 }
     );
 
     // Booking notes indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.BOOKING_NOTES).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.BOOKING_NOTES).createIndex(
       { bookingId: 1, createdAt: -1 }
     );
 
     // Booking cancellations indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.BOOKING_CANCELLATIONS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.BOOKING_CANCELLATIONS).createIndex(
       { bookingId: 1 }
     );
 
     // ========== SOCIAL FEATURE INDEXES ==========
 
     // Posts indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ id: 1 }, { unique: true });
-    await mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ author_id: 1, created_at: -1 });
-    await mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ hashtags: 1 });
-    await mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ mentions: 1 });
-    await mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ category: 1, created_at: -1 });
-    await mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ parent_id: 1, created_at: -1 });
-    await mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ deleted_at: 1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ id: 1 }, { unique: true });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ author_id: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ hashtags: 1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ mentions: 1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ category: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ parent_id: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.POSTS).createIndex({ deleted_at: 1 });
 
     // Comments indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.COMMENTS).createIndex({ post_id: 1, created_at: -1 });
-    await mongoDb.collection(MONGO_COLLECTIONS.COMMENTS).createIndex({ parent_id: 1, created_at: -1 });
-    await mongoDb.collection(MONGO_COLLECTIONS.COMMENTS).createIndex({ author_id: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.COMMENTS).createIndex({ post_id: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.COMMENTS).createIndex({ parent_id: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.COMMENTS).createIndex({ author_id: 1, created_at: -1 });
 
     // Reactions indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.REACTIONS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.REACTIONS).createIndex(
       { target_id: 1, target_type: 1, emoji: 1, user_id: 1 },
       { unique: true }
     );
 
     // Follows indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.FOLLOWS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.FOLLOWS).createIndex(
       { follower_id: 1, following_id: 1 },
       { unique: true }
     );
-    await mongoDb.collection(MONGO_COLLECTIONS.FOLLOWS).createIndex({ following_id: 1, follower_id: 1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.FOLLOWS).createIndex({ following_id: 1, follower_id: 1 });
 
     // Saved posts indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.SAVED_POSTS).createIndex({ user_id: 1, created_at: -1 });
-    await mongoDb.collection(MONGO_COLLECTIONS.SAVED_POSTS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.SAVED_POSTS).createIndex({ user_id: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.SAVED_POSTS).createIndex(
       { post_id: 1, user_id: 1 },
       { unique: true }
     );
 
     // Social notifications indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.SOCIAL_NOTIFICATIONS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.SOCIAL_NOTIFICATIONS).createIndex(
       { user_id: 1, read: 1, created_at: -1 }
     );
-    await mongoDb.collection(MONGO_COLLECTIONS.SOCIAL_NOTIFICATIONS).createIndex({ actor_id: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.SOCIAL_NOTIFICATIONS).createIndex({ actor_id: 1, created_at: -1 });
 
     // User blocks indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.USER_BLOCKS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.USER_BLOCKS).createIndex(
       { blocker_id: 1, blocked_id: 1 },
       { unique: true }
     );
-    await mongoDb.collection(MONGO_COLLECTIONS.USER_BLOCKS).createIndex({ blocked_id: 1, blocker_id: 1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.USER_BLOCKS).createIndex({ blocked_id: 1, blocker_id: 1 });
 
     // Content reports indexes
-    await mongoDb.collection(MONGO_COLLECTIONS.CONTENT_REPORTS).createIndex(
+    await state.mongoDb.collection(MONGO_COLLECTIONS.CONTENT_REPORTS).createIndex(
       { target_id: 1, target_type: 1 }
     );
-    await mongoDb.collection(MONGO_COLLECTIONS.CONTENT_REPORTS).createIndex({ status: 1, created_at: -1 });
+    await state.mongoDb.collection(MONGO_COLLECTIONS.CONTENT_REPORTS).createIndex({ status: 1, created_at: -1 });
 
     console.log('✅ MongoDB indexes created successfully');
 

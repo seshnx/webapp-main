@@ -8,9 +8,20 @@
 import { MongoClient } from 'mongodb';
 import * as Sentry from '@sentry/react';
 
-// MongoDB connection state
-let mongoClient = null;
-let mongoDb = null;
+// MongoDB connection state - use globalThis to share across module instances in serverless
+// In ES modules, each import creates its own scope, so we need a global reference
+const getGlobalState = () => {
+  if (typeof globalThis !== 'undefined') {
+    if (!globalThis.__MONGODB_STATE__) {
+      globalThis.__MONGODB_STATE__ = { mongoClient: null, mongoDb: null };
+    }
+    return globalThis.__MONGODB_STATE__;
+  }
+  // Fallback for browser/dev
+  return { mongoClient: null, mongoDb: null };
+};
+
+const getState = () => getGlobalState();
 
 /**
  * Get MongoDB connection string from environment variables
@@ -60,9 +71,10 @@ export async function initMongoDB() {
   }
 
   try {
-    mongoClient = new MongoClient(connectionString);
-    await mongoClient.connect();
-    mongoDb = mongoClient.db(getMongoDbName());
+    const state = getState();
+    state.mongoClient = new MongoClient(connectionString);
+    await state.mongoClient.connect();
+    state.mongoDb = state.mongoClient.db(getMongoDbName());
 
     console.log('✅ MongoDB connected successfully');
 
@@ -81,8 +93,9 @@ export async function initMongoDB() {
     }
 
     // Don't throw - allow app to run without MongoDB
-    mongoClient = null;
-    mongoDb = null;
+    const state = getState();
+    state.mongoClient = null;
+    state.mongoDb = null;
   }
 }
 
@@ -90,14 +103,15 @@ export async function initMongoDB() {
  * Get MongoDB database instance
  */
 export function getMongoDb() {
-  return mongoDb;
+  return getState().mongoDb;
 }
 
 /**
  * Check if MongoDB is available
  */
 export function isMongoDbAvailable() {
-  return mongoDb !== null && mongoClient !== null;
+  const state = getState();
+  return state.mongoDb !== null && state.mongoClient !== null;
 }
 
 /**
@@ -105,9 +119,10 @@ export function isMongoDbAvailable() {
  * Should be called when app shuts down
  */
 export async function closeMongoDB() {
-  if (mongoClient) {
+  const state = getState();
+  if (state.mongoClient) {
     try {
-      await mongoClient.close();
+      await state.mongoClient.close();
       console.log('MongoDB connection closed');
     } catch (error) {
       console.error('Error closing MongoDB connection:', error);
