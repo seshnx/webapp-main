@@ -44,7 +44,8 @@
       "mcp__plugin_sentry_sentry__search_issues",
       "mcp__plugin_sentry_sentry__get_issue_details",
       "Bash(SOCIAL_MIGRATION_SUMMARY.md:*)",
-      "Bash(npm list:*)"
+      "Bash(npm list:*)",
+      "Bash(cd:*)"
     ]
   }
 }

@@ -1,4 +1,75 @@
-# Supabase Diagnostic Scripts
+# Project Scripts
+
+This directory contains utility scripts for development and maintenance.
+
+---
+
+## 🤖 Ollama-Powered Note Taking
+
+**NEW**: Automatic note generation using local Ollama models. This saves Claude Code tokens and keeps your Obsidian vault updated continuously.
+
+### Quick Start
+
+1. **Install Ollama**: Download from https://ollama.com/
+2. **Pull the model**: `ollama pull llama3.2:3b`
+3. **Start Ollama**: `ollama serve`
+4. **Run the note taker**:
+
+**Windows** (Easy):
+```bash
+# Double-click this file
+scripts\note-taker.bat
+```
+
+**Any Platform**:
+```bash
+# Generate notes for recent changes
+node scripts/note-taker.mjs
+
+# Auto mode: Generate notes every 10 minutes
+node scripts/note-taker.mjs --auto
+
+# Generate note for current commit
+node scripts/note-taker.mjs --commit
+```
+
+### How It Works
+1. **Git Analysis**: Scans recent commits and file changes
+2. **Ollama Generation**: Uses local LLM to generate structured summaries
+3. **Obsidian Update**: Writes to your Obsidian vault automatically
+4. **Zero Tokens**: All processing happens locally
+
+### Configuration
+Edit `scripts/note-taker.mjs`:
+```javascript
+const CONFIG = {
+  obsidianVault: 'C:\\Users\\ricar\\...\\SeshNx',
+  model: 'llama3.2:3b',
+  intervalMinutes: 10,
+};
+```
+
+### Models Options
+| Model | Size | Speed | Quality |
+|-------|------|-------|--------|
+| `llama3.2:3b` | 2GB | ⚡ Fast | ✅ Great (Recommended) |
+| `phi3:mini` | 2.3GB | ⚡⚡ Very Fast | ✅ Good |
+| `gemma2:2b` | 1.6GB | ⚡⚡⚡ Ultra Fast | ✅ Good |
+
+### Integration with Claude Code
+Claude Code can trigger the note-taker:
+```
+User: "Generate a session note"
+Claude: [Runs node scripts/note-taker.mjs]
+```
+
+This creates a hybrid approach:
+- **Ollama**: Routine summaries, git-based notes
+- **Claude Code**: Complex decisions, architectural analysis
+
+---
+
+## 🩺 Supabase Diagnostic Scripts
 
 These scripts help you diagnose Supabase connection and table issues.
 

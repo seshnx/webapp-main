@@ -112,7 +112,6 @@ export async function POST(request) {
     } else if (result.action === 'removed') {
       removeReactionFromConvex(target_id, target_type, user_id);
     }
-  }
 
     return new Response(JSON.stringify(result), {
       headers: { 'Content-Type': 'application/json' },
