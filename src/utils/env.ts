@@ -52,8 +52,17 @@ export function cleanEnv(value: string | undefined): string | undefined {
  * const clerkKey = getCleanEnv('VITE_CLERK_PUBLISHABLE_KEY');
  */
 export function getCleanEnv(key: string): string | undefined {
-  const value = import.meta.env[key];
-  return cleanEnv(value);
+  // Try import.meta.env first (browser/Vite)
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    const value = import.meta.env[key];
+    if (value !== undefined) return cleanEnv(value);
+  }
+  // Fall back to process.env (Node.js/serverless)
+  if (typeof process !== 'undefined' && process.env) {
+    const value = process.env[key];
+    if (value !== undefined) return cleanEnv(value);
+  }
+  return undefined;
 }
 
 /**

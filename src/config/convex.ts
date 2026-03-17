@@ -16,9 +16,37 @@ import { cleanEnv } from '../utils/env.js';
  * The placeholder URL won't connect, but satisfies the URL format requirement.
  */
 
+/**
+ * Helper to get environment variables from both browser (import.meta.env) and Node.js (process.env)
+ */
+function getEnvVar(key: string): string | undefined {
+  // Browser/Vite: use import.meta.env
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env[key];
+  }
+  // Node.js/Serverless: use process.env
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key];
+  }
+  return undefined;
+}
+
+/**
+ * Check if we're in development mode
+ */
+function isDevMode(): boolean {
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env.DEV === 'true' || import.meta.env.MODE === 'development';
+  }
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env.NODE_ENV === 'development';
+  }
+  return false;
+}
+
 // Try to get Convex URL from environment variables (in priority order)
-const rawConvexUrl = cleanEnv(import.meta.env.VITE_CONVEX_URL) ||
-                     cleanEnv(import.meta.env.CONVEX_DEPLOY_KEY);
+const rawConvexUrl = cleanEnv(getEnvVar('VITE_CONVEX_URL')) ||
+                     cleanEnv(getEnvVar('CONVEX_DEPLOY_KEY'));
 
 // Internal function to validate and get the Convex URL
 const getConvexUrlInternal = (): string => {
@@ -82,7 +110,7 @@ export const getConvexStatus = () => {
 };
 
 // Log Convex status in development
-if (import.meta.env.DEV) {
+if (isDevMode()) {
   const status = getConvexStatus();
 
   if (status.isAvailable) {

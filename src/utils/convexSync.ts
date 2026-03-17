@@ -10,8 +10,23 @@
 
 import { isConvexAvailable } from "../config/convex";
 
+/**
+ * Helper to get environment variables from both browser (import.meta.env) and Node.js (process.env)
+ */
+function getEnvVar(key: string): string | undefined {
+  // Browser/Vite: use import.meta.env
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    return import.meta.env[key];
+  }
+  // Node.js/Serverless: use process.env
+  if (typeof process !== 'undefined' && process.env) {
+    return process.env[key];
+  }
+  return undefined;
+}
+
 // Get Convex URL from environment
-const CONVEX_URL = import.meta.env.VITE_CONVEX_URL || '';
+const CONVEX_URL = getEnvVar('VITE_CONVEX_URL') || '';
 
 /**
  * Booking data for syncing
