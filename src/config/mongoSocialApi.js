@@ -6,7 +6,7 @@
  */
 
 import { ObjectId } from 'mongodb';
-import { getMongoDb, isMongoDbAvailable, MONGO_COLLECTIONS } from './mongodb.js';
+import { getMongoDb, isMongoDbAvailable, MONGO_COLLECTIONS } from './mongodbApi.js';
 
 // ============================================================================
 // HELPER FUNCTIONS
