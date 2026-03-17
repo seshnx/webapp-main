@@ -1,5 +1,5 @@
 import { ConvexReactClient } from "convex/react";
-import { cleanEnv } from '../utils/env';
+import { cleanEnv } from '../utils/env.js';
 
 /**
  * Convex Configuration

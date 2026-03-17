@@ -15,7 +15,7 @@
  */
 
 import type { AccountType } from '../types';
-import { cleanEnv } from '../utils/env';
+import { cleanEnv } from '../utils/env.js';
 
 // Validate required environment variables (clean any extra quotes, newlines, etc.)
 const clerkPubKey = cleanEnv(import.meta.env.VITE_CLERK_PUBLISHABLE_KEY);
