@@ -332,7 +332,8 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
         if (!window.confirm('Are you sure you want to delete this post?')) return;
 
         try {
-            const success = await deletePost(post.id);
+            // Pass author_id for ownership verification (post.userId maps to author_id)
+            const success = await deletePost(post.id, post.userId);
 
             if (!success) {
                 toast.error("Couldn't delete post - permission denied");

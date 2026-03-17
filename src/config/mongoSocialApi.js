@@ -168,7 +168,7 @@ export async function updatePost(postId, updates) {
 /**
  * Delete a post
  */
-export async function deletePost(postId) {
+export async function deletePost(postId, authorId) {
   if (!isMongoDbAvailable()) throw new Error('MongoDB not available');
 
   const db = getMongoDb();
@@ -176,7 +176,28 @@ export async function deletePost(postId) {
 
   try {
     const collection = db.collection(MONGO_COLLECTIONS.SOCIAL_POSTS);
-    await collection.deleteOne({ id: postId });
+
+    // Verify ownership before soft-deleting
+    const post = await collection.findOne({ id: postId });
+    if (!post) {
+      throw new Error('Post not found');
+    }
+
+    if (post.author_id !== authorId) {
+      throw new Error('You can only delete your own posts');
+    }
+
+    // Soft delete by marking as deleted (better for data integrity)
+    const result = await collection.updateOne(
+      { id: postId, author_id: authorId },
+      { $set: { deleted_at: new Date().toISOString() } }
+    );
+
+    if (result.modifiedCount === 0) {
+      throw new Error('Failed to delete post');
+    }
+
+    return { success: true };
   } catch (error) {
     console.error('Error deleting post:', error);
     throw error;

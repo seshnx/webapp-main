@@ -58,8 +58,13 @@ export async function updatePost(postId: string, updates: any) {
   });
 }
 
-export async function deletePost(postId: string) {
-  return apiCall(`/posts?id=${postId}`, {
+export async function deletePost(postId: string, authorId: string) {
+  const params = new URLSearchParams({
+    post_id: postId,
+    author_id: authorId,
+  });
+
+  return apiCall(`/posts?${params}`, {
     method: 'DELETE',
   });
 }

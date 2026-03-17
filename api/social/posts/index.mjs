@@ -249,13 +249,36 @@ export async function DELETE(request) {
       });
     }
 
-    await deletePost(post_id);
+    if (!author_id) {
+      return new Response(JSON.stringify({ error: 'Missing required field: author_id' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    await deletePost(post_id, author_id);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error('Error in posts DELETE:', error);
+
+    // Return appropriate status codes based on error type
+    if (error.message === 'Post not found') {
+      return new Response(JSON.stringify({ error: 'Post not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (error.message === 'You can only delete your own posts') {
+      return new Response(JSON.stringify({ error: 'You can only delete your own posts' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
     return new Response(JSON.stringify({ error: 'Failed to delete post', details: error.message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },

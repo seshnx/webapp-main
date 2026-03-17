@@ -243,17 +243,31 @@ export async function updatePost(
 }
 
 /**
- * Soft delete a post
+ * Soft delete a post (marks as deleted rather than removing)
  */
-export async function deletePost(postId: string): Promise<boolean> {
+export async function deletePost(postId: string, authorId: string): Promise<boolean> {
   if (!isMongoDbAvailable()) return false;
 
   const db = getMongoDb();
   if (!db) return false;
 
+  // Verify ownership before soft-deleting
+  const post = await db.collection<MongoPost>('posts').findOne({ id: postId });
+  if (!post) {
+    throw new Error('Post not found');
+  }
+
+  if (post.author_id !== authorId) {
+    throw new Error('You can only delete your own posts');
+  }
+
+  // Soft delete by marking as deleted
   const result = await db
     .collection<MongoPost>('posts')
-    .updateOne({ id: postId }, { $set: { deleted_at: new Date() } });
+    .updateOne(
+      { id: postId, author_id: authorId },
+      { $set: { deleted_at: new Date() } }
+    );
 
   return result.modifiedCount > 0;
 }
