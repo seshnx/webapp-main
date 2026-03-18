@@ -323,7 +323,7 @@ export const getTransactionsByBuyer = query({
 export const getTransactionsBySeller = query({
   args: {
     sellerId: v.string(),
-    status: v.optional(v.string(),
+    status: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
