@@ -5,7 +5,7 @@ import BookingCalendar from './shared/BookingCalendar';
 import SessionDetailsModal from './SessionDetailsModal';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
-import { getBookings, updateBookingStatus } from '../config/neonQueries';
+import { useBookingsByClient, useConfirmBooking, useCancelBooking, useUpdateBooking } from '@/hooks/useConvex';
 import type { UserData } from '../types';
 
 // Lazy load the missing modules
@@ -74,6 +74,13 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
   const navigate = useNavigate();
   const { t } = useLanguage();
 
+  // Convex hooks for bookings
+  const userId = userData?.id || user?.id || user?.uid;
+  const clientBookings = useBookingsByClient(userId || '');
+  const confirmBooking = useConfirmBooking();
+  const cancelBooking = useCancelBooking();
+  const updateBooking = useUpdateBooking();
+
   // Get tab from URL path (e.g., /bookings/calendar -> 'calendar')
   const getTabFromPath = (path: string): TabId => {
     const parts = path.split('/').filter(Boolean);
@@ -84,8 +91,6 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
   };
 
   const [activeTab, setActiveTab] = useState<TabId>(() => getTabFromPath(location.pathname));
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterType, setFilterType] = useState<FilterType>('all');
@@ -118,28 +123,22 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     { id: 'my-bookings', label: t('myBookings') || 'My Bookings', icon: Calendar },
   ];
 
-  // Fetch all bookings for the user
-  useEffect(() => {
-    if (!userData?.id && !user?.id && !user?.uid) return;
-
-    const loadBookings = async (): Promise<void> => {
-      setLoading(true);
-      try {
-        const userId = userData?.id || user?.id || user?.uid;
-
-        // Fetch bookings using direct database query
-        const bookingsData = await getBookings(userId, { limit: 100 });
-
-        setBookings(bookingsData || []);
-      } catch (error) {
-        console.error('Error loading bookings:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadBookings();
-  }, [user?.id, user?.uid, userData?.id]);
+  // Map Convex bookings to expected format
+  const bookings = clientBookings?.map((b: any): Booking => ({
+    id: b._id,
+    sender_id: b.clientId,
+    sender_name: b.clientName,
+    target_id: b.studioId,
+    target_name: b.studioName,
+    date: b.date,
+    time: b.startTime,
+    duration: undefined, // Calculate from startTime and endTime
+    status: b.status,
+    offer_amount: b.totalAmount,
+    message: b.notes,
+    created_at: b.createdAt,
+    updated_at: b.updatedAt
+  })) || [];
 
   // Filter bookings based on status and type
   const filteredBookings = bookings.filter((booking: Booking): boolean => {
@@ -210,14 +209,18 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
 
   const handleBookingAction = async (bookingId: string, action: 'accept' | 'decline'): Promise<void> => {
     try {
-      const status = action === 'accept' ? 'Confirmed' : 'Declined';
+      if (action === 'accept') {
+        // Use Convex confirm booking mutation
+        await confirmBooking({ bookingId });
+      } else {
+        // Use Convex update booking mutation to set status to Declined
+        await updateBooking({
+          bookingId,
+          status: 'Declined'
+        });
+      }
 
-      await updateBookingStatus(bookingId, status);
-
-      // Reload bookings to show updated state
-      const userId = userData?.id || user?.id || user?.uid;
-      const bookingsData = await getBookings(userId, { limit: 100 });
-      setBookings(bookingsData || []);
+      // Convex automatically updates the bookings, no need to manually reload
     } catch (error) {
       console.error('Error updating booking:', error);
       alert('Failed to update booking');
@@ -237,7 +240,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
     resource: booking
   }));
 
-  if (loading) {
+  if (clientBookings === undefined) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="animate-spin text-brand-blue" size={32} />

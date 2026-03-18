@@ -14,7 +14,7 @@ import TalentMap from './shared/TalentMap';
 import LocationPicker from './shared/LocationPicker';
 import TalentSearchFilterPanel from './TalentSearchFilterPanel.tsx';
 import { motion, AnimatePresence } from 'framer-motion';
-import { searchProfiles } from '../config/neonQueries';
+import { useSearchUsers } from '@/hooks/useConvex';
 
 // Lazy load BroadcastRequest component
 const BroadcastRequest = lazy(() => import('./BroadcastRequest'));
@@ -207,8 +207,7 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
     const [toolMode, setToolMode] = useState<string>('search'); // 'search' | 'broadcast'
 
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [searchResults, setSearchResults] = useState<TalentProfile[]>([]);
-    const [loadingSearch, setLoadingSearch] = useState<boolean>(false);
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState<string>('');
     const [viewMode, setViewMode] = useState<string>('list'); // 'list' or 'map'
     const [showFilters, setShowFilters] = useState<boolean>(true);
     const [showMobileFilters, setShowMobileFilters] = useState<boolean>(false);
@@ -264,81 +263,113 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
         filters.engineeringSpecialty
     ].filter(Boolean).length;
 
-    const handleSearch = async () => {
-        setLoadingSearch(true);
-        try {
-            const userId = user?.id || user?.uid;
+    // Debounce search query to avoid excessive API calls
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
 
-            // Build search options
-            const searchOptions: any = {
-                searchQuery: searchQuery || undefined,
-                accountTypes: filters.role !== 'All' ? [filters.role] : undefined,
-                minRate: filters.minRate > 0 ? filters.minRate : undefined,
-                maxRate: filters.maxRate < 500 ? filters.maxRate : undefined,
-                experience: filters.experience !== 'All' ? filters.experience : undefined,
-                verifiedOnly: filters.verified || undefined,
-                availableNow: filters.availableNow || undefined,
-                hasPortfolio: filters.hasPortfolio || undefined,
-                vocalRange: filters.vocalRange || undefined,
-                vocalStyle: filters.vocalStyle || undefined,
-                djStyle: filters.djStyle || undefined,
-                productionStyle: filters.productionStyle || undefined,
-                engineeringSpecialty: filters.engineeringSpecialty || undefined,
-                genres: filters.genres.length > 0 ? filters.genres : undefined,
-                sortBy: sortBy,
-                limit: 100,
-                excludeUserId: userId,
-            };
+    // Use Convex search users hook
+    const convexUsers = useSearchUsers(debouncedSearchQuery || '', 100);
 
-            // Add location filter if set
-            if (userLocation && filters.location) {
-                searchOptions.location = {
-                    lat: userLocation.lat,
-                    lng: userLocation.lng,
-                    radius: filters.radius || 50,
-                };
-            }
+    // Map Convex users to TalentProfile format and apply filters client-side
+    const searchResults: TalentProfile[] = useMemo(() => {
+        if (!convexUsers) return [];
 
-            const results = await searchProfiles(searchOptions);
+        // Map Convex user structure to TalentProfile
+        const mapped = convexUsers
+            .filter((user: any) => {
+                // Exclude current user
+                const currentUserId = user?.id || user?.uid;
+                if (user.clerkId === currentUserId) return false;
 
-            // Map results to expected format
-            const mappedResults: TalentProfile[] = results.map((profile: any): TalentProfile => ({
-                id: profile.id,
-                firstName: profile.first_name,
-                lastName: profile.last_name,
-                profileName: profile.display_name || profile.username,
-                photoURL: profile.profile_photo || profile.profile_photo_url,
-                bio: profile.bio,
-                accountTypes: profile.account_types || [],
-                rate: profile.talent_info?.rate,
-                yearsExperience: profile.talent_info?.yearsExperience,
-                rating: profile.rating,
-                reviewCount: profile.review_count || 0,
-                verified: profile.verified,
-                skills: profile.talent_info?.skills || [],
-                genres: profile.talent_info?.genres || [],
-                vocalRange: profile.talent_info?.vocalRange,
-                vocalStyles: profile.talent_info?.vocalStyles || [],
-                djStyles: profile.talent_info?.djStyles || [],
-                productionStyles: profile.talent_info?.productionStyles || [],
-                location: profile.talent_info?.location,
-                city: profile.talent_info?.city,
-                state: profile.talent_info?.state,
-                lastActive: profile.updated_at,
+                // Apply account type filter
+                if (filters.role !== 'All') {
+                    if (!user.accountTypes?.includes(filters.role)) return false;
+                }
+
+                // Apply rate filters
+                if (filters.minRate > 0 && (user.talentInfo?.rate || 0) < filters.minRate) return false;
+                if (filters.maxRate < 500 && (user.talentInfo?.rate || 0) > filters.maxRate) return false;
+
+                // Apply experience filter
+                if (filters.experience !== 'All') {
+                    const years = user.talentInfo?.yearsExperience || 0;
+                    const expMap: Record<string, boolean> = {
+                        'beginner': years >= 0 && years < 2,
+                        'intermediate': years >= 2 && years < 5,
+                        'advanced': years >= 5 && years < 10,
+                        'expert': years >= 10,
+                    };
+                    if (!expMap[filters.experience]) return false;
+                }
+
+                // Apply genre filter
+                if (filters.genres.length > 0) {
+                    const hasGenre = filters.genres.some(g => user.talentInfo?.genres?.includes(g));
+                    if (!hasGenre) return false;
+                }
+
+                // Apply skills filter
+                if (filters.skills.length > 0) {
+                    const hasSkill = filters.skills.some(s => user.talentInfo?.skills?.includes(s));
+                    if (!hasSkill) return false;
+                }
+
+                // Apply role-specific filters
+                if (filters.vocalRange && user.talentInfo?.vocalRange !== filters.vocalRange) return false;
+                if (filters.vocalStyle && !user.talentInfo?.vocalStyles?.includes(filters.vocalStyle)) return false;
+                if (filters.djStyle && !user.talentInfo?.djStyles?.includes(filters.djStyle)) return false;
+                if (filters.productionStyle && !user.talentInfo?.productionStyles?.includes(filters.productionStyle)) return false;
+                if (filters.engineeringSpecialty && user.talentInfo?.engineeringSpecialty !== filters.engineeringSpecialty) return false;
+
+                return true;
+            })
+            .map((user: any): TalentProfile => ({
+                id: user.clerkId,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                profileName: user.displayName || user.username,
+                photoURL: user.profilePhoto,
+                bio: user.bio,
+                accountTypes: user.accountTypes || [],
+                rate: user.talentInfo?.rate,
+                yearsExperience: user.talentInfo?.yearsExperience,
+                rating: user.rating,
+                reviewCount: 0, // Not tracked in current schema
+                verified: user.verified,
+                skills: user.talentInfo?.skills || [],
+                genres: user.talentInfo?.genres || [],
+                vocalRange: user.talentInfo?.vocalRange,
+                vocalStyles: user.talentInfo?.vocalStyles || [],
+                djStyles: user.talentInfo?.djStyles || [],
+                productionStyles: user.talentInfo?.productionStyles || [],
+                location: user.talentInfo?.location,
+                city: user.talentInfo?.city,
+                state: user.talentInfo?.state,
+                lastActive: user.updatedAt,
             }));
 
-            setSearchResults(mappedResults);
-        } catch (e) {
-            console.error("Search failed:", e);
-            setSearchResults([]);
+        // Sort results
+        const sorted = [...mapped];
+        if (sortBy === 'rating') {
+            sorted.sort((a, b) => (b.rating || 0) - (a.rating || 0));
+        } else if (sortBy === 'rate_low') {
+            sorted.sort((a, b) => (a.rate || 0) - (b.rate || 0));
+        } else if (sortBy === 'rate_high') {
+            sorted.sort((a, b) => (b.rate || 0) - (a.rate || 0));
+        } else if (sortBy === 'recent') {
+            sorted.sort((a, b) => {
+                const aTime = a.lastActive?.toDate?.() || a.lastActive || 0;
+                const bTime = b.lastActive?.toDate?.() || b.lastActive || 0;
+                return new Date(bTime).getTime() - new Date(aTime).getTime();
+            });
         }
-        setLoadingSearch(false);
-    };
 
-    // Search on mount
-    useEffect(() => {
-        handleSearch();
-    }, []);
+        return sorted;
+    }, [convexUsers, filters, sortBy, user?.id, user?.uid]);
 
     const clearFilters = () => {
         setFilters({
@@ -436,7 +467,7 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
                             GENRE_DATA={GENRE_DATA}
                             EXPERIENCE_LEVELS={EXPERIENCE_LEVELS}
                             activeFilterCount={activeFilterCount}
-                            handleSearch={handleSearch}
+                            handleSearch={() => setDebouncedSearchQuery(searchQuery)}
                             clearFilters={clearFilters}
                             onLocationSelect={handleLocationSelect}
                         />
@@ -489,7 +520,7 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
                                 GENRE_DATA={GENRE_DATA}
                                 EXPERIENCE_LEVELS={EXPERIENCE_LEVELS}
                                 activeFilterCount={activeFilterCount}
-                                handleSearch={handleSearch}
+                                handleSearch={() => setDebouncedSearchQuery(searchQuery)}
                                 clearFilters={clearFilters}
                                 onLocationSelect={handleLocationSelect}
                             />
@@ -552,7 +583,7 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
                                 placeholder="Search by name, skill, genre..."
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
-                                onKeyDown={e => e.key === 'Enter' && handleSearch()}
+                                onKeyDown={e => e.key === 'Enter' && setDebouncedSearchQuery(searchQuery)}
                             />
                         </div>
 
@@ -576,7 +607,7 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
                             <span className="text-xs text-gray-500">Sort by:</span>
                             <select
                                 value={sortBy}
-                                onChange={e => { setSortBy(e.target.value); handleSearch(); }}
+                                onChange={e => { setSortBy(e.target.value); setDebouncedSearchQuery(searchQuery); }}
                                 className="text-sm border-0 bg-transparent dark:text-white font-medium focus:ring-0 cursor-pointer"
                             >
                                 <option value="relevance">Relevance</option>
@@ -629,7 +660,7 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
                             userLocation={userLocation}
                             radius={filters.radius}
                         />
-                    ) : loadingSearch ? (
+                    ) : convexUsers === undefined ? (
                         <div className="flex flex-col items-center justify-center py-20 text-gray-500">
                             <div className="w-8 h-8 border-2 border-brand-blue border-t-transparent rounded-full animate-spin mb-3"></div>
                             <span>Searching talent...</span>

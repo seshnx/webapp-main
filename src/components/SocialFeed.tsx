@@ -1,8 +1,6 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { Loader2, RefreshCw, Users, Compass, UserPlus, Search, LucideIcon } from 'lucide-react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { Loader2, RefreshCw, Users, Compass, UserPlus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getProfilesByIds, ensureUserInDatabase } from '../config/neonQueries';
 import PostCard from './social/PostCard';
 import CreatePostWidget from './social/CreatePostWidget';
 import ReportModal from './ReportModal';
@@ -11,8 +9,7 @@ import { useFollowSystem } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
-import { usePosts, useCreatePost } from '../hooks/useSocialQueries';
-import { useRealtimePosts } from '../hooks/useRealtimePosts';
+import { useFeed, useHomeFeed, useCreatePost, useUserByClerkId } from '@/hooks/useConvex';
 import type { UserData } from '../types';
 
 // =====================================================
@@ -59,7 +56,7 @@ interface Post {
   username?: string;
   text?: string;
   attachments?: any[];
-  timestamp: string;
+  timestamp: string | number;
   commentCount: number;
   reactionCount: number;
   saveCount: number;
@@ -120,108 +117,52 @@ export default function SocialFeed({
   // Memoize following IDs for feed filtering
   const followingIds = useMemo(() => getFollowingIds(), [following]);
 
-  // Determine query filters based on feed mode
-  const queryFilters = useMemo(() => {
-    if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
-      return { user_id: followingIds[0] }; // Will filter client-side for all following
-    }
-    return {};
-  }, [feedMode, followingIds]);
+  // Get current user from Convex
+  const convexUser = useUserByClerkId(userId || '');
 
-  // React Query for posts - replaces manual polling and useState
-  const queryClient = useQueryClient();
+  // Get posts based on feed mode
+  const feedPosts = useFeed(20); // For You mode
+  const homeFeedPosts = useHomeFeed(userId || '', 20); // Following mode (personalized)
 
-  const {
-    data: fetchedPosts = [],
-    isLoading: postsLoading,
-    error: postsError,
-    refetch: refetchPosts,
-    isRefetching
-  } = usePosts(queryFilters, 20, feedMode !== FEED_MODES.DISCOVER);
+  // Select appropriate data source based on feed mode
+  const rawPosts = feedMode === FEED_MODES.FOLLOWING
+    ? homeFeedPosts
+    : feedPosts;
 
-  // Convex for real-time post updates (replaces Socket.io for Vercel compatibility)
-  const { posts: realtimePosts } = useRealtimePosts({
-    enabled: feedMode !== FEED_MODES.DISCOVER,
-    userId,
-    followingIds,
-    feedMode: feedMode === 'following' ? 'following' : 'for_you',
-  });
-
-  // Merge real-time posts with React Query posts
-  React.useEffect(() => {
-    if (realtimePosts.length > 0) {
-      // Add real-time posts to cache
-      queryClient.setQueryData(['posts', queryFilters], (old: any[] = []) => {
-        const existingIds = new Set(old.map((post: any) => post.id));
-        const newPosts = realtimePosts.filter((post: any) => !existingIds.has(post.id));
-        return [...newPosts, ...old];
-      });
-    }
-  }, [realtimePosts, queryClient, queryFilters]);
-
-  // React Query mutation for creating posts - replaces manual API call
-  const createPostMutation = useCreatePost();
-
-  // Process and filter posts
+  // Process posts and map to expected format
   const posts = useMemo(() => {
-    let processedPosts = fetchedPosts.map((post: any) => ({
-      id: post.id,
-      ...post,
-      userId: post.user_id,
-      displayName: post.display_name ||
-                     post.username ||
-                     (post.first_name && post.last_name ? `${post.first_name} ${post.last_name}` : null) ||
-                     post.first_name ||
-                     post.last_name ||
-                     'Unknown User',
-      authorPhoto: post.photo_url || post.profile_photo_url,
-      username: post.username,
+    if (!rawPosts) return []; // Loading
+    if (rawPosts === null) return []; // Error
+
+    return rawPosts.map((post: any): Post => ({
+      id: post._id,
+      userId: post.authorId,
+      displayName: post.authorName || 'Unknown User',
+      authorPhoto: post.authorPhoto || null,
+      username: post.authorUsername,
       text: post.content,
-      attachments: post.media,
-      timestamp: post.created_at,
-      commentCount: post.comment_count || 0,
-      reactionCount: post.reaction_count || 0,
-      saveCount: post.save_count || 0
+      attachments: post.mediaUrls?.map((url: string, idx: number) => ({
+        type: 'image',
+        url: url,
+        thumbnail: url,
+        name: `Attachment ${idx + 1}`,
+        isGif: false
+      })),
+      timestamp: post.createdAt,
+      commentCount: post.engagement?.commentsCount || 0,
+      reactionCount: post.engagement?.likesCount || 0,
+      saveCount: post.engagement?.savesCount || 0,
+      role: post.role
     }));
-
-    // Apply feed algorithm based on settings (only for "For You" feed)
-    if (feedMode === FEED_MODES.FOR_YOU) {
-      if (feedAlgorithm === 'following') {
-        if (followingIds.length > 0) {
-          processedPosts = processedPosts.filter((p: Post) => followingIds.includes(p.userId));
-        } else {
-          processedPosts = [];
-        }
-      } else if (feedAlgorithm === 'chronological') {
-        // Already sorted by created_at desc, no changes needed
-      } else {
-        // Recommended algorithm (default) - prioritize posts with more engagement
-        processedPosts.sort((a: Post, b: Post) => {
-          const aScore = (a.reactionCount || 0) * 2 + (a.commentCount || 0) * 3 + (a.saveCount || 0);
-          const bScore = (b.reactionCount || 0) * 2 + (b.commentCount || 0) * 3 + (b.saveCount || 0);
-          return bScore - aScore;
-        });
-      }
-    }
-
-    // Client-side filtering for Following feed
-    if (feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0) {
-      const currentUserId = user?.id || user?.uid;
-      processedPosts = processedPosts.filter((post: Post) =>
-        followingIds.includes(post.userId) || post.userId === currentUserId
-      );
-    }
-
-    return processedPosts;
-  }, [fetchedPosts, feedMode, feedAlgorithm, followingIds, user?.id, user?.uid]);
+  }, [rawPosts]);
 
   // Combined loading state
-  const loading = postsLoading || followLoading;
+  const loading = !rawPosts || followLoading;
 
   // Load suggested users when on Following tab with no follows
-  React.useEffect(() => {
-    const userId = user?.id || user?.uid;
-    if (feedMode === FEED_MODES.FOLLOWING && followingIds.length === 0 && userId) {
+  useEffect(() => {
+    const clerkId = user?.id || user?.uid;
+    if (feedMode === FEED_MODES.FOLLOWING && followingIds.length === 0 && clerkId) {
       loadSuggestedUsers();
     }
   }, [feedMode, followingIds.length, user?.id, user?.uid]);
@@ -229,42 +170,42 @@ export default function SocialFeed({
   const loadSuggestedUsers = async (): Promise<void> => {
     setLoadingSuggestions(true);
     try {
-      if (!user?.id && !user?.uid) return;
+      const clerkId = user?.id || user?.uid;
+      if (!clerkId) return;
 
-      const userId = user.id || user.uid;
+      // Get recent posts from users they don't follow
+      const recentPosts = feedPosts || [];
 
-      // Get recent posts as suggestions (excluding current user)
-      const fetchedPosts = await getPosts({ limit: 20 });
+      // Filter to get unique user IDs from posts (not current user, not already following)
+      const currentUserId = clerkId;
+      const followingIdSet = new Set(followingIds);
+      followingIdSet.add(currentUserId);
 
-      // Filter out current user's posts
-      const otherUsersPosts = fetchedPosts.filter(p => p.user_id !== userId);
+      const uniqueUserIds = [...new Set(
+        recentPosts
+          .filter((post: any) => !followingIdSet.has(post.authorId))
+          .map((post: any) => post.authorId)
+      )].slice(0, 10);
 
-      // Extract unique user IDs from posts
-      const uniqueUserIds = [...new Set(otherUsersPosts.map(p => p.user_id))];
-
-      // Fetch profiles for these users
-      let profilePhotos: Record<string, string | null> = {};
-      if (uniqueUserIds.length > 0) {
-        const profiles = await getProfilesByIds(uniqueUserIds);
-        profiles.forEach(p => {
-          profilePhotos[p.user_id] = p.avatar_url || p.photo_url;
-        });
+      // Fetch user data for each ID
+      const suggestedUsersData: SuggestedUser[] = [];
+      for (const uid of uniqueUserIds) {
+        try {
+          const userData = await fetch(`/api/users/${uid}`).then(r => r.json());
+          if (userData && userData.id) {
+            suggestedUsersData.push({
+              userId: userData.id,
+              displayName: userData.displayName || userData.username || 'User',
+              photoURL: userData.photoURL || null,
+              role: userData.accountTypes?.[0] || 'Fan'
+            });
+          }
+        } catch (e) {
+          console.error('Failed to fetch user:', e);
+        }
       }
 
-      // Build unique users map with fresh photos
-      const usersMap = new Map<string, SuggestedUser>();
-      otherUsersPosts.forEach(post => {
-        if (!usersMap.has(post.user_id)) {
-          usersMap.set(post.user_id, {
-            userId: post.user_id,
-            displayName: post.display_name,
-            photoURL: profilePhotos[post.user_id] || null,
-            role: post.role
-          });
-        }
-      });
-
-      setSuggestedUsers(Array.from(usersMap.values()).slice(0, 5));
+      setSuggestedUsers(suggestedUsersData.slice(0, 5));
     } catch (error) {
       console.error('Error loading suggestions:', error);
     }
@@ -302,13 +243,12 @@ export default function SocialFeed({
     );
   };
 
-  // React Query automatically handles polling with refetchInterval
-  // No need for manual polling logic anymore
+  const createPost = useCreatePost();
 
   const handlePost = async (postPayload: PostPayload): Promise<void> => {
     if (!user) return;
     try {
-      const userId = user.id || user.uid;
+      const clerkId = user.id || user.uid;
       const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'Fan';
 
       // Get active profile data from MongoDB subprofiles first, then fall back to legacy subProfiles
@@ -324,51 +264,23 @@ export default function SocialFeed({
                          `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || null;
       const authorPhoto = activeProfile?.photo_url || userData?.photoURL || user?.imageUrl || null;
 
-      // Ensure user exists in database (fallback for webhook sync)
-      const username = user.username ||
-                     user.publicMetadata?.username ||
-                     `${user.firstName || ''}${user.lastName ? ' ' + user.lastName : ''}`.trim() ||
-                     user.email?.split('@')[0] ||
-                     null;
-
-      await ensureUserInDatabase(userId, {
-        id: userId,
-        email: user.primaryEmailAddress?.emailAddress || user.email || user.emailAddresses?.[0]?.emailAddress,
-        first_name: user.firstName || null,
-        last_name: user.lastName || null,
-        username: username,
-        profile_photo_url: user.imageUrl || user.profileImageUrl || null,
-        account_types: user.publicMetadata?.account_types || ['Fan'],
-        active_role: user.publicMetadata?.active_role || 'Fan'
-      });
-
       // Process attachments from postPayload
       const attachments = postPayload.attachments || [];
-
-      // Convert attachments to media format
-      const media = attachments.map(a => ({
-        type: a.type,
-        url: a.url,
-        thumbnail: a.thumbnail || null,
-        name: a.name || null,
-        isGif: a.isGif || false
-      }));
+      const mediaUrls = attachments.map(a => a.url);
 
       // Extract mentions and hashtags from text
       const mentions = (postPayload.text?.match(/@(\w+)/g) || []).map(m => m.substring(1));
       const hashtags = (postPayload.text?.match(/#(\w+)/g) || []).map(h => h.substring(1));
 
-      // Use React Query mutation for optimistic updates
-      createPostMutation.mutate({
-        author_id: userId,
-        text: postPayload.text || '',
-        media_urls: media,
-        mentions: mentions,
-        hashtags: hashtags,
+      // Create post using Convex mutation
+      await createPost({
+        authorId: clerkId,
+        content: postPayload.text || '',
+        mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
+        hashtags: hashtags.length > 0 ? hashtags : undefined,
+        mentions: mentions.length > 0 ? mentions : undefined,
         visibility: 'public',
-        display_name: displayName,
-        author_photo: authorPhoto,
-        posted_as_role: activeRole
+        category: activeRole,
       });
     } catch (e) {
       console.error("Failed to post:", e);
@@ -472,13 +384,6 @@ export default function SocialFeed({
         </button>
       </div>
 
-      {/* Refresh Button - replaces "New Posts" banner */}
-      {isRefetching && (
-        <div className="mb-4 flex justify-center">
-          <Loader2 className="animate-spin text-brand-blue" size={24} />
-        </div>
-      )}
-
       {/* Feed Content */}
       {feedMode === FEED_MODES.DISCOVER ? (
         <Discover
@@ -486,7 +391,7 @@ export default function SocialFeed({
           userData={userData}
           openPublicProfile={openPublicProfile}
         />
-      ) : loading || followLoading ? (
+      ) : loading ? (
         renderSkeleton()
       ) : (
         <>
@@ -565,7 +470,10 @@ export default function SocialFeed({
                   subProfiles={subProfiles}
                   openPublicProfile={openPublicProfile || (() => {})}
                   onReport={() => setReportTarget(post)}
-                  onDelete={(postId) => setPosts(prev => prev.filter(p => p.id !== postId))}
+                  onDelete={(postId) => {
+                    // This would need to be implemented with Convex delete
+                    console.log('Delete post:', postId);
+                  }}
                   isFollowingAuthor={isFollowing(post.userId)}
                   onToggleFollow={() => toggleFollow(post.userId, {
                     displayName: post.displayName,

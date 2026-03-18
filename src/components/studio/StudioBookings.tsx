@@ -8,8 +8,7 @@ import {
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { getBookings, getBlockedDates, updateBookingStatus } from '../../config/neonQueries';
-import type { BlockedDate } from '../../config/neonQueries';
+import { useBookingsByStudio, useBlockedDates, useConfirmBooking, useCancelBooking, useUpdateBooking } from '@/hooks/useConvex';
 import RecurringBookingModal from './RecurringBookingModal';
 import MultiRoomBookingModal from './MultiRoomBookingModal';
 import UnifiedCalendar from '../shared/UnifiedCalendar';
@@ -122,10 +121,14 @@ function getStatusConfig(status?: string): StatusConfig {
  * Phase 2: Includes templates, waitlist, payments, and calendar sync
  */
 export default function StudioBookings({ user, userData, onNavigateToChat }: StudioBookingsProps) {
+    // Convex hooks for real-time data
+    const studioBookings = useBookingsByStudio(userData?.id || '');
+    const blockedDatesData = useBlockedDates(userData?.id || '');
+    const confirmBooking = useConfirmBooking();
+    const cancelBooking = useCancelBooking();
+    const updateBooking = useUpdateBooking();
+
     const [activeTab, setActiveTab] = useState<string>('bookings'); // 'bookings', 'templates', 'waitlist', 'payments', 'calendar-sync'
-    const [bookings, setBookings] = useState<Booking[]>([]);
-    const [blockedDates, setBlockedDates] = useState<BlockedDate[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
     const [filter, setFilter] = useState<string>('all');
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -144,19 +147,34 @@ export default function StudioBookings({ user, userData, onNavigateToChat }: Stu
     const [selectedBookingForRecurring, setSelectedBookingForRecurring] = useState<Booking | null>(null);
     const [selectedBookingForRooms, setSelectedBookingForRooms] = useState<Booking | null>(null);
 
-    // Fetch bookings from Neon API
-    useEffect(() => {
-        if (!userData?.id) return;
+    // Map Convex bookings to expected format
+    const bookings = studioBookings?.map((b: any): Booking => ({
+        id: b._id,
+        status: b.status?.toLowerCase(),
+        date: b.date ? new Date(b.date) : null,
+        clientName: b.clientName,
+        clientEmail: b.clientEmail,
+        clientId: b.clientId,
+        roomName: b.roomName,
+        startTime: b.startTime,
+        duration: undefined, // Calculate from startTime and endTime
+        totalPrice: b.totalAmount,
+        offer_amount: b.totalAmount,
+        notes: b.notes,
+        createdAt: b.createdAt ? new Date(b.createdAt) : undefined,
+        created_at: b.createdAt
+    })) || [];
 
-        loadBookings();
-
-        // Poll for updates every 30 seconds (replace with Convex real-time later)
-        const interval = setInterval(() => {
-            loadBookings();
-        }, 30000);
-
-        return () => clearInterval(interval);
-    }, [userData?.id]);
+    // Map Convex blocked dates to expected format
+    const blockedDates = blockedDatesData?.map((d: any): BlockedDate => ({
+        id: d._id,
+        date: d.date ? new Date(d.date) : new Date(),
+        time_slot: d.timeSlot,
+        start_time: d.startTime,
+        end_time: d.endTime,
+        reason: d.reason,
+        studio_id: d.studioId
+    })) || [];
 
     // Helper function to safely parse booking dates
     const parseBookingDate = (dateValue: any): Date | null => {
@@ -169,76 +187,29 @@ export default function StudioBookings({ user, userData, onNavigateToChat }: Stu
         }
     };
 
-    const loadBookings = async (): Promise<void> => {
-        if (!userData?.id) return;
-        setLoading(true);
-        try {
-            // Use direct database call instead of API
-            const bookingsData = await getBookings(userData.id, { limit: 100 });
-
-            // Parse dates for all bookings
-            const bookingsWithDates = bookingsData.map((b: Booking) => ({
-                ...b,
-                date: parseBookingDate(b.date)
-            }));
-            setBookings(bookingsWithDates);
-        } catch (error) {
-            console.error('Error fetching bookings:', error);
-            toast.error('Failed to load bookings');
-            setBookings([]);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    // Fetch blocked dates
-    useEffect(() => {
-        if (!userData?.id) return;
-
-        loadBlockedDates();
-
-        // Poll for updates every 30 seconds
-        const interval = setInterval(() => {
-            loadBlockedDates();
-        }, 30000);
-
-        return () => clearInterval(interval);
-    }, [userData?.id]);
-
-    const loadBlockedDates = async (): Promise<void> => {
-        if (!userData?.id) return;
-        try {
-            // Use direct database call instead of API
-            const blockedDatesData = await getBlockedDates(userData.id);
-            setBlockedDates(blockedDatesData);
-        } catch (error) {
-            console.error('Error fetching blocked dates:', error);
-            toast.error('Failed to load blocked dates');
-            setBlockedDates([]);
-        }
-    };
-
     const handleUpdateStatus = async (bookingId: string, newStatus: string): Promise<void> => {
         setUpdating(bookingId);
         const toastId = toast.loading(`Updating booking...`);
 
         try {
-            const response = await fetch(`/api/studio-ops/bookings/${bookingId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: newStatus })
-            });
+            // Map status to match Convex enum
+            const convexStatus = newStatus.charAt(0).toUpperCase() + newStatus.slice(1);
 
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to update booking');
+            // Use appropriate Convex mutation based on status
+            if (newStatus === 'confirmed') {
+                await confirmBooking({ bookingId });
+            } else if (newStatus === 'cancelled') {
+                await cancelBooking({ bookingId });
+            } else {
+                await updateBooking({
+                    bookingId,
+                    status: convexStatus
+                });
             }
 
             toast.success(`Booking ${newStatus}!`, { id: toastId });
 
-            // Reload bookings to reflect changes
-            await loadBookings();
+            // Convex automatically updates bookings, no need to reload
         } catch (error: any) {
             console.error('Update failed:', error);
             toast.error(error.message || 'Failed to update booking', { id: toastId });
@@ -348,7 +319,7 @@ export default function StudioBookings({ user, userData, onNavigateToChat }: Stu
         })
         .reduce((sum, b) => sum + (b.totalPrice || b.offer_amount || 0), 0);
 
-    if (loading) {
+    if (studioBookings === undefined) {
         return (
             <div className="flex items-center justify-center h-64">
                 <RefreshCw className="animate-spin text-brand-blue" size={32} />

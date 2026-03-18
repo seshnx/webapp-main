@@ -13,7 +13,7 @@ import { PROFILE_SCHEMAS, GENRE_DATA, INSTRUMENT_DATA } from '../config/constant
 import { MultiSelect, NestedSelect } from './shared/Inputs';
 import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
 import SoftwareAutocomplete from './shared/SoftwareAutocomplete';
-import { updateProfile, upsertSubProfile, getProfile } from '../config/neonQueries';
+import { useUpdateProfile } from '@/hooks/useConvex';
 import PageLayout from './shared/PageLayout';
 
 // --- Interfaces ---
@@ -110,6 +110,9 @@ export default function ProfileManager({
 }: ProfileManagerProps) {
     const location = useLocation();
     const navigate = useNavigate();
+
+    // Convex mutations
+    const updateProfile = useUpdateProfile();
 
     // Get active tab from URL path
     const getTabFromPath = (path: string): TabInfo => {
@@ -314,10 +317,15 @@ export default function ProfileManager({
                 });
             }
 
-            // Update legal info in Neon (first name, last name only)
-            await updateProfile(userId, legalUpdates);
+            // Update legal info using Convex
+            await updateProfile({
+                clerkId: userId,
+                ...legalUpdates
+            });
 
             // Update profile and subprofiles in MongoDB
+            // TODO: Migrate this MongoDB API call to Convex
+            // For now, this handles additional profile fields not yet in Convex schema
             if (Object.keys(mongoProfile).length > 0 || subprofiles.length > 0) {
                 const mongoResponse = await fetch('/api/user/profile', {
                     method: 'POST',
@@ -597,11 +605,16 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
 
             const userId = user?.id || user?.uid;
 
-            // Save sub-profile data using Neon
+            // Save sub-profile data using Convex
             const dataToSave = { ...formData, followMainProfile, useLegalNameOnly, useUserNameOnly, syncStudioOps, displayName: effectiveName };
 
-            // Upsert sub-profile
-            await upsertSubProfile(userId, role, dataToSave);
+            // Update sub-profile using Convex
+            await updateProfile({
+                clerkId: userId,
+                subprofiles: {
+                    [role]: dataToSave
+                }
+            });
 
             // Note: display_name and effective_display_name are now handled by MongoDB
             // Subprofiles are updated through the MongoDB API in the main profile save function
