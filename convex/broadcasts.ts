@@ -111,7 +111,7 @@ export const getBroadcastsByTarget = query({
 
 export const getScheduledBroadcasts = query({
   args: {
-    schoolId: v.optional(v.id("schools")>,
+    schoolId: v.optional(v.id("schools")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -183,7 +183,7 @@ export const getActiveBroadcasts = query({
 export const getDraftBroadcasts = query({
   args: {
     schoolId: v.id("schools"),
-    createdBy: v.optional(v.string()>,
+    createdBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let q = ctx.db
@@ -243,7 +243,7 @@ export const createBroadcast = mutation({
     title: v.string(),
     content: v.string(),
     targetType: v.string(), // 'all', 'students', 'staff', 'specific'
-    targetId: v.optional(v.string()>, // User ID for 'specific' targeting
+    targetId: v.optional(v.string()), // User ID for 'specific' targeting
     priority: v.optional(v.string()), // 'urgent', 'high', 'normal', 'low'
     status: v.optional(v.string()), // 'draft', 'published', 'scheduled', 'archived'
     scheduledFor: v.optional(v.number()), // Timestamp for scheduled broadcasts
@@ -473,7 +473,7 @@ export const getBroadcastReads = query({
 export const getUserReadBroadcasts = query({
   args: {
     userId: v.string(),
-    schoolId: v.optional(v.id("schools")>,
+    schoolId: v.optional(v.id("schools")),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
