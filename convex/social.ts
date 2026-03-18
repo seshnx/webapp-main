@@ -946,24 +946,33 @@ export const getHomeFeed = query({
     const limit = args.limit || 20;
     const skip = args.skip || 0;
 
+    // Get users that this user follows
     const follows = await ctx.db
       .query("follows")
       .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
       .collect();
 
     const followingIds = follows.map((f) => f.followingId);
+    
+    // Add user's own ID to the list
+    const authorIds = [args.userId, ...followingIds];
 
+    // Fetch more posts than needed to account for filtering
+    const fetchSize = (skip + limit) * 3;
+
+    // Get all recent posts
     const allPosts = await ctx.db
       .query("posts")
       .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take((skip + limit) * 3);
+      .take(fetchSize);
 
-    const feedPosts = allPosts.filter(
-      (post) =>
-        post.authorId === args.userId || followingIds.includes(post.authorId)
+    // Filter to only posts from followed users or user's own posts
+    const feedPosts = allPosts.filter((post) =>
+      authorIds.includes(post.authorId)
     );
 
+    // Apply pagination
     return feedPosts.slice(skip, skip + limit);
   },
 });
