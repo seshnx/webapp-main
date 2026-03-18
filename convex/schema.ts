@@ -184,8 +184,7 @@ export default defineSchema({
     .index("by_post", ["postId", "createdAt"])
     .index("by_parent", ["parentId", "createdAt"])
     .index("by_author", ["authorId", "createdAt"])
-    .index("by_comment_id", ["_id"]), // For MongoDB migration
-
+    
   // Reactions table (likes, emojis)
   reactions: defineTable({
     // Target
@@ -268,7 +267,6 @@ export default defineSchema({
   })
     .index("by_user_read", ["userId", "createdAt"])
     .index("by_unread", ["userId", "read", "createdAt"])
-    .index("by_notification_id", ["_id"]), // For MongoDB migration
 
   // =====================================================
   // MESSAGING & CHAT
