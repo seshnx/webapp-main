@@ -1,4 +1,3 @@
- 
 /**
  * Generated `api` utility.
  *
@@ -8,18 +7,12 @@
  * @module
  */
 
+import type * as users from "../users.js";
+import type * as social from "../social.js";
 import type * as bookings from "../bookings.js";
-import type * as comments from "../comments.js";
-import type * as conversations from "../conversations.js";
-import type * as enhancedPresence from "../enhancedPresence.js";
-import type * as enhancedSchema from "../enhancedSchema.js";
-import type * as messages from "../messages.js";
-import type * as notifications from "../notifications.js";
-import type * as presence from "../presence.js";
-import type * as profileUpdates from "../profileUpdates.js";
-import type * as reactions from "../reactions.js";
-import type * as readReceipts from "../readReceipts.js";
-import type * as schema_expanded from "../schema_expanded.js";
+import type * as edu from "../edu.js";
+import type * as broadcasts from "../broadcasts.js";
+import type * as marketplace from "../marketplace.js";
 
 import type {
   ApiFromModules,
@@ -28,18 +21,12 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  users: typeof users;
+  social: typeof social;
   bookings: typeof bookings;
-  comments: typeof comments;
-  conversations: typeof conversations;
-  enhancedPresence: typeof enhancedPresence;
-  enhancedSchema: typeof enhancedSchema;
-  messages: typeof messages;
-  notifications: typeof notifications;
-  presence: typeof presence;
-  profileUpdates: typeof profileUpdates;
-  reactions: typeof reactions;
-  readReceipts: typeof readReceipts;
-  schema_expanded: typeof schema_expanded;
+  edu: typeof edu;
+  broadcasts: typeof broadcasts;
+  marketplace: typeof marketplace;
 }>;
 
 /**
@@ -49,23 +36,10 @@ declare const fullApi: ApiFromModules<{
  * ```js
  * const myFunctionReference = api.myModule.myFunction;
  * ```
- */
-export declare const api: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "public">
->;
-
-/**
- * A utility for referencing Convex functions in your app's internal API.
  *
- * Usage:
- * ```js
- * const myFunctionReference = internal.myModule.myFunction;
- * ```
+ * @public
  */
-export declare const internal: FilterApi<
-  typeof fullApi,
-  FunctionReference<any, "internal">
->;
+declare const api: FilterApi<typeof fullApi, "public">;
+declare const internal: FilterApi<typeof fullApi, "internal">;
 
-export declare const components: {};
+export { api, internal };
