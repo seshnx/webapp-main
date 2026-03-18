@@ -2,6 +2,19 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
+// =====================================================
+// HELPER FUNCTIONS
+// =====================================================
+
+// Safely look up a native Convex User ID from a Clerk String ID
+const getNativeUser = async (ctx: any, clerkId: string | undefined) => {
+  if (!clerkId) return null;
+  return await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+    .first();
+};
+
 
 /**
  * Get user by Clerk ID
@@ -17,20 +30,6 @@ export const getUserByClerkId = query({
       .first();
   },
 });
-
-
-// =====================================================
-// HELPER FUNCTIONS
-// =====================================================
-
-// Safely look up a native Convex User ID from a Clerk String ID
-const getNativeUser = async (ctx: any, clerkId: string | undefined) => {
-  if (!clerkId) return null;
-  return await ctx.db
-    .query("users")
-    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
-    .first();
-};
 
 // =====================================================
 // POST QUERIES
@@ -74,901 +73,7 @@ export const getFeed = query({
 });
 
 /**
- * Get posts by author
- * Returns all posts from a specific user
- */
-export const getPostsByAuthor = query({
-  args: {
-    authorId: v.id("users"),
-    limit: v.optional(v.number()),
-    skip: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-    const skip = args.skip || 0;
-    const fetchSize = (skip + limit) * 2;
-
-    const posts = await ctx.db
-      .query("posts")
-      .withIndex("by_author", (q) => q.eq("authorId", args.authorId))
-      .order("desc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(fetchSize);
-
-    return posts.slice(skip, skip + limit);
-  },
-});
-
-/**
- * Get post by ID
- * Returns a single post with its details
- */
-export const getPostById = query({
-  args: { postId: v.id("posts") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.postId);
-  },
-});
-
-/**
- * Get posts by category
- * Returns filtered posts by category (Music, Studio, Gear, etc.)
- */
-export const getPostsByCategory = query({
-  args: {
-    category: v.string(),
-    limit: v.optional(v.number()),
-    skip: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-    const skip = args.skip || 0;
-    const fetchSize = (skip + limit) * 2;
-
-    const posts = await ctx.db
-      .query("posts")
-      .withIndex("by_category", (q) => q.eq("category", args.category))
-      .order("desc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(fetchSize);
-
-    return posts.slice(skip, skip + limit);
-  },
-});
-
-/**
- * Get posts by hashtag
- * Returns posts containing a specific hashtag
- */
-export const getPostsByHashtag = query({
-  args: {
-    hashtag: v.string(),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 50;
-
-    // Get all posts
-    const allPosts = await ctx.db
-      .query("posts")
-      .order("desc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(limit * 2);
-
-    // Filter by hashtag
-    const filtered = allPosts.filter((post) =>
-      post.hashtags?.includes(args.hashtag)
-    );
-
-    return filtered.slice(0, limit);
-  },
-});
-
-/**
- * Get reposts of a post
- * Returns all reposts of a specific post
- */
-export const getReposts = query({
-  args: {
-    originalPostId: v.id("posts"),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-
-    const reposts = await ctx.db
-      .query("posts")
-      .withIndex("by_repost_of", (q) => q.eq("repostOf", args.originalPostId))
-      .order("desc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(limit);
-
-    return reposts;
-  },
-});
-
-/**
- * Search posts
- * Searches post content and captions
- */
-export const searchPosts = query({
-  args: {
-    searchText: v.string(),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-
-    const allPosts = await ctx.db
-      .query("posts")
-      .order("desc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(limit * 2);
-
-    const searchTerm = args.searchText.toLowerCase();
-    const filtered = allPosts.filter(
-      (post) =>
-        (post.content || "").toLowerCase().includes(searchTerm) ||
-        (post.hashtags || []).some((tag) =>
-          tag.toLowerCase().includes(searchTerm)
-        )
-    );
-
-    return filtered.slice(0, limit);
-  },
-});
-
-// =====================================================
-// POST MUTATIONS
-// =====================================================
-
-/**
- * Create a new post
- */
-export const createPost = mutation({
-  args: {
-    authorId: v.id("users"),
-    content: v.optional(v.string()),
-    mediaUrls: v.optional(v.array(v.string())),
-    mediaType: v.optional(v.string()),
-    category: v.optional(v.string()),
-    visibility: v.optional(v.string()),
-    equipment: v.optional(v.array(v.string())),
-    software: v.optional(v.array(v.string())),
-    customFields: v.optional(v.any()),
-  },
-  handler: async (ctx, args) => {
-    const author = await ctx.db.get(args.authorId);
-    if (!author) {
-      throw new Error("Author not found");
-    }
-
-    const hashtags =
-      args.content
-        ?.match(/#\w+/g)
-        ?.map((tag) => tag.slice(1).toLowerCase()) || [];
-
-    const mentions =
-      args.content?.match(/@\w+/g)?.map((mention) => mention.slice(1)) || [];
-
-    const postId = await ctx.db.insert("posts", {
-      authorId: args.authorId,
-      authorName: author.displayName,
-      authorPhoto: author.avatarUrl,
-      authorUsername: author.username,
-      role: author.activeRole,
-      content: args.content,
-      mediaUrls: args.mediaUrls,
-      mediaType: args.mediaType,
-      hashtags,
-      mentions,
-      category: args.category,
-      visibility: args.visibility || "public",
-      repostOf: undefined,
-      parentId: undefined,
-      equipment: args.equipment,
-      software: args.software,
-      customFields: args.customFields,
-      engagement: {
-        likesCount: 0,
-        commentsCount: 0,
-        repostsCount: 0,
-        savesCount: 0,
-      },
-      deletedAt: undefined,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
-    await ctx.db.patch(args.authorId, {
-      stats: {
-        ...author.stats,
-        postsCount: (author.stats?.postsCount || 0) + 1,
-      },
-    });
-
-    return postId;
-  },
-});
-
-/**
- * Update an existing post
- */
-export const updatePost = mutation({
-  args: {
-    postId: v.id("posts"),
-    content: v.optional(v.string()),
-    mediaUrls: v.optional(v.array(v.string())),
-    category: v.optional(v.string()),
-    visibility: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.postId);
-    if (!post) {
-      throw new Error("Post not found");
-    }
-
-    const updateData: any = {
-      content: args.content,
-      mediaUrls: args.mediaUrls,
-      category: args.category,
-      visibility: args.visibility,
-      updatedAt: Date.now(),
-    };
-
-    if (args.content) {
-      updateData.hashtags =
-        args.content
-          .match(/#\w+/g)
-          ?.map((tag) => tag.slice(1).toLowerCase()) || [];
-
-      updateData.mentions =
-        args.content?.match(/@\w+/g)?.map((mention) => mention.slice(1)) || [];
-    }
-
-    await ctx.db.patch(args.postId, updateData);
-    return { success: true };
-  },
-});
-
-/**
- * Delete a post (soft delete)
- */
-export const deletePost = mutation({
-  args: {
-    postId: v.id("posts"),
-    authorId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.postId);
-    if (!post) {
-      throw new Error("Post not found");
-    }
-
-    if (post.authorId !== args.authorId) {
-      throw new Error("You can only delete your own posts");
-    }
-
-    await ctx.db.patch(args.postId, {
-      deletedAt: Date.now(),
-    });
-
-    const author = await ctx.db.get(args.authorId);
-    if (author) {
-      await ctx.db.patch(args.authorId, {
-        stats: {
-          ...author.stats,
-          postsCount: Math.max(0, (author.stats?.postsCount || 1) - 1),
-        },
-      });
-    }
-
-    return { success: true };
-  },
-});
-
-/**
- * Repost a post
- */
-export const repostPost = mutation({
-  args: {
-    originalPostId: v.id("posts"),
-    authorId: v.id("users"),
-    comment: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const originalPost = await ctx.db.get(args.originalPostId);
-    if (!originalPost) {
-      throw new Error("Original post not found");
-    }
-
-    const author = await ctx.db.get(args.authorId);
-    if (!author) {
-      throw new Error("Author not found");
-    }
-
-    const existingRepost = await ctx.db
-      .query("posts")
-      .withIndex("by_author", (q) => q.eq("authorId", args.authorId))
-      .filter((q) => q.eq(q.field("repostOf"), args.originalPostId))
-      .first();
-
-    if (existingRepost) {
-      throw new Error("You already reposted this post");
-    }
-
-    const repostId = await ctx.db.insert("posts", {
-      authorId: args.authorId,
-      authorName: author.displayName,
-      authorPhoto: author.avatarUrl,
-      authorUsername: author.username,
-      role: author.activeRole,
-      content: args.comment || "",
-      mediaUrls: originalPost.mediaUrls,
-      mediaType: originalPost.mediaType,
-      hashtags: originalPost.hashtags,
-      mentions: originalPost.mentions,
-      category: originalPost.category,
-      visibility: originalPost.visibility,
-      repostOf: args.originalPostId,
-      parentId: undefined,
-      engagement: {
-        likesCount: 0,
-        commentsCount: 0,
-        repostsCount: 0,
-        savesCount: 0,
-      },
-      deletedAt: undefined,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
-    return repostId;
-  },
-});
-
-/**
- * Undo repost
- */
-export const unrepostPost = mutation({
-  args: {
-    repostId: v.id("posts"),
-  },
-  handler: async (ctx, args) => {
-    const repost = await ctx.db.get(args.repostId);
-    if (!repost) {
-      throw new Error("Repost not found");
-    }
-
-    if (!repost.repostOf) {
-      throw new Error("This is not a repost");
-    }
-
-    await ctx.db.patch(args.repostId, {
-      deletedAt: Date.now(),
-    });
-
-    return { success: true };
-  },
-});
-
-// =====================================================
-// COMMENT QUERIES
-// =====================================================
-
-/**
- * Get comments for a post
- */
-export const getCommentsByPost = query({
-  args: {
-    postId: v.id("posts"),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 50;
-
-    const comments = await ctx.db
-      .query("comments")
-      .withIndex("by_post", (q) => q.eq("postId", args.postId))
-      .order("asc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(limit);
-
-    return comments;
-  },
-});
-
-/**
- * Get comment replies
- */
-export const getCommentReplies = query({
-  args: {
-    parentId: v.id("comments"),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-
-    const replies = await ctx.db
-      .query("comments")
-      .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
-      .order("asc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(limit);
-
-    return replies;
-  },
-});
-
-/**
- * Get comments by author
- */
-export const getCommentsByAuthor = query({
-  args: {
-    authorId: v.id("users"),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-
-    const comments = await ctx.db
-      .query("comments")
-      .withIndex("by_author", (q) => q.eq("authorId", args.authorId))
-      .order("desc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(limit);
-
-    return comments;
-  },
-});
-
-// =====================================================
-// COMMENT MUTATIONS
-// =====================================================
-
-/**
- * Create a new comment
- */
-export const createComment = mutation({
-  args: {
-    postId: v.id("posts"),
-    authorId: v.id("users"),
-    content: v.string(),
-    parentId: v.optional(v.id("comments")),
-  },
-  handler: async (ctx, args) => {
-    const author = await ctx.db.get(args.authorId);
-    if (!author) {
-      throw new Error("Author not found");
-    }
-
-    const post = await ctx.db.get(args.postId);
-    if (!post) {
-      throw new Error("Post not found");
-    }
-
-    if (args.parentId) {
-      const parentComment = await ctx.db.get(args.parentId);
-      if (!parentComment || parentComment.postId !== args.postId) {
-        throw new Error("Parent comment not found");
-      }
-    }
-
-    const commentId = await ctx.db.insert("comments", {
-      postId: args.postId,
-      commentId: crypto.randomUUID(),
-      authorId: args.authorId,
-      authorName: author.displayName,
-      authorPhoto: author.avatarUrl,
-      content: args.content,
-      parentId: args.parentId,
-      reactionCount: 0,
-      deletedAt: undefined,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
-    await ctx.db.patch(args.postId, {
-      engagement: {
-        ...post.engagement,
-        commentsCount: (post.engagement?.commentsCount || 0) + 1,
-      },
-    });
-
-    return commentId;
-  },
-});
-
-/**
- * Update a comment
- */
-export const updateComment = mutation({
-  args: {
-    commentId: v.id("comments"),
-    content: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const comment = await ctx.db.get(args.commentId);
-    if (!comment) {
-      throw new Error("Comment not found");
-    }
-
-    await ctx.db.patch(args.commentId, {
-      content: args.content,
-      updatedAt: Date.now(),
-    });
-
-    return { success: true };
-  },
-});
-
-/**
- * Delete a comment (soft delete)
- */
-export const deleteComment = mutation({
-  args: {
-    commentId: v.id("comments"),
-  },
-  handler: async (ctx, args) => {
-    const comment = await ctx.db.get(args.commentId);
-    if (!comment) {
-      throw new Error("Comment not found");
-    }
-
-    await ctx.db.patch(args.commentId, {
-      deletedAt: Date.now(),
-    });
-
-    if (comment.postId) {
-      const post = await ctx.db.get(comment.postId);
-      if (post) {
-        await ctx.db.patch(comment.postId, {
-          engagement: {
-            ...post.engagement,
-            commentsCount: Math.max(
-              0,
-              (post.engagement?.commentsCount || 1) - 1
-            ),
-          },
-        });
-      }
-    }
-
-    return { success: true };
-  },
-});
-
-// =====================================================
-// REACTION QUERIES
-// =====================================================
-
-/**
- * Get reactions for a target
- */
-export const getReactions = query({
-  args: {
-    targetId: v.string(),
-    targetType: v.union(v.literal("post"), v.literal("comment")),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("reactions")
-      .withIndex("by_target", (q) =>
-        q.eq("targetId", args.targetId).eq("targetType", args.targetType)
-      )
-      .collect();
-  },
-});
-
-/**
- * Get reaction summary
- */
-export const getReactionSummary = query({
-  args: {
-    targetId: v.string(),
-    targetType: v.union(v.literal("post"), v.literal("comment")),
-  },
-  handler: async (ctx, args) => {
-    const reactions = await ctx.db
-      .query("reactions")
-      .withIndex("by_target", (q) =>
-        q.eq("targetId", args.targetId).eq("targetType", args.targetType)
-      )
-      .collect();
-
-    const summary: Record<string, { count: number; users: string[] }> = {};
-
-    for (const reaction of reactions) {
-      if (!summary[reaction.emoji]) {
-        summary[reaction.emoji] = { count: 0, users: [] };
-      }
-      summary[reaction.emoji].count++;
-      summary[reaction.emoji].users.push(reaction.userId);
-    }
-
-    return summary;
-  },
-});
-
-/**
- * Check if user reacted
- */
-export const getUserReaction = query({
-  args: {
-    targetId: v.string(),
-    targetType: v.union(v.literal("post"), v.literal("comment")),
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("reactions")
-      .withIndex("by_user_target", (q) =>
-        q
-          .eq("userId", args.userId)
-          .eq("targetId", args.targetId)
-          .eq("targetType", args.targetType)
-      )
-      .first();
-  },
-});
-
-// =====================================================
-// REACTION MUTATIONS
-// =====================================================
-
-/**
- * Toggle a reaction
- */
-export const toggleReaction = mutation({
-  args: {
-    targetId: v.string(),
-    targetType: v.union(v.literal("post"), v.literal("comment")),
-    emoji: v.string(),
-    userId: v.id("users"),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("reactions")
-      .withIndex("by_user_target", (q) =>
-        q
-          .eq("userId", args.userId)
-          .eq("targetId", args.targetId)
-          .eq("targetType", args.targetType)
-      )
-      .first();
-
-    if (existing) {
-      await ctx.db.delete(existing._id);
-
-      if (args.targetType === "post") {
-        const posts = await ctx.db
-          .query("posts")
-          .filter((q) => q.eq(q.field("_id"), existing.targetId))
-          .take(1);
-
-        if (posts.length > 0) {
-          await ctx.db.patch(posts[0]._id, {
-            engagement: {
-              ...posts[0].engagement,
-              likesCount: Math.max(
-                0,
-                (posts[0].engagement?.likesCount || 1) - 1
-              ),
-            },
-          });
-        }
-      }
-
-      if (args.targetType === "comment") {
-        const comments = await ctx.db
-          .query("comments")
-          .filter((q) => q.eq(q.field("_id"), existing.targetId))
-          .take(1);
-
-        if (comments.length > 0) {
-          await ctx.db.patch(comments[0]._id, {
-            reactionCount: Math.max(0, comments[0].reactionCount - 1),
-          });
-        }
-      }
-
-      return { action: "removed", emoji: existing.emoji };
-    } else {
-      await ctx.db.insert("reactions", {
-        targetId: args.targetId,
-        targetType: args.targetType,
-        emoji: args.emoji,
-        userId: args.userId,
-        timestamp: Date.now(),
-      });
-
-      if (args.targetType === "post") {
-        const posts = await ctx.db
-          .query("posts")
-          .filter((q) => q.eq(q.field("_id"), args.targetId))
-          .take(1);
-
-        if (posts.length > 0) {
-          await ctx.db.patch(posts[0]._id, {
-            engagement: {
-              ...posts[0].engagement,
-              likesCount: (posts[0].engagement?.likesCount || 0) + 1,
-            },
-          });
-        }
-      }
-
-      if (args.targetType === "comment") {
-        const comments = await ctx.db
-          .query("comments")
-          .filter((q) => q.eq(q.field("_id"), args.targetId))
-          .take(1);
-
-        if (comments.length > 0) {
-          await ctx.db.patch(comments[0]._id, {
-            reactionCount: comments[0].reactionCount + 1,
-          });
-        }
-      }
-
-      return { action: "added", emoji: args.emoji };
-    }
-  },
-});
-
-/**
- * Clear all reactions
- */
-export const clearReactions = mutation({
-  args: {
-    targetId: v.string(),
-    targetType: v.union(v.literal("post"), v.literal("comment")),
-  },
-  handler: async (ctx, args) => {
-    const reactions = await ctx.db
-      .query("reactions")
-      .withIndex("by_target", (q) =>
-        q.eq("targetId", args.targetId).eq("targetType", args.targetType)
-      )
-      .collect();
-
-    for (const reaction of reactions) {
-      await ctx.db.delete(reaction._id);
-    }
-
-    return { cleared: reactions.length };
-  },
-});
-
-// =====================================================
-// SAVED POSTS
-// =====================================================
-
-/**
- * Get saved posts
- */
-export const getSavedPosts = query({
-  args: {
-    userId: v.id("users"),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 50;
-
-    const saved = await ctx.db
-      .query("savedPosts")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .take(limit);
-
-    const posts = await Promise.all(saved.map((s) => ctx.db.get(s.postId)));
-
-    return posts.filter((p) => p !== null && p.deletedAt === undefined);
-  },
-});
-
-/**
- * Check if post is saved
- */
-export const isPostSaved = query({
-  args: {
-    userId: v.id("users"),
-    postId: v.id("posts"),
-  },
-  handler: async (ctx, args) => {
-    const saved = await ctx.db
-      .query("savedPosts")
-      .withIndex("by_user_post", (q) =>
-        q.eq("userId", args.userId).eq("postId", args.postId)
-      )
-      .first();
-
-    return !!saved;
-  },
-});
-
-/**
- * Save a post
- */
-export const savePost = mutation({
-  args: {
-    userId: v.id("users"),
-    postId: v.id("posts"),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("savedPosts")
-      .withIndex("by_user_post", (q) =>
-        q.eq("userId", args.userId).eq("postId", args.postId)
-      )
-      .first();
-
-    if (existing) {
-      return { success: true, alreadySaved: true };
-    }
-
-    await ctx.db.insert("savedPosts", {
-      userId: args.userId,
-      postId: args.postId,
-      createdAt: Date.now(),
-    });
-
-    const post = await ctx.db.get(args.postId);
-    if (post) {
-      await ctx.db.patch(args.postId, {
-        engagement: {
-          ...post.engagement,
-          savesCount: (post.engagement?.savesCount || 0) + 1,
-        },
-      });
-    }
-
-    return { success: true, alreadySaved: false };
-  },
-});
-
-/**
- * Unsave a post
- */
-export const unsavePost = mutation({
-  args: {
-    userId: v.id("users"),
-    postId: v.id("posts"),
-  },
-  handler: async (ctx, args) => {
-    const saved = await ctx.db
-      .query("savedPosts")
-      .withIndex("by_user_post", (q) =>
-        q.eq("userId", args.userId).eq("postId", args.postId)
-      )
-      .first();
-
-    if (!saved) {
-      return { success: true, wasNotSaved: true };
-    }
-
-    await ctx.db.delete(saved._id);
-
-    const post = await ctx.db.get(args.postId);
-    if (post) {
-      await ctx.db.patch(args.postId, {
-        engagement: {
-          ...post.engagement,
-          savesCount: Math.max(0, (post.engagement?.savesCount || 1) - 1),
-        },
-      });
-    }
-
-    return { success: true, wasNotSaved: false };
-  },
-});
-
-// =====================================================
-// FEED HELPERS
-// =====================================================
-
-/**
- * Get home feed
+ * Get home feed for a specific user (Following + Own posts)
  */
 export const getHomeFeed = query({
   args: { 
@@ -1070,5 +175,701 @@ export const getTrendingPosts = query({
       .slice(0, limit);
 
     return sorted;
+  },
+});
+
+/**
+ * Search posts by query string
+ */
+export const searchPosts = query({
+  args: {
+    searchQuery: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+
+    // Use full-text search index if configured in schema
+    // Fallback to simple filtering for now
+    const allPosts = await ctx.db
+      .query("posts")
+      .order("desc")
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .take(100);
+
+    const query = args.searchQuery.toLowerCase();
+
+    return allPosts
+      .filter((post) => {
+        const inContent = post.content?.toLowerCase().includes(query);
+        const inAuthor =
+          post.authorName?.toLowerCase().includes(query) ||
+          post.authorUsername?.toLowerCase().includes(query);
+        const inHashtags = post.hashtags?.some((t) =>
+          t.toLowerCase().includes(query)
+        );
+        return inContent || inAuthor || inHashtags;
+      })
+      .slice(0, limit);
+  },
+});
+
+/**
+ * Get a single post by ID
+ */
+export const getPost = query({
+  args: {
+    postId: v.id("posts"),
+  },
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!post || post.deletedAt) {
+      return null;
+    }
+    return post;
+  },
+});
+
+/**
+ * Get posts by a specific user
+ */
+export const getPostsByAuthor = query({
+  args: {
+    authorId: v.id("users"),
+    limit: v.optional(v.number()),
+    skip: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    const skip = args.skip || 0;
+
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_author", (q) => q.eq("authorId", args.authorId))
+      .order("desc")
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .take(skip + limit);
+
+    return posts.slice(skip, skip + limit);
+  },
+});
+
+/**
+ * Get posts by category
+ */
+export const getPostsByCategory = query({
+  args: {
+    category: v.string(),
+    limit: v.optional(v.number()),
+    skip: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    const skip = args.skip || 0;
+
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_category", (q) => q.eq("category", args.category))
+      .order("desc")
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .take(skip + limit);
+
+    return posts.slice(skip, skip + limit);
+  },
+});
+
+// =====================================================
+// POST MUTATIONS
+// =====================================================
+
+/**
+ * Create a new post
+ */
+export const createPost = mutation({
+  args: {
+    authorId: v.string(), // Accept Clerk ID string
+    content: v.optional(v.string()),
+    mediaUrls: v.optional(v.array(v.string())),
+    mediaType: v.optional(v.string()),
+    category: v.optional(v.string()),
+    visibility: v.optional(v.string()),
+    equipment: v.optional(v.array(v.string())),
+    software: v.optional(v.array(v.string())),
+    customFields: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    // Look up the Convex user using the Clerk ID
+    const author = await getNativeUser(ctx, args.authorId);
+    if (!author) {
+      throw new Error("Author not found or not synced to database yet.");
+    }
+
+    const hashtags =
+      args.content
+        ?.match(/#[a-zA-Z0-9]+/g)
+        ?.map((tag) => tag.slice(1).toLowerCase()) || [];
+
+    const mentions =
+      args.content?.match(/@[a-zA-Z0-9]+/g)?.map((mention) => mention.slice(1)) || [];
+
+    const postId = await ctx.db.insert("posts", {
+      authorId: author._id, // Use the native Convex ID
+      authorName: author.displayName || author.username || "Unknown",
+      authorPhoto: author.imageUrl || author.avatarUrl,
+      authorUsername: author.username,
+      role: author.activeProfileRole || author.activeRole || "Talent",
+      content: args.content,
+      mediaUrls: args.mediaUrls,
+      mediaType: args.mediaType,
+      hashtags,
+      mentions,
+      category: args.category,
+      visibility: args.visibility || "public",
+      repostOf: undefined,
+      parentId: undefined,
+      equipment: args.equipment,
+      software: args.software,
+      customFields: args.customFields,
+      engagement: {
+        likesCount: 0,
+        commentsCount: 0,
+        repostsCount: 0,
+        savesCount: 0,
+      },
+      deletedAt: undefined,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    return postId;
+  },
+});
+
+/**
+ * Delete a post (soft delete)
+ */
+export const deletePost = mutation({
+  args: {
+    postId: v.id("posts"),
+    authorId: v.string(), // CHANGED
+  },
+  handler: async (ctx, args) => {
+    const post = await ctx.db.get(args.postId);
+    if (!post) throw new Error("Post not found");
+
+    const author = await getNativeUser(ctx, args.authorId);
+    if (!author || post.authorId !== author._id) {
+      throw new Error("Unauthorized");
+    }
+
+    // Soft delete
+    await ctx.db.patch(args.postId, { deletedAt: Date.now() });
+  },
+});
+
+/**
+ * Repost a post
+ */
+export const repostPost = mutation({
+  args: {
+    originalPostId: v.id("posts"),
+    authorId: v.string(), // CHANGED
+    comment: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const originalPost = await ctx.db.get(args.originalPostId);
+    if (!originalPost) throw new Error("Original post not found");
+
+    const author = await getNativeUser(ctx, args.authorId);
+    if (!author) throw new Error("Author not found");
+
+    const postId = await ctx.db.insert("posts", {
+      authorId: author._id,
+      authorName: author.displayName || "Unknown",
+      authorPhoto: author.imageUrl || author.avatarUrl,
+      authorUsername: author.username,
+      role: author.activeProfileRole || author.activeRole,
+      content: args.comment,
+      repostOf: originalPost._id,
+      visibility: "public",
+      engagement: {
+        likesCount: 0,
+        commentsCount: 0,
+        repostsCount: 0,
+        savesCount: 0,
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    // Increment original post's repost count
+    await ctx.db.patch(originalPost._id, {
+      engagement: {
+        ...originalPost.engagement,
+        repostsCount: (originalPost.engagement?.repostsCount || 0) + 1,
+      },
+    });
+
+    return postId;
+  },
+});
+
+// =====================================================
+// COMMENT QUERIES
+// =====================================================
+
+/**
+ * Get comments for a post
+ */
+export const getComments = query({
+  args: {
+    postId: v.id("posts"),
+    limit: v.optional(v.number()),
+    skip: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 50;
+    const skip = args.skip || 0;
+
+    const comments = await ctx.db
+      .query("comments")
+      .withIndex("by_post", (q) => q.eq("postId", args.postId))
+      .order("asc")
+      .take(skip + limit);
+
+    return comments.slice(skip, skip + limit);
+  },
+});
+
+/**
+ * Get nested replies for a comment
+ */
+export const getReplies = query({
+  args: {
+    commentId: v.id("comments"),
+    limit: v.optional(v.number()),
+    skip: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    const skip = args.skip || 0;
+
+    const replies = await ctx.db
+      .query("comments")
+      .withIndex("by_parent", (q) => q.eq("parentId", args.commentId))
+      .order("asc")
+      .take(skip + limit);
+
+    return replies.slice(skip, skip + limit);
+  },
+});
+
+// =====================================================
+// COMMENT MUTATIONS
+// =====================================================
+
+/**
+ * Add a comment to a post
+ */
+export const createComment = mutation({
+  args: {
+    postId: v.id("posts"),
+    authorId: v.string(), // CHANGED
+    content: v.string(),
+    parentId: v.optional(v.id("comments")),
+  },
+  handler: async (ctx, args) => {
+    const author = await getNativeUser(ctx, args.authorId);
+    if (!author) throw new Error("Author not found");
+
+    const commentId = await ctx.db.insert("comments", {
+      postId: args.postId,
+      authorId: author._id,
+      content: args.content,
+      parentId: args.parentId,
+      engagement: { likesCount: 0, repliesCount: 0 },
+      createdAt: Date.now(),
+    });
+
+    // Increment the post's comment count
+    const post = await ctx.db.get(args.postId);
+    if (post) {
+      await ctx.db.patch(post._id, {
+        engagement: {
+          ...post.engagement,
+          commentsCount: (post.engagement?.commentsCount || 0) + 1,
+        },
+      });
+    }
+
+    return commentId;
+  },
+});
+
+/**
+ * Delete a comment
+ */
+export const deleteComment = mutation({
+  args: {
+    commentId: v.id("comments"),
+    authorId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const comment = await ctx.db.get(args.commentId);
+    if (!comment) {
+      throw new Error("Comment not found");
+    }
+
+    if (comment.authorId !== args.authorId) {
+      throw new Error("Unauthorized to delete this comment");
+    }
+
+    // Soft delete by updating content
+    await ctx.db.patch(args.commentId, {
+      content: "[Deleted]",
+    });
+
+    // We don't decrement the comment count to keep thread structure
+  },
+});
+
+// =====================================================
+// REACTION QUERIES
+// =====================================================
+
+/**
+ * Get reactions for a target (post or comment)
+ */
+export const getReactions = query({
+  args: {
+    targetId: v.string(),
+    targetType: v.union(v.literal("post"), v.literal("comment")),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("reactions")
+      .withIndex("by_target", (q) =>
+        q.eq("targetId", args.targetId).eq("targetType", args.targetType)
+      )
+      .collect();
+  },
+});
+
+/**
+ * Check if current user has reacted to a target
+ */
+export const hasReacted = query({
+  args: {
+    targetId: v.string(),
+    targetType: v.union(v.literal("post"), v.literal("comment")),
+    userId: v.id("users"),
+    emoji: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    let q = ctx.db
+      .query("reactions")
+      .withIndex("by_user_target", (q) =>
+        q
+          .eq("userId", args.userId)
+          .eq("targetId", args.targetId)
+          .eq("targetType", args.targetType)
+      );
+
+    if (args.emoji) {
+      q = q.filter((q) => q.eq(q.field("emoji"), args.emoji));
+    }
+
+    const reaction = await q.first();
+    return !!reaction;
+  },
+});
+
+// =====================================================
+// REACTION MUTATIONS
+// =====================================================
+
+/**
+ * Toggle a reaction (add or remove)
+ */
+export const toggleReaction = mutation({
+  args: {
+    targetId: v.string(),
+    targetType: v.union(v.literal("post"), v.literal("comment")),
+    emoji: v.string(),
+    userId: v.string(), // CHANGED
+  },
+  handler: async (ctx, args) => {
+    const user = await getNativeUser(ctx, args.userId);
+    if (!user) throw new Error("User not found");
+
+    const existing = await ctx.db
+      .query("reactions")
+      .withIndex("by_user_target", (q) =>
+        q.eq("userId", user._id).eq("targetId", args.targetId).eq("targetType", args.targetType)
+      )
+      .filter((q) => q.eq(q.field("emoji"), args.emoji))
+      .first();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      // Remove a like logically via patch
+      if (args.targetType === "post") {
+         const post = await ctx.db.get(args.targetId as any);
+         if (post) await ctx.db.patch(post._id, { engagement: { ...post.engagement, likesCount: Math.max(0, (post.engagement?.likesCount || 0) - 1) }});
+      }
+      return { added: false };
+    } else {
+      await ctx.db.insert("reactions", {
+        targetId: args.targetId,
+        targetType: args.targetType,
+        emoji: args.emoji,
+        userId: user._id,
+        timestamp: Date.now(),
+      });
+      // Add a like logically via patch
+      if (args.targetType === "post") {
+         const post = await ctx.db.get(args.targetId as any);
+         if (post) await ctx.db.patch(post._id, { engagement: { ...post.engagement, likesCount: (post.engagement?.likesCount || 0) + 1 }});
+      }
+      return { added: true };
+    }
+  },
+});
+
+// =====================================================
+// FOLLOW QUERIES
+// =====================================================
+
+/**
+ * Check if user follows another user
+ */
+export const isFollowing = query({
+  args: {
+    followerId: v.id("users"),
+    followingId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const follow = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.followerId))
+      .filter((q) => q.eq(q.field("followingId"), args.followingId))
+      .first();
+
+    return !!follow;
+  },
+});
+
+/**
+ * Get followers for a user
+ */
+export const getFollowers = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("follows")
+      .withIndex("by_following", (q) => q.eq("followingId", args.userId))
+      .collect();
+  },
+});
+
+/**
+ * Get users the specified user is following
+ */
+export const getFollowing = query({
+  args: {
+    userId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+      .collect();
+  },
+});
+
+// =====================================================
+// FOLLOW MUTATIONS
+// =====================================================
+
+/**
+ * Toggle follow status
+ */
+export const toggleFollow = mutation({
+  args: {
+    followerId: v.id("users"),
+    followingId: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    if (args.followerId === args.followingId) {
+      throw new Error("Cannot follow yourself");
+    }
+
+    const existing = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.followerId))
+      .filter((q) => q.eq(q.field("followingId"), args.followingId))
+      .first();
+
+    if (existing) {
+      // Unfollow
+      await ctx.db.delete(existing._id);
+      return { following: false };
+    } else {
+      // Follow
+      await ctx.db.insert("follows", {
+        followerId: args.followerId,
+        followingId: args.followingId,
+        createdAt: Date.now(),
+      });
+      return { following: true };
+    }
+  },
+});
+
+// =====================================================
+// SAVED POSTS QUERIES
+// =====================================================
+
+/**
+ * Get saved posts for a user
+ */
+export const getSavedPosts = query({
+  args: {
+    userId: v.id("users"),
+    limit: v.optional(v.number()),
+    skip: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    const skip = args.skip || 0;
+
+    const saved = await ctx.db
+      .query("savedPosts")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(skip + limit);
+
+    // Get actual post data for the saved records
+    const pagedSaved = saved.slice(skip, skip + limit);
+
+    const result = [];
+    for (const record of pagedSaved) {
+      const post = await ctx.db.get(record.postId);
+      if (post && !post.deletedAt) {
+        result.push({
+          ...post,
+          savedAt: record.savedAt,
+        });
+      }
+    }
+
+    return result;
+  },
+});
+
+/**
+ * Check if a post is saved by a user
+ */
+export const isSaved = query({
+  args: {
+    userId: v.optional(v.id("users")),
+    postId: v.id("posts"),
+  },
+  handler: async (ctx, args) => {
+    if (!args.userId) return false;
+
+    const saved = await ctx.db
+      .query("savedPosts")
+      .withIndex("by_user_post", (q) =>
+        q.eq("userId", args.userId).eq("postId", args.postId)
+      )
+      .first();
+
+    return !!saved;
+  },
+});
+
+// =====================================================
+// SAVED POSTS MUTATIONS
+// =====================================================
+
+/**
+ * Save a post
+ */
+export const savePost = mutation({
+  args: {
+    userId: v.string(), // CHANGED
+    postId: v.id("posts"),
+  },
+  handler: async (ctx, args) => {
+    const user = await getNativeUser(ctx, args.userId);
+    if (!user) throw new Error("User not found");
+
+    const existing = await ctx.db
+      .query("savedPosts")
+      .withIndex("by_user_post", (q) =>
+        q.eq("userId", user._id).eq("postId", args.postId)
+      )
+      .first();
+
+    if (existing) return { saved: true };
+
+    await ctx.db.insert("savedPosts", {
+      userId: user._id,
+      postId: args.postId,
+      savedAt: Date.now(),
+    });
+    
+    // Optionally increment save count
+    const post = await ctx.db.get(args.postId);
+    if (post) {
+      await ctx.db.patch(post._id, {
+        engagement: {
+          ...post.engagement,
+          savesCount: (post.engagement?.savesCount || 0) + 1,
+        },
+      });
+    }
+
+    return { saved: true };
+  },
+});
+
+/**
+ * Remove a post from saved
+ */
+export const unsavePost = mutation({
+  args: {
+    userId: v.string(), // CHANGED
+    postId: v.id("posts"),
+  },
+  handler: async (ctx, args) => {
+    const user = await getNativeUser(ctx, args.userId);
+    if (!user) throw new Error("User not found");
+
+    const saved = await ctx.db
+      .query("savedPosts")
+      .withIndex("by_user_post", (q) =>
+        q.eq("userId", user._id).eq("postId", args.postId)
+      )
+      .first();
+
+    if (saved) {
+      await ctx.db.delete(saved._id);
+      
+      const post = await ctx.db.get(args.postId);
+      if (post) {
+        await ctx.db.patch(post._id, {
+          engagement: {
+            ...post.engagement,
+            savesCount: Math.max(0, (post.engagement?.savesCount || 0) - 1),
+          },
+        });
+      }
+    }
+
+    return { saved: false };
   },
 });
