@@ -82,6 +82,17 @@ const Dashboard = retryLazyLoad(() => import('./Dashboard'));
 const SocialFeed = retryLazyLoad(() => import('./SocialFeed'));
 const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
 const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
+const BookingSystem = retryLazyLoad(() => import('./BookingSystem'));
+const Marketplace = retryLazyLoad(() => import('./Marketplace'));
+const TechServices = retryLazyLoad(() => import('./TechServices'));
+const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
+const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
+const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
+const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
+const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
+const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
+const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
+const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
 
 // =====================================================
 // MAIN COMPONENT
