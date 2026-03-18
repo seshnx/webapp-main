@@ -1,50 +1,39 @@
-import { useUser, useAuth } from "@clerk/react";
-import { useMutation } from "convex/react";
+import { useUser, useAuth } from "@clerk/clerk-react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 export const useUserSync = () => {
   const { user } = useUser();
   const { isLoaded, isSignedIn, userId } = useAuth();
   const syncUser = useMutation(api.users.syncUserFromClerk);
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error'>('idle');
+  
+  const userData = useQuery(api.users.getUserByClerkId, 
+    userId ? { clerkId: userId } : "skip"
+  );
+
   const syncStarted = useRef(false);
 
   useEffect(() => {
-    // Only attempt sync if Clerk is ready and user is signed in
+    // Only sync if Clerk is ready, user is signed in, and we haven't started this session
     if (isLoaded && isSignedIn && userId && user && !syncStarted.current) {
-      const performSync = async () => {
-        try {
-          syncStarted.current = true;
-          setSyncStatus('syncing');
-          console.log("🔄 Syncing Clerk user to Convex...", userId);
-          
-          await syncUser({
-            clerkId: userId,
-            email: user.primaryEmailAddress?.emailAddress || "",
-            username: user.username || undefined,
-            emailVerified: user.primaryEmailAddress?.verification.status === "verified",
-            firstName: user.firstName || undefined,
-            lastName: user.lastName || undefined,
-            imageUrl: user.imageUrl,
-          });
-
-          console.log("✅ Convex user synced");
-          setSyncStatus('synced');
-        } catch (error) {
-          console.error("❌ Failed to sync user with Convex:", error);
-          setSyncStatus('error');
-        }
-      };
-
-      performSync();
+      // If user data already exists, we mark sync as 'done' internally
+      if (userData !== undefined) {
+        syncStarted.current = true;
+        
+        // Background sync to keep profile updated (optional but recommended)
+        syncUser({
+          clerkId: userId,
+          email: user.primaryEmailAddress?.emailAddress || "",
+          username: user.username || undefined,
+          emailVerified: user.primaryEmailAddress?.verification.status === "verified",
+          firstName: user.firstName || undefined,
+          lastName: user.lastName || undefined,
+          imageUrl: user.imageUrl,
+        }).catch(err => console.error("Background sync failed:", err));
+      }
     }
-  }, [isLoaded, isSignedIn, userId, user, syncUser]);
+  }, [isLoaded, isSignedIn, userId, user, userData, syncUser]);
 
-  return {
-    // If not signed in, we are "loaded" (nothing to sync)
-    // If signed in, we are loaded only after the sync finishes or errors
-    isReady: !isSignedIn || (syncStatus === 'synced' || syncStatus === 'error'),
-    syncStatus
-  };
+  return { userData };
 };
