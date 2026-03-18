@@ -227,12 +227,12 @@ export const updateMarketItem = mutation({
     location: v.optional(v.string()),
     photos: v.optional(v.array(v.string())),
     specifications: v.optional(v.object({})),
-    featured: v.optional(v.boolean>(),
-    shippingAvailable: v.optional(v.boolean>(),
-    shippingCost: v.optional(v.number>(),
-    localPickup: v.optional(v.boolean>(),
-    dimensions: v.optional(v.string>(),
-    weight: v.optional(v.string>(),
+    featured: v.optional(v.boolean()),
+    shippingAvailable: v.optional(v.boolean()),
+    shippingCost: v.optional(v.number()),
+    localPickup: v.optional(v.boolean()),
+    dimensions: v.optional(v.string()),
+    weight: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     status: v.optional(v.string()), // 'available', 'pending', 'sold', 'removed'
   },
@@ -323,7 +323,7 @@ export const getTransactionsByBuyer = query({
 export const getTransactionsBySeller = query({
   args: {
     sellerId: v.string(),
-    status: v.optional(v.string>(),
+    status: v.optional(v.string(),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -375,15 +375,15 @@ export const createTransaction = mutation({
     buyerId: v.string(),
     buyerName: v.string(),
     buyerEmail: v.string(),
-    buyerPhone: v.optional(v.string>(),
+    buyerPhone: v.optional(v.string()),
     sellerId: v.string(),
     sellerName: v.string(),
     sellerEmail: v.string(),
-    sellerPhone: v.optional(v.string>(),
-    offerAmount: v.optional(v.number>(), // If different from listed price
-    message: v.optional(v.string>(),
-    paymentMethod: v.optional(v.string>(), // 'cash', 'card', 'transfer'
-    shippingRequired: v.optional(v.boolean>(),
+    sellerPhone: v.optional(v.string()),
+    offerAmount: v.optional(v.number()), // If different from listed price
+    message: v.optional(v.string()),
+    paymentMethod: v.optional(v.string()), // 'cash', 'card', 'transfer'
+    shippingRequired: v.optional(v.boolean()),
     shippingAddress: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -427,7 +427,7 @@ export const createTransaction = mutation({
 export const acceptOffer = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
-    counterOffer: v.optional(v.number>(),
+    counterOffer: v.optional(v.number()),
     message: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -465,7 +465,7 @@ export const acceptOffer = mutation({
 export const rejectOffer = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
-    reason: v.optional(v.string>(),
+    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const transaction = await ctx.db.get(args.transactionId);
@@ -498,8 +498,8 @@ export const rejectOffer = mutation({
 export const confirmPurchase = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
-    paymentConfirmed: v.boolean>(),
-    trackingNumber: v.optional(v.string>(),
+    paymentConfirmed: v.boolean(),
+    trackingNumber: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const transaction = await ctx.db.get(args.transactionId);
@@ -543,7 +543,7 @@ export const completeTransaction = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
     buyerRating: v.optional(v.number()),
-    buyerReview: v.optional(v.string>(),
+    buyerReview: v.optional(v.string()),
     sellerRating: v.optional(v.number()},
     sellerReview: v.optional(v.string()),
   },
@@ -587,7 +587,7 @@ export const cancelTransaction = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
     cancelledBy: v.string(), // 'buyer' or 'seller'
-    reason: v.optional(v.string>(),
+    reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const transaction = await ctx.db.get(args.transactionId);
