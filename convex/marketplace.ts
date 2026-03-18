@@ -544,7 +544,7 @@ export const completeTransaction = mutation({
     transactionId: v.id("marketTransactions"),
     buyerRating: v.optional(v.number()),
     buyerReview: v.optional(v.string()),
-    sellerRating: v.optional(v.number()},
+    sellerRating: v.optional(v.number()),
     sellerReview: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
