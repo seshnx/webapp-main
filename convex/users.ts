@@ -713,3 +713,44 @@ export const decrementUserStat = mutation({
     return { success: true };
   },
 });
+
+/**
+ * Aggregated User Data Query
+ * Replaces legacy Neon queries by fetching User, SubProfiles, and Bookings in one go.
+ */
+export const getFullUserData = query({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) return null;
+
+    // Fetch supplemental data in parallel
+    const [subProfiles, bookings] = await Promise.all([
+      ctx.db
+        .query("subProfiles")
+        .withIndex("by_user", (q) => q.eq("userId", user._id))
+        .collect(),
+      ctx.db
+        .query("bookings")
+        .withIndex("by_client", (q) => q.eq("clientId", user._id))
+        .collect(),
+    ]);
+
+    // Format subProfiles into a record map for easy UI access: { "Talent": {...}, "Producer": {...} }
+    const subProfilesMap = subProfiles.reduce((acc, profile) => {
+      acc[profile.role] = profile;
+      return acc;
+    }, {} as Record<string, any>);
+
+    return {
+      ...user,
+      subProfiles: subProfilesMap,
+      bookingCount: bookings.length,
+      tokenBalance: 0, // Placeholder until Wallet logic is explicitly migrated
+    };
+  },
+});
