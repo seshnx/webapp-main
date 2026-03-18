@@ -185,7 +185,7 @@ export const createMarketItem = mutation({
     photos: v.optional(v.array(v.string())),
     specifications: v.optional(v.object({})), // Flexible object for item-specific specs
     featured: v.optional(v.boolean()),
-    shippingAvailable: v.optional(v.boolean>(),
+    shippingAvailable: v.optional(v.boolean()),
     shippingCost: v.optional(v.number()),
     localPickup: v.optional(v.boolean()),
     dimensions: v.optional(v.string()), // e.g., "20x10x5 inches"
