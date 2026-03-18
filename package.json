@@ -3,13 +3,13 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
+ "scripts": {
     "dev": "vite",
     "dev:api": "node server-mock-api.js",
     "dev:full": "concurrently \"npm:dev:api\" \"npm:dev\"",
     "prebuild": "node scripts/validate-env.cjs .env || true",
-    "build": "vite build",
-    "build:vercel": "(npx convex deploy --yes || echo 'Convex deploy skipped') && vite build",
+    "build": "npx convex codegen && vite build",
+    "build:vercel": "npx convex codegen && (npx convex deploy --yes || echo 'Convex deploy skipped') && vite build",
     "build:analyze": "ANALYZE=true vite build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
