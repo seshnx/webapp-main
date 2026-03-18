@@ -299,7 +299,7 @@ export const createRoom = mutation({
     capacity: v.number(),
     hourlyRate: v.number(),
     size: v.optional(v.number()), // square feet
-      v.array(v.string())),
+    amenities: v.optional(v.array(v.string())),
     photos: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
@@ -323,7 +323,7 @@ export const updateRoom = mutation({
     capacity: v.optional(v.number()),
     hourlyRate: v.optional(v.number()),
     size: v.optional(v.number()),
-      v.optional(v.array(v.string())),
+    amenities: v.optional(v.array(v.string())),
     photos: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {

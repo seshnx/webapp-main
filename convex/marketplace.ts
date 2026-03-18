@@ -215,7 +215,7 @@ export const createMarketItem = mutation({
 export const updateMarketItem = mutation({
   args: {
     itemId: v.id("marketItems"),
-    title: v.optional(v.string>(),
+    title: v.optional(v.string()),
     description: v.optional(v.string()),
     category: v.optional(v.string()),
     brand: v.optional(v.string()),
