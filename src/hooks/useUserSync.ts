@@ -8,6 +8,7 @@ export const useUserSync = () => {
   const { isLoaded, isSignedIn, userId } = useAuth();
   const syncUser = useMutation(api.users.syncUserFromClerk);
   
+  // Use "skip" if no userId to prevent the query from running early
   const userData = useQuery(api.users.getUserByClerkId, 
     userId ? { clerkId: userId } : "skip"
   );
@@ -15,14 +16,18 @@ export const useUserSync = () => {
   const syncStarted = useRef(false);
 
   useEffect(() => {
-    // Only sync if Clerk is ready, user is signed in, and we haven't started this session
-    if (isLoaded && isSignedIn && userId && user && !syncStarted.current) {
-      // If user data already exists, we mark sync as 'done' internally
-      if (userData !== undefined) {
+    // 1. Only run if everything is ready
+    if (!isLoaded || !isSignedIn || !userId || !user) return;
+
+    // 2. Only run once per session
+    if (syncStarted.current) return;
+
+    const performSync = async () => {
+      try {
         syncStarted.current = true;
+        console.log("🔄 Background Sync: Clerk -> Convex");
         
-        // Background sync to keep profile updated (optional but recommended)
-        syncUser({
+        await syncUser({
           clerkId: userId,
           email: user.primaryEmailAddress?.emailAddress || "",
           username: user.username || undefined,
@@ -30,10 +35,15 @@ export const useUserSync = () => {
           firstName: user.firstName || undefined,
           lastName: user.lastName || undefined,
           imageUrl: user.imageUrl,
-        }).catch(err => console.error("Background sync failed:", err));
+        });
+        console.log("✅ Background Sync: Complete");
+      } catch (error) {
+        console.error("❌ Background Sync: Failed", error);
       }
-    }
-  }, [isLoaded, isSignedIn, userId, user, userData, syncUser]);
+    };
+
+    performSync();
+  }, [isLoaded, isSignedIn, userId, user, syncUser]);
 
   return { userData };
 };
