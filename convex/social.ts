@@ -18,6 +18,20 @@ export const getUserByClerkId = query({
   },
 });
 
+
+// =====================================================
+// HELPER FUNCTIONS
+// =====================================================
+
+// Safely look up a native Convex User ID from a Clerk String ID
+const getNativeUser = async (ctx: any, clerkId: string | undefined) => {
+  if (!clerkId) return null;
+  return await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+    .first();
+};
+
 // =====================================================
 // POST QUERIES
 // =====================================================
@@ -27,31 +41,35 @@ export const getUserByClerkId = query({
  * Returns posts for the main feed with pagination
  */
 export const getFeed = query({
-  args: {
+  args: { 
+    category: v.optional(v.string()),
     limit: v.optional(v.number()),
     skip: v.optional(v.number()),
-    category: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-    const skip = args.skip || 0;
+    const limit = args.limit ?? 20;
+    const skip = args.skip ?? 0;
 
-    // Fetch more than needed to account for filtering
-    const fetchSize = (skip + limit) * 2;
+    try {
+      let q = ctx.db.query("posts");
+      
+      if (args.category && args.category !== "All") {
+        q = q.withIndex("by_category", (q) => q.eq("category", args.category));
+      } else {
+        q = q.withIndex("by_created");
+      }
 
-    let posts = await ctx.db
-      .query("posts")
-      .order("desc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(fetchSize);
-
-    // Filter by category if specified
-    if (args.category) {
-      posts = posts.filter((post) => post.category === args.category);
+      const rawPosts = await q.order("desc").take(limit + skip + 50);
+      
+      // Filter out soft-deleted posts and ensure visibility
+      const validPosts = rawPosts.filter(p => !p.deletedAt && p.visibility === "public");
+      
+      // Manual pagination using slice
+      return validPosts.slice(skip, skip + limit);
+    } catch (error) {
+      console.error("Error in getFeed:", error);
+      return [];
     }
-
-    // Apply pagination
-    return posts.slice(skip, skip + limit);
   },
 });
 
@@ -953,43 +971,69 @@ export const unsavePost = mutation({
  * Get home feed
  */
 export const getHomeFeed = query({
-  args: {
-    userId: v.id("users"),
+  args: { 
+    userId: v.optional(v.string()), // Accept Clerk ID as string
     limit: v.optional(v.number()),
     skip: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const limit = args.limit || 20;
-    const skip = args.skip || 0;
+    const limit = args.limit ?? 20;
+    const skip = args.skip ?? 0;
 
-    // Get users that this user follows
-    const follows = await ctx.db
-      .query("follows")
-      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
-      .collect();
+    // 1. If no user is provided, just return the public feed safely
+    if (!args.userId) {
+      const allPosts = await ctx.db
+        .query("posts")
+        .withIndex("by_created")
+        .order("desc")
+        .take(limit + skip);
+        
+      return allPosts.slice(skip, skip + limit);
+    }
 
-    const followingIds = follows.map((f) => f.followingId);
-    
-    // Add user's own ID to the list
-    const authorIds = [args.userId, ...followingIds];
+    try {
+      // 2. Look up the native Convex User ID using the provided Clerk ID
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId as string))
+        .first();
 
-    // Fetch more posts than needed to account for filtering
-    const fetchSize = (skip + limit) * 3;
+      // If user isn't found in Convex yet, return empty array to prevent crash
+      if (!user) return [];
 
-    // Get all recent posts
-    const allPosts = await ctx.db
-      .query("posts")
-      .order("desc")
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(fetchSize);
+      // 3. Get who the user follows
+      const follows = await ctx.db
+        .query("follows")
+        .withIndex("by_follower", (q) => q.eq("followerId", user._id))
+        .collect();
 
-    // Filter to only posts from followed users or user's own posts
-    const feedPosts = allPosts.filter((post) =>
-      authorIds.includes(post.authorId)
-    );
+      const followingIds = follows.map((f) => f.followingId);
+      
+      // Include the user's own posts in their home feed
+      followingIds.push(user._id);
 
-    // Apply pagination
-    return feedPosts.slice(skip, skip + limit);
+      // 4. Fetch all posts (We fetch a larger batch to filter in memory)
+      // Note: Convex doesn't currently support "IN" queries for arrays of IDs efficiently in standard queries, 
+      // so we filter after fetching the most recent posts.
+      const recentPosts = await ctx.db
+        .query("posts")
+        .withIndex("by_created")
+        .order("desc")
+        .take(100); // Fetch top 100 recent posts
+
+      // 5. Filter posts to only show those from followed users (or self)
+      const feedPosts = recentPosts.filter(post => 
+        followingIds.some(id => id === post.authorId)
+      );
+
+      // 6. Apply manual pagination (slice)
+      return feedPosts.slice(skip, skip + limit);
+
+    } catch (error) {
+      console.error("Error in getHomeFeed:", error);
+      // Fail gracefully instead of crashing the client
+      return [];
+    }
   },
 });
 
