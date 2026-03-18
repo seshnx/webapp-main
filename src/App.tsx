@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth, useUser, useClerk } from '@clerk/clerk-react';
+import { useAuth, useUser, useClerk } from '@clerk/react';
 import { useQuery } from 'convex/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
