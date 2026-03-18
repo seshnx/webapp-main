@@ -1,3 +1,4 @@
+// social.ts
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
@@ -19,21 +20,22 @@ export const getFeed = query({
     const limit = args.limit || 20;
     const skip = args.skip || 0;
 
-    let postsQuery = ctx.db
+    // Fetch more than needed to account for filtering
+    const fetchSize = (skip + limit) * 2;
+
+    let posts = await ctx.db
       .query("posts")
-      .withIndex("by_created", (q) => q.order("desc"))
-      .filter((q) => q.eq(q.field("deletedAt"), undefined));
+      .order("desc")
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .take(fetchSize);
 
     // Filter by category if specified
     if (args.category) {
-      postsQuery = postsQuery.filter((q) =>
-        q.eq(q.field("category"), args.category)
-      );
+      posts = posts.filter((post) => post.category === args.category);
     }
 
-    // Use .take(limit + skip) and slice the array since Convex doesn't use .skip()
-    const posts = await postsQuery.take(skip + limit);
-    return posts.slice(skip);
+    // Apply pagination
+    return posts.slice(skip, skip + limit);
   },
 });
 
@@ -50,16 +52,16 @@ export const getPostsByAuthor = query({
   handler: async (ctx, args) => {
     const limit = args.limit || 20;
     const skip = args.skip || 0;
+    const fetchSize = (skip + limit) * 2;
 
     const posts = await ctx.db
       .query("posts")
-      .withIndex("by_author", (q) =>
-        q.eq("authorId", args.authorId).order("desc")
-      )
+      .withIndex("by_author", (q) => q.eq("authorId", args.authorId))
+      .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(skip + limit);
+      .take(fetchSize);
 
-    return posts.slice(skip);
+    return posts.slice(skip, skip + limit);
   },
 });
 
@@ -70,8 +72,7 @@ export const getPostsByAuthor = query({
 export const getPostById = query({
   args: { postId: v.id("posts") },
   handler: async (ctx, args) => {
-    const post = await ctx.db.get(args.postId);
-    return post;
+    return await ctx.db.get(args.postId);
   },
 });
 
@@ -88,16 +89,16 @@ export const getPostsByCategory = query({
   handler: async (ctx, args) => {
     const limit = args.limit || 20;
     const skip = args.skip || 0;
+    const fetchSize = (skip + limit) * 2;
 
     const posts = await ctx.db
       .query("posts")
-      .withIndex("by_category", (q) =>
-        q.eq("category", args.category).order("desc")
-      )
+      .withIndex("by_category", (q) => q.eq("category", args.category))
+      .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(skip + limit);
+      .take(fetchSize);
 
-    return posts.slice(skip);
+    return posts.slice(skip, skip + limit);
   },
 });
 
@@ -113,10 +114,10 @@ export const getPostsByHashtag = query({
   handler: async (ctx, args) => {
     const limit = args.limit || 50;
 
-    // Get all posts (in production, you'd want a proper index)
+    // Get all posts
     const allPosts = await ctx.db
       .query("posts")
-      .withIndex("by_created", (q) => q.order("desc"))
+      .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(limit * 2);
 
@@ -143,9 +144,8 @@ export const getReposts = query({
 
     const reposts = await ctx.db
       .query("posts")
-      .withIndex("by_repost_of", (q) =>
-        q.eq("repostOf", args.originalPostId).order("desc")
-      )
+      .withIndex("by_repost_of", (q) => q.eq("repostOf", args.originalPostId))
+      .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(limit);
 
@@ -167,14 +167,17 @@ export const searchPosts = query({
 
     const allPosts = await ctx.db
       .query("posts")
-      .withIndex("by_created", (q) => q.order("desc"))
+      .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(limit * 2);
 
     const searchTerm = args.searchText.toLowerCase();
-    const filtered = allPosts.filter((post) =>
-      (post.content || "").toLowerCase().includes(searchTerm) ||
-      (post.hashtags || []).some((tag) => tag.toLowerCase().includes(searchTerm))
+    const filtered = allPosts.filter(
+      (post) =>
+        (post.content || "").toLowerCase().includes(searchTerm) ||
+        (post.hashtags || []).some((tag) =>
+          tag.toLowerCase().includes(searchTerm)
+        )
     );
 
     return filtered.slice(0, limit);
@@ -195,28 +198,25 @@ export const createPost = mutation({
     mediaUrls: v.optional(v.array(v.string())),
     mediaType: v.optional(v.string()),
     category: v.optional(v.string()),
-    visibility: v.optional(v.string()), // public, followers, private
+    visibility: v.optional(v.string()),
     equipment: v.optional(v.array(v.string())),
     software: v.optional(v.array(v.string())),
     customFields: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    // Get author info
     const author = await ctx.db.get(args.authorId);
     if (!author) {
       throw new Error("Author not found");
     }
 
-    // Extract hashtags and mentions from content
-    const hashtags = args.content
-      ?.match(/#\w+/g)
-      ?.map((tag) => tag.slice(1).toLowerCase()) || [];
+    const hashtags =
+      args.content
+        ?.match(/#\w+/g)
+        ?.map((tag) => tag.slice(1).toLowerCase()) || [];
 
-    const mentions = args.content
-      ?.match(/@\w+/g)
-      ?.map((mention) => mention.slice(1)) || [];
+    const mentions =
+      args.content?.match(/@\w+/g)?.map((mention) => mention.slice(1)) || [];
 
-    // Create post
     const postId = await ctx.db.insert("posts", {
       authorId: args.authorId,
       authorName: author.displayName,
@@ -246,7 +246,6 @@ export const createPost = mutation({
       updatedAt: Date.now(),
     });
 
-    // Increment user's post count
     await ctx.db.patch(args.authorId, {
       stats: {
         ...author.stats,
@@ -275,7 +274,6 @@ export const updatePost = mutation({
       throw new Error("Post not found");
     }
 
-    // Re-extract hashtags and mentions if content is updated
     const updateData: any = {
       content: args.content,
       mediaUrls: args.mediaUrls,
@@ -285,24 +283,22 @@ export const updatePost = mutation({
     };
 
     if (args.content) {
-      updateData.hashtags = args.content
-        .match(/#\w+/g)
-        ?.map((tag) => tag.slice(1).toLowerCase()) || [];
+      updateData.hashtags =
+        args.content
+          .match(/#\w+/g)
+          ?.map((tag) => tag.slice(1).toLowerCase()) || [];
 
-      updateData.mentions = args.content
-        .match(/@\w+/g)
-        ?.map((mention) => mention.slice(1)) || [];
+      updateData.mentions =
+        args.content?.match(/@\w+/g)?.map((mention) => mention.slice(1)) || [];
     }
 
     await ctx.db.patch(args.postId, updateData);
-
     return { success: true };
   },
 });
 
 /**
  * Delete a post (soft delete)
- * Marks post as deleted rather than removing it
  */
 export const deletePost = mutation({
   args: {
@@ -315,17 +311,14 @@ export const deletePost = mutation({
       throw new Error("Post not found");
     }
 
-    // Verify ownership
     if (post.authorId !== args.authorId) {
       throw new Error("You can only delete your own posts");
     }
 
-    // Soft delete
     await ctx.db.patch(args.postId, {
       deletedAt: Date.now(),
     });
 
-    // Decrement user's post count
     const author = await ctx.db.get(args.authorId);
     if (author) {
       await ctx.db.patch(args.authorId, {
@@ -342,7 +335,6 @@ export const deletePost = mutation({
 
 /**
  * Repost a post
- * Creates a new post that references the original
  */
 export const repostPost = mutation({
   args: {
@@ -361,22 +353,16 @@ export const repostPost = mutation({
       throw new Error("Author not found");
     }
 
-    // Check if user already reposted this post
     const existingRepost = await ctx.db
       .query("posts")
-      .withIndex("by_author", (q) =>
-        q.eq("authorId", args.authorId).order("desc")
-      )
-      .filter((q) =>
-        q.eq(q.field("repostOf"), args.originalPostId)
-      )
+      .withIndex("by_author", (q) => q.eq("authorId", args.authorId))
+      .filter((q) => q.eq(q.field("repostOf"), args.originalPostId))
       .first();
 
     if (existingRepost) {
       throw new Error("You already reposted this post");
     }
 
-    // Create repost
     const repostId = await ctx.db.insert("posts", {
       authorId: args.authorId,
       authorName: author.displayName,
@@ -403,16 +389,12 @@ export const repostPost = mutation({
       updatedAt: Date.now(),
     });
 
-    // Increment repost count on original post
-    // Note: You'd want to track this separately or calculate on read
-
     return repostId;
   },
 });
 
 /**
  * Undo repost
- * Soft deletes the repost
  */
 export const unrepostPost = mutation({
   args: {
@@ -442,7 +424,6 @@ export const unrepostPost = mutation({
 
 /**
  * Get comments for a post
- * Returns all comments for a specific post
  */
 export const getCommentsByPost = query({
   args: {
@@ -454,9 +435,8 @@ export const getCommentsByPost = query({
 
     const comments = await ctx.db
       .query("comments")
-      .withIndex("by_post", (q) =>
-        q.eq("postId", args.postId).order("asc")
-      )
+      .withIndex("by_post", (q) => q.eq("postId", args.postId))
+      .order("asc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(limit);
 
@@ -466,7 +446,6 @@ export const getCommentsByPost = query({
 
 /**
  * Get comment replies
- * Returns nested replies for a comment
  */
 export const getCommentReplies = query({
   args: {
@@ -478,9 +457,8 @@ export const getCommentReplies = query({
 
     const replies = await ctx.db
       .query("comments")
-      .withIndex("by_parent", (q) =>
-        q.eq("parentId", args.parentId).order("asc")
-      )
+      .withIndex("by_parent", (q) => q.eq("parentId", args.parentId))
+      .order("asc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(limit);
 
@@ -490,7 +468,6 @@ export const getCommentReplies = query({
 
 /**
  * Get comments by author
- * Returns all comments from a specific user
  */
 export const getCommentsByAuthor = query({
   args: {
@@ -502,9 +479,8 @@ export const getCommentsByAuthor = query({
 
     const comments = await ctx.db
       .query("comments")
-      .withIndex("by_author", (q) =>
-        q.eq("authorId", args.authorId).order("desc")
-      )
+      .withIndex("by_author", (q) => q.eq("authorId", args.authorId))
+      .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(limit);
 
@@ -527,19 +503,16 @@ export const createComment = mutation({
     parentId: v.optional(v.id("comments")),
   },
   handler: async (ctx, args) => {
-    // Get author info
     const author = await ctx.db.get(args.authorId);
     if (!author) {
       throw new Error("Author not found");
     }
 
-    // Verify post exists
     const post = await ctx.db.get(args.postId);
     if (!post) {
       throw new Error("Post not found");
     }
 
-    // If parentId is provided, verify it exists
     if (args.parentId) {
       const parentComment = await ctx.db.get(args.parentId);
       if (!parentComment || parentComment.postId !== args.postId) {
@@ -547,7 +520,6 @@ export const createComment = mutation({
       }
     }
 
-    // Create comment
     const commentId = await ctx.db.insert("comments", {
       postId: args.postId,
       commentId: crypto.randomUUID(),
@@ -562,7 +534,6 @@ export const createComment = mutation({
       updatedAt: Date.now(),
     });
 
-    // Increment post's comment count
     await ctx.db.patch(args.postId, {
       engagement: {
         ...post.engagement,
@@ -614,14 +585,16 @@ export const deleteComment = mutation({
       deletedAt: Date.now(),
     });
 
-    // Decrement post's comment count
     if (comment.postId) {
       const post = await ctx.db.get(comment.postId);
       if (post) {
         await ctx.db.patch(comment.postId, {
           engagement: {
             ...post.engagement,
-            commentsCount: Math.max(0, (post.engagement?.commentsCount || 1) - 1),
+            commentsCount: Math.max(
+              0,
+              (post.engagement?.commentsCount || 1) - 1
+            ),
           },
         });
       }
@@ -636,7 +609,7 @@ export const deleteComment = mutation({
 // =====================================================
 
 /**
- * Get reactions for a target (post or comment)
+ * Get reactions for a target
  */
 export const getReactions = query({
   args: {
@@ -644,20 +617,17 @@ export const getReactions = query({
     targetType: v.union(v.literal("post"), v.literal("comment")),
   },
   handler: async (ctx, args) => {
-    const reactions = await ctx.db
+    return await ctx.db
       .query("reactions")
       .withIndex("by_target", (q) =>
         q.eq("targetId", args.targetId).eq("targetType", args.targetType)
       )
       .collect();
-
-    return reactions;
   },
 });
 
 /**
- * Get reaction summary grouped by emoji
- * Returns count of each emoji reaction
+ * Get reaction summary
  */
 export const getReactionSummary = query({
   args: {
@@ -687,8 +657,7 @@ export const getReactionSummary = query({
 });
 
 /**
- * Check if user reacted to a target
- * Returns the user's reaction if exists
+ * Check if user reacted
  */
 export const getUserReaction = query({
   args: {
@@ -697,7 +666,7 @@ export const getUserReaction = query({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    const reaction = await ctx.db
+    return await ctx.db
       .query("reactions")
       .withIndex("by_user_target", (q) =>
         q
@@ -706,8 +675,6 @@ export const getUserReaction = query({
           .eq("targetType", args.targetType)
       )
       .first();
-
-    return reaction;
   },
 });
 
@@ -716,8 +683,7 @@ export const getUserReaction = query({
 // =====================================================
 
 /**
- * Toggle a reaction (add if not exists, remove if exists)
- * Handles likes and emoji reactions
+ * Toggle a reaction
  */
 export const toggleReaction = mutation({
   args: {
@@ -727,7 +693,6 @@ export const toggleReaction = mutation({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    // Check for existing reaction
     const existing = await ctx.db
       .query("reactions")
       .withIndex("by_user_target", (q) =>
@@ -739,29 +704,42 @@ export const toggleReaction = mutation({
       .first();
 
     if (existing) {
-      // Remove reaction
       await ctx.db.delete(existing._id);
 
-      // Decrement reaction count if it's a post
       if (args.targetType === "post") {
-        const post = await ctx.db
+        const posts = await ctx.db
           .query("posts")
           .filter((q) => q.eq(q.field("_id"), existing.targetId))
-          .first();
+          .take(1);
 
-        if (post) {
-          await ctx.db.patch(post._id, {
+        if (posts.length > 0) {
+          await ctx.db.patch(posts[0]._id, {
             engagement: {
-              ...post.engagement,
-              likesCount: Math.max(0, (post.engagement?.likesCount || 1) - 1),
+              ...posts[0].engagement,
+              likesCount: Math.max(
+                0,
+                (posts[0].engagement?.likesCount || 1) - 1
+              ),
             },
+          });
+        }
+      }
+
+      if (args.targetType === "comment") {
+        const comments = await ctx.db
+          .query("comments")
+          .filter((q) => q.eq(q.field("_id"), existing.targetId))
+          .take(1);
+
+        if (comments.length > 0) {
+          await ctx.db.patch(comments[0]._id, {
+            reactionCount: Math.max(0, comments[0].reactionCount - 1),
           });
         }
       }
 
       return { action: "removed", emoji: existing.emoji };
     } else {
-      // Add new reaction
       await ctx.db.insert("reactions", {
         targetId: args.targetId,
         targetType: args.targetType,
@@ -770,33 +748,31 @@ export const toggleReaction = mutation({
         timestamp: Date.now(),
       });
 
-      // Increment reaction count if it's a post
       if (args.targetType === "post") {
-        const post = await ctx.db
+        const posts = await ctx.db
           .query("posts")
           .filter((q) => q.eq(q.field("_id"), args.targetId))
-          .first();
+          .take(1);
 
-        if (post) {
-          await ctx.db.patch(post._id, {
+        if (posts.length > 0) {
+          await ctx.db.patch(posts[0]._id, {
             engagement: {
-              ...post.engagement,
-              likesCount: (post.engagement?.likesCount || 0) + 1,
+              ...posts[0].engagement,
+              likesCount: (posts[0].engagement?.likesCount || 0) + 1,
             },
           });
         }
       }
 
-      // Increment comment reaction count
       if (args.targetType === "comment") {
-        const comment = await ctx.db
+        const comments = await ctx.db
           .query("comments")
           .filter((q) => q.eq(q.field("_id"), args.targetId))
-          .first();
+          .take(1);
 
-        if (comment) {
-          await ctx.db.patch(comment._id, {
-            reactionCount: comment.reactionCount + 1,
+        if (comments.length > 0) {
+          await ctx.db.patch(comments[0]._id, {
+            reactionCount: comments[0].reactionCount + 1,
           });
         }
       }
@@ -807,8 +783,7 @@ export const toggleReaction = mutation({
 });
 
 /**
- * Clear all reactions from a target
- * Removes all reactions from a post or comment
+ * Clear all reactions
  */
 export const clearReactions = mutation({
   args: {
@@ -832,12 +807,11 @@ export const clearReactions = mutation({
 });
 
 // =====================================================
-// SAVED POSTS (BOOKMARKS)
+// SAVED POSTS
 // =====================================================
 
 /**
- * Get saved posts for a user
- * Returns posts that the user has bookmarked
+ * Get saved posts
  */
 export const getSavedPosts = query({
   args: {
@@ -849,21 +823,18 @@ export const getSavedPosts = query({
 
     const saved = await ctx.db
       .query("savedPosts")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId).order("desc"))
-      .take(limit)
-      .collect();
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .take(limit);
 
-    // Get full post objects
-    const posts = await Promise.all(
-      saved.map((s) => ctx.db.get(s.postId))
-    );
+    const posts = await Promise.all(saved.map((s) => ctx.db.get(s.postId)));
 
     return posts.filter((p) => p !== null && p.deletedAt === undefined);
   },
 });
 
 /**
- * Check if a post is saved by a user
+ * Check if post is saved
  */
 export const isPostSaved = query({
   args: {
@@ -883,7 +854,7 @@ export const isPostSaved = query({
 });
 
 /**
- * Save a post (bookmark)
+ * Save a post
  */
 export const savePost = mutation({
   args: {
@@ -891,7 +862,6 @@ export const savePost = mutation({
     postId: v.id("posts"),
   },
   handler: async (ctx, args) => {
-    // Check if already saved
     const existing = await ctx.db
       .query("savedPosts")
       .withIndex("by_user_post", (q) =>
@@ -903,14 +873,12 @@ export const savePost = mutation({
       return { success: true, alreadySaved: true };
     }
 
-    // Save post
     await ctx.db.insert("savedPosts", {
       userId: args.userId,
       postId: args.postId,
       createdAt: Date.now(),
     });
 
-    // Increment post's save count
     const post = await ctx.db.get(args.postId);
     if (post) {
       await ctx.db.patch(args.postId, {
@@ -926,7 +894,7 @@ export const savePost = mutation({
 });
 
 /**
- * Unsave a post (remove bookmark)
+ * Unsave a post
  */
 export const unsavePost = mutation({
   args: {
@@ -947,7 +915,6 @@ export const unsavePost = mutation({
 
     await ctx.db.delete(saved._id);
 
-    // Decrement post's save count
     const post = await ctx.db.get(args.postId);
     if (post) {
       await ctx.db.patch(args.postId, {
@@ -967,8 +934,7 @@ export const unsavePost = mutation({
 // =====================================================
 
 /**
- * Get posts for user's home feed
- * Returns posts from user and people they follow
+ * Get home feed
  */
 export const getHomeFeed = query({
   args: {
@@ -980,7 +946,6 @@ export const getHomeFeed = query({
     const limit = args.limit || 20;
     const skip = args.skip || 0;
 
-    // Get people user follows
     const follows = await ctx.db
       .query("follows")
       .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
@@ -988,25 +953,23 @@ export const getHomeFeed = query({
 
     const followingIds = follows.map((f) => f.followingId);
 
-    // Fix invalid index, invalid filter, and invalid skip() chain
     const allPosts = await ctx.db
       .query("posts")
-      .withIndex("by_created", (q) => q.order("desc")) 
+      .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(skip + (limit * 5));
+      .take((skip + limit) * 3);
 
-    // Filter to only show posts from user + following
-    const feedPosts = allPosts.slice(skip).filter((post) =>
-      post.authorId === args.userId || followingIds.includes(post.authorId)
+    const feedPosts = allPosts.filter(
+      (post) =>
+        post.authorId === args.userId || followingIds.includes(post.authorId)
     );
 
-    return feedPosts.slice(0, limit);
+    return feedPosts.slice(skip, skip + limit);
   },
 });
 
 /**
  * Get trending posts
- * Returns posts with high engagement
  */
 export const getTrendingPosts = query({
   args: {
@@ -1017,22 +980,22 @@ export const getTrendingPosts = query({
 
     const allPosts = await ctx.db
       .query("posts")
-      .withIndex("by_created", (q) => q.order("desc"))
+      .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(100)
-      .collect();
+      .take(100);
 
-    // Sort by engagement (likes + comments + reposts + saves)
     const sorted = allPosts
       .sort((a, b) => {
-        const aScore = (a.engagement?.likesCount || 0) +
-                      (a.engagement?.commentsCount || 0) +
-                      (a.engagement?.repostsCount || 0) +
-                      (a.engagement?.savesCount || 0);
-        const bScore = (b.engagement?.likesCount || 0) +
-                      (b.engagement?.commentsCount || 0) +
-                      (b.engagement?.repostsCount || 0) +
-                      (b.engagement?.savesCount || 0);
+        const aScore =
+          (a.engagement?.likesCount || 0) +
+          (a.engagement?.commentsCount || 0) +
+          (a.engagement?.repostsCount || 0) +
+          (a.engagement?.savesCount || 0);
+        const bScore =
+          (b.engagement?.likesCount || 0) +
+          (b.engagement?.commentsCount || 0) +
+          (b.engagement?.repostsCount || 0) +
+          (b.engagement?.savesCount || 0);
         return bScore - aScore;
       })
       .slice(0, limit);
