@@ -4,7 +4,6 @@ import { useAuth, useUser, useClerk } from '@clerk/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
-import { Analytics } from '@vercel/analytics/react';
 
 import { useUserSync } from './hooks/useUserSync';
 import { LanguageProvider } from './contexts/LanguageContext';
@@ -21,10 +20,10 @@ export default function App(): JSX.Element {
   const { user } = useUser();
   const clerk = useClerk();
 
-  // 1. Fetch User Data (Non-blocking)
+  // 1. Sync Logic (Returns data if it exists, otherwise undefined/null)
   const { userData } = useUserSync();
 
-  // 2. Theme Authority
+  // 2. Theme State
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('theme');
     if (saved) return saved === 'dark';
@@ -35,23 +34,13 @@ export default function App(): JSX.Element {
     setDarkMode(prev => {
       const next = !prev;
       localStorage.setItem('theme', next ? 'dark' : 'light');
-      // Force update the DOM immediately
-      if (next) {
-        document.documentElement.classList.add('dark');
-      } else {
-        document.documentElement.classList.remove('dark');
-      }
+      document.documentElement.classList.toggle('dark', next);
       return next;
     });
   }, []);
 
-  // Sync DOM with state on every mount/change to prevent "MainLayout" overrides
   useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
+    document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
   const handleLogout = useCallback(async () => {
@@ -59,8 +48,10 @@ export default function App(): JSX.Element {
     navigate('/login', { replace: true });
   }, [clerk, navigate]);
 
-  // 3. The Loading Fix: Only block while Clerk is initializing.
-  // We show the UI as soon as we know if the user is signed in or not.
+  // =========================================================
+  // CRITICAL LOADING LOGIC:
+  // We ONLY block the screen if Clerk is initializing.
+  // =========================================================
   if (!clerkLoaded) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
@@ -70,47 +61,46 @@ export default function App(): JSX.Element {
   }
 
   const isAuthenticated = !!isSignedIn;
-  const isOnLoginPage = location.pathname === '/login';
 
-  if (!isAuthenticated && !isOnLoginPage) {
+  // 3. Auth Guard: If not signed in, show AuthWizard
+  if (!isAuthenticated && location.pathname !== '/login') {
     return (
-      <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin" /></div>}>
+      <Suspense fallback={<Loader2 className="animate-spin" />}>
         <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} />
       </Suspense>
     );
   }
 
+  // 4. Render Layout (Non-blocking)
+  // Even if userData is still undefined (loading from Convex), 
+  // we show the layout and pass the state down.
   return (
     <QueryClientProvider client={queryClient}>
-      {/* We pass userData here, but components must handle it being undefined while loading */}
       <LanguageProvider userData={userData}>
         <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
           <Toaster position="bottom-right" />
-          <Analytics />
-          
           <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
-            <div className="content-container">
-              {location.pathname === '/settings' ? (
-                <main className="p-6">
-                  <AppRoutes 
-                    user={user} 
-                    userData={userData} 
-                    darkMode={darkMode} 
-                    toggleTheme={toggleTheme} 
-                    handleLogout={handleLogout} 
-                  />
-                </main>
-              ) : (
-                <MainLayout
-                  user={user}
-                  userData={userData}
-                  loading={userData === undefined} // MainLayout can show its own inner skeletons
-                  darkMode={darkMode}
-                  toggleTheme={toggleTheme}
-                  handleLogout={handleLogout}
+            {location.pathname === '/settings' ? (
+              <main className="p-6">
+                <AppRoutes 
+                  user={user} 
+                  userData={userData} 
+                  darkMode={darkMode} 
+                  toggleTheme={toggleTheme} 
+                  handleLogout={handleLogout} 
+                  loading={userData === undefined} 
                 />
-              )}
-            </div>
+              </main>
+            ) : (
+              <MainLayout
+                user={user}
+                userData={userData}
+                darkMode={darkMode}
+                toggleTheme={toggleTheme}
+                handleLogout={handleLogout}
+                loading={userData === undefined} // Pass loading state to MainLayout
+              />
+            )}
           </Suspense>
         </div>
       </LanguageProvider>
