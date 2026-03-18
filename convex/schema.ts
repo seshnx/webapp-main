@@ -634,7 +634,7 @@ export default defineSchema({
 
     // Shipping
     shippingAvailable: v.optional(v.boolean()),
-    shippingCost: v.optional(v.number>()),
+    shippingCost: v.optional(v.number()),
 
     // Timestamps
     createdAt: v.number(),
