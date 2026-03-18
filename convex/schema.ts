@@ -183,7 +183,7 @@ export default defineSchema({
   })
     .index("by_post", ["postId", "createdAt"])
     .index("by_parent", ["parentId", "createdAt"])
-    .index("by_author", ["authorId", "createdAt"])
+    .index("by_author", ["authorId", "createdAt"]),
     
   // Reactions table (likes, emojis)
   reactions: defineTable({
@@ -266,7 +266,7 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_user_read", ["userId", "createdAt"])
-    .index("by_unread", ["userId", "read", "createdAt"])
+    .index("by_unread", ["userId", "read", "createdAt"]),
 
   // =====================================================
   // MESSAGING & CHAT
