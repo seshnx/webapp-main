@@ -31,11 +31,9 @@ export const getFeed = query({
       );
     }
 
-    const posts = await postsQuery
-      .take(limit)
-      .skip(skip);
-
-    return posts;
+    // Use .take(limit + skip) and slice the array since Convex doesn't use .skip()
+    const posts = await postsQuery.take(skip + limit);
+    return posts.slice(skip);
   },
 });
 

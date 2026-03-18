@@ -103,9 +103,9 @@ export const searchUsers = query({
     // Filter by search text
     const searchTerm = args.searchText.toLowerCase();
     const filtered = allUsers.filter((user) =>
-      user.username?.toLowerCase().includes(searchTerm) ||
-      user.displayName?.toLowerCase().includes(searchTerm) ||
-      user.bio?.toLowerCase().includes(searchTerm)
+      (user.username || "").toLowerCase().includes(searchTerm) ||
+      (user.displayName || "").toLowerCase().includes(searchTerm) ||
+      (user.bio || "").toLowerCase().includes(searchTerm)
     );
 
     return filtered.slice(0, limit);
