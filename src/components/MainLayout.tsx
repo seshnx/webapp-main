@@ -133,7 +133,7 @@ export default function MainLayout({
   };
 
   const renderContent = () => {
-    // Non-blocking loading state (displays while Convex is fetching the initial dataset)
+    // Non-blocking loading state
     if (loading) {
       return (
         <div className="flex-1 flex items-center justify-center">
@@ -142,7 +142,6 @@ export default function MainLayout({
       );
     }
 
-    // Default fallbacks to prevent undefined errors in children
     const subProfiles = userData?.subProfiles || {};
     const bookingCount = userData?.bookingCount || 0;
     const tokenBalance = userData?.tokenBalance || 0;
@@ -177,14 +176,82 @@ export default function MainLayout({
             <ChatInterface user={user} userData={userData} subProfiles={subProfiles} pendingChatTarget={pendingChatTarget} clearPendingChatTarget={() => setPendingChatTarget(null)} />
           </Suspense>
         );
+      case 'bookings':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <BookingSystem user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'marketplace':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <Marketplace user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'tech':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <TechServices user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'payments':
+      case 'billing':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <PaymentsManager user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
       case 'profile':
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
             <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
           </Suspense>
         );
+      case 'business-center':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <BusinessCenter user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'legal':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <LegalDocs user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'labels':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <LabelDashboard user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'edu-student':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <EduStudentDashboard user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'edu-intern':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <EduInternDashboard user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'edu-staff':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <EduStaffDashboard user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
+      case 'edu-admin':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <EduAdminDashboard user={user} userData={userData} subProfiles={subProfiles} />
+          </Suspense>
+        );
       default:
-        return <div className="p-8 text-center text-gray-500">Feature coming soon</div>;
+        // Only show this if they navigate to a URL that truly doesn't exist
+        return <div className="p-8 text-center text-gray-500">Module coming soon or not found.</div>;
     }
   };
 
