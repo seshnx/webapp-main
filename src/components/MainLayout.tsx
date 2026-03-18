@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useMutation } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { SchoolProvider } from '../contexts/SchoolContext';
-// These queries should eventually be migrated to Convex
-import { updateProfile, getSubProfiles, getWalletBalance, getBookingCount } from '../config/neonQueries';
 import { Loader2 } from 'lucide-react';
 import ErrorBoundary from './shared/ErrorBoundary';
 import MobileBottomNav from './MobileBottomNav';
@@ -16,9 +16,12 @@ interface User {
 }
 
 interface UserData {
-  _id?: string; // Convex ID
-  id?: string;  // Legacy ID
-  activeProfileRole?: string;
+  _id?: string;
+  clerkId?: string;
+  activeRole?: string;
+  subProfiles?: Record<string, any>;
+  bookingCount?: number;
+  tokenBalance?: number;
   settings?: {
     ui?: {
       showBreadcrumbs?: boolean;
@@ -35,7 +38,6 @@ interface MainLayoutProps {
   darkMode: boolean;
   toggleTheme: () => void;
   handleLogout: () => void;
-  onRoleSwitch?: (newRole: string) => void;
 }
 
 // =====================================================
@@ -79,19 +81,7 @@ const PublicProfileModal = retryLazyLoad(() => import('./PublicProfileModal'));
 const Dashboard = retryLazyLoad(() => import('./Dashboard'));
 const SocialFeed = retryLazyLoad(() => import('./SocialFeed'));
 const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
-const BookingSystem = retryLazyLoad(() => import('./BookingSystem'));
-const Marketplace = retryLazyLoad(() => import('./Marketplace'));
-const TechServices = retryLazyLoad(() => import('./TechServices'));
-const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
 const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
-const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
-const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
-const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
-const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
-const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
-const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
-const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
-const ContractManager = retryLazyLoad(() => import('./labels/ContractManager'));
 
 // =====================================================
 // MAIN COMPONENT
@@ -102,35 +92,25 @@ export default function MainLayout({
   loading,
   darkMode,
   toggleTheme,
-  handleLogout,
-  onRoleSwitch
+  handleLogout
 }: MainLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Convex Mutation for switching roles
+  const updateRole = useMutation(api.users.updateAccountTypes);
 
   // Helper to determine active tab from URL
   const getTabFromPath = (path: string): string => {
     if (path === '/dashboard' || path === '/') return 'dashboard';
     if (path.startsWith('/feed') || path === '/social') return 'feed';
     if (path.startsWith('/messages') || path.startsWith('/chat')) return 'messages';
-    if (path.startsWith('/bookings')) return 'bookings';
-    if (path.startsWith('/marketplace')) return 'marketplace';
-    if (path.startsWith('/tech')) return 'tech';
-    if (path.startsWith('/payments') || path === '/billing') return 'payments';
     if (path.startsWith('/profile')) return 'profile';
-    if (path.startsWith('/business-center')) return 'business-center';
-    if (path === '/legal') return 'legal';
-    if (path.startsWith('/studio-ops')) return 'studio-ops';
-    if (path.startsWith('/labels')) return 'labels';
-    if (path.startsWith('/edu-')) return path.substring(1).split('/')[0];
     return 'dashboard';
   };
 
   const [activeTab, setActiveTab] = useState<string>(() => getTabFromPath(location.pathname));
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [subProfiles, setSubProfiles] = useState<Record<string, any>>({});
-  const [tokenBalance, setTokenBalance] = useState<number>(0);
-  const [bookingCount, setBookingCount] = useState<number>(0);
   const [viewingProfile, setViewingProfile] = useState<any>(null);
   const [pendingChatTarget, setPendingChatTarget] = useState<any>(null);
 
@@ -139,51 +119,33 @@ export default function MainLayout({
     setActiveTab(getTabFromPath(location.pathname));
   }, [location.pathname]);
 
-  // Load supplemental data based on Convex or Clerk ID
-  const internalUserId = userData?._id || userData?.id || user?.id; //
-
-  const loadSupplementalData = useCallback(async () => {
-    if (!internalUserId) return;
-    try {
-      const [profiles, balance, count] = await Promise.all([
-        getSubProfiles(internalUserId),
-        getWalletBalance(internalUserId),
-        getBookingCount(internalUserId)
-      ]);
-
-      const profileMap: Record<string, any> = {};
-      profiles?.forEach((p: any) => { profileMap[p.account_type] = p; });
-      setSubProfiles(profileMap);
-      setTokenBalance(balance || 0);
-      setBookingCount(count || 0);
-    } catch (err) {
-      console.warn('Supplemental data load failed');
-    }
-  }, [internalUserId]);
-
-  useEffect(() => {
-    loadSupplementalData();
-  }, [loadSupplementalData]);
-
   const handleRoleSwitch = async (newRole: string) => {
-    if (!internalUserId) return;
+    if (!user?.id || !userData?.accountTypes) return;
     try {
-      await updateProfile(internalUserId, { active_role: newRole });
-      onRoleSwitch?.(newRole);
+      await updateRole({ 
+        clerkId: user.id, 
+        accountTypes: userData.accountTypes,
+        activeRole: newRole 
+      });
     } catch (e) {
       console.error("Role switch failed:", e);
     }
   };
 
   const renderContent = () => {
-    // FIXED GUARD: Don't hang if userData is fetching but we have a loading state
-    if (loading && !userData) {
+    // Non-blocking loading state (displays while Convex is fetching the initial dataset)
+    if (loading) {
       return (
         <div className="flex-1 flex items-center justify-center">
           <Loader2 className="animate-spin text-brand-blue" size={48} />
         </div>
       );
     }
+
+    // Default fallbacks to prevent undefined errors in children
+    const subProfiles = userData?.subProfiles || {};
+    const bookingCount = userData?.bookingCount || 0;
+    const tokenBalance = userData?.tokenBalance || 0;
 
     switch (activeTab) {
       case 'dashboard':
@@ -218,10 +180,9 @@ export default function MainLayout({
       case 'profile':
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} onRoleSwitch={handleRoleSwitch} onSubProfileUpdate={loadSupplementalData} />
+            <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
           </Suspense>
         );
-      // ... Add other cases as needed following this pattern
       default:
         return <div className="p-8 text-center text-gray-500">Feature coming soon</div>;
     }
@@ -229,7 +190,6 @@ export default function MainLayout({
 
   return (
     <SchoolProvider user={user} userData={userData}>
-      {/* Explicit dark class application ensures theme toggle works immediately */}
       <div className={`relative h-screen overflow-hidden ${darkMode ? 'dark bg-[#1a1d21]' : 'bg-gray-50'}`}>
         
         {/* Navbar */}
@@ -237,7 +197,7 @@ export default function MainLayout({
           <Navbar
             user={{ id: user?.id }}
             userData={userData as any}
-            subProfiles={subProfiles}
+            subProfiles={userData?.subProfiles || {}}
             darkMode={darkMode}
             toggleTheme={toggleTheme}
             activeTab={activeTab}
