@@ -447,7 +447,6 @@ export default defineSchema({
   })
     .index("by_studio_status", ["studioId", "status"])
     .index("by_client", ["clientId", "createdAt"])
-    .index("by_id", ["id"], { unique: true })
     .index("by_studio_date", ["studioId", "date"])
     .index("by_room_date", ["roomId", "date"]),
 
