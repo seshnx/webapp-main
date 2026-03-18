@@ -10,7 +10,7 @@
     "prebuild": "node scripts/validate-env.cjs .env || true",
     "build": "rm -rf convex/_generated && npx convex codegen && vite build --force",
     "build:vercel": "rm -rf convex/_generated && npx convex codegen && (npx convex deploy --yes || echo 'Convex deploy skipped') && vite build --force",
-    "build:analyze": "ANALYZE=true vite build"
+    "build:analyze": "ANALYZE=true vite build",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "type-check": "tsc --noEmit",
