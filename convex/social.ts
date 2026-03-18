@@ -57,10 +57,9 @@ export const getPostsByAuthor = query({
         q.eq("authorId", args.authorId).order("desc")
       )
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(limit)
-      .skip(skip);
+      .take(skip + limit);
 
-    return posts;
+    return posts.slice(skip);
   },
 });
 
@@ -96,10 +95,9 @@ export const getPostsByCategory = query({
         q.eq("category", args.category).order("desc")
       )
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
-      .take(limit)
-      .skip(skip);
+      .take(skip + limit);
 
-    return posts;
+    return posts.slice(skip);
   },
 });
 
@@ -175,8 +173,8 @@ export const searchPosts = query({
 
     const searchTerm = args.searchText.toLowerCase();
     const filtered = allPosts.filter((post) =>
-      post.content?.toLowerCase().includes(searchTerm) ||
-      post.hashtags?.some((tag) => tag.toLowerCase().includes(searchTerm))
+      (post.content || "").toLowerCase().includes(searchTerm) ||
+      (post.hashtags || []).some((tag) => tag.toLowerCase().includes(searchTerm))
     );
 
     return filtered.slice(0, limit);
@@ -990,22 +988,16 @@ export const getHomeFeed = query({
 
     const followingIds = follows.map((f) => f.followingId);
 
-    // Get posts from user and people they follow
+    // Fix invalid index, invalid filter, and invalid skip() chain
     const allPosts = await ctx.db
       .query("posts")
-      .withIndex("by_author", (q) => q.order("desc"))
-      .filter((q) => {
-        // Filter to show posts from user and people they follow
-        const post = q.eq("deletedAt", undefined);
-        return post; // You'd want to filter by authorId here in production
-      })
-      .take(limit * 5)
-      .skip(skip)
-      .collect();
+      .withIndex("by_created", (q) => q.order("desc")) 
+      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .take(skip + (limit * 5));
 
     // Filter to only show posts from user + following
-    const feedPosts = allPosts.filter((post) =>
-      post.authorId === args.userId || followingIds.some((id) => id === post.authorId)
+    const feedPosts = allPosts.slice(skip).filter((post) =>
+      post.authorId === args.userId || followingIds.includes(post.authorId)
     );
 
     return feedPosts.slice(0, limit);
