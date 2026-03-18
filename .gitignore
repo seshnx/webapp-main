@@ -11,3 +11,5 @@ supabase-schema-fixed.sql
 .vercel
 .env*.local
 .sentryclirc
+
+convex/_generated
