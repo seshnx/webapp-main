@@ -38,9 +38,6 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      // Use browser-safe API for client-side builds
-      // The generated api.js imports from convex/server which is server-side only
-      "convex/_generated/api": path.resolve(__dirname, "./convex/_generated/api-browser.js"),
     },
   },
   build: {
