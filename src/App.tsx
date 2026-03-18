@@ -42,6 +42,15 @@ export default function App(): JSX.Element {
     return false;
   });
 
+  const toggleTheme = useCallback(() => {
+    setDarkMode(prev => {
+      const newVal = !prev;
+      localStorage.setItem('theme', newVal ? 'dark' : 'light');
+      document.documentElement.classList.toggle('dark', newVal);
+      return newVal;
+    });
+  }, []);
+
   useEffect(() => {
     const stored = initializeSettingsFromStorage();
     if (stored?.theme) {
