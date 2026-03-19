@@ -1,12 +1,10 @@
 /* eslint-disable */
 /**
- * Generated API index.
- * This is a STUB file generated to allow the build to succeed before `npx convex dev` is run.
- * When you run `npx convex dev` this file will be replaced.
- *
+ * STUB: Generated API index.
+ * This file is a placeholder until `npx convex dev` generates the real one.
+ * Handles bare imports like: import { api } from '../../convex/_generated'
  * @module
  */
 
-// Re-export the api stub for imports like: import { api } from '../../convex/_generated'
 export { api, internal } from "./api";
-export type { Id, Doc } from "./dataModel";
+export type { Id, Doc, TableNames, DataModel } from "./dataModel";
