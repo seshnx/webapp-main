@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 
 interface ImageData { id: string; url: string; order: number; }
 interface PanDirection { startX: number; startY: number; endX: number; endY: number; }
+interface FallingNote { id: number; left: number; delay: number; duration: number; emoji: string; }
+
 export interface AuthWizardBackgroundProps { onImagesLoaded?: (loaded: boolean) => void; }
 
 const AUDIO_PRO_IMAGES: ImageData[] = [
@@ -19,23 +21,32 @@ const AUDIO_PRO_IMAGES: ImageData[] = [
   { id: '12', url: 'https://images.unsplash.com/photo-1550985616-10810253b84d?w=1920&q=80', order: 11 },
 ];
 
-const RICK_ROLL_IMG: ImageData = { 
-  id: 'rick-roll', 
-  url: 'https://c.tenor.com/SSY2V0RrU3IAAAAd/tenor.gif', 
-  order: 99 
-};
+const RICK_ROLL_IMG: ImageData = { id: 'rick-roll', url: 'https://c.tenor.com/SSY2V0RrU3IAAAAd/tenor.gif', order: 99 };
+const MUSIC_EMOJIS = ['🎵', '🎶', '🎼', '🎹', '🎸', '🎧'];
 
 export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackgroundProps) {
-  const [currentImage, setCurrentImage] = useState<ImageData>(() => 
-    AUDIO_PRO_IMAGES[Math.floor(Math.random() * AUDIO_PRO_IMAGES.length)]
-  );
+  const [currentImage, setCurrentImage] = useState<ImageData>(() => AUDIO_PRO_IMAGES[Math.floor(Math.random() * AUDIO_PRO_IMAGES.length)]);
   const [prevImage, setPrevImage] = useState<ImageData | null>(null);
   const [imagesReady, setImagesReady] = useState<boolean>(false);
   const [panDirection, setPanDirection] = useState<PanDirection>({ startX: 0, startY: 0, endX: 100, endY: 0 });
   const [typedBuffer, setTypedBuffer] = useState<string>('');
+  const [notes, setNotes] = useState<FallingNote[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Preloader to trigger parent reveal
+  // Trigger "Note Rain" effect
+  const triggerNoteRain = () => {
+    const newNotes = Array.from({ length: 25 }).map((_, i) => ({
+      id: Date.now() + i,
+      left: Math.random() * 100,
+      delay: Math.random() * 2,
+      duration: 3 + Math.random() * 2,
+      emoji: MUSIC_EMOJIS[Math.floor(Math.random() * MUSIC_EMOJIS.length)]
+    }));
+    setNotes(prev => [...prev, ...newNotes]);
+    // Cleanup notes after they fall (5s max)
+    setTimeout(() => setNotes(prev => prev.filter(n => !newNotes.find(nn => nn.id === n.id))), 6000);
+  };
+
   useEffect(() => {
     if (!imagesReady) {
       const img = new Image();
@@ -45,7 +56,6 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     }
   }, [imagesReady, onImagesLoaded, currentImage.url]);
 
-  // Keyboard shortcut with input protection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) return;
@@ -53,6 +63,7 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
       setTypedBuffer(prev => {
         const next = (prev + key).slice(-4);
         if (next === 'RICK') { setPrevImage(currentImage); setCurrentImage(RICK_ROLL_IMG); }
+        if (next === 'NOTE') triggerNoteRain();
         return next;
       });
     };
@@ -60,13 +71,12 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentImage]);
 
-  // Image rotation logic with 0.2% probability
+  // Rotation, Pan, and Transform logic
   useEffect(() => {
     const displayDuration = 15000; 
     intervalRef.current = setInterval(() => {
       setPrevImage(currentImage);
-      const isLucky = Math.random() < 0.002; 
-      if (isLucky && currentImage.id !== 'rick-roll') {
+      if (Math.random() < 0.002 && currentImage.id !== 'rick-roll') {
         setCurrentImage(RICK_ROLL_IMG);
       } else {
         const currentIndex = AUDIO_PRO_IMAGES.findIndex(img => img.id === currentImage.id);
@@ -76,7 +86,6 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [currentImage]);
 
-  // Pan randomization
   useEffect(() => {
     const directions: PanDirection[] = [
       { startX: 0, startY: 0, endX: 100, endY: 0 },
@@ -87,59 +96,49 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     setPanDirection(directions[Math.floor(Math.random() * directions.length)]);
   }, [currentImage.id]);
 
-  const zoomLevel = 1.8;
-  const maxPanPercent = 30;
-  const getTransform = (x: number, y: number): string => {
-    const translateX = x === 0 ? '0%' : x === 100 ? `-${maxPanPercent}%` : `-${maxPanPercent / 2}%`;
-    const translateY = y === 0 ? '0%' : y === 100 ? `-${maxPanPercent}%` : `-${maxPanPercent / 2}%`;
-    return `scale(${zoomLevel}) translate(${translateX}, ${translateY})`;
-  };
-
-  const startTransform = getTransform(panDirection.startX, panDirection.startY);
-  const endTransform = getTransform(panDirection.endX, panDirection.endY);
-  const panAnimationName = `pan-${panDirection.startX}-${panDirection.startY}-${panDirection.endX}-${panDirection.endY}`;
+  const endTransform = `scale(1.8) translate(${panDirection.endX === 0 ? '0%' : panDirection.endX === 100 ? '-30%' : '-15%'}, ${panDirection.endY === 0 ? '0%' : panDirection.endY === 100 ? '-30%' : '-15%'})`;
+  const startTransform = `scale(1.8) translate(${panDirection.startX === 0 ? '0%' : panDirection.startX === 100 ? '-30%' : '-15%'}, ${panDirection.startY === 0 ? '0%' : panDirection.startY === 100 ? '-30%' : '-15%'})`;
+  const panAnimation = `pan-${panDirection.startX}-${panDirection.startY}-${panDirection.endX}-${panDirection.endY}`;
 
   return (
     <>
       <style>{`
-        @keyframes ${panAnimationName} { 0% { transform: ${startTransform}; } 100% { transform: ${endTransform}; } }
+        @keyframes ${panAnimation} { 0% { transform: ${startTransform}; } 100% { transform: ${endTransform}; } }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
+        @keyframes noteFall { 
+          0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+        }
       `}</style>
+
       <div className="fixed inset-0 bg-black overflow-hidden pointer-events-none" style={{ zIndex: -1 }}>
-        {/* Previous Image - Fading Out */}
         {prevImage && (
           <div key={`prev-${prevImage.id}`} className="absolute inset-0">
-            <div
-              className="absolute inset-0"
-              style={{
-                backgroundImage: `url(${prevImage.url})`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-                transform: endTransform, // Freeze at end of previous pan
-                animation: 'fadeOut 2s ease-in-out forwards',
-                WebkitMaskImage: 'radial-gradient(circle, black 40%, transparent 100%)',
-                maskImage: 'radial-gradient(circle, black 40%, transparent 100%)',
-              }}
-            />
+            <div className="absolute inset-0" style={{ backgroundImage: `url(${prevImage.url})`, backgroundSize: 'cover', backgroundPosition: 'center', transform: endTransform, animation: 'fadeOut 2s ease-in-out forwards', WebkitMaskImage: 'radial-gradient(circle, black 40%, transparent 100%)', maskImage: 'radial-gradient(circle, black 40%, transparent 100%)' }} />
           </div>
         )}
-
-        {/* Current Image - Fading In */}
         <div key={`curr-${currentImage.id}`} className="absolute inset-0">
-          <div
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `url(${currentImage.url})`,
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              animation: `fadeIn 2s ease-in-out, ${panAnimationName} 15s linear forwards`,
-              WebkitMaskImage: 'radial-gradient(circle, black 40%, transparent 100%)',
-              maskImage: 'radial-gradient(circle, black 40%, transparent 100%)',
-            }}
-          />
+          <div className="absolute inset-0" style={{ backgroundImage: `url(${currentImage.url})`, backgroundSize: 'cover', backgroundPosition: 'center', animation: `fadeIn 2s ease-in-out, ${panAnimation} 15s linear forwards`, WebkitMaskImage: 'radial-gradient(circle, black 40%, transparent 100%)', maskImage: 'radial-gradient(circle, black 40%, transparent 100%)' }} />
         </div>
         <div className="absolute inset-0 bg-black/40" />
+
+        {/* Note Rain Layer */}
+        {notes.map(note => (
+          <div
+            key={note.id}
+            className="absolute top-0 text-3xl sm:text-4xl"
+            style={{
+              left: `${note.left}%`,
+              animation: `noteFall ${note.duration}s linear ${note.delay}s forwards`,
+              zIndex: 10
+            }}
+          >
+            {note.emoji}
+          </div>
+        ))}
       </div>
     </>
   );
