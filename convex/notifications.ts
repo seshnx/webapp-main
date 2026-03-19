@@ -20,8 +20,7 @@ export const getNotifications = query({
       .query("notifications")
       .withIndex("by_user_read", (q: any) => q.eq("userId", user._id))
       .order("desc")
-      .take(100)
-      .collect();
+      .take(100);
   },
 });
 
@@ -32,13 +31,12 @@ export const getUnreadNotifications = query({
     const user = await getUserByClerkId(ctx, args.userId);
     if (!user) return [];
 
-    return await ctx.db
+    const all = await ctx.db
       .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id))
-      .filter((q: any) => q.eq(q.field("read"), false))
+      .withIndex("by_unread", (q: any) => q.eq("userId", user._id).eq("read", false))
       .order("desc")
-      .take(50)
-      .collect();
+      .take(50);
+    return all;
   },
 });
 
@@ -51,9 +49,8 @@ export const getUnreadCount = query({
 
     const notifications = await ctx.db
       .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id))
-      .filter((q: any) => q.eq(q.field("read"), false))
-      .collect();
+      .withIndex("by_unread", (q: any) => q.eq("userId", user._id).eq("read", false))
+      .take(200);
 
     return notifications.length;
   },
@@ -84,7 +81,7 @@ export const createNotification = mutation({
       userId: user._id,
       type: args.type,
       title: args.title,
-      message: args.message,
+      message: args.message ?? "",  // schema requires string
       read: false,
       createdAt: Date.now(),
       metadata: args.metadata,
@@ -101,7 +98,7 @@ export const syncNotification = mutation({
     userId: v.string(),
     type: v.string(),
     title: v.string(),
-    message: v.string(),
+    message: v.optional(v.string()),
     read: v.boolean(),
     createdAt: v.optional(v.number()),
     metadata: v.optional(v.any()),
@@ -114,7 +111,7 @@ export const syncNotification = mutation({
       userId: user._id,
       type: args.type,
       title: args.title,
-      message: args.message,
+      message: args.message ?? "",
       read: args.read,
       createdAt: args.createdAt || Date.now(),
       metadata: args.metadata,
@@ -130,7 +127,7 @@ export const markAsRead = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db.get(args.notificationId);
     if (existing) {
-      await ctx.db.patch(args.notificationId, { read: true });
+      await ctx.db.patch(args.notificationId, { read: true, readAt: Date.now() });
     }
     return { success: true };
   },
@@ -145,12 +142,11 @@ export const markAllAsRead = mutation({
 
     const notifications = await ctx.db
       .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id))
-      .filter((q: any) => q.eq(q.field("read"), false))
-      .collect();
+      .withIndex("by_unread", (q: any) => q.eq("userId", user._id).eq("read", false))
+      .take(500);
 
     for (const notification of notifications) {
-      await ctx.db.patch(notification._id, { read: true });
+      await ctx.db.patch(notification._id, { read: true, readAt: Date.now() });
     }
 
     return { success: true, marked: notifications.length };
@@ -179,7 +175,7 @@ export const clearAll = mutation({
     const notifications = await ctx.db
       .query("notifications")
       .withIndex("by_user_read", (q: any) => q.eq("userId", user._id))
-      .collect();
+      .take(500);
 
     for (const notification of notifications) {
       await ctx.db.delete(notification._id);
@@ -189,7 +185,7 @@ export const clearAll = mutation({
   },
 });
 
-// Remove a single notification (alias for deleteNotification - legacy compat)
+// Alias (legacy compat)
 export const removeNotification = mutation({
   args: { notificationId: v.id("notifications") },
   handler: async (ctx, args) => {
@@ -200,5 +196,3 @@ export const removeNotification = mutation({
     return { success: true };
   },
 });
-
-import { v } from "convex/values";
