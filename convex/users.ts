@@ -392,6 +392,14 @@ export const updateProfile = mutation({
 
     // Technician-specific fields
     technicianSkills: v.optional(v.string()),
+
+    // Settings
+    settings: v.optional(v.object({
+      privacy: v.string(),
+      notificationsEnabled: v.boolean(),
+      showEmail: v.boolean(),
+      showLocation: v.boolean(),
+    })),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db
@@ -519,6 +527,9 @@ export const updateProfile = mutation({
 
     // Technician-specific fields
     if (args.technicianSkills !== undefined) updateData.technicianSkills = args.technicianSkills;
+
+    // Settings
+    if (args.settings !== undefined) updateData.settings = args.settings;
 
     // Update user
     await ctx.db.patch(user._id, updateData);
