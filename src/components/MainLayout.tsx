@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -130,7 +130,7 @@ export default function MainLayout({
     setActiveTab(getTabFromPath(location.pathname));
   }, [location.pathname]);
 
-  const handleRoleSwitch = async (newRole: string) => {
+  const handleRoleSwitch = useCallback(async (newRole: string) => {
     if (!user?.id || !userData?.accountTypes) return;
     try {
       await updateRole({ 
@@ -141,7 +141,9 @@ export default function MainLayout({
     } catch (e) {
       console.error("Role switch failed:", e);
     }
-  };
+  }, [user?.id, userData?.accountTypes, updateRole]);
+
+  const navbarUser = useMemo(() => ({ id: user?.id }), [user?.id]);
 
   const renderContent = () => {
     // Non-blocking loading state
@@ -273,7 +275,7 @@ export default function MainLayout({
         {/* Navbar */}
         <div className="fixed top-0 left-0 right-0 z-50">
           <Navbar
-            user={{ id: user?.id }}
+            user={navbarUser}
             userData={userData as any}
             subProfiles={userData?.subProfiles || {}}
             darkMode={darkMode}

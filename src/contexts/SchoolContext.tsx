@@ -1,5 +1,5 @@
 // src/contexts/SchoolContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import type { UserData } from '../types';
 import * as eduService from '../services/eduService';
 
@@ -219,24 +219,26 @@ export function SchoolProvider({ children, user, userData }: SchoolProviderProps
     loadSchoolData();
   }, [schoolId, userId]);
 
-  const checkIn = async (): Promise<CheckInOutResult> => {
+  const checkIn = useCallback(async (): Promise<CheckInOutResult> => {
     if (!userId || !schoolId) {
       return { success: false, error: 'User or school not found' };
     }
 
     return await eduService.checkInStudent(userId, schoolId);
-  };
+  }, [userId, schoolId]);
 
-  const checkOut = async (): Promise<CheckInOutResult> => {
+  const checkOut = useCallback(async (): Promise<CheckInOutResult> => {
     if (!userId || !schoolId) {
       return { success: false, error: 'User or school not found' };
     }
 
     return await eduService.checkOutStudent(userId, schoolId);
-  };
+  }, [userId, schoolId]);
 
-  const value: SchoolContextValue = {
-    schoolId,
+  const refreshAction = useCallback(() => loadSchoolData(), [schoolId, userId]);
+
+  const value = useMemo((): SchoolContextValue => ({
+    schoolId: schoolId || null,
     schoolData,
     studentProfile,
     staffProfile,
@@ -247,8 +249,19 @@ export function SchoolProvider({ children, user, userData }: SchoolProviderProps
     checkIn,
     checkOut,
     loading,
-    refresh: loadSchoolData
-  };
+    refresh: refreshAction
+  }), [
+    schoolId,
+    schoolData,
+    studentProfile,
+    staffProfile,
+    myPermissions,
+    internshipStudio,
+    checkIn,
+    checkOut,
+    loading,
+    refreshAction
+  ]);
 
   return (
     <SchoolContext.Provider value={value}>

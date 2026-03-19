@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { getTranslation, getTranslations } from '../i18n/translations';
 
 /**
@@ -85,11 +85,18 @@ export function LanguageProvider({ children, userData }: LanguageProviderProps):
     localStorage.setItem('language', language);
   }, [language]);
 
-  const t = (key: TranslationKey): string => getTranslation(key, language);
-  const translations = getTranslations(language);
+  const t = useMemo(() => (key: TranslationKey): string => getTranslation(key, language), [language]);
+  const translations = useMemo(() => getTranslations(language), [language]);
+
+  const value = useMemo(() => ({
+    language,
+    setLanguage,
+    t,
+    translations
+  }), [language, setLanguage, t, translations]);
 
   return (
-    <LanguageContext.Provider value={{ language, setLanguage, t, translations }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );

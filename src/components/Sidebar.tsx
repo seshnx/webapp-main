@@ -153,98 +153,24 @@ export function Sidebar({
   });
 
   const handleNavigation = (id: string) => {
-    // Update activeTab state - MainLayout will sync URL
     setActiveTab?.(id);
-    // Always close sidebar after navigation (especially on mobile)
-    // Check if we're on mobile screen size
     const currentMobile = window.innerWidth < 1024;
     if (setSidebarOpen && (currentMobile || sidebarOpen)) {
       setSidebarOpen(false);
     }
   };
 
-  const SidebarContent: React.FC<SidebarContentProps> = ({ isMobile }) => (
-    <>
-      <div className="flex-1 py-4 overflow-y-auto scrollbar-hide">
-        {isMobile && (
-            <div className="px-4 mb-6 flex items-center justify-between">
-                <div className="text-xs font-bold text-gray-400 uppercase">Menu</div>
-                <button
-                    onClick={() => setSidebarOpen?.(false)}
-                    className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
-                    aria-label="Close menu"
-                >
-                    <X size={20} aria-hidden="true" />
-                </button>
-            </div>
-        )}
-
-        <nav className="space-y-6 px-2">
-            {navGroups.map((group, groupIndex) => {
-              const GroupIcon = group.icon;
-              return (
-                <div key={group.label} className="space-y-1">
-                  {/* Group Header */}
-                  <div className="flex items-center gap-2 px-3 py-1.5 mb-1">
-                    <GroupIcon size={14} className="text-gray-400 dark:text-gray-500" />
-                    <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                      {group.label}
-                    </span>
-                  </div>
-
-                  {/* Group Items */}
-                  <div className="space-y-1">
-                    {group.items.map(link => {
-                      const ItemIcon = link.icon;
-                      return (
-                        <button
-                          key={link.id}
-                          onClick={() => handleNavigation(link.id)}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
-                          ${activeTab === link.id
-                              ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400'
-                              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
-                          ${link.highlight ? 'text-amber-600 dark:text-amber-500' : ''}
-                          `}
-                        >
-                          <ItemIcon size={18} className={link.highlight ? 'text-amber-600 dark:text-amber-500' : ''} />
-                          {link.label}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-        </nav>
-
-        <div className="mt-auto px-2 pt-4 space-y-1 border-t border-gray-200 dark:border-gray-700">
-            <div className="flex items-center gap-2 px-3 py-1.5 mb-1">
-              <ShieldCheck size={14} className="text-gray-400 dark:text-gray-500" />
-              <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
-                Resources
-              </span>
-            </div>
-            <button onClick={() => handleNavigation('legal')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${activeTab === 'legal' ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
-                <ShieldCheck size={18} />
-                Legal Center
-            </button>
-        </div>
-      </div>
-
-      <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-white dark:bg-[#1f2128]">
-        <button onClick={onLogout} className="flex items-center gap-2 text-red-500 text-sm font-medium hover:opacity-80 px-2 w-full py-2 rounded hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
-          <LogOut size={16} /> {t('logout')}
-        </button>
-      </div>
-    </>
-  );
-
   return (
     <>
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-30">
-         <SidebarContent isMobile={false} />
+        <SidebarContent 
+          navGroups={navGroups}
+          activeTab={activeTab}
+          handleNavigation={handleNavigation}
+          onLogout={onLogout}
+          t={t}
+        />
       </aside>
 
       {/* Mobile Backdrop */}
@@ -263,11 +189,103 @@ export function Sidebar({
         aria-modal="true"
         aria-label="Navigation menu"
       >
-         <SidebarContent isMobile={true} />
+        <SidebarContent 
+          isMobile={true}
+          setSidebarOpen={setSidebarOpen}
+          navGroups={navGroups}
+          activeTab={activeTab}
+          handleNavigation={handleNavigation}
+          onLogout={onLogout}
+          t={t}
+        />
       </aside>
     </>
   );
 }
+
+// Separate component for internal content to avoid re-definition and unmounts
+const SidebarContent = ({ 
+  isMobile = false, 
+  setSidebarOpen, 
+  navGroups, 
+  activeTab, 
+  handleNavigation, 
+  onLogout,
+  t 
+}: any) => (
+  <>
+    <div className="flex-1 py-4 overflow-y-auto scrollbar-hide">
+      {isMobile && (
+          <div className="px-4 mb-6 flex items-center justify-between">
+              <div className="text-xs font-bold text-gray-400 uppercase">Menu</div>
+              <button
+                  onClick={() => setSidebarOpen?.(false)}
+                  className="p-2 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors"
+                  aria-label="Close menu"
+              >
+                  <X size={20} aria-hidden="true" />
+              </button>
+          </div>
+      )}
+
+      <nav className="space-y-6 px-2">
+          {navGroups.map((group: any) => {
+            const GroupIcon = group.icon;
+            return (
+              <div key={group.label} className="space-y-1">
+                <div className="flex items-center gap-2 px-3 py-1.5 mb-1">
+                  <GroupIcon size={14} className="text-gray-400 dark:text-gray-500" />
+                  <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                    {group.label}
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  {group.items.map((link: any) => {
+                    const ItemIcon = link.icon;
+                    return (
+                      <button
+                        key={link.id}
+                        onClick={() => handleNavigation(link.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
+                        ${activeTab === link.id
+                            ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400'
+                            : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
+                        ${link.highlight ? 'text-amber-600 dark:text-amber-500' : ''}
+                        `}
+                      >
+                        <ItemIcon size={18} className={link.highlight ? 'text-amber-600 dark:text-amber-500' : ''} />
+                        {link.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+      </nav>
+
+      <div className="mt-auto px-2 pt-4 space-y-1 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-1">
+            <ShieldCheck size={14} className="text-gray-400 dark:text-gray-500" />
+            <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              Resources
+            </span>
+          </div>
+          <button onClick={() => handleNavigation('legal')} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium w-full transition ${activeTab === 'legal' ? 'bg-blue-50 text-brand-blue dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}`}>
+              <ShieldCheck size={18} />
+              Legal Center
+          </button>
+      </div>
+    </div>
+
+    <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-white dark:bg-[#1f2128]">
+      <button onClick={onLogout} className="flex items-center gap-2 text-red-500 text-sm font-medium hover:opacity-80 px-2 w-full py-2 rounded hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+        <LogOut size={16} /> {t('logout')}
+      </button>
+    </div>
+  </>
+);
 
 // Default export for backward compatibility
 export default Sidebar;
