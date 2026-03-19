@@ -1,26 +1,30 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 
-// Helper to resolve clerkId -> internal user._id
-async function getUserByClerkId(ctx: any, clerkId: string) {
-  return await ctx.db
-    .query("users")
-    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
-    .first();
-}
-
 // Get notifications for a user (accepts clerkId string from frontend)
 export const getNotifications = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
-    const user = await getUserByClerkId(ctx, args.userId);
-    if (!user) return [];
+    try {
+      // Skip if clearly not a real user ID
+      if (!args.userId || args.userId === "skip" || args.userId === "undefined") return [];
 
-    return await ctx.db
-      .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id))
-      .order("desc")
-      .take(100);
+      // Resolve clerkId -> internal Convex userId
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId))
+        .first();
+
+      if (!user) return [];
+
+      return await ctx.db
+        .query("notifications")
+        .withIndex("by_user_read", (q) => q.eq("userId", user._id))
+        .order("desc")
+        .take(100);
+    } catch {
+      return [];
+    }
   },
 });
 
@@ -28,15 +32,24 @@ export const getNotifications = query({
 export const getUnreadNotifications = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
-    const user = await getUserByClerkId(ctx, args.userId);
-    if (!user) return [];
+    try {
+      if (!args.userId || args.userId === "skip") return [];
 
-    const all = await ctx.db
-      .query("notifications")
-      .withIndex("by_unread", (q: any) => q.eq("userId", user._id).eq("read", false))
-      .order("desc")
-      .take(50);
-    return all;
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId))
+        .first();
+
+      if (!user) return [];
+
+      return await ctx.db
+        .query("notifications")
+        .withIndex("by_unread", (q) => q.eq("userId", user._id).eq("read", false))
+        .order("desc")
+        .take(50);
+    } catch {
+      return [];
+    }
   },
 });
 
@@ -44,15 +57,25 @@ export const getUnreadNotifications = query({
 export const getUnreadCount = query({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
-    const user = await getUserByClerkId(ctx, args.userId);
-    if (!user) return 0;
+    try {
+      if (!args.userId || args.userId === "skip") return 0;
 
-    const notifications = await ctx.db
-      .query("notifications")
-      .withIndex("by_unread", (q: any) => q.eq("userId", user._id).eq("read", false))
-      .take(200);
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId))
+        .first();
 
-    return notifications.length;
+      if (!user) return 0;
+
+      const notifications = await ctx.db
+        .query("notifications")
+        .withIndex("by_unread", (q) => q.eq("userId", user._id).eq("read", false))
+        .take(200);
+
+      return notifications.length;
+    } catch {
+      return 0;
+    }
   },
 });
 
@@ -67,21 +90,25 @@ export const getNotification = query({
 // Create a new notification
 export const createNotification = mutation({
   args: {
-    userId: v.string(), // clerkId of target user
+    userId: v.string(),
     type: v.string(),
     title: v.string(),
     message: v.optional(v.string()),
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    const user = await getUserByClerkId(ctx, args.userId);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId))
+      .first();
+
     if (!user) return { success: false, error: "User not found" };
 
     await ctx.db.insert("notifications", {
       userId: user._id,
       type: args.type,
       title: args.title,
-      message: args.message ?? "",  // schema requires string
+      message: args.message ?? "",
       read: false,
       createdAt: Date.now(),
       metadata: args.metadata,
@@ -91,7 +118,7 @@ export const createNotification = mutation({
   },
 });
 
-// Sync notification from Neon to Convex (legacy compat)
+// Sync notification (legacy compat)
 export const syncNotification = mutation({
   args: {
     id: v.optional(v.string()),
@@ -104,7 +131,11 @@ export const syncNotification = mutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
-    const user = await getUserByClerkId(ctx, args.userId);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId))
+      .first();
+
     if (!user) return { success: false };
 
     await ctx.db.insert("notifications", {
@@ -137,12 +168,16 @@ export const markAsRead = mutation({
 export const markAllAsRead = mutation({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
-    const user = await getUserByClerkId(ctx, args.userId);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId))
+      .first();
+
     if (!user) return { success: false, marked: 0 };
 
     const notifications = await ctx.db
       .query("notifications")
-      .withIndex("by_unread", (q: any) => q.eq("userId", user._id).eq("read", false))
+      .withIndex("by_unread", (q) => q.eq("userId", user._id).eq("read", false))
       .take(500);
 
     for (const notification of notifications) {
@@ -158,9 +193,7 @@ export const deleteNotification = mutation({
   args: { notificationId: v.id("notifications") },
   handler: async (ctx, args) => {
     const existing = await ctx.db.get(args.notificationId);
-    if (existing) {
-      await ctx.db.delete(args.notificationId);
-    }
+    if (existing) await ctx.db.delete(args.notificationId);
     return { success: true };
   },
 });
@@ -169,12 +202,16 @@ export const deleteNotification = mutation({
 export const clearAll = mutation({
   args: { userId: v.string() },
   handler: async (ctx, args) => {
-    const user = await getUserByClerkId(ctx, args.userId);
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId))
+      .first();
+
     if (!user) return { success: false };
 
     const notifications = await ctx.db
       .query("notifications")
-      .withIndex("by_user_read", (q: any) => q.eq("userId", user._id))
+      .withIndex("by_user_read", (q) => q.eq("userId", user._id))
       .take(500);
 
     for (const notification of notifications) {
@@ -185,14 +222,12 @@ export const clearAll = mutation({
   },
 });
 
-// Alias (legacy compat)
+// Alias for legacy compat
 export const removeNotification = mutation({
   args: { notificationId: v.id("notifications") },
   handler: async (ctx, args) => {
     const existing = await ctx.db.get(args.notificationId);
-    if (existing) {
-      await ctx.db.delete(args.notificationId);
-    }
+    if (existing) await ctx.db.delete(args.notificationId);
     return { success: true };
   },
 });
