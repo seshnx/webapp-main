@@ -22,7 +22,7 @@ const AUDIO_PRO_IMAGES: ImageData[] = [
 ];
 
 const RICK_ROLL_IMG: ImageData = { id: 'rick-roll', url: 'https://c.tenor.com/SSY2V0RrU3IAAAAd/tenor.gif', order: 99 };
-const MUSIC_EMOJIS = ['🎵', '🎶', '🎼', '🎹', '🎸', '🎧'];
+const PURE_NOTES = ['🎵', '🎶']; // Restricted to just the notes
 
 export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackgroundProps) {
   const [currentImage, setCurrentImage] = useState<ImageData>(() => AUDIO_PRO_IMAGES[Math.floor(Math.random() * AUDIO_PRO_IMAGES.length)]);
@@ -33,20 +33,21 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
   const [notes, setNotes] = useState<FallingNote[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Trigger "Note Rain" effect
+  // Trigger refined Note Rain
   const triggerNoteRain = () => {
-    const newNotes = Array.from({ length: 25 }).map((_, i) => ({
+    const rainCount = 40; // More like rain
+    const newNotes = Array.from({ length: rainCount }).map((_, i) => ({
       id: Date.now() + i,
       left: Math.random() * 100,
-      delay: Math.random() * 2,
-      duration: 3 + Math.random() * 2,
-      emoji: MUSIC_EMOJIS[Math.floor(Math.random() * MUSIC_EMOJIS.length)]
+      delay: Math.random() * 3, // Staggered start
+      duration: 4 + Math.random() * 3, // Varied fall speeds
+      emoji: PURE_NOTES[Math.floor(Math.random() * PURE_NOTES.length)]
     }));
     setNotes(prev => [...prev, ...newNotes]);
-    // Cleanup notes after they fall (5s max)
-    setTimeout(() => setNotes(prev => prev.filter(n => !newNotes.find(nn => nn.id === n.id))), 6000);
+    setTimeout(() => setNotes(prev => prev.filter(n => !newNotes.find(nn => nn.id === n.id))), 8000);
   };
 
+  // Preloader signal for parent
   useEffect(() => {
     if (!imagesReady) {
       const img = new Image();
@@ -56,14 +57,25 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     }
   }, [imagesReady, onImagesLoaded, currentImage.url]);
 
+  // Keyboard shortcut logic with Bug Fixes
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Input protection: don't trigger while typing credentials
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) return;
+      
       const key = e.key.toUpperCase();
       setTypedBuffer(prev => {
         const next = (prev + key).slice(-4);
-        if (next === 'RICK') { setPrevImage(currentImage); setCurrentImage(RICK_ROLL_IMG); }
-        if (next === 'NOTE') triggerNoteRain();
+        
+        // Use if/else if to ensure only one trigger per sequence
+        if (next === 'RICK') {
+          setPrevImage(currentImage);
+          setCurrentImage(RICK_ROLL_IMG);
+          return ""; // Clear buffer after trigger
+        } else if (next === 'NOTE') {
+          triggerNoteRain();
+          return ""; // Clear buffer after trigger
+        }
         return next;
       });
     };
@@ -71,9 +83,8 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentImage]);
 
-  // Rotation, Pan, and Transform logic
+  // Image rotation
   useEffect(() => {
-    const displayDuration = 15000; 
     intervalRef.current = setInterval(() => {
       setPrevImage(currentImage);
       if (Math.random() < 0.002 && currentImage.id !== 'rick-roll') {
@@ -82,10 +93,11 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
         const currentIndex = AUDIO_PRO_IMAGES.findIndex(img => img.id === currentImage.id);
         setCurrentImage(AUDIO_PRO_IMAGES[(currentIndex + 1) % AUDIO_PRO_IMAGES.length]);
       }
-    }, displayDuration);
+    }, 15000);
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [currentImage]);
 
+  // Pan logic
   useEffect(() => {
     const directions: PanDirection[] = [
       { startX: 0, startY: 0, endX: 100, endY: 0 },
@@ -96,8 +108,8 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     setPanDirection(directions[Math.floor(Math.random() * directions.length)]);
   }, [currentImage.id]);
 
-  const endTransform = `scale(1.8) translate(${panDirection.endX === 0 ? '0%' : panDirection.endX === 100 ? '-30%' : '-15%'}, ${panDirection.endY === 0 ? '0%' : panDirection.endY === 100 ? '-30%' : '-15%'})`;
-  const startTransform = `scale(1.8) translate(${panDirection.startX === 0 ? '0%' : panDirection.startX === 100 ? '-30%' : '-15%'}, ${panDirection.startY === 0 ? '0%' : panDirection.startY === 100 ? '-30%' : '-15%'})`;
+  const endTransform = `scale(1.8) translate(${panDirection.endX === 100 ? '-30%' : '0%'}, ${panDirection.endY === 100 ? '-30%' : '0%'})`;
+  const startTransform = `scale(1.8) translate(${panDirection.startX === 100 ? '-30%' : '0%'}, ${panDirection.startY === 100 ? '-30%' : '0%'})`;
   const panAnimation = `pan-${panDirection.startX}-${panDirection.startY}-${panDirection.endX}-${panDirection.endY}`;
 
   return (
@@ -107,7 +119,7 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
         @keyframes noteFall { 
-          0% { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+          0% { transform: translateY(-20vh) rotate(0deg); opacity: 0; }
           10% { opacity: 1; }
           90% { opacity: 1; }
           100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
@@ -125,11 +137,11 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
         </div>
         <div className="absolute inset-0 bg-black/40" />
 
-        {/* Note Rain Layer */}
+        {/* Improved Note Rain Layer */}
         {notes.map(note => (
           <div
             key={note.id}
-            className="absolute top-0 text-3xl sm:text-4xl"
+            className="absolute top-0 text-3xl opacity-0"
             style={{
               left: `${note.left}%`,
               animation: `noteFall ${note.duration}s linear ${note.delay}s forwards`,
