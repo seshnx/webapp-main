@@ -5,6 +5,7 @@
  * No more polling - everything is real-time!
  */
 
+import { useMemo, useCallback } from 'react';
 import {
   useMarketItems,
   useMarketItemsBySeller,
@@ -31,11 +32,11 @@ export function useGearListings(options: { limit?: number; status?: string } = {
     limit: options.limit,
   });
 
-  return {
+  return useMemo(() => ({
     data: items?.filter(item => !options.status || item.status === options.status) || [],
     loading: items === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [items, options.status]);
 }
 
 /**
@@ -45,10 +46,10 @@ export function useGearListings(options: { limit?: number; status?: string } = {
 export function useGearListing(listingId: string | null) {
   const item = useMarketItem(listingId || undefined);
 
-  return {
+  return useMemo(() => ({
     listing: item || null,
     loading: item === undefined,
-  };
+  }), [item]);
 }
 
 /**
@@ -58,11 +59,11 @@ export function useGearListing(listingId: string | null) {
 export function useSellerItems(sellerId: string | null, status?: string) {
   const items = useMarketItemsBySeller(sellerId || undefined, status);
 
-  return {
+  return useMemo(() => ({
     data: items || [],
     loading: items === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [items]);
 }
 
 /**
@@ -83,11 +84,11 @@ export function useSearchMarketItemsHook(searchQuery: string, filters: {
     ...filters,
   });
 
-  return {
+  return useMemo(() => ({
     data: items || [],
     loading: items === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [items]);
 }
 
 /**
@@ -97,11 +98,11 @@ export function useSearchMarketItemsHook(searchQuery: string, filters: {
 export function useFeaturedMarketItems(limit = 10) {
   const items = useFeaturedItems(limit);
 
-  return {
+  return useMemo(() => ({
     data: items || [],
     loading: items === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [items]);
 }
 
 // =====================================================
@@ -117,11 +118,11 @@ export function useMarketplaceItems(options: { type?: string } = {}) {
     type: options.type,
   });
 
-  return {
+  return useMemo(() => ({
     data: items?.filter(item => !options.type || item.itemType === options.type) || [],
     loading: items === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [items, options.type]);
 }
 
 /**
@@ -131,10 +132,10 @@ export function useMarketplaceItems(options: { type?: string } = {}) {
 export function useMarketplaceItem(itemId: string | null) {
   const item = useMarketItem(itemId || undefined);
 
-  return {
+  return useMemo(() => ({
     item: item || null,
     loading: item === undefined,
-  };
+  }), [item]);
 }
 
 // =====================================================
@@ -147,51 +148,56 @@ export function useMarketplaceItem(itemId: string | null) {
 export function useMarketplaceItemMutations() {
   const { create, update, remove, incrementView } = useMarketItemMutations();
 
-  return {
-    createItem: async (itemData: any) => {
-      try {
-        const result = await create(itemData);
-        return result;
-      } catch (error) {
-        console.error('Failed to create item:', error);
-        throw error;
-      }
-    },
+  const createItem = useCallback(async (itemData: any) => {
+    try {
+      const result = await create(itemData);
+      return result;
+    } catch (error) {
+      console.error('Failed to create item:', error);
+      throw error;
+    }
+  }, [create]);
 
-    updateItem: async (itemId: string, updates: any) => {
-      try {
-        await update({
-          itemId: itemId as any,
-          ...updates,
-        });
-      } catch (error) {
-        console.error('Failed to update item:', error);
-        throw error;
-      }
-    },
+  const updateItem = useCallback(async (itemId: string, updates: any) => {
+    try {
+      await update({
+        itemId: itemId as any,
+        ...updates,
+      });
+    } catch (error) {
+      console.error('Failed to update item:', error);
+      throw error;
+    }
+  }, [update]);
 
-    deleteItem: async (itemId: string) => {
-      try {
-        await remove({
-          itemId: itemId as any,
-        });
-      } catch (error) {
-        console.error('Failed to delete item:', error);
-        throw error;
-      }
-    },
+  const deleteItem = useCallback(async (itemId: string) => {
+    try {
+      await remove({
+        itemId: itemId as any,
+      });
+    } catch (error) {
+      console.error('Failed to delete item:', error);
+      throw error;
+    }
+  }, [remove]);
 
-    incrementViewCount: async (itemId: string) => {
-      try {
-        await incrementView({
-          itemId: itemId as any,
-        });
-      } catch (error) {
-        console.error('Failed to increment view count:', error);
-        throw error;
-      }
-    },
-  };
+  const incrementViewCount = useCallback(async (itemId: string) => {
+    try {
+      await incrementView({
+        itemId: itemId as any,
+      });
+    } catch (error) {
+      console.error('Failed to increment view count:', error);
+      throw error;
+    }
+  }, [incrementView]);
+
+  return useMemo(() => ({
+    createItem,
+    updateItem,
+    deleteItem,
+    incrementViewCount,
+  }), [createItem, updateItem, deleteItem, incrementViewCount]);
 }
 
 // =====================================================
@@ -205,11 +211,11 @@ export function useMarketplaceItemMutations() {
 export function useGearOrders(userId: string | null, status?: string | null) {
   const transactions = useTransactionsByBuyer(userId || undefined, status || undefined);
 
-  return {
+  return useMemo(() => ({
     data: transactions || [],
     loading: transactions === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [transactions]);
 }
 
 /**
@@ -219,11 +225,11 @@ export function useGearOrders(userId: string | null, status?: string | null) {
 export function useGearOffers(options: { listingId?: string | null; userId?: string | null } = {}) {
   const transactions = useTransaction(options.listingId || undefined);
 
-  return {
+  return useMemo(() => ({
     data: transactions ? [transactions] : [],
     loading: transactions === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [transactions]);
 }
 
 /**
@@ -233,11 +239,11 @@ export function useGearOffers(options: { listingId?: string | null; userId?: str
 export function useSafeExchangeTransactions(userId: string | null, status?: string | null) {
   const transactions = useTransactionsByBuyer(userId || undefined, status || undefined);
 
-  return {
+  return useMemo(() => ({
     data: transactions || [],
     loading: transactions === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [transactions]);
 }
 
 /**
@@ -247,10 +253,10 @@ export function useSafeExchangeTransactions(userId: string | null, status?: stri
 export function useSafeExchangeTransaction(transactionId: string | null) {
   const transaction = useTransaction(transactionId || undefined);
 
-  return {
+  return useMemo(() => ({
     transaction: transaction || null,
     loading: transaction === undefined,
-  };
+  }), [transaction]);
 }
 
 /**
@@ -260,11 +266,11 @@ export function useSafeExchangeTransaction(transactionId: string | null) {
 export function useUserLibrary(userId: string | null) {
   const transactions = useTransactionsByBuyer(userId || undefined, 'completed');
 
-  return {
+  return useMemo(() => ({
     data: transactions || [],
     loading: transactions === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
-  };
+  }), [transactions]);
 }
 
 /**
@@ -288,86 +294,104 @@ export function useItemOwnership(userId: string | null, itemId: string | null) {
 export function useTransactionMutations() {
   const { create, acceptOffer, rejectOffer, complete, cancel, addTracking, updateTransaction, addPhoto } = useServiceTransactionMutations();
 
-  return {
-    createTransaction: async (transactionData: any) => {
-      try {
-        const result = await create(transactionData);
-        return result;
-      } catch (error) {
-        console.error('Failed to create transaction:', error);
-        throw error;
-      }
-    },
+  const createTransactionAction = useCallback(async (transactionData: any) => {
+    try {
+      const result = await create(transactionData);
+      return result;
+    } catch (error) {
+      console.error('Failed to create transaction:', error);
+      throw error;
+    }
+  }, [create]);
 
-    createOffer: async (offerData: any) => {
-      try {
-        const result = await create(offerData);
-        return result;
-      } catch (error) {
-        console.error('Failed to create offer:', error);
-        throw error;
-      }
-    },
+  const createOfferAction = useCallback(async (offerData: any) => {
+    try {
+      const result = await create(offerData);
+      return result;
+    } catch (error) {
+      console.error('Failed to create offer:', error);
+      throw error;
+    }
+  }, [create]);
 
-    acceptOffer: async (transactionId: string, counterOffer?: number, message?: string) => {
-      try {
-        await acceptOffer({
-          transactionId: transactionId as any,
-          counterOffer,
-          message,
-        });
-      } catch (error) {
-        console.error('Failed to accept offer:', error);
-        throw error;
-      }
-    },
+  const acceptOfferAction = useCallback(async (transactionId: string, counterOffer?: number, message?: string) => {
+    try {
+      await acceptOffer({
+        transactionId: transactionId as any,
+        counterOffer,
+        message,
+      });
+    } catch (error) {
+      console.error('Failed to accept offer:', error);
+      throw error;
+    }
+  }, [acceptOffer]);
 
-    rejectOffer: async (transactionId: string, reason?: string) => {
-      try {
-        await rejectOffer({
-          transactionId: transactionId as any,
-        });
-      } catch (error) {
-        console.error('Failed to reject offer:', error);
-        throw error;
-      }
-    },
+  const rejectOfferAction = useCallback(async (transactionId: string, reason?: string) => {
+    try {
+      await rejectOffer({
+        transactionId: transactionId as any,
+      });
+    } catch (error) {
+      console.error('Failed to reject offer:', error);
+      throw error;
+    }
+  }, [rejectOffer]);
 
-    completeTransaction: async (transactionId: string) => {
-      try {
-        await complete({
-          transactionId: transactionId as any,
-        });
-      } catch (error) {
-        console.error('Failed to complete transaction:', error);
-        throw error;
-      }
-    },
+  const completeTransactionAction = useCallback(async (transactionId: string) => {
+    try {
+      await complete({
+        transactionId: transactionId as any,
+      });
+    } catch (error) {
+      console.error('Failed to complete transaction:', error);
+      throw error;
+    }
+  }, [complete]);
 
-    cancelTransaction: async (transactionId: string) => {
-      try {
-        await cancel({
-          transactionId: transactionId as any,
-        });
-      } catch (error) {
-        console.error('Failed to cancel transaction:', error);
-        throw error;
-      }
-    },
+  const cancelTransactionAction = useCallback(async (transactionId: string) => {
+    try {
+      await cancel({
+        transactionId: transactionId as any,
+      });
+    } catch (error) {
+      console.error('Failed to cancel transaction:', error);
+      throw error;
+    }
+  }, [cancel]);
 
-    addTrackingNumber: async (transactionId: string, trackingNumber: string) => {
-      try {
-        await addTracking({
-          transactionId: transactionId as any,
-          trackingNumber,
-        });
-      } catch (error) {
-      }
-    },
+  const addTrackingNumberAction = useCallback(async (transactionId: string, trackingNumber: string) => {
+    try {
+      await addTracking({
+        transactionId: transactionId as any,
+        trackingNumber,
+      });
+    } catch (error) {
+      console.error('Failed to add tracking number:', error);
+    }
+  }, [addTracking]);
 
+  return useMemo(() => ({
+    createTransaction: createTransactionAction,
+    createOffer: createOfferAction,
+    acceptOffer: acceptOfferAction,
+    rejectOffer: rejectOfferAction,
+    completeTransaction: completeTransactionAction,
+    cancelTransaction: cancelTransactionAction,
+    addTrackingNumber: addTrackingNumberAction,
     updateTransaction,
     addPhoto,
-  };
+  }), [
+    createTransactionAction,
+    createOfferAction,
+    acceptOfferAction,
+    rejectOfferAction,
+    completeTransactionAction,
+    cancelTransactionAction,
+    addTrackingNumberAction,
+    updateTransaction,
+    addPhoto,
+  ]);
 }
 
 /**
@@ -387,11 +411,11 @@ export function useMarketplaceMutations() {
  * TODO: Not yet implemented in Convex
  */
 export function useDistributionReleases(userId: string | null) {
-  return {
+  return useMemo(() => ({
     data: [],
     loading: false,
     refresh: () => {},
-  };
+  }), []);
 }
 
 /**
@@ -399,10 +423,10 @@ export function useDistributionReleases(userId: string | null) {
  * TODO: Not yet implemented in Convex
  */
 export function useDistributionRelease(releaseId: string | null) {
-  return {
+  return useMemo(() => ({
     release: null,
     loading: false,
-  };
+  }), []);
 }
 
 /**
@@ -410,18 +434,24 @@ export function useDistributionRelease(releaseId: string | null) {
  * TODO: Not yet implemented in Convex
  */
 export function useDistributionMutations() {
-  return {
-    createRelease: async (data: any) => {
-      console.warn('Distribution releases not yet implemented in Convex');
-      throw new Error('Not yet implemented');
-    },
-    updateRelease: async (releaseId: string, data: any) => {
-      console.warn('Distribution releases not yet implemented in Convex');
-      throw new Error('Not yet implemented');
-    },
-    deleteRelease: async (releaseId: string) => {
-      console.warn('Distribution releases not yet implemented in Convex');
-      throw new Error('Not yet implemented');
-    },
-  };
+  const createRelease = useCallback(async (data: any) => {
+    console.warn('Distribution releases not yet implemented in Convex');
+    throw new Error('Not yet implemented');
+  }, []);
+
+  const updateRelease = useCallback(async (releaseId: string, data: any) => {
+    console.warn('Distribution releases not yet implemented in Convex');
+    throw new Error('Not yet implemented');
+  }, []);
+
+  const deleteRelease = useCallback(async (releaseId: string) => {
+    console.warn('Distribution releases not yet implemented in Convex');
+    throw new Error('Not yet implemented');
+  }, []);
+
+  return useMemo(() => ({
+    createRelease,
+    updateRelease,
+    deleteRelease,
+  }), [createRelease, updateRelease, deleteRelease]);
 }

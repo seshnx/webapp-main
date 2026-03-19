@@ -7,6 +7,7 @@
 
 import { api } from '../../convex/_generated';
 import { useQuery, useMutation } from 'convex/react';
+import { useMemo } from 'react';
 import type { Id } from '../../convex/_generated/dataModel';
 
 // =====================================================
@@ -90,11 +91,11 @@ export function usePostMutations() {
   const remove = useMutation(api.social.deletePost);
   const repost = useMutation(api.social.repostPost);
 
-  return {
+  return useMemo(() => ({
     create,
     remove,
     repost,
-  };
+  }), [create, remove, repost]);
 }
 
 // =====================================================
@@ -132,10 +133,10 @@ export function useCommentMutations() {
   const create = useMutation(api.social.createComment);
   const remove = useMutation(api.social.deleteComment);
 
-  return {
+  return useMemo(() => ({
     create,
     remove,
-  };
+  }), [create, remove]);
 }
 
 // =====================================================
@@ -147,7 +148,7 @@ export function useCommentMutations() {
  */
 export function useReactions(targetId: string | undefined, targetType: 'post' | 'comment') {
   // This would need a query in Convex - for now using placeholder
-  return { reactions: [], loading: false };
+  return useMemo(() => ({ reactions: [], loading: false }), []);
 }
 
 /**
@@ -159,7 +160,7 @@ export function useUserReaction(
   targetType: 'post' | 'comment'
 ) {
   // This would need a query in Convex - for now using placeholder
-  return { reacted: false, emoji: null, loading: false };
+  return useMemo(() => ({ reacted: false, emoji: null, loading: false }), []);
 }
 
 // =====================================================
@@ -172,9 +173,9 @@ export function useUserReaction(
 export function useReactionMutations() {
   const toggle = useMutation(api.social.toggleReaction);
 
-  return {
+  return useMemo(() => ({
     toggle,
-  };
+  }), [toggle]);
 }
 
 // =====================================================
@@ -264,10 +265,10 @@ export function useFollowMutations() {
   const follow = useMutation(api.social.followUser);
   const unfollow = useMutation(api.social.unfollowUser);
 
-  return {
+  return useMemo(() => ({
     follow,
     unfollow,
-  };
+  }), [follow, unfollow]);
 }
 
 // =====================================================
@@ -307,10 +308,10 @@ export function useSavedPostsMutations() {
   const save = useMutation(api.social.savePost);
   const unsave = useMutation(api.social.unsavePost);
 
-  return {
+  return useMemo(() => ({
     save,
     unsave,
-  };
+  }), [save, unsave]);
 }
 
 // =====================================================
@@ -338,10 +339,10 @@ export function useBlockMutations() {
   const block = useMutation(api.social.blockUser);
   const unblock = useMutation(api.social.unblockUser);
 
-  return {
+  return useMemo(() => ({
     block,
     unblock,
-  };
+  }), [block, unblock]);
 }
 
 // =====================================================

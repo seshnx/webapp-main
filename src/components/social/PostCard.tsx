@@ -83,7 +83,9 @@ const cardVariants = {
     exit: { opacity: 0, scale: 0.95, transition: { duration: 0.2 } }
 };
 
-const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCard({
+const EMPTY_ARRAY: string[] = [];
+
+const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(function PostCard({
     post,
     currentUser,
     currentUserData,
@@ -238,13 +240,13 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
                 if (!wasReacted && !isOwnPost) {
                     createNotification({
                         targetUserId: post.userId,
-                        type: 'reaction',
+                        type: 'like',
                         fromUserId: userId,
                         fromUserName: currentUserData?.effectiveDisplayName || currentUserData?.firstName || 'Someone',
                         fromUserPhoto: currentUserData?.photoURL,
                         postId: post.id,
                         postPreview: post.text?.substring(0, 50),
-                        message: `reacted ${emoji} to your post`
+                        message: `liked your post`
                     });
                 }
             }
@@ -268,12 +270,7 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
                 toast.success('Removed from saved');
             } else {
                 // Save
-                await savePost(userId, post.id, {
-                    author_id: post.userId,
-                    author_name: post.displayName,
-                    preview: post.text?.substring(0, 100) || 'Media post',
-                    has_media: !!(post.attachments?.length || post.imageUrl || post.audioUrl)
-                });
+                await savePost(userId, post.id);
                 await updatePostSaveCount(post.id, 1);
 
                 setIsSaved(true);
@@ -333,12 +330,7 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
 
         try {
             // Pass author_id for ownership verification (post.userId maps to author_id)
-            const success = await deletePost(post.id, post.userId);
-
-            if (!success) {
-                toast.error("Couldn't delete post - permission denied");
-                return;
-            }
+            await deletePost(post.id, post.userId);
 
             toast.success('Post deleted');
             // Notify parent to remove post from UI
@@ -658,7 +650,7 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
                             currentUser={currentUser}
                             currentUserData={currentUserData}
                             subProfiles={subProfiles}
-                            blockedUsers={[]}
+                            blockedUsers={EMPTY_ARRAY}
                             onCountChange={setCommentCount}
                         />
                     </motion.div>
@@ -678,6 +670,6 @@ const PostCard = React.forwardRef<HTMLDivElement, PostCardProps>(function PostCa
             />
         </motion.div>
     );
-});
+}));
 
 export default PostCard;

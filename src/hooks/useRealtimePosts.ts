@@ -5,7 +5,7 @@
  * Works seamlessly with Vercel deployment
  */
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useCallback } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { isConvexAvailable } from '../config/convex';
@@ -97,20 +97,32 @@ export function useRealtimePosts(
     }));
   }, [convexPosts]);
 
-  // Call onNewPost callback when posts are received
+  // Use a ref for onNewPost to prevent infinite re-renders if the callback is unstable
+  const onNewPostRef = useRef(onNewPost);
   useEffect(() => {
-    if (onNewPost && posts.length > 0) {
-      // Notify about new posts (this could be optimized to only notify about actually new posts)
-      onNewPost(posts[0]);
-    }
-  }, [posts, onNewPost]);
+    onNewPostRef.current = onNewPost;
+  }, [onNewPost]);
 
-  return {
+  // Track the last seen post ID to only notify about actually new posts
+  const lastPostIdRef = useRef<string | null>(null);
+
+  // Call onNewPost callback when new posts are received
+  useEffect(() => {
+    if (onNewPostRef.current && posts.length > 0) {
+      const newestPost = posts[0];
+      if (newestPost.id !== lastPostIdRef.current) {
+        lastPostIdRef.current = newestPost.id;
+        onNewPostRef.current(newestPost);
+      }
+    }
+  }, [posts]);
+
+  return useMemo(() => ({
     posts,
     isLoading: convexPosts === undefined,
     error: null,
     isConnected,
-  };
+  }), [posts, convexPosts, isConnected]);
 }
 
 /**
@@ -120,7 +132,7 @@ export function useRealtimePosts(
 export function useSyncPost() {
   const syncPostMutation = useMutation(api.posts.syncPost);
 
-  const syncPost = async (
+  const syncPost = useCallback(async (
     post: {
       postId: string;
       userId: string;
@@ -143,7 +155,7 @@ export function useSyncPost() {
       console.error('Failed to sync post to Convex:', error);
       return { success: false, error };
     }
-  };
+  }, [syncPostMutation]);
 
   return syncPost;
 }
@@ -154,7 +166,7 @@ export function useSyncPost() {
 export function useUpdatePostReactionCount() {
   const updateMutation = useMutation(api.posts.updateReactionCount);
 
-  const updateCount = async (postId: string, reactionCount: number) => {
+  const updateCount = useCallback(async (postId: string, reactionCount: number) => {
     try {
       await updateMutation({ postId, reactionCount });
       return { success: true };
@@ -162,7 +174,7 @@ export function useUpdatePostReactionCount() {
       console.error('Failed to update reaction count:', error);
       return { success: false, error };
     }
-  };
+  }, [updateMutation]);
 
   return updateCount;
 }
@@ -173,7 +185,7 @@ export function useUpdatePostReactionCount() {
 export function useUpdatePostCommentCount() {
   const updateMutation = useMutation(api.posts.updateCommentCount);
 
-  const updateCount = async (postId: string, commentCount: number) => {
+  const updateCount = useCallback(async (postId: string, commentCount: number) => {
     try {
       await updateMutation({ postId, commentCount });
       return { success: true };
@@ -181,7 +193,7 @@ export function useUpdatePostCommentCount() {
       console.error('Failed to update comment count:', error);
       return { success: false, error };
     }
-  };
+  }, [updateMutation]);
 
   return updateCount;
 }

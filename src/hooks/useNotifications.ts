@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated';
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 
 /**
  * Extended notification interface with UI properties
@@ -141,7 +141,7 @@ export function useNotifications(
   /**
    * Mark a single notification as read
    */
-  const markAsRead = async (notificationId: string): Promise<void> => {
+  const markAsRead = useCallback(async (notificationId: string): Promise<void> => {
     if (!clerkUserId) return;
 
     try {
@@ -151,12 +151,12 @@ export function useNotifications(
     } catch (error) {
       console.error('Mark as read error:', error);
     }
-  };
+  }, [clerkUserId, markAsReadMutation]);
 
   /**
    * Mark all notifications as read
    */
-  const markAllAsRead = async (): Promise<void> => {
+  const markAllAsRead = useCallback(async (): Promise<void> => {
     if (!clerkUserId || unreadCount === 0) return;
 
     try {
@@ -166,12 +166,12 @@ export function useNotifications(
     } catch (error) {
       console.error('Mark all as read error:', error);
     }
-  };
+  }, [clerkUserId, unreadCount, markAllAsReadMutation]);
 
   /**
    * Delete a notification
    */
-  const deleteNotification = async (notificationId: string): Promise<void> => {
+  const deleteNotification = useCallback(async (notificationId: string): Promise<void> => {
     if (!clerkUserId) return;
 
     try {
@@ -181,12 +181,12 @@ export function useNotifications(
     } catch (error) {
       console.error('Delete notification error:', error);
     }
-  };
+  }, [clerkUserId, deleteMutation]);
 
   /**
    * Clear all notifications (soft delete)
    */
-  const clearAll = async (): Promise<void> => {
+  const clearAll = useCallback(async (): Promise<void> => {
     if (!clerkUserId) return;
 
     try {
@@ -196,9 +196,9 @@ export function useNotifications(
     } catch (error) {
       console.error('Clear all error:', error);
     }
-  };
+  }, [clerkUserId, clearAllMutation]);
 
-  return {
+  return useMemo(() => ({
     notifications: uiNotifications,
     unreadCount,
     loading,
@@ -206,7 +206,7 @@ export function useNotifications(
     markAllAsRead,
     deleteNotification,
     clearAll
-  };
+  }), [uiNotifications, unreadCount, loading, markAsRead, markAllAsRead, deleteNotification, clearAll]);
 }
 
 /**
@@ -291,7 +291,7 @@ export const getNotificationIcon = (type: NotificationType): string => {
 export function useNotificationMutations() {
   const create = useMutation(api.notifications.createNotification);
 
-  return {
+  return useMemo(() => ({
     create,
-  };
+  }), [create]);
 }

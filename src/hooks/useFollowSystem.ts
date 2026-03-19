@@ -170,7 +170,7 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
     return followingList.map(f => f.userId);
   }, [followingList]);
 
-  return {
+  return useMemo(() => ({
     following: followingList,
     followers: followersList,
     stats,
@@ -180,7 +180,17 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
     unfollowUser,
     toggleFollow,
     getFollowingIds,
-  };
+  }), [
+    followingList,
+    followersList,
+    stats,
+    loading,
+    isFollowing,
+    followUser,
+    unfollowUser,
+    toggleFollow,
+    getFollowingIds,
+  ]);
 }
 
 /**
@@ -216,10 +226,10 @@ export function useUserSocialStats(userId: string | null | undefined) {
     followingCount: user?.stats?.followingCount || 0,
   }), [user]);
 
-  return {
+  return useMemo(() => ({
     stats,
     loading: user === undefined,
-  };
+  }), [stats, user]);
 }
 
 /**
@@ -254,10 +264,10 @@ export function useIsFollowing(
       : "skip"
   );
 
-  return {
+  return useMemo(() => ({
     isFollowing: isFollowingData?.isFollowing || false,
     loading: isFollowingData === undefined,
-  };
+  }), [isFollowingData]);
 }
 
 /**
@@ -268,31 +278,34 @@ export function useFollowMutations() {
   const follow = useMutation(api.social.followUser);
   const unfollow = useMutation(api.social.unfollowUser);
 
-  return {
-    follow: async (followerId: string, followingId: string) => {
-      try {
-        await follow({
-          followerId,
-          followingId,
-        });
-        return { success: true };
-      } catch (error) {
-        console.error('Follow error:', error);
-        return { success: false, error };
-      }
-    },
+  const followAction = useCallback(async (followerId: string, followingId: string) => {
+    try {
+      await follow({
+        followerId,
+        followingId,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Follow error:', error);
+      return { success: false, error };
+    }
+  }, [follow]);
 
-    unfollow: async (followerId: string, followingId: string) => {
-      try {
-        await unfollow({
-          followerId,
-          followingId,
-        });
-        return { success: true };
-      } catch (error) {
-        console.error('Unfollow error:', error);
-        return { success: false, error };
-      }
-    },
-  };
+  const unfollowAction = useCallback(async (followerId: string, followingId: string) => {
+    try {
+      await unfollow({
+        followerId,
+        followingId,
+      });
+      return { success: true };
+    } catch (error) {
+      console.error('Unfollow error:', error);
+      return { success: false, error };
+    }
+  }, [unfollow]);
+
+  return useMemo(() => ({
+    follow: followAction,
+    unfollow: unfollowAction,
+  }), [followAction, unfollowAction]);
 }

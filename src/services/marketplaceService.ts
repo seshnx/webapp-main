@@ -7,6 +7,7 @@
 
 import { api } from '../../convex/_generated';
 import { useQuery, useMutation } from 'convex/react';
+import { useMemo, useCallback } from 'react';
 import { Id } from '../../convex/_generated/dataModel';
 import * as Sentry from '@sentry/react';
 
@@ -148,12 +149,12 @@ export function useMarketItemMutations() {
   const remove = useMutation(api.marketplace.deleteMarketItem);
   const incrementView = useMutation(api.marketplace.incrementViewCount);
 
-  return {
+  return useMemo(() => ({
     create,
     update,
     remove,
     incrementView,
-  };
+  }), [create, update, remove, incrementView]);
 }
 
 // =====================================================
@@ -223,22 +224,35 @@ export function useTransactionMutations() {
   const cancel = useMutation(api.marketplace.cancelTransaction);
   const addTracking = useMutation(api.marketplace.addTrackingNumber);
 
-  return {
+  const updateTransaction = useCallback(async (transactionId: string, updates: any) => {
+    console.warn('updateTransaction: Not yet implemented in Convex');
+    return { success: true };
+  }, []);
+
+  const addPhoto = useCallback(async (transactionId: string, photoUrl: string) => {
+    console.warn('addPhoto: Not yet implemented in Convex');
+    return { success: true };
+  }, []);
+
+  return useMemo(() => ({
     create,
     acceptOffer,
     rejectOffer,
     complete,
     cancel,
     addTracking,
-    updateTransaction: async (transactionId: string, updates: any) => {
-      console.warn('updateTransaction: Not yet implemented in Convex');
-      return { success: true };
-    },
-    addPhoto: async (transactionId: string, photoUrl: string) => {
-      console.warn('addPhoto: Not yet implemented in Convex');
-      return { success: true };
-    },
-  };
+    updateTransaction,
+    addPhoto,
+  }), [
+    create,
+    acceptOffer,
+    rejectOffer,
+    complete,
+    cancel,
+    addTracking,
+    updateTransaction,
+    addPhoto
+  ]);
 }
 
 // =====================================================

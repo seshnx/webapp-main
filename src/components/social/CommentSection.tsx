@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Send, Trash2 } from 'lucide-react';
 import { getComments, createComment, deleteComment, updatePostCommentCount } from '../../services/socialApi';
 import { createNotification } from '../../hooks/useNotifications';
@@ -45,7 +45,7 @@ export interface CommentSectionProps {
 /**
  * CommentSection component for displaying and managing post comments
  */
-export default function CommentSection({
+const CommentSection = React.memo(function CommentSection({
     post,
     currentUser,
     currentUserData,
@@ -53,11 +53,14 @@ export default function CommentSection({
     blockedUsers = [],
     onCountChange
 }: CommentSectionProps) {
+    // ... (rest of the component)
     // Real-time comments from Convex
     const convexComments = useQuery(api.comments.list, { postId: post.id });
     const [comments, setComments] = useState<CommentData[]>([]);
     const [text, setText] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
+
+    const prevCountRef = useRef<number>(-1);
 
     // Sync Convex comments to local state (with blocking filter)
     useEffect(() => {
@@ -75,7 +78,12 @@ export default function CommentSection({
             // Filter out blocked users
             const filtered = mapped.filter((c) => !blockedUsers?.includes(c.user_id));
             setComments(filtered);
-            onCountChange?.(filtered.length);
+            
+            // Only notify if count actually changed to prevent loops
+            if (onCountChange && filtered.length !== prevCountRef.current) {
+                prevCountRef.current = filtered.length;
+                onCountChange(filtered.length);
+            }
         }
     }, [convexComments, blockedUsers, onCountChange]);
 
@@ -261,4 +269,6 @@ export default function CommentSection({
             </form>
         </div>
     );
-}
+});
+
+export default CommentSection;
