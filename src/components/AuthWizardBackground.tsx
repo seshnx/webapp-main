@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 interface ImageData { id: string; url: string; order: number; }
 interface PanDirection { startX: number; startY: number; endX: number; endY: number; }
-interface FallingNote { id: number; left: number; delay: number; duration: number; emoji: string; }
+interface FallingNote { id: number; left: number; duration: number; emoji: string; }
 
 export interface AuthWizardBackgroundProps { onImagesLoaded?: (loaded: boolean) => void; }
 
@@ -33,24 +33,35 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
   const [notes, setNotes] = useState<FallingNote[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Trigger Fast Note Rain
+  // 1. Logic for "Continuous" Rain
   const triggerNoteRain = () => {
-    const rainCount = 1000; // Denser rain for faster movement
-    const newNotes = Array.from({ length: rainCount }).map((_, i) => ({
-      id: Date.now() + i,
-      left: Math.random() * 100,
-      delay: Math.random() * 2, // 2s spread for the start
-      duration: 1 + Math.random() * 1.5, // High speed: 1s to 2.5s fall time
-      emoji: PURE_NOTES[Math.floor(Math.random() * PURE_NOTES.length)]
-    }));
-    setNotes(prev => [...prev, ...newNotes]);
+    const startTime = Date.now();
     
-    // Cleanup state after 5 seconds
-    setTimeout(() => {
-      setNotes(prev => prev.filter(n => !newNotes.find(nn => nn.id === n.id)));
-    }, 5000);
+    const rainInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      if (elapsed > 5000) {
+        clearInterval(rainInterval);
+        return;
+      }
+
+      // Spawn 3 new notes every 100ms for a steady stream
+      const batch = Array.from({ length: 3 }).map(() => ({
+        id: Math.random(),
+        left: Math.random() * 100,
+        duration: 0.8 + Math.random() * 1.2, // Super fast fall (0.8s - 2s)
+        emoji: PURE_NOTES[Math.floor(Math.random() * PURE_NOTES.length)]
+      }));
+
+      setNotes(prev => [...prev, ...batch]);
+
+      // Remove individual notes after they finish their fall
+      setTimeout(() => {
+        setNotes(prev => prev.filter(n => !batch.find(bn => bn.id === n.id)));
+      }, 2500);
+    }, 100);
   };
 
+  // Image Preloader
   useEffect(() => {
     if (!imagesReady) {
       const img = new Image();
@@ -60,6 +71,7 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     }
   }, [imagesReady, onImagesLoaded, currentImage.url]);
 
+  // Keyboard Triggers with Input Protection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) return;
@@ -82,7 +94,7 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentImage]);
 
-  // Image rotation
+  // Image Rotation and Pan Logic
   useEffect(() => {
     intervalRef.current = setInterval(() => {
       setPrevImage(currentImage);
@@ -96,7 +108,6 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [currentImage]);
 
-  // Pan logic
   useEffect(() => {
     const directions: PanDirection[] = [
       { startX: 0, startY: 0, endX: 100, endY: 0 },
@@ -118,32 +129,34 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
         @keyframes noteFall { 
-          0% { transform: translateY(-20vh) rotate(0deg); opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: 1; }
-          100% { transform: translateY(110vh) rotate(360deg); opacity: 0; }
+          0% { transform: translateY(-30vh) rotate(0deg); opacity: 0; }
+          15% { opacity: 1; }
+          85% { opacity: 1; }
+          100% { transform: translateY(115vh) rotate(720deg); opacity: 0; }
         }
       `}</style>
 
       <div className="fixed inset-0 bg-black overflow-hidden pointer-events-none" style={{ zIndex: -1 }}>
+        {/* Anti-Ghosting Fade Out */}
         {prevImage && (
           <div key={`prev-${prevImage.id}`} className="absolute inset-0">
             <div className="absolute inset-0" style={{ backgroundImage: `url(${prevImage.url})`, backgroundSize: 'cover', backgroundPosition: 'center', transform: endTransform, animation: 'fadeOut 2s ease-in-out forwards', WebkitMaskImage: 'radial-gradient(circle, black 40%, transparent 100%)', maskImage: 'radial-gradient(circle, black 40%, transparent 100%)' }} />
           </div>
         )}
+        
         <div key={`curr-${currentImage.id}`} className="absolute inset-0">
           <div className="absolute inset-0" style={{ backgroundImage: `url(${currentImage.url})`, backgroundSize: 'cover', backgroundPosition: 'center', animation: `fadeIn 2s ease-in-out, ${panAnimation} 15s linear forwards`, WebkitMaskImage: 'radial-gradient(circle, black 40%, transparent 100%)', maskImage: 'radial-gradient(circle, black 40%, transparent 100%)' }} />
         </div>
         <div className="absolute inset-0 bg-black/40" />
 
-        {/* High-Speed Note Rain Layer */}
+        {/* Continuous Stream Note Rain */}
         {notes.map(note => (
           <div
             key={note.id}
-            className="absolute top-0 text-3xl opacity-0"
+            className="absolute top-0 text-3xl sm:text-4xl opacity-0"
             style={{
               left: `${note.left}%`,
-              animation: `noteFall ${note.duration}s linear ${note.delay}s forwards`,
+              animation: `noteFall ${note.duration}s linear forwards`,
               zIndex: 10
             }}
           >
