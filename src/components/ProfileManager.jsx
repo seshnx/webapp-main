@@ -14,7 +14,7 @@ import { MultiSelect, NestedSelect } from './shared/Inputs';
 import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
 import SoftwareAutocomplete from './shared/SoftwareAutocomplete';
 import { useMutation, useQuery } from 'convex/react';
-import { api } from '../../convex/_generated';
+import { api } from '../../convex/_generated/api';
 
 // --- Validation Schemas ---
 const mainProfileSchema = z.object({

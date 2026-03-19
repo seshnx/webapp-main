@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Home, Plus, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated';
+import { api } from '../../../convex/_generated/api';
 
 /**
  * Room interface

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 // TODO: Replace with Convex queries
 // import { useQuery } from 'convex/react';
-// import { api } from '../../../convex/_generated';
+// import { api } from '../../../convex/_generated/api';
 import LabelOverviewCard from './LabelOverviewCard';
 import StudioOverviewCard from './StudioOverviewCard';
 import DistributionOverviewCard from './DistributionOverviewCard';

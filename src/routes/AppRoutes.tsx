@@ -3,7 +3,7 @@ import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-
 import { useAuth } from '@clerk/react';
 import { Loader2 } from 'lucide-react';
 import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated';
+import { api } from '../../convex/_generated/api';
 import type { UserData, AccountType } from '../types';
 
 // =====================================================

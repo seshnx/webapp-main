@@ -9,8 +9,11 @@ export const useUserSync = () => {
   const syncUser = useMutation(api.users.syncUserFromClerk);
   
   // Fetch everything needed for the UI in one query
-  const fullUserData = useQuery(api.users.getFullUserData, 
-    userId ? { clerkId: userId } : "skip"
+  // Using a stable object type instead of alternating between literal "skip" and Object
+  // to prevent React Top-Level suspense/re-render looping issues in App.tsx
+  const fullUserData = useQuery(
+    api.users.getFullUserData, 
+    { clerkId: userId || "skip" }
   );
 
   const syncStarted = useRef(false);

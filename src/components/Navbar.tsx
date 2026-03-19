@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, MouseEvent, FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated';
+import { api } from '../../convex/_generated/api';
 import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical } from 'lucide-react';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';

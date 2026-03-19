@@ -6,7 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../convex/_generated';
+import { api } from '../convex/_generated/api';
 
 // Lazy load components to avoid initialization order issues
 const AuthWizard = lazy(() => import('./components/AuthWizard'));

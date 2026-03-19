@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated';
+import { api } from '../../convex/_generated/api';
 
 /**
  * User data interface

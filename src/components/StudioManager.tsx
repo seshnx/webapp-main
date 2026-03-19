@@ -6,7 +6,7 @@ import {
 // Import database functions
 // TODO: Replace with Convex query
 // import { useQuery } from 'convex/react';
-// import { api } from '../../convex/_generated';
+// import { api } from '../../convex/_generated/api';
 // Import sub-components
 import StudioOverview from './studio/StudioOverview';
 import StudioRooms from './studio/StudioRooms';

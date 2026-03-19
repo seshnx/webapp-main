@@ -10,7 +10,7 @@
 
 // TODO: Replace Neon profile functions with Convex equivalents
 // import { fetchQuery, fetchMutation } from 'convex/server';
-// import { api } from '../../convex/_generated';
+// import { api } from '../../convex/_generated/api';
 
 // Stub for getCoreUserProfile - returns null until Convex migration is complete
 const getCoreUserProfile = async (userId: string): Promise<any> => {

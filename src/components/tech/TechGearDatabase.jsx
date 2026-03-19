@@ -5,7 +5,7 @@ import {
 import { EQUIP_CATEGORIES } from '../../config/constants';
 // TODO: Replace with Convex queries
 // import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../../convex/_generated';
+// import { api } from '../../../convex/_generated/api';
 
 export default function TechGearDatabase({ user, userData, isTech }) {
     const [view, setView] = useState('feed');

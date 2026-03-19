@@ -111,31 +111,9 @@ if (import.meta.env.DEV) {
 // =====================================================
 
 /**
- * AppWrapper - Wraps the app with Sentry ErrorBoundary if configured
+ * AppWrapper - Normal wrapper without Sentry for debugging
  */
 const AppWrapper = ({ children }: AppWrapperProps): JSX.Element => {
-  if (sentryDsn) {
-    return (
-      <Sentry.ErrorBoundary
-        fallback={({ error, resetError }: ErrorFallbackProps) => (
-          <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
-            <div className="text-center p-8">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Something went wrong</h1>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">{error?.message || 'An unexpected error occurred'}</p>
-              <button
-                onClick={resetError}
-                className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 transition-colors"
-              >
-                Try again
-              </button>
-            </div>
-          </div>
-        )}
-      >
-        {children}
-      </Sentry.ErrorBoundary>
-    );
-  }
   return <>{children}</>;
 };
 

@@ -4,7 +4,7 @@ import { TECH_SPECIALTIES } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
 // TODO: Replace with Convex queries
 // import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../../convex/_generated';
+// import { api } from '../../../convex/_generated/api';
 
 /**
  * Tech profile form data interface

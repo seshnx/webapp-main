@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth, useUser, useClerk } from '@clerk/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
@@ -22,7 +22,6 @@ export default function App(): JSX.Element {
 
   // 1. Sync Logic (Returns data if it exists, otherwise undefined/null)
   const { userData } = useUserSync();
-
   // 2. Theme State
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     const saved = localStorage.getItem('theme');
@@ -61,12 +60,28 @@ export default function App(): JSX.Element {
   }
 
   const isAuthenticated = !!isSignedIn;
+  const isOnLoginPage = location.pathname === '/login';
+  const isTestLoginPage = location.pathname === '/test-login';
 
   // 3. Auth Guard: If not signed in, show AuthWizard
-  if (!isAuthenticated && location.pathname !== '/login') {
+  // Note: We render AuthWizard for both root and /login if unauthenticated
+  if (!isAuthenticated && (!isOnLoginPage && !isTestLoginPage)) {
     return (
-      <Suspense fallback={<Loader2 className="animate-spin" />}>
-        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} />
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
+      </Suspense>
+    );
+  }
+
+  // Handle login page explicitly
+  if (isOnLoginPage) {
+    if (isAuthenticated) {
+      // If already signed in but at /login, go home
+      return <Navigate to="/" replace />;
+    }
+    return (
+      <Suspense fallback={<div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+        <AuthWizard darkMode={darkMode} toggleTheme={toggleTheme} onSuccess={() => navigate('/')} isNewUser={false} />
       </Suspense>
     );
   }

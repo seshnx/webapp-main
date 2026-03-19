@@ -5,7 +5,7 @@
  * No more Neon/PostgreSQL - everything in one place.
  */
 
-import { api } from '../../convex/_generated';
+import { api } from '../../convex/_generated/api';
 import { useQuery, useMutation } from 'convex/react';
 import type { Id } from '../../convex/_generated/dataModel';
 import * as Sentry from '@sentry/react';

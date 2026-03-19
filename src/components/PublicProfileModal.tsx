@@ -10,7 +10,7 @@ import { useFollowSystem, useUserSocialStats } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import FollowersListModal, { FollowStats } from './social/FollowersListModal';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../convex/_generated';
+import { api } from '../../convex/_generated/api';
 import { STORAGE_FOLDERS } from '../config/vercel-blob';
 import type { UserData } from '../types';
 

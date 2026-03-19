@@ -9,7 +9,7 @@
  * - Real-time subscriptions for all data updates
  */
 
-import { api } from '../../convex/_generated';
+import { api } from '../../convex/_generated/api';
 import { useQuery, useMutation } from 'convex/react';
 import type { Id } from '../../convex/_generated/dataModel';
 

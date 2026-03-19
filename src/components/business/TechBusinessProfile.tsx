@@ -6,7 +6,7 @@ import {
 import { TECH_SPECIALTIES, SERVICE_CATALOGUE } from '../../config/constants';
 // TODO: Replace with Convex queries
 // import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../../convex/_generated';
+// import { api } from '../../../convex/_generated/api';
 // Inline TechnicianProfile type until Convex migration
 interface TechnicianProfile { user_id?: string; [key: string]: any; }
 import type { UserData } from '../../types';

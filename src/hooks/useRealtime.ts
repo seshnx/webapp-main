@@ -11,7 +11,7 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { useMutation, useQuery, useAction } from 'convex/react';
-import { api } from '../../convex/_generated';
+import { api } from '../../convex/_generated/api';
 import type {
   ConvexPresence,
   ConvexActiveSession,

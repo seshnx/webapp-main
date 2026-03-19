@@ -6,7 +6,7 @@ import {
 import { SERVICE_CATALOGUE } from '../../config/constants';
 // TODO: Replace with Convex queries
 // import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../../convex/_generated';
+// import { api } from '../../../convex/_generated/api';
 // Inline ServiceRequest type until Convex migration
 interface ServiceRequest { id: string; created_at: string; status?: string; service_category?: string; title?: string; description?: string; issue_description?: string; equipment_name?: string; equipment_brand?: string; equipment_model?: string; logistics?: string; location?: string; preferred_date?: string; budget_cap?: number; priority?: string; requester_name?: string; requester_photo?: string; [key: string]: any; }
 import type { UserData } from '../../types';

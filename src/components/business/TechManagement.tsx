@@ -11,7 +11,7 @@ import TechHistory from './TechHistory';
 import TechBusinessProfile from './TechBusinessProfile';
 // TODO: Replace with Convex queries
 // import { useQuery } from 'convex/react';
-// import { api } from '../../../convex/_generated';
+// import { api } from '../../../convex/_generated/api';
 // Inline TechMetricsData type until Convex migration
 interface TechMetricsData { [key: string]: any; }
 

@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { SERVICE_CATALOGUE, TECH_SPECIALTIES } from '../../config/constants';
 import { useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated';
+import { api } from '../../../convex/_generated/api';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import type { UserData } from '../../types';
 

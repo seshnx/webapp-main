@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 // TODO: Replace with Convex queries
 // import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../../convex/_generated';
+// import { api } from '../../../convex/_generated/api';
 // Inline ServiceRequest type until Convex migration
 interface ServiceRequest { id: string; created_at: string; [key: string]: any; }
 
