@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 
 /**
- * Image data and Pan direction interfaces preserved from the original source
+ * Interfaces and structure derived from original source
  */
 interface ImageData {
     id: string;
@@ -35,7 +35,6 @@ const AUDIO_PRO_IMAGES: ImageData[] = [
   { id: '12', url: 'https://images.unsplash.com/photo-1519632800561-809d80759a41?w=1920&q=80', order: 11 },
 ];
 
-// The definitive Rick Roll GIF
 const RICK_ROLL_IMG: ImageData = { 
   id: 'rick-roll', 
   url: 'https://c.tenor.com/SSY2V0RrU3IAAAAd/tenor.gif', 
@@ -47,11 +46,22 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     AUDIO_PRO_IMAGES[Math.floor(Math.random() * AUDIO_PRO_IMAGES.length)]
   );
   const [prevImage, setPrevImage] = useState<ImageData | null>(null);
+  const [imagesReady, setImagesReady] = useState<boolean>(false);
   const [panDirection, setPanDirection] = useState<PanDirection>({ startX: 0, startY: 0, endX: 100, endY: 0 });
   const [typedBuffer, setTypedBuffer] = useState<string>('');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Hidden keyboard trigger logic
+  // 1. RE-ADDED: Image preloader to signal the parent component to reveal
+  useEffect(() => {
+    if (!imagesReady) {
+      const img = new Image();
+      img.onload = () => { setImagesReady(true); onImagesLoaded?.(true); };
+      img.onerror = () => { setImagesReady(true); onImagesLoaded?.(true); };
+      img.src = currentImage.url;
+    }
+  }, [imagesReady, onImagesLoaded, currentImage.url]);
+
+  // Keyboard shortcut listener for "RICK"
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const key = e.key.toUpperCase();
@@ -68,7 +78,6 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentImage]);
 
-  // Handle Ken Burns pan directions
   useEffect(() => {
     const directions: PanDirection[] = [
       { startX: 0, startY: 0, endX: 100, endY: 0 },
@@ -79,12 +88,10 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     setPanDirection(directions[Math.floor(Math.random() * directions.length)]);
   }, [currentImage.id]);
 
-  // Main rotation loop with 0.2% probability injection
   useEffect(() => {
     const displayDuration = 15000; 
     intervalRef.current = setInterval(() => {
       setPrevImage(currentImage);
-      
       const isLucky = Math.random() < 0.002; 
       
       if (isLucky && currentImage.id !== 'rick-roll') {
@@ -99,7 +106,6 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [currentImage]);
 
-  // Transform calculation based on original zoomLevel logic
   const zoomLevel = 1.8;
   const maxPanPercent = 30;
   const getTransform = (x: number, y: number): string => {
