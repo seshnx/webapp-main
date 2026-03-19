@@ -35,7 +35,7 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
 
   // Trigger Fast Note Rain
   const triggerNoteRain = () => {
-    const rainCount = 10000; // Denser rain for faster movement
+    const rainCount = 1000; // Denser rain for faster movement
     const newNotes = Array.from({ length: rainCount }).map((_, i) => ({
       id: Date.now() + i,
       left: Math.random() * 100,
