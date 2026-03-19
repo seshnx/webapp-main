@@ -6,7 +6,8 @@
  */
 
 import { api } from '../../convex/_generated';
-import { useQuery, useMutation, Id } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
+import type { Id } from '../../convex/_generated/dataModel';
 
 // =====================================================
 // POST QUERIES
@@ -86,12 +87,12 @@ export function usePost(postId: string | undefined) {
  */
 export function usePostMutations() {
   const create = useMutation(api.social.createPost);
-  const delete = useMutation(api.social.deletePost);
+  const remove = useMutation(api.social.deletePost);
   const repost = useMutation(api.social.repostPost);
 
   return {
     create,
-    delete,
+    remove,
     repost,
   };
 }
@@ -129,11 +130,11 @@ export function useReplies(commentId: string | undefined, limit = 20, skip = 0) 
  */
 export function useCommentMutations() {
   const create = useMutation(api.social.createComment);
-  const delete = useMutation(api.social.deleteComment);
+  const remove = useMutation(api.social.deleteComment);
 
   return {
     create,
-    delete,
+    remove,
   };
 }
 
@@ -191,12 +192,49 @@ export function useFollowers(userId: string | undefined) {
 }
 
 /**
- * Get following for a user
+ * Get users the specified user is following
  */
 export function useFollowing(userId: string | undefined) {
   return useQuery(
     api.social.getFollowing,
     userId ? { userId: userId as Id<"users"> } : "skip"
+  );
+}
+
+/**
+ * Bulk get user profiles by Convex IDs
+ */
+export function useUsersByIds(userIds: string[] | undefined) {
+  return useQuery(
+    api.social.getUsersByIds,
+    userIds ? { userIds: userIds as Id<"users">[] } : "skip"
+  );
+}
+
+/**
+ * Search users by Convex query
+ */
+export function useUserSearch(searchQuery: string | undefined) {
+  return useQuery(
+    api.social.searchUsers,
+    searchQuery ? { searchQuery } : "skip"
+  );
+}
+
+/**
+ * Get trending hashtags
+ */
+export function useTrendingHashtags(limit?: number) {
+  return useQuery(api.social.getTrendingHashtags, { limit });
+}
+
+/**
+ * Search posts by hashtag
+ */
+export function usePostsByHashtag(hashtag: string | undefined) {
+  return useQuery(
+    api.social.getPostsByHashtag,
+    hashtag ? { hashtag } : "skip"
   );
 }
 
@@ -404,9 +442,25 @@ export async function getSavedPostsList(userId: string) {
   return [];
 }
 
-export async function repostPost(userId: string, originalPostId: string, comment?: string) {
+export async function updatePostCommentCount(postId: string, increment: number) {
+  console.warn('updatePostCommentCount: Use Convex mutation instead');
+}
+
+export async function updatePostSaveCount(postId: string, increment: number) {
+  console.warn('updatePostSaveCount: Use Convex mutation instead');
+}
+
+export async function updatePostRepostCount(postId: string, increment: number) {
+  console.warn('updatePostRepostCount: Use Convex mutation instead');
+}
+
+export async function updatePostReactionCount(postId: string, increment: number) {
+  console.warn('updatePostReactionCount: Use Convex mutation instead');
+}
+
+export async function repostPost(postId: string, userId: string, comment?: string) {
   console.warn('repostPost: Use usePostMutations hook instead');
-  return null;
+  return { id: 'stub-repost-id' };
 }
 
 export async function hasUserReposted(userId: string, postId: string): Promise<boolean> {
@@ -442,6 +496,10 @@ export default {
   useSavedPosts,
   useIsPostSaved,
   useBlockedUsers,
+  useUsersByIds,
+  useUserSearch,
+  useTrendingHashtags,
+  usePostsByHashtag,
 
   // Mutations (use these in components)
   usePostMutations,
@@ -472,5 +530,9 @@ export default {
   getSavedPostsList,
   repostPost,
   hasUserReposted,
+  updatePostCommentCount,
+  updatePostSaveCount,
+  updatePostRepostCount,
+  updatePostReactionCount,
   isSocialApiAvailable,
 };

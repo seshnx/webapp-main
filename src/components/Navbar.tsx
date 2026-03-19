@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect, MouseEvent, FormEvent } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated';
 import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical } from 'lucide-react';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
@@ -144,6 +146,11 @@ export default function Navbar({
     clearAll
   } = useNotifications(user?.id || user?.uid);
 
+  // Convex mutations for booking actions
+  const confirmBooking = useMutation(api.bookings.confirmBooking);
+  const cancelBooking = useMutation(api.bookings.cancelBooking);
+  const markAsReadMutation = useMutation(api.notifications.markAsRead);
+
   // Type guards
   const isUser = (user: any): user is { id?: string; uid?: string } => {
     return !!user?.id || !!user?.uid;
@@ -249,34 +256,19 @@ export default function Navbar({
     notificationId: string
   ): Promise<void> => {
       try {
-          // Dynamic import to avoid circular dependency
-          const { neonClient } = await import('../config/neon');
-          const supabase = neonClient;
+          if (action === 'accept') {
+              await confirmBooking({ bookingId: bookingId as any });
+          } else {
+              await cancelBooking({ 
+                  bookingId: bookingId as any, 
+                  cancelledBy: 'studio',
+                  reason: 'Declined via notification' 
+              });
+          }
 
-          if (!supabase) throw new Error('Neon client not initialized');
-
-          // Update booking status using the query function
-          const { query } = await import('../config/neon');
-          const { error: bookingError } = await query(
-              `UPDATE bookings
-               SET status = $1, responded_at = $2
-               WHERE id = $3`,
-              [action === 'accept' ? 'Confirmed' : 'Declined', new Date().toISOString(), bookingId]
-          );
-
-          if (bookingError) throw bookingError;
-
-          // Mark notification as actioned
-          if (notificationId && (user?.id || user?.uid)) {
-              const userId = user?.id || user?.uid;
-              const { error: notifError } = await query(
-                  `UPDATE notifications
-                   SET action_taken = $1, read = $2, updated_at = $3
-                   WHERE id = $4 AND user_id = $5`,
-                  [action, true, new Date().toISOString(), notificationId, userId]
-              );
-
-              if (notifError) throw notifError;
+          // Mark notification as read
+          if (notificationId) {
+              await markAsReadMutation({ notificationId: notificationId as any });
           }
       } catch (error) {
           console.error('Booking action failed:', error);
@@ -353,12 +345,12 @@ export default function Navbar({
       if (!timestamp) return '';
 
       let date: Date;
-      if ('toMillis' in timestamp) {
+      if (timestamp && typeof timestamp === 'object' && 'toMillis' in (timestamp as any)) {
         date = new Date((timestamp as { toMillis(): number }).toMillis());
       } else if (typeof timestamp === 'number') {
         date = new Date(timestamp);
       } else {
-        date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+        date = timestamp instanceof Date ? timestamp : new Date(timestamp as string);
       }
 
       const now = new Date();
@@ -604,7 +596,7 @@ export default function Navbar({
 
               {showNotifs && (
                   <NotificationsPanel
-                      notifications={notifications as UINotification[]}
+                      notifications={notifications as any}
                       unreadCount={unreadCount}
                       loading={notifsLoading}
                       onMarkAsRead={markAsRead}

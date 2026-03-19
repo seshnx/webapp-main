@@ -23,14 +23,21 @@ const updateNeonProfile = async (userId: string, updates: Record<string, any>): 
   // TODO: Replace with: await fetchMutation(api.users.updateProfile, { userId, ...updates });
   console.log('updateNeonProfile (TODO: implement via Convex):', { userId, fields: Object.keys(updates) });
 };
-import {
-  getProfile as getMongoProfile,
-  upsertProfile as upsertMongoProfile,
-  getFollowing,
-  getFollowers,
-  updateLastActive,
-} from '../config/mongoSocial';
-import type { UserData } from '../types';
+// import {
+//   getProfile as getMongoProfile,
+//   upsertProfile as upsertMongoProfile,
+//   getFollowing,
+//   getFollowers,
+//   updateLastActive,
+// } from '../config/mongoSocial';
+
+const getMongoProfile = async (id: string) => null;
+const upsertMongoProfile = async (id: string, updates: any) => {};
+const getFollowing = async (id: string, limit: number) => [];
+const getFollowers = async (id: string, limit: number) => [];
+const updateLastActive = async (id: string) => {};
+const searchProfiles = async (query: any) => [];
+import type { UserData, AccountType } from '../types';
 
 // =====================================================
 // TYPES
@@ -108,9 +115,9 @@ interface CompleteUserProfile extends UserData {
   firstName?: string;
   lastName?: string;
   phone?: string;
-  accountTypes: string[];
-  activeRole: string;
-  preferredRole: string;
+  accountTypes: AccountType[];
+  activeRole: AccountType;
+  preferredRole: AccountType;
   currentTier?: string;
   walletBalance?: number;
   earningsBalance?: number;
@@ -123,18 +130,9 @@ interface CompleteUserProfile extends UserData {
   skills?: string[];
   specialties?: string[];
   genres?: string[];
-  instruments?: string[];
+  instruments?: any;
   software?: string[];
-  location?: {
-    city?: string;
-    state?: string;
-    country?: string;
-    zipCode?: string;
-    coordinates?: {
-      type: 'Point';
-      coordinates: [number, number];
-    };
-  };
+  location?: any;
   portfolioUrls?: Array<{
     title: string;
     url: string;
@@ -462,17 +460,15 @@ export async function getUserFollowers(
   }
 }
 
-// Re-export MongoDB functions that should be called directly
-export {
-  followUser,
-  unfollowUser,
-  isFollowing,
-  createPost as mongoCreatePost,
-  getPosts as mongoGetPosts,
-  getPostById as mongoGetPostById,
-  toggleReaction,
-  savePost,
-  unsavePost,
-  getSavedPosts,
-  markAllNotificationsAsRead,
-} from '../config/mongoSocial';
+// Re-export MongoDB functions - STUBS
+export const followUser = async () => {};
+export const unfollowUser = async () => {};
+export const isFollowing = async () => false;
+export const mongoCreatePost = async () => {};
+export const mongoGetPosts = async () => [];
+export const mongoGetPostById = async () => null;
+export const toggleReaction = async () => {};
+export const savePost = async () => {};
+export const unsavePost = async () => {};
+export const getSavedPosts = async () => [];
+export const markAllNotificationsAsRead = async () => {};

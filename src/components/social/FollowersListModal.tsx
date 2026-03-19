@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { X, Users, UserCheck, Search, Loader2 } from 'lucide-react';
-import { getFollowers, getFollowing } from '../../services/socialApi';
-import { getProfilesByIds } from '../../config/mongoSocial';
+import { useFollowers, useFollowing } from '../../services/socialApi';
 import { motion, AnimatePresence } from 'framer-motion';
 import UserAvatar from '../shared/UserAvatar';
-import FollowButton, { FollowButtonProps } from './FollowButton';
+import FollowButton from './FollowButton';
 
 const TABS = {
     FOLLOWERS: 'followers' as const,
@@ -54,121 +53,33 @@ export default function FollowersListModal({
     const [activeTab, setActiveTab] = useState<'followers' | 'following'>(
         initialTab === 'following' ? 'following' : 'followers'
     );
-    const [followers, setFollowers] = useState<ListUser[]>([]);
-    const [following, setFollowing] = useState<ListUser[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
     const [searchQuery, setSearchQuery] = useState<string>('');
+    const followersData = useFollowers(userId);
+    const followingData = useFollowing(userId);
 
-    // Fetch followers
-    useEffect(() => {
-        if (!userId) return;
+    const followers = useMemo(() => {
+        if (!followersData) return [];
+        return followersData.map((f: any) => ({
+            userId: f._id,
+            displayName: f.displayName,
+            photoURL: f.photoURL,
+            role: f.role,
+            timestamp: new Date(f.timestamp).toISOString()
+        }));
+    }, [followersData]);
 
-        setLoading(true);
+    const following = useMemo(() => {
+        if (!followingData) return [];
+        return followingData.map((f: any) => ({
+            userId: f._id,
+            displayName: f.displayName,
+            photoURL: f.photoURL,
+            role: f.role,
+            timestamp: new Date(f.timestamp).toISOString()
+        }));
+    }, [followingData]);
 
-        const loadFollowers = async () => {
-            try {
-                // Get follower IDs
-                const followerIds = await getFollowers(userId);
-
-                if (followerIds.length === 0) {
-                    setFollowers([]);
-                    setLoading(false);
-                    return;
-                }
-
-                // Get profile data for all followers
-                const profiles = await getProfilesByIds(followerIds);
-
-                // Create a map for easy lookup
-                const profileMap: Record<string, any> = {};
-                profiles.forEach(p => {
-                    profileMap[p.user_id || p.id] = p;
-                });
-
-                // Map follower IDs to profiles with timestamps
-                const followersList: ListUser[] = followerIds.map(fid => {
-                    const profile = profileMap[fid];
-                    return {
-                        userId: fid,
-                        displayName: profile?.display_name || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'User',
-                        photoURL: profile?.avatar_url || profile?.photo_url,
-                        role: profile?.active_role || profile?.role,
-                        timestamp: profile?.created_at || new Date().toISOString()
-                    };
-                });
-
-                setFollowers(followersList);
-                setLoading(false);
-            } catch (error) {
-                console.error('Followers fetch error:', error);
-                setLoading(false);
-            }
-        };
-
-        loadFollowers();
-
-        // Set up polling (every 30 seconds)
-        const pollInterval = setInterval(() => {
-            loadFollowers();
-        }, 30000);
-
-        return () => {
-            clearInterval(pollInterval);
-        };
-    }, [userId]);
-
-    // Fetch following
-    useEffect(() => {
-        if (!userId) return;
-
-        const loadFollowing = async () => {
-            try {
-                // Get following IDs
-                const followingIds = await getFollowing(userId);
-
-                if (followingIds.length === 0) {
-                    setFollowing([]);
-                    return;
-                }
-
-                // Get profile data for all following
-                const profiles = await getProfilesByIds(followingIds);
-
-                // Create a map for easy lookup
-                const profileMap: Record<string, any> = {};
-                profiles.forEach(p => {
-                    profileMap[p.user_id || p.id] = p;
-                });
-
-                // Map following IDs to profiles with timestamps
-                const followingList: ListUser[] = followingIds.map(fid => {
-                    const profile = profileMap[fid];
-                    return {
-                        userId: fid,
-                        displayName: profile?.display_name || `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || 'User',
-                        photoURL: profile?.avatar_url || profile?.photo_url,
-                        role: profile?.active_role || profile?.role,
-                        timestamp: profile?.created_at || new Date().toISOString()
-                    };
-                });
-
-                setFollowing(followingList);
-            } catch (error) {
-                console.error('Following fetch error:', error);
-            }
-        };
-
-        loadFollowing();
-
-        // Set up polling (every 30 seconds)
-        const pollInterval = setInterval(() => {
-            loadFollowing();
-        }, 30000);
-
-        return () => {
-            clearInterval(pollInterval);
-        };
-    }, [userId]);
+    const loading = activeTab === TABS.FOLLOWERS ? !followersData : !followingData;
 
     const activeList = activeTab === TABS.FOLLOWERS ? followers : following;
 

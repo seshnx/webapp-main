@@ -6,7 +6,8 @@
  */
 
 import { api } from '../../convex/_generated';
-import { useQuery, useMutation, Id } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
+import type { Id } from '../../convex/_generated/dataModel';
 import * as Sentry from '@sentry/react';
 
 // =====================================================
@@ -265,7 +266,7 @@ export function useEnrollmentsByCourse(
 export function useEnrollmentMutations() {
   const enroll = useMutation(api.edu.enrollStudent);
   const update = useMutation(api.edu.updateEnrollment);
-  const withdraw = useMutation(api.eu.withdrawFromCourse);
+  const withdraw = useMutation(api.edu.withdrawFromCourse);
 
   return {
     enroll,
@@ -435,9 +436,25 @@ export async function updateInternshipData(internshipId: string, updates: any) {
   throw new Error('Use Convex mutation directly');
 }
 
-// =====================================================
-// EXPORTS
-// =====================================================
+export async function fetchStudentByUserAndSchool(userId: string, schoolId: string) {
+  console.warn('fetchStudentByUserAndSchool: Use useStudentByUserAndSchool hook instead');
+  return null;
+}
+
+export async function fetchStaffByUserAndSchool(userId: string, schoolId: string) {
+  console.warn('fetchStaffByUserAndSchool: Use useStaffByUserAndSchool hook instead');
+  return null;
+}
+
+export async function checkInStudent(userId: string, schoolId: string) {
+  console.warn('checkInStudent: Use Convex mutations directly');
+  return { success: false, error: 'Not implemented' };
+}
+
+export async function checkOutStudent(userId: string, schoolId: string) {
+  console.warn('checkOutStudent: Use Convex mutations directly');
+  return { success: false, error: 'Not implemented' };
+}
 
 export default {
   // Queries (use these in components)
@@ -486,4 +503,8 @@ export default {
   fetchInternships,
   createInternship,
   updateInternshipData,
+  fetchStudentByUserAndSchool,
+  fetchStaffByUserAndSchool,
+  checkInStudent,
+  checkOutStudent,
 };

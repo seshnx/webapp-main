@@ -151,7 +151,7 @@ export default function CommentSection({
             await updatePostCommentCount(post.id, 1);
 
             // Reload comments to show the new one
-            await loadComments();
+            await loadCommentsFromNeon();
 
             // Send notification to post author (if not commenting on own post)
             if (post.userId !== userId) {
@@ -182,7 +182,7 @@ export default function CommentSection({
         try {
             await deleteComment(commentId);
             await updatePostCommentCount(post.id, -1);
-            await loadComments();
+            await loadCommentsFromNeon();
         } catch (e) {
             console.error('Delete comment error:', e);
         }

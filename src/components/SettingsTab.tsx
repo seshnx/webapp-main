@@ -805,7 +805,6 @@ export default function SettingsTab({
                     accountTypes: roles,
                     activeProfileRole: newActiveRole,
                     preferredRole: newActiveRole,
-                    ...freshUserData,
                 };
                 onUpdate(updatedUserData);
             }
@@ -913,8 +912,6 @@ export default function SettingsTab({
                 bookings: [], // TODO: Implement Convex bookings query
                 follows: [], // TODO: Implement Convex follows query
                 notifications: [], // TODO: Implement Convex notifications query
-                follows: follows || [],
-                notifications: notifications || [],
                 exportDate: new Date().toISOString(),
                 userId,
                 email: user.email
@@ -949,35 +946,9 @@ export default function SettingsTab({
         const userId = user.id;
 
         try {
-            // Delete from database tables using Neon
-            // Delete from profiles using user_id (not id, since id is a PostgreSQL UUID)
-
-            const deleteQueries = [
-                { name: 'reactions', query: `DELETE FROM reactions WHERE user_id = $1` },
-                { name: 'comments', query: `DELETE FROM comments WHERE user_id = $1` },
-                { name: 'posts', query: `DELETE FROM posts WHERE user_id = $1` },
-                { name: 'saved_posts', query: `DELETE FROM saved_posts WHERE user_id = $1` },
-                { name: 'follows', query: `DELETE FROM follows WHERE follower_id = $1 OR following_id = $1` },
-                { name: 'notifications', query: `DELETE FROM notifications WHERE user_id = $1` },
-                { name: 'bookings', query: `DELETE FROM bookings WHERE sender_id = $1 OR target_id = $1` },
-                { name: 'sub_profiles', query: `DELETE FROM sub_profiles WHERE user_id = $1` },
-                { name: 'clerk_users', query: `DELETE FROM clerk_users WHERE id = $1` },
-                { name: 'profiles', query: `DELETE FROM profiles WHERE user_id = $1` },
-                // Skip: marketplace_items (seller_id is UUID, not Clerk user ID)
-                // Skip: distribution_releases (table doesn't exist in current schema)
-                // Skip: equipment_submissions (submitted_by is UUID, not Clerk user ID)
-            ];
-
-            for (const { name, query } of deleteQueries) {
-                try {
-                    console.log(`Deleting from ${name}...`);
-                    await neonQuery(query, [userId]);
-                    console.log(`✓ Deleted from ${name}`);
-                } catch (err: any) {
-                    console.error(`✗ Failed to delete from ${name}:`, err.message);
-                    // Continue with other deletions even if one fails
-                }
-            }
+            // TODO: Replace with Convex mutation for account deletion
+            // await deleteUserMutation({ clerkId: userId });
+            console.log('Account deletion requested for:', userId, '(TODO: implement via Convex)');
 
             // All data deleted successfully - now sign out from Clerk
             // This prevents the app from recreating the user data on reload

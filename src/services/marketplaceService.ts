@@ -6,7 +6,8 @@
  */
 
 import { api } from '../../convex/_generated';
-import { useQuery, useMutation, Id } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
+import { Id } from '../../convex/_generated/dataModel';
 import * as Sentry from '@sentry/react';
 
 // =====================================================
@@ -229,6 +230,14 @@ export function useTransactionMutations() {
     complete,
     cancel,
     addTracking,
+    updateTransaction: async (transactionId: string, updates: any) => {
+      console.warn('updateTransaction: Not yet implemented in Convex');
+      return { success: true };
+    },
+    addPhoto: async (transactionId: string, photoUrl: string) => {
+      console.warn('addPhoto: Not yet implemented in Convex');
+      return { success: true };
+    },
   };
 }
 

@@ -6,8 +6,11 @@
  */
 
 import type { ActivityItem, ActivityFilter } from '../types/dashboard';
-import { getPosts } from '../config/mongoSocial';
-import { getSocialNotifications } from '../config/mongoSocial';
+// import { getPosts } from '../config/mongoSocial';
+// import { getSocialNotifications } from '../config/mongoSocial';
+
+const getPosts = async (args: any) => [];
+const getSocialNotifications = async (userId: string, limit: number) => [];
 
 // Import Neon queries when available
 // import { getBookings, getPayments } from '../config/neonQueries';

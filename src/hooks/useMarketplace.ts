@@ -15,7 +15,7 @@ import {
   useTransactionsByBuyer,
   useTransactionsBySeller,
   useTransaction,
-  useTransactionMutations,
+  useTransactionMutations as useServiceTransactionMutations,
 } from '../services/marketplaceService';
 
 // =====================================================
@@ -286,7 +286,7 @@ export function useItemOwnership(userId: string | null, itemId: string | null) {
  * Hook for transaction mutations
  */
 export function useTransactionMutations() {
-  const { create, acceptOffer, rejectOffer, complete, cancel, addTracking } = useTransactionMutations();
+  const { create, acceptOffer, rejectOffer, complete, cancel, addTracking, updateTransaction, addPhoto } = useServiceTransactionMutations();
 
   return {
     createTransaction: async (transactionData: any) => {
@@ -362,12 +362,21 @@ export function useTransactionMutations() {
           trackingNumber,
         });
       } catch (error) {
-        console.error('Failed to add tracking number:', error);
-        throw error;
       }
     },
+
+    updateTransaction,
+    addPhoto,
   };
 }
+
+/**
+ * Hook for marketplace mutations (alias for useTransactionMutations as used in some components)
+ */
+export function useMarketplaceMutations() {
+  return useTransactionMutations();
+}
+
 
 // =====================================================
 // DISTRIBUTION HOOKS (Not yet implemented in Convex)

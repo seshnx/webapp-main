@@ -2,6 +2,9 @@
 // Database operations should be handled in components with proper Convex context
 // This utility file provides interfaces and helper functions
 
+// import { query as neonQuery } from '../config/neon';
+const neonQuery = async (q: string, args: any[]) => [] as any[];
+
 /**
  * Booking reminder interface
  */

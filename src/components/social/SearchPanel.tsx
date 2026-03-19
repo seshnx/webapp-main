@@ -1,17 +1,15 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Hash, Users, FileText, X, TrendingUp } from 'lucide-react';
 import {
-  searchPosts,
-  searchUsers,
-  getTrendingHashtags,
-  getPostsByHashtag
-} from '../../config/mongoSocial';
+  useSearchPosts,
+  useUserSearch,
+  useTrendingHashtags,
+  usePostsByHashtag
+} from '../../services/socialApi';
 import { useNavigate } from 'react-router-dom';
 import UserAvatar from '../shared/UserAvatar';
 import PostCard from './PostCard';
-import type { ClerkUser } from '../../config/mongoSocial';
-import type { Post } from '../../config/mongoSocial';
 
 /**
  * SearchPanel Props
@@ -41,86 +39,45 @@ const SearchPanel: React.FC<SearchPanelProps> = ({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'posts' | 'users' | 'hashtags'>('posts');
-  const [searchResults, setSearchResults] = useState<{
-    posts: Post[];
-    users: ClerkUser[];
-    hashtags: { hashtag: string; count: number }[];
-  }>({
-    posts: [],
-    users: [],
-    hashtags: []
-  });
-  const [loading, setLoading] = useState(false);
-  const [trendingHashtags, setTrendingHashtags] = useState<{ hashtag: string; count: number }[]>([]);
-
-  // Focus input when opened
-  useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 100);
-    }
-  }, [isOpen]);
-
-  // Load trending hashtags on mount
-  useEffect(() => {
-    const loadTrending = async () => {
-      try {
-        const trending = await getTrendingHashtags(10);
-        setTrendingHashtags(trending);
-      } catch (error) {
-        console.error('Error loading trending hashtags:', error);
-      }
+  const trendingHashtags = useTrendingHashtags(10) || [];
+  
+  const searchedPosts = useSearchPosts(activeTab === 'posts' && searchQuery.trim() ? searchQuery : undefined);
+  const searchedUsers = useUserSearch(activeTab === 'users' && searchQuery.trim() ? searchQuery : undefined);
+  
+  const searchResults = useMemo(() => {
+    return {
+      posts: (searchedPosts || []).map((post: any) => ({
+        ...post,
+        id: post._id,
+        display_name: post.authorName,
+        photo_url: post.authorPhoto,
+        username: post.authorUsername,
+        reaction_count: post.engagement?.likesCount || 0,
+        comment_count: post.engagement?.commentsCount || 0,
+        save_count: post.engagement?.savesCount || 0,
+      })),
+      users: (searchedUsers || []).map((user: any) => ({
+        id: user.clerkId || user._id,
+        username: user.username,
+        first_name: user.displayName?.split(' ')[0] || '',
+        last_name: user.displayName?.split(' ').slice(1).join(' ') || '',
+        profile_photo_url: user.avatarUrl || user.photoURL,
+        bio: user.bio,
+        account_types: user.talentSubRole ? [user.talentSubRole] : [user.activeRole]
+      })),
+      hashtags: trendingHashtags.filter((h: any) =>
+        h.hashtag.toLowerCase().includes(searchQuery.toLowerCase())
+      )
     };
-    loadTrending();
-  }, []);
+  }, [searchedPosts, searchedUsers, trendingHashtags, searchQuery]);
 
-  // Debounced search
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      if (searchQuery.trim()) {
-        performSearch(searchQuery);
-      } else {
-        setSearchResults({ posts: [], users: [], hashtags: [] });
-      }
-    }, 300);
+  const loading = searchQuery.trim() !== '' && (
+    (activeTab === 'posts' && !searchedPosts) ||
+    (activeTab === 'users' && !searchedUsers)
+  );
 
-    return () => clearTimeout(timeoutId);
-  }, [searchQuery, activeTab, userId]);
-
-  const performSearch = async (query: string) => {
-    setLoading(true);
-    try {
-      switch (activeTab) {
-        case 'posts':
-          const posts = await searchPosts({
-            query,
-            userId,
-            limit: 20
-          });
-          setSearchResults(prev => ({ ...prev, posts }));
-          break;
-
-        case 'users':
-          const users = await searchUsers({
-            query,
-            limit: 20
-          });
-          setSearchResults(prev => ({ ...prev, users }));
-          break;
-
-        case 'hashtags':
-          // For hashtags, we search locally in trending or use a different approach
-          // Since getTrendingHashtags doesn't support search, we'll filter client-side
-          const filteredHashtags = trendingHashtags.filter(h =>
-            h.hashtag.toLowerCase().includes(query.toLowerCase())
-          );
-          setSearchResults(prev => ({ ...prev, hashtags: filteredHashtags }));
-          break;
-      }
-    } catch (error) {
-      console.error('Search error:', error);
-    } finally {
-      setLoading(false);
-    }
+  const performSearch = () => {
+    // Convex hooks handle this automatically via reactive queries
   };
 
   const handleHashtagClick = async (hashtag: string) => {
@@ -303,7 +260,7 @@ const SearchPanel: React.FC<SearchPanelProps> = ({
                             >
                               <UserAvatar
                                 src={user.profile_photo_url}
-                                alt={user.username || user.email || 'User'}
+                                name={user.username || user.email || 'User'}
                                 size="md"
                               />
                               <div className="flex-1 min-w-0">

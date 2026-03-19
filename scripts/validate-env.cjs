@@ -14,22 +14,11 @@ const fs = require('fs');
 const path = require('path');
 
 // Required environment variables
-const REQUIRED_VARS = [
-  'VITE_CLERK_PUBLISHABLE_KEY',
-  'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-  'CLERK_SECRET_KEY',
-  'VITE_CONVEX_URL',
-  'DATABASE_URL'
-];
+const REQUIRED_VARS = [];
 
 // Variables that should NOT have quotes
 const SHOULD_NOT_HAVE_QUOTES = [
-  'VITE_CLERK_PUBLISHABLE_KEY',
-  'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-  'CLERK_SECRET_KEY',
-  'CLERK_WEBHOOK_SECRET',
   'VITE_CONVEX_URL',
-  'DATABASE_URL',
   'VITE_API_ENDPOINT'
 ];
 

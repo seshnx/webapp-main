@@ -668,10 +668,26 @@ export const getFollowers = query({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const follows = await ctx.db
       .query("follows")
       .withIndex("by_following", (q) => q.eq("followingId", args.userId))
       .collect();
+
+    const results = [];
+    for (const f of follows) {
+      const user = await ctx.db.get(f.followerId);
+      if (user) {
+        results.push({
+          _id: user._id,
+          clerkId: user.clerkId,
+          displayName: user.displayName || user.username || "User",
+          photoURL: user.avatarUrl,
+          role: user.talentSubRole || user.activeRole,
+          timestamp: f.createdAt,
+        });
+      }
+    }
+    return results;
   },
 });
 
@@ -683,10 +699,26 @@ export const getFollowing = query({
     userId: v.id("users"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const follows = await ctx.db
       .query("follows")
       .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
       .collect();
+
+    const results = [];
+    for (const f of follows) {
+      const user = await ctx.db.get(f.followingId);
+      if (user) {
+        results.push({
+          _id: user._id,
+          clerkId: user.clerkId,
+          displayName: user.displayName || user.username || "User",
+          photoURL: user.avatarUrl,
+          role: user.talentSubRole || user.activeRole,
+          timestamp: f.createdAt,
+        });
+      }
+    }
+    return results;
   },
 });
 
@@ -872,5 +904,111 @@ export const unsavePost = mutation({
     }
 
     return { saved: false };
+  },
+});
+/**
+ * Bulk get user profiles by Convex IDs
+ */
+/**
+ * Search users by name or username
+ */
+export const searchUsers = query({
+  args: {
+    searchQuery: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    const query = args.searchQuery.toLowerCase();
+
+    const allUsers = await ctx.db
+      .query("users")
+      .take(100); // Simple scan for now
+
+    return allUsers.filter(user => 
+      user.displayName?.toLowerCase().includes(query) ||
+      user.username?.toLowerCase().includes(query) ||
+      user.clerkId.toLowerCase().includes(query)
+    ).slice(0, limit);
+  },
+});
+
+/**
+ * Get trending hashtags
+ */
+export const getTrendingHashtags = query({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 10;
+    
+    const recentPosts = await ctx.db
+      .query("posts")
+      .withIndex("by_created")
+      .order("desc")
+      .take(200);
+
+    const counts: Record<string, number> = {};
+    recentPosts.forEach(post => {
+      post.hashtags?.forEach(tag => {
+        counts[tag] = (counts[tag] || 0) + 1;
+      });
+    });
+
+    return Object.entries(counts)
+      .map(([hashtag, count]) => ({ hashtag, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, limit);
+  },
+});
+
+/**
+ * Get posts by hashtag
+ */
+export const getPostsByHashtag = query({
+  args: {
+    hashtag: v.string(),
+    limit: v.optional(v.number()),
+    skip: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    const skip = args.skip || 0;
+    const tag = args.hashtag.toLowerCase().replace("#", "");
+
+    const allPosts = await ctx.db
+      .query("posts")
+      .withIndex("by_created")
+      .order("desc")
+      .take(200);
+
+    const filtered = allPosts.filter(post => 
+      post.hashtags?.some(h => h.toLowerCase() === tag)
+    );
+
+    return filtered.slice(skip, skip + limit);
+  },
+});
+
+export const getUsersByIds = query({
+  args: {
+    userIds: v.array(v.id("users")),
+  },
+  handler: async (ctx, args) => {
+    const results = [];
+    for (const id of args.userIds) {
+      const user = await ctx.db.get(id);
+      if (user) {
+        results.push({
+          _id: user._id,
+          clerkId: user.clerkId,
+          displayName: user.displayName || user.username || "User",
+          photoURL: user.avatarUrl,
+          role: user.talentSubRole || user.activeRole,
+        });
+      }
+    }
+    return results;
   },
 });

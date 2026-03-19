@@ -339,6 +339,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                                 initialData={subProfiles[selectedRole] || {}}
                                 schema={PROFILE_SCHEMAS[selectedRole] || []}
                                 onSave={onSubProfileUpdate}
+                                subProfiles={subProfiles}
                             />
                         )}
                     </div>
@@ -351,7 +352,10 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
 }
 
 // ... (DynamicSubProfileForm remains unchanged from previous version) ...
-function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSave }) {
+function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSave, subProfiles }) {
+    const updateSubProfileMutation = useMutation(api.users.updateSubProfile);
+    const createSubProfileMutation = useMutation(api.users.createSubProfile);
+    const updateProfileMutation = useMutation(api.users.updateProfile);
     const [formData, setFormData] = useState(initialData);
     const [isSaving, setIsSaving] = useState(false);
     const [followMainProfile, setFollowMainProfile] = useState(initialData.followMainProfile ?? true);
@@ -393,14 +397,14 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
             const existingSubProfile = subProfiles?.[role];
             if (existingSubProfile) {
                 await updateSubProfileMutation({
-                    subProfileId: existingSubProfile._id as any,
+                    subProfileId: existingSubProfile._id,
                     displayName: effectiveName,
                     bio: dataToSave.bio,
                     location: dataToSave.location,
                 });
             } else {
                 await createSubProfileMutation({
-                    userId: userId as any,
+                    userId: userId,
                     role: role,
                     displayName: effectiveName,
                     bio: dataToSave.bio,

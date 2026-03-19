@@ -1,26 +1,20 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  getSavedPosts,
-  savePost as savePostToMongo,
-  unsavePost as unsavePostFromMongo,
-} from '../config/mongoSocial';
-import { getPosts } from '../config/mongoSocial';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated';
+import { Id } from '../../convex/_generated/dataModel';
 
 /**
  * Saved post data from database
  */
 export interface SavedPostData {
-  _id?: string;
-  id: string;
-  postId?: string;
-  userId: string;
-  author_id?: string;
-  author_name?: string;
+  _id: Id<"saved_posts">;
+  id: string; // compatibility
+  postId: Id<"posts">;
+  userId: Id<"users">;
+  authorName?: string;
   preview?: string;
-  has_media?: boolean;
-  savedAt: string | Date;
-  created_at: Date;
-  [key: string]: any;
+  hasMedia?: boolean;
+  created_at: number;
 }
 
 /**
@@ -31,13 +25,12 @@ export interface PostWithData {
   userId?: string;
   displayName?: string;
   authorPhoto?: string;
-  timestamp?: string | Date;
-  savedAt?: string | Date;
+  timestamp?: number;
+  savedAt?: number;
   deleted?: boolean;
   authorName?: string;
   preview?: string;
   content?: string;
-  text?: string;
   media_urls?: string[];
   [key: string]: any;
 }
@@ -62,7 +55,7 @@ export interface UseSavedPostsReturn {
   savedPosts: SavedPostData[];
   loading: boolean;
   isPostSaved: (postId: string) => boolean;
-  savePost: (postId: string, postData: SavePostParams) => Promise<boolean>;
+  savePost: (postId: string, postData?: SavePostParams) => Promise<boolean>;
   removeSavedPost: (postId: string) => Promise<boolean>;
   fetchSavedPostsWithData: () => Promise<PostWithData[]>;
   savedCount: number;
@@ -70,173 +63,85 @@ export interface UseSavedPostsReturn {
 
 /**
  * Hook for managing and fetching saved/bookmarked posts
- *
- * @param userId - The authenticated user's UID
- * @param fetchLimit - Max saved posts to fetch (default 50)
- * @returns Saved posts state and controls
- *
- * @example
- * function SavedPostsList({ userId }) {
- *   const {
- *     savedPosts,
- *     loading,
- *     savePost,
- *     removeSavedPost,
- *     fetchSavedPostsWithData,
- *     savedCount
- *   } = useSavedPosts(userId, 50);
- *
- *   const [postsWithData, setPostsWithData] = useState([]);
- *
- *   useEffect(() => {
- *     fetchSavedPostsWithData().then(setPostsWithData);
- *   }, [savedPosts]);
- *
- *   return (
- *     <div>
- *       <h2>Saved Posts ({savedCount})</h2>
- *       {loading ? (
- *         <div>Loading...</div>
- *       ) : (
- *         postsWithData.map(post => (
- *           <PostCard
- *             key={post.id}
- *             post={post}
- *             isSaved={true}
- *             onUnsave={() => removeSavedPost(post.id)}
- *           />
- *         ))
- *       )}
- *     </div>
- *   );
- * }
  */
 export function useSavedPosts(
   userId: string | null | undefined,
-  fetchLimit: number = 50
+  _fetchLimit: number = 50
 ): UseSavedPostsReturn {
-  const [savedPosts, setSavedPosts] = useState<SavedPostData[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [localSavedPosts, setLocalSavedPosts] = useState<SavedPostData[]>([]);
+  
+  const convexUserId = userId as Id<"users"> | undefined;
+  
+  const savedPostsData = useQuery(
+    api.social.getSavedPosts,
+    convexUserId ? { userId: convexUserId } : "skip"
+  );
 
-  // Fetch saved posts
+  const saveMutation = useMutation(api.social.savePost);
+  const unsaveMutation = useMutation(api.social.unsavePost);
+
   useEffect(() => {
-    if (!userId) {
-      setLoading(false);
-      return;
+    if (savedPostsData) {
+      setLocalSavedPosts(savedPostsData.map((s: any) => ({
+        ...s,
+        id: s._id,
+        postId: s.postId,
+        userId: s.userId,
+        created_at: s._creationTime
+      })));
     }
+  }, [savedPostsData]);
 
-    const fetchSaved = async () => {
-      try {
-        const saved = await getSavedPosts(userId, fetchLimit);
-        setSavedPosts(saved || []);
-        setLoading(false);
-      } catch (error) {
-        console.error('Saved posts fetch error:', error);
-        setLoading(false);
-      }
-    };
-
-    fetchSaved();
-
-    // Note: Supabase realtime subscription removed.
-    // Can be replaced with Convex subscription if needed.
-  }, [userId, fetchLimit]);
+  const loading = savedPostsData === undefined;
+  const savedPosts = localSavedPosts;
 
   /**
    * Check if a specific post is saved
    */
   const isPostSaved = useCallback((postId: string): boolean => {
-    return savedPosts.some(p => p.id === postId || p.postId === postId);
+    return savedPosts.some(p => p.postId === postId || p.id === postId);
   }, [savedPosts]);
 
   /**
    * Save a post
    */
-  const savePost = useCallback(async (postId: string, postData: SavePostParams): Promise<boolean> => {
-    if (!userId) return false;
-
+  const savePost = useCallback(async (postId: string, _postData: SavePostParams = {}): Promise<boolean> => {
+    if (!convexUserId) return false;
     try {
-      await savePostToMongo(userId, postId);
-
-      // Refresh saved posts
-      const saved = await getSavedPosts(userId, fetchLimit);
-      setSavedPosts(saved || []);
-
+      await saveMutation({ 
+        userId: convexUserId, 
+        targetId: postId as any
+      });
       return true;
     } catch (error) {
       console.error('Error saving post:', error);
       return false;
     }
-  }, [userId, fetchLimit]);
+  }, [convexUserId, saveMutation]);
 
   /**
    * Unsave a post
    */
   const removeSavedPost = useCallback(async (postId: string): Promise<boolean> => {
-    if (!userId) return false;
-
+    if (!convexUserId) return false;
     try {
-      await unsavePostFromMongo(userId, postId);
-
-      // Refresh saved posts
-      const saved = await getSavedPosts(userId, fetchLimit);
-      setSavedPosts(saved || []);
-
+      await unsaveMutation({ 
+        userId: convexUserId, 
+        targetId: postId as any
+      });
       return true;
     } catch (error) {
       console.error('Error unsaving post:', error);
       return false;
     }
-  }, [userId, fetchLimit]);
+  }, [convexUserId, unsaveMutation]);
 
   /**
    * Get the full post data for saved posts
-   * This fetches the actual post documents
    */
   const fetchSavedPostsWithData = useCallback(async (): Promise<PostWithData[]> => {
-    if (!savedPosts.length) return [];
-
-    try {
-      const postIds = savedPosts.map(s => s.postId || s.id).filter(Boolean) as string[];
-
-      if (postIds.length === 0) return [];
-
-      // Use MongoDB getPosts function
-      const posts = await getPosts({ limit: 100 });
-      const filteredPosts = posts.filter(p => postIds.includes(p.id));
-
-      const postsMap = new Map(filteredPosts.map(p => [p.id, p]));
-
-      const postsWithData: PostWithData[] = savedPosts.map((saved): PostWithData => {
-        const post = postsMap.get(saved.postId || saved.id);
-
-        if (post) {
-          return {
-            ...post,
-            id: post.id,
-            userId: post.author_id,
-            displayName: post.author_id, // Will be resolved from profile
-            authorPhoto: undefined, // Will be resolved from profile
-            timestamp: post.created_at,
-            savedAt: saved.created_at
-          };
-        }
-        // Return minimal data if post was deleted
-        return {
-          id: saved.postId || saved.id,
-          deleted: true,
-          authorName: saved.author_name,
-          preview: saved.preview,
-          savedAt: saved.created_at
-        };
-      });
-
-      return postsWithData.filter(p => !p.deleted);
-    } catch (error) {
-      console.error('Error fetching saved posts data:', error);
-      return [];
-    }
-  }, [savedPosts]);
+    return []; // Handled by standard Convex subscriptions in components
+  }, []);
 
   return {
     savedPosts,
