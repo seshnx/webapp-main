@@ -20,19 +20,20 @@ export interface AuthWizardBackgroundProps {
     onImagesLoaded?: (loaded: boolean) => void;
 }
 
+// 1. UPDATED: Verified active URLs for 2026
 const AUDIO_PRO_IMAGES: ImageData[] = [
-  { id: '1', url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1920&q=80', order: 0 },
-  { id: '2', url: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1920&q=80', order: 1 },
-  { id: '3', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1920&q=80', order: 2 },
-  { id: '4', url: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1920&q=80', order: 3 },
-  { id: '5', url: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1920&q=80', order: 4 },
-  { id: '6', url: 'https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1920&q=80', order: 5 },
-  { id: '7', url: 'https://images.unsplash.com/photo-1525362035658-5553ee27bbcb?w=1920&q=80', order: 6 },
-  { id: '8', url: 'https://images.unsplash.com/photo-1551710029-607e06bd45ff?w=1920&q=80', order: 7 },
-  { id: '9', url: 'https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?w=1920&q=80', order: 8 },
-  { id: '10', url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=1920&q=80', order: 9 },
-  { id: '11', url: 'https://images.unsplash.com/photo-1461360370896-922624d12aa1?w=1920&q=80', order: 10 },
-  { id: '12', url: 'https://images.unsplash.com/photo-1519632800561-809d80759a41?w=1920&q=80', order: 11 },
+  { id: '1', url: 'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=1920&q=80', order: 0 }, // Console
+  { id: '2', url: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=1920&q=80', order: 1 }, // Keys
+  { id: '3', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=1920&q=80', order: 2 }, // DJ
+  { id: '4', url: 'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=1920&q=80', order: 3 }, // Session
+  { id: '5', url: 'https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1920&q=80', order: 4 }, // Monitors
+  { id: '6', url: 'https://images.unsplash.com/photo-1516280440614-37939bbacd81?w=1920&q=80', order: 5 }, // Faders
+  { id: '7', url: 'https://images.unsplash.com/photo-1525413183858-f8facf07662c?w=1920&q=80', order: 6 }, // Mic (New Verified)
+  { id: '8', url: 'https://images.unsplash.com/photo-1551710029-607e06bd45ff?w=1920&q=80', order: 7 }, // Modular
+  { id: '9', url: 'https://images.unsplash.com/photo-1520523839897-bd0b52f945a0?w=1920&q=80', order: 8 }, // Engineer
+  { id: '10', url: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=1920&q=80', order: 9 }, // VU Meters
+  { id: '11', url: 'https://images.unsplash.com/photo-1603048588665-791ca8aea617?w=1920&q=80', order: 10 }, // Vinyl (New Verified)
+  { id: '12', url: 'https://images.unsplash.com/photo-1550985616-10810253b84d?w=1920&q=80', order: 11 }, // Pedals (New Verified)
 ];
 
 const RICK_ROLL_IMG: ImageData = { 
@@ -51,7 +52,7 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
   const [typedBuffer, setTypedBuffer] = useState<string>('');
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // 1. RE-ADDED: Image preloader to signal the parent component to reveal
+  // 2. Preloading reveal logic
   useEffect(() => {
     if (!imagesReady) {
       const img = new Image();
@@ -61,9 +62,16 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     }
   }, [imagesReady, onImagesLoaded, currentImage.url]);
 
-  // Keyboard shortcut listener for "RICK"
+  // 3. Keyboard shortcut with Input Protection
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const isTypingInField = 
+        e.target instanceof HTMLInputElement || 
+        e.target instanceof HTMLTextAreaElement ||
+        (e.target as HTMLElement).isContentEditable;
+
+      if (isTypingInField) return;
+
       const key = e.key.toUpperCase();
       setTypedBuffer(prev => {
         const next = (prev + key).slice(-4);
@@ -78,16 +86,7 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentImage]);
 
-  useEffect(() => {
-    const directions: PanDirection[] = [
-      { startX: 0, startY: 0, endX: 100, endY: 0 },
-      { startX: 100, startY: 0, endX: 0, endY: 0 },
-      { startX: 0, startY: 0, endX: 0, endY: 100 },
-      { startX: 0, startY: 100, endX: 0, endY: 0 },
-    ];
-    setPanDirection(directions[Math.floor(Math.random() * directions.length)]);
-  }, [currentImage.id]);
-
+  // Rotation and 0.2% probability logic
   useEffect(() => {
     const displayDuration = 15000; 
     intervalRef.current = setInterval(() => {
@@ -105,6 +104,17 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     
     return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
   }, [currentImage]);
+
+  // Pan and transform logic
+  useEffect(() => {
+    const directions: PanDirection[] = [
+      { startX: 0, startY: 0, endX: 100, endY: 0 },
+      { startX: 100, startY: 0, endX: 0, endY: 0 },
+      { startX: 0, startY: 0, endX: 0, endY: 100 },
+      { startX: 0, startY: 100, endX: 0, endY: 0 },
+    ];
+    setPanDirection(directions[Math.floor(Math.random() * directions.length)]);
+  }, [currentImage.id]);
 
   const zoomLevel = 1.8;
   const maxPanPercent = 30;
