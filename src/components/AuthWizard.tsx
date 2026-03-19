@@ -312,10 +312,6 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
             <img src={darkMode ? LogoWhite : LogoLight} alt="SeshNx" className="w-96 h-40 object-contain drop-shadow-md" />
           </div>
 
-          <p className="text-sm font-bold text-gray-500 uppercase tracking-wider text-center mb-6">
-            {mode === 'login' ? 'Welcome Back' : 'Join SeshNx'}
-          </p>
-
           {error && (
             <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4">
               <AlertCircle size={16} /> {error}
