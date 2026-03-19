@@ -47,11 +47,7 @@ export default defineConfig({
     minify: 'esbuild', // Fastest minifier
     cssMinify: 'esbuild', // Fast CSS minification
     rollupOptions: {
-      external: (id) => {
-        // Don't externalize convex/server - we're using a stub instead
-        // Only externalize if it's a different pattern
-        return false;
-      },
+      external: [],
       output: {
         // Better chunk naming for caching
         chunkFileNames: 'assets/[name]-[hash].js',
