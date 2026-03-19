@@ -168,7 +168,7 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
             // Update profile using Convex
             await updateProfileMutation({
                 clerkId: userId,
-                imageUrl: url,
+                avatarUrl: url,
             });
 
             toast.success('Photo updated!', { id: toastId });
@@ -421,11 +421,11 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
                 });
             }
 
-            // Update studio name if applicable
+            // Update studio profile name if applicable
             if (role === 'Studio' && syncStudioOps) {
                 await updateProfileMutation({
                     clerkId: userId,
-                    studioName: effectiveName,
+                    profileName: effectiveName,
                 });
             }
 
