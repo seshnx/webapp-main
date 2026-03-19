@@ -135,7 +135,7 @@ export function useNotifications(
     }));
   }, [notifications]);
 
-  const unreadCount = unreadCountData?.count || 0;
+  const unreadCount = (typeof unreadCountData === 'number' ? unreadCountData : 0);
   const loading = notifications === undefined;
 
   /**
