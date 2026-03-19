@@ -99,7 +99,7 @@ export function useNotifications(
   // Get notifications from Convex (real-time!)
   const notifications = useQuery(
     api.notifications.getNotifications,
-    clerkUserId ? { userId: clerkUserId, limit: fetchLimit } : "skip"
+    clerkUserId ? { userId: clerkUserId } : "skip"
   );
 
   // Get unread count from Convex
