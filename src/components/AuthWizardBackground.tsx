@@ -22,7 +22,7 @@ const AUDIO_PRO_IMAGES: ImageData[] = [
 ];
 
 const RICK_ROLL_IMG: ImageData = { id: 'rick-roll', url: 'https://c.tenor.com/SSY2V0RrU3IAAAAd/tenor.gif', order: 99 };
-const PURE_NOTES = ['🎵', '🎶']; // Restricted to just the notes
+const PURE_NOTES = ['🎵', '🎶'];
 
 export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackgroundProps) {
   const [currentImage, setCurrentImage] = useState<ImageData>(() => AUDIO_PRO_IMAGES[Math.floor(Math.random() * AUDIO_PRO_IMAGES.length)]);
@@ -33,21 +33,24 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
   const [notes, setNotes] = useState<FallingNote[]>([]);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Trigger refined Note Rain
+  // Trigger Fast Note Rain
   const triggerNoteRain = () => {
-    const rainCount = 40; // More like rain
+    const rainCount = 100; // Denser rain for faster movement
     const newNotes = Array.from({ length: rainCount }).map((_, i) => ({
       id: Date.now() + i,
       left: Math.random() * 100,
-      delay: Math.random() * 3, // Staggered start
-      duration: 4 + Math.random() * 3, // Varied fall speeds
+      delay: Math.random() * 2, // 2s spread for the start
+      duration: 1 + Math.random() * 1.5, // High speed: 1s to 2.5s fall time
       emoji: PURE_NOTES[Math.floor(Math.random() * PURE_NOTES.length)]
     }));
     setNotes(prev => [...prev, ...newNotes]);
-    setTimeout(() => setNotes(prev => prev.filter(n => !newNotes.find(nn => nn.id === n.id))), 8000);
+    
+    // Cleanup state after 5 seconds
+    setTimeout(() => {
+      setNotes(prev => prev.filter(n => !newNotes.find(nn => nn.id === n.id)));
+    }, 5000);
   };
 
-  // Preloader signal for parent
   useEffect(() => {
     if (!imagesReady) {
       const img = new Image();
@@ -57,24 +60,20 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
     }
   }, [imagesReady, onImagesLoaded, currentImage.url]);
 
-  // Keyboard shortcut logic with Bug Fixes
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Input protection: don't trigger while typing credentials
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || (e.target as HTMLElement).isContentEditable) return;
       
       const key = e.key.toUpperCase();
       setTypedBuffer(prev => {
         const next = (prev + key).slice(-4);
-        
-        // Use if/else if to ensure only one trigger per sequence
         if (next === 'RICK') {
           setPrevImage(currentImage);
           setCurrentImage(RICK_ROLL_IMG);
-          return ""; // Clear buffer after trigger
+          return "";
         } else if (next === 'NOTE') {
           triggerNoteRain();
-          return ""; // Clear buffer after trigger
+          return "";
         }
         return next;
       });
@@ -137,7 +136,7 @@ export default function AuthWizardBackground({ onImagesLoaded }: AuthWizardBackg
         </div>
         <div className="absolute inset-0 bg-black/40" />
 
-        {/* Improved Note Rain Layer */}
+        {/* High-Speed Note Rain Layer */}
         {notes.map(note => (
           <div
             key={note.id}
