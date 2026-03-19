@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getExternalArtists, createExternalArtist } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery, useMutation } from 'convex/react';
+// import { api } from '../../../convex/_generated';
 import { UserPlus, Mail, Music, Edit2, Trash2 } from 'lucide-react';
 
 /**
@@ -68,8 +70,9 @@ export default function ExternalArtistManager({ user }: ExternalArtistManagerPro
     const loadArtists = async () => {
         setLoading(true);
         try {
-            const data = await getExternalArtists(user?.id);
-            setArtists((data || []) as ExternalArtist[]);
+            // TODO: Replace with Convex query
+            // const data = await convexQuery(api.labels.getExternalArtists, { labelId: user?.id });
+            setArtists([]);
         } catch (error) {
             console.error('Error loading external artists:', error);
         } finally {
@@ -83,15 +86,9 @@ export default function ExternalArtistManager({ user }: ExternalArtistManagerPro
 
         setSubmitting(true);
         try {
-            await createExternalArtist(user.id, {
-                name: formData.name,
-                email: formData.email || null,
-                stage_name: formData.stage_name || null,
-                genre: formData.genre,
-                primary_role: formData.primary_role || null,
-                contract_type: formData.contract_type || null,
-                signed_date: new Date().toISOString().split('T')[0]
-            });
+            // TODO: Replace with Convex mutation
+            // await createExternalArtistMutation({ labelId: user.id, ...formData });
+            console.log('Would create external artist:', formData);
 
             // Reset form and reload
             setFormData({

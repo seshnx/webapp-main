@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { 
-    Calendar, Clock, History, Filter, Loader2, 
+import {
+    Calendar, Clock, History, Filter, Loader2,
     Search, LayoutGrid, List, RefreshCw, ChevronRight
 } from 'lucide-react';
-import { getBookings } from '../../config/neonQueries';
+import { useBookingsByClient } from '../../services/bookingService';
 import UserAvatar from '../shared/UserAvatar';
 import UnifiedCalendar from '../shared/UnifiedCalendar';
 import toast from 'react-hot-toast';
@@ -25,10 +25,10 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  
-  // Data State
-  const [bookings, setBookings] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  // Data State - use Convex real-time bookings
+  const userId = userData?.id || user?.id;
+  const { bookings: rawBookings, loading } = useBookingsByClient(userId || null);
   const [searchTerm, setSearchTerm] = useState('');
 
   // Sub-tab configuration for List View
@@ -39,33 +39,14 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
     { id: 'history' as SubTab, label: 'All History', icon: Filter, description: 'Full booking history' }
   ];
 
-  // Fetch bookings with date parsing for calendar compatibility
-  useEffect(() => {
-    const loadBookings = async () => {
-      if (!userData?.id && !user?.id) return;
-      setLoading(true);
-      try {
-        const userId = userData?.id || user?.id;
-        const data = await getBookings(userId, { limit: 100 });
-        
-        // Ensure dates are actual Date objects for the UnifiedCalendar
-        const parsedData = (data || []).map(booking => ({
-          ...booking,
-          date: booking.date && booking.date !== 'Flexible' ? new Date(booking.date) : null,
-          clientName: booking.sender_name || booking.target_name || 'User'
-        }));
-        
-        setBookings(parsedData);
-      } catch (error) {
-        console.error('Error loading bookings:', error);
-        toast.error('Failed to load bookings');
-        setBookings([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadBookings();
-  }, [userData?.id, user?.id]);
+  // Parse bookings data from Convex
+  const bookings = React.useMemo(() => {
+    return (rawBookings || []).map(booking => ({
+      ...booking,
+      date: booking.date && booking.date !== 'Flexible' ? new Date(booking.date) : null,
+      clientName: booking.sender_name || booking.target_name || 'User'
+    }));
+  }, [rawBookings]);
 
   // Filtering Logic
   const getFilteredBookings = () => {

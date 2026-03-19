@@ -3,7 +3,11 @@ import {
   DollarSign, TrendingUp, Calendar, Download,
   Filter, CheckCircle, ChevronDown
 } from 'lucide-react';
-import { getTechEarnings, type ServiceRequest } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery } from 'convex/react';
+// import { api } from '../../../convex/_generated';
+// Inline types until Convex migration
+interface ServiceRequest { id: string; created_at: string; [key: string]: any; }
 
 /**
  * Props for TechEarnings component
@@ -37,8 +41,9 @@ export default function TechEarnings({ userId }: TechEarningsProps) {
 
       setLoading(true);
       try {
-        const data = await getTechEarnings(userId, { limit: 100 });
-        setEarnings(data);
+        // TODO: Replace with Convex query
+        // const data = await convexQuery(api.tech.getTechEarnings, { userId, limit: 100 });
+        setEarnings([]);
       } catch (error) {
         console.error('Error fetching earnings:', error);
       } finally {

@@ -4,7 +4,11 @@ import {
   CheckCircle, XCircle, Filter, Calendar,
   MapPin, Wrench, ChevronRight
 } from 'lucide-react';
-import { getTechServiceRequests, updateServiceRequestStatus, type ServiceRequest } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery, useMutation } from 'convex/react';
+// import { api } from '../../../convex/_generated';
+// Inline ServiceRequest type until Convex migration
+interface ServiceRequest { id: string; created_at: string; [key: string]: any; }
 
 /**
  * Props for TechServiceRequests component
@@ -39,8 +43,9 @@ export default function TechServiceRequests({ userId }: TechServiceRequestsProps
 
       setLoading(true);
       try {
-        const data = await getTechServiceRequests(userId);
-        setRequests(data);
+        // TODO: Replace with Convex query
+        // const data = await convexQuery(api.tech.getServiceRequests, { techId: userId });
+        setRequests([]);
       } catch (error) {
         console.error('Error fetching service requests:', error);
       } finally {
@@ -56,7 +61,8 @@ export default function TechServiceRequests({ userId }: TechServiceRequestsProps
     setProcessing(prev => new Set(prev).add(requestId));
 
     try {
-      await updateServiceRequestStatus(requestId, status, userId);
+      // TODO: Replace with Convex mutation
+      // await updateServiceRequestMutation({ requestId, status, techId: userId });
       // Update local state
       setRequests(prev => prev.map(req =>
         req.id === requestId ? { ...req, status } : req

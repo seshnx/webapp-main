@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { executeQuery } from '../../config/neon';
+// TODO: Replace with Convex queries
+// import { useQuery } from 'convex/react';
+// import { api } from '../../../convex/_generated';
 import {
     FileText,
     Plus,
@@ -72,42 +74,9 @@ export default function ContractManager({ user }: ContractManagerProps) {
     const fetchContracts = async () => {
         setLoading(true);
         try {
-            let query = `
-                SELECT
-                  c.id,
-                  c.contract_type,
-                  c.status,
-                  c.created_at,
-                  c.effective_date,
-                  c.expiration_date,
-                  c.advance_amount,
-                  c.royalty_rate,
-                  c.label_signed,
-                  c.artist_signed,
-                  c.artist_id,
-                  label.username as label_name,
-                  artist.username as artist_name,
-                  sp_label.display_name as label_display_name,
-                  sp_artist.display_name as artist_display_name
-                FROM contracts c
-                JOIN clerk_users label ON c.label_id = label.id
-                LEFT JOIN clerk_users artist ON c.artist_id = artist.id
-                LEFT JOIN profiles sp_label ON sp_label.user_id = label.id
-                LEFT JOIN profiles sp_artist ON sp_artist.user_id = artist.id
-                WHERE c.label_id = $1
-            `;
-
-            const params: (string | number)[] = [userId];
-
-            if (filterStatus !== 'all') {
-                query += ' AND c.status = $2';
-                params.push(filterStatus);
-            }
-
-            query += ' ORDER BY c.created_at DESC';
-
-            const result = await executeQuery(query, params);
-            setContracts((result || []) as Contract[]);
+            // TODO: Replace with Convex query
+            // const result = await convexQuery(api.labels.getContracts, { labelId: userId, status: filterStatus });
+            setContracts([]);
         } catch (error) {
             console.error('Error fetching contracts:', error);
         } finally {

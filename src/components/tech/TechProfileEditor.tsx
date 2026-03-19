@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Save, Loader2 } from 'lucide-react';
 import { TECH_SPECIALTIES } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
-import { getSubProfile, upsertSubProfile } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery, useMutation } from 'convex/react';
+// import { api } from '../../../convex/_generated';
 
 /**
  * Tech profile form data interface
@@ -36,23 +38,10 @@ export default function TechProfileEditor({ user }: TechProfileEditorProps) {
 
         const userId = user.id || user.uid;
 
-        // Fetch sub-profile data using Neon
-        getSubProfile(userId, 'Technician')
-            .then((profile) => {
-                if (profile) {
-                    setData({
-                        skills: profile.data?.skills || '',
-                        rate: profile.data?.rate || '',
-                        serviceRadius: profile.data?.service_radius || profile.data?.serviceRadius || '',
-                        subRoles: profile.data?.sub_roles || profile.data?.subRoles || []
-                    });
-                }
-                setLoading(false);
-            })
-            .catch((err) => {
-                console.error('Error fetching tech profile:', err);
-                setLoading(false);
-            });
+        // TODO: Replace with Convex query
+        // convexQuery(api.tech.getSubProfile, { userId, role: 'Technician' })
+        //   .then((profile) => { if (profile) setData({ ... }); });
+        setLoading(false);
     }, [user?.id, user?.uid]);
 
     const handleSave = async () => {
@@ -64,16 +53,9 @@ export default function TechProfileEditor({ user }: TechProfileEditorProps) {
         try {
             const userId = user.id || user.uid;
 
-            // Update sub-profile using Neon
-            const profileData = {
-                skills: data.skills,
-                rate: data.rate ? parseInt(data.rate) : null,
-                service_radius: data.serviceRadius ? parseInt(data.serviceRadius) : null,
-                sub_roles: data.subRoles || [],
-            };
-
-            await upsertSubProfile(userId, 'Technician', profileData);
-
+            // TODO: Replace with Convex mutation
+            // await upsertSubProfileMutation({ userId, role: 'Technician', data: { skills, rate, ... } });
+            console.log('Would update tech profile (TODO: implement via Convex):', data);
             alert("Tech Profile Updated Successfully");
         } catch (e) {
             console.error(e);

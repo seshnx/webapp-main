@@ -9,7 +9,8 @@ import { useVercelImageUpload } from '../hooks/useVercelUpload';
 import { useFollowSystem, useUserSocialStats } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import FollowersListModal, { FollowStats } from './social/FollowersListModal';
-import { getProfile, updateProfile } from '../config/neonQueries';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated';
 import { STORAGE_FOLDERS } from '../config/vercel-blob';
 import type { UserData } from '../types';
 
@@ -111,6 +112,13 @@ export default function PublicProfileModal({
 
     const { uploadImage } = useVercelImageUpload();
 
+    // Convex query and mutation
+    const convexProfile = useQuery(
+        api.users.getUserByClerkId,
+        userId ? { clerkId: userId } : "skip"
+    );
+    const updateProfileMutation = useMutation(api.users.updateProfile);
+
     // Follow system hooks
     const { isFollowing, toggleFollow } = useFollowSystem(currentUserId);
     const { stats: socialStats } = useUserSocialStats(userId);
@@ -120,12 +128,10 @@ export default function PublicProfileModal({
         setShowFollowersModal(true);
     };
 
-    const refreshProfile = async () => {
-        try {
-            // Fetch profile using Neon
-            const profileData = await getProfile(userId);
-
-            if (!profileData) {
+    // React to Convex profile data changes
+    useEffect(() => {
+        if (convexProfile !== undefined) {
+            if (!convexProfile) {
                 setError("Profile not found or is private.");
                 setLoading(false);
                 return;
@@ -133,26 +139,18 @@ export default function PublicProfileModal({
 
             // Normalize data structure
             setProfile({
-                ...profileData,
-                firstName: profileData.first_name,
-                lastName: profileData.last_name,
-                displayName: profileData.display_name || profileData.effective_display_name,
-                photoURL: profileData.avatar_url || profileData.photo_url,
-                bannerURL: profileData.banner_url,
-                rate: profileData.hourly_rate,
-                zip: profileData.zip
+                ...convexProfile,
+                firstName: convexProfile.firstName,
+                lastName: convexProfile.lastName,
+                displayName: convexProfile.profileName,
+                photoURL: convexProfile.imageUrl,
+                bannerURL: convexProfile.bannerUrl,
+                rate: convexProfile.hourlyRate,
+                zip: convexProfile.zipCode
             } as ProfileData);
-        } catch (e) {
-            console.error("Failed to load profile:", e);
-            setError("Unable to load profile. Please try again later.");
-        } finally {
             setLoading(false);
         }
-    };
-
-    useEffect(() => {
-        if (userId) refreshProfile();
-    }, [userId]);
+    }, [convexProfile, userId]);
 
     const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -164,8 +162,9 @@ export default function PublicProfileModal({
             const uploadResult = await uploadImage(file, STORAGE_FOLDERS.PROFILE_PHOTOS);
             if (uploadResult?.url) {
                 // Update Profile using Neon
-                await updateProfile(userId, {
-                    banner_url: uploadResult.url,
+                await updateProfileMutation({
+                    clerkId: userId,
+                    bannerUrl: uploadResult.url,
                 });
 
                 // Optimistic update

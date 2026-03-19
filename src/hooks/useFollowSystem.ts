@@ -1,14 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  getFollowing,
-  getFollowers,
-  followUser as followUserInMongo,
-  unfollowUser as unfollowUserInMongo,
-  getFollowingCount,
-  getFollowersCount,
-  isFollowing as checkIsFollowing,
-} from '../config/mongoSocial';
-import { getProfilesByIds } from '../config/neonQueries';
+/**
+ * Follow System Hook - Convex Only
+ *
+ * All follow operations now use Convex for real-time updates.
+ * No more polling - everything is real-time!
+ */
+
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated';
+import { useMemo, useCallback } from 'react';
 
 /**
  * User profile interface for follow system
@@ -38,9 +37,10 @@ export interface FollowResult {
 }
 
 /**
- * Hook for managing the social follow system (MongoDB Version)
+ * Hook for managing the social follow system
+ * Now uses Convex real-time subscriptions - no polling needed!
  *
- * @param currentUserId - The authenticated user's ID
+ * @param currentUserId - The authenticated user's Clerk ID
  * @returns Follow system state and operations
  *
  * @example
@@ -66,112 +66,97 @@ export interface FollowResult {
  * }
  */
 export function useFollowSystem(currentUserId: string | null | undefined) {
-  const [following, setFollowing] = useState<FollowProfile[]>([]);
-  const [followers, setFollowers] = useState<FollowProfile[]>([]);
-  const [stats, setStats] = useState<FollowStats>({ followersCount: 0, followingCount: 0 });
-  const [loading, setLoading] = useState<boolean>(true);
+  // Get followers from Convex (real-time!)
+  const followers = useQuery(
+    api.social.getFollowers,
+    currentUserId ? { userId: currentUserId } : "skip"
+  );
 
-  // Fetch Helper: Get detailed profiles for a list of IDs
-  const fetchProfiles = async (userIds: string[]): Promise<FollowProfile[]> => {
-    if (!userIds || userIds.length === 0) return [];
+  // Get following from Convex (real-time!)
+  const following = useQuery(
+    api.social.getFollowing,
+    currentUserId ? { userId: currentUserId } : "skip"
+  );
 
-    try {
-      const profiles = await getProfilesByIds(userIds);
+  // Mutations
+  const followMutation = useMutation(api.social.followUser);
+  const unfollowMutation = useMutation(api.social.unfollowUser);
 
-      return profiles.map(p => ({
-        odId: p.user_id || p.id || '',
-        userId: p.user_id || p.id || '',
-        displayName: p.display_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Unknown',
-        photoURL: p.avatar_url || p.photo_url || null,
-        role: p.active_role || p.role
-      }));
-    } catch (error) {
-      console.error("Error fetching profiles:", error);
-      return [];
-    }
-  };
+  // Transform Convex data to FollowProfile format
+  const followersList: FollowProfile[] = useMemo(() => {
+    if (!followers) return [];
 
-  const loadData = useCallback(async () => {
-    if (!currentUserId) return;
+    return followers.map(f => ({
+      odId: f.followerId,
+      userId: f.followerId,
+      displayName: f.followerName || 'Unknown',
+      photoURL: f.followerPhoto || null,
+      role: f.followerRole,
+    }));
+  }, [followers]);
 
-    try {
-      // 1. Get IDs of who I follow
-      const followingIds = await getFollowing(currentUserId);
-      const followingProfiles = await fetchProfiles(followingIds);
-      setFollowing(followingProfiles);
+  const followingList: FollowProfile[] = useMemo(() => {
+    if (!following) return [];
 
-      // 2. Get IDs of who follows me
-      const followerIds = await getFollowers(currentUserId);
-      const followerProfiles = await fetchProfiles(followerIds);
-      setFollowers(followerProfiles);
-
-      // 3. Stats
-      setStats({
-        followingCount: followingIds.length,
-        followersCount: followerIds.length
-      });
-
-      setLoading(false);
-    } catch (err) {
-      console.error("Error loading follow data:", err);
-      setLoading(false);
-    }
-  }, [currentUserId]);
-
-  // Initial Load & Polling
-  useEffect(() => {
-    loadData();
-
-    if (!currentUserId) return;
-
-    // Set up polling to check for follow changes (every 30 seconds)
-    const pollInterval = setInterval(() => {
-      loadData();
-    }, 30000);
-
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, [currentUserId, loadData]);
-
-  const isFollowing = useCallback((targetUserId: string): boolean => {
-    return following.some(f => f.odId === targetUserId);
+    return following.map(f => ({
+      odId: f.followingId,
+      userId: f.followingId,
+      displayName: f.followingName || 'Unknown',
+      photoURL: f.followingPhoto || null,
+      role: f.followingRole,
+    }));
   }, [following]);
 
+  // Stats from user data (could also be fetched from user stats)
+  const stats: FollowStats = useMemo(() => ({
+    followersCount: followersList.length,
+    followingCount: followingList.length,
+  }), [followersList.length, followingList.length]);
+
+  const loading = followers === undefined || following === undefined;
+
+  // Check if following a specific user
+  const isFollowing = useCallback((targetUserId: string): boolean => {
+    return followingList.some(f => f.userId === targetUserId);
+  }, [followingList]);
+
+  // Follow a user
   const followUser = useCallback(async (targetUserId: string): Promise<FollowResult> => {
     if (!currentUserId || !targetUserId || currentUserId === targetUserId) {
       return { success: false };
     }
 
     try {
-      await followUserInMongo(currentUserId, targetUserId);
-
-      // Optimistic update
-      loadData();
+      await followMutation({
+        followerId: currentUserId,
+        followingId: targetUserId,
+      });
       return { success: true };
     } catch (error) {
       console.error('Follow error:', error);
       return { success: false, error };
     }
-  }, [currentUserId, loadData]);
+  }, [currentUserId, followMutation]);
 
+  // Unfollow a user
   const unfollowUser = useCallback(async (targetUserId: string): Promise<FollowResult> => {
     if (!currentUserId || !targetUserId) {
       return { success: false };
     }
 
     try {
-      await unfollowUserInMongo(currentUserId, targetUserId);
-
-      // Optimistic update
-      loadData();
+      await unfollowMutation({
+        followerId: currentUserId,
+        followingId: targetUserId,
+      });
       return { success: true };
     } catch (error) {
       console.error('Unfollow error:', error);
       return { success: false, error };
     }
-  }, [currentUserId, loadData]);
+  }, [currentUserId, unfollowMutation]);
 
+  // Toggle follow/unfollow
   const toggleFollow = useCallback(async (targetUserId: string): Promise<FollowResult> => {
     if (isFollowing(targetUserId)) {
       return unfollowUser(targetUserId);
@@ -180,27 +165,29 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
     }
   }, [isFollowing, followUser, unfollowUser]);
 
+  // Get following IDs
   const getFollowingIds = useCallback((): string[] => {
-    return following.map(f => f.odId);
-  }, [following]);
+    return followingList.map(f => f.userId);
+  }, [followingList]);
 
   return {
-    following,
-    followers,
+    following: followingList,
+    followers: followersList,
     stats,
     loading,
     isFollowing,
     followUser,
     unfollowUser,
     toggleFollow,
-    getFollowingIds
+    getFollowingIds,
   };
 }
 
 /**
  * Hook for fetching social stats for a specific user (read-only)
+ * Now uses Convex real-time subscriptions!
  *
- * @param userId - User ID to fetch stats for
+ * @param userId - User Clerk ID to fetch stats for
  * @returns Stats and loading state
  *
  * @example
@@ -218,35 +205,94 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
  * }
  */
 export function useUserSocialStats(userId: string | null | undefined) {
-  const [stats, setStats] = useState<FollowStats>({ followersCount: 0, followingCount: 0 });
-  const [loading, setLoading] = useState<boolean>(true);
+  // Get user from Convex (includes stats)
+  const user = useQuery(
+    api.users.getUserByClerkId,
+    userId ? { clerkId: userId } : "skip"
+  );
 
-  useEffect(() => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
+  const stats: FollowStats = useMemo(() => ({
+    followersCount: user?.stats?.followersCount || 0,
+    followingCount: user?.stats?.followingCount || 0,
+  }), [user]);
 
-    const fetchStats = async () => {
+  return {
+    stats,
+    loading: user === undefined,
+  };
+}
+
+/**
+ * Hook for checking if current user follows another user
+ * Now uses Convex real-time subscriptions!
+ *
+ * @param followerId - Current user's Clerk ID
+ * @param followingId - Target user's Clerk ID
+ * @returns Object with isFollowing boolean and loading state
+ *
+ * @example
+ * function FollowButton({ currentUserId, targetUserId }) {
+ *   const { isFollowing, loading } = useIsFollowing(currentUserId, targetUserId);
+ *
+ *   if (loading) return <div>Loading...</div>;
+ *
+ *   return (
+ *     <button>
+ *       {isFollowing ? 'Following' : 'Follow'}
+ *     </button>
+ *   );
+ * }
+ */
+export function useIsFollowing(
+  followerId: string | null | undefined,
+  followingId: string | null | undefined
+) {
+  const isFollowingData = useQuery(
+    api.social.isFollowing,
+    (followerId && followingId)
+      ? { followerId: followerId as any, followingId: followingId as any }
+      : "skip"
+  );
+
+  return {
+    isFollowing: isFollowingData?.isFollowing || false,
+    loading: isFollowingData === undefined,
+  };
+}
+
+/**
+ * Hook for follow mutations only
+ * Use this when you only need the follow/unfollow actions
+ */
+export function useFollowMutations() {
+  const follow = useMutation(api.social.followUser);
+  const unfollow = useMutation(api.social.unfollowUser);
+
+  return {
+    follow: async (followerId: string, followingId: string) => {
       try {
-        const [followers, following] = await Promise.all([
-          getFollowersCount(userId),
-          getFollowingCount(userId)
-        ]);
-
-        setStats({
-          followersCount: followers,
-          followingCount: following
+        await follow({
+          followerId,
+          followingId,
         });
-        setLoading(false);
+        return { success: true };
       } catch (error) {
-        console.error("Error fetching social stats:", error);
-        setLoading(false);
+        console.error('Follow error:', error);
+        return { success: false, error };
       }
-    };
+    },
 
-    fetchStats();
-  }, [userId]);
-
-  return { stats, loading };
+    unfollow: async (followerId: string, followingId: string) => {
+      try {
+        await unfollow({
+          followerId,
+          followingId,
+        });
+        return { success: true };
+      } catch (error) {
+        console.error('Unfollow error:', error);
+        return { success: false, error };
+      }
+    },
+  };
 }

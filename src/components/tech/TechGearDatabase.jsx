@@ -3,7 +3,9 @@ import {
     Database, CheckCircle, Loader2, User, ThumbsUp, ThumbsDown, Copy
 } from 'lucide-react';
 import { EQUIP_CATEGORIES } from '../../config/constants';
-import { getPendingSubmissions, updateSubmissionVotes, approveEquipmentSubmission, rejectEquipmentSubmission, upsertWallet, createEquipmentSubmission } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery, useMutation } from 'convex/react';
+// import { api } from '../../../convex/_generated';
 
 export default function TechGearDatabase({ user, userData, isTech }) {
     const [view, setView] = useState('feed');

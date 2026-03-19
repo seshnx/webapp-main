@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Calendar, Repeat, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { query as neonQuery } from '../../config/neon.js';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated';
 
 /**
  * Recurrence pattern type
@@ -49,6 +50,9 @@ export default function RecurringBookingModal({ booking, onClose, onSuccess }: R
     const [maxOccurrences, setMaxOccurrences] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
 
+    // Convex mutation for creating bookings
+    const createBooking = useMutation(api.bookings.createBooking);
+
     const handleDayToggle = (day: number): void => {
         setDaysOfWeek(prev =>
             prev.includes(day)
@@ -91,33 +95,45 @@ export default function RecurringBookingModal({ booking, onClose, onSuccess }: R
                 daysOfWeek: recurrenceType === 'weekly' ? daysOfWeek : null,
             };
 
-            // Create recurring booking record using Neon
-            const result = await neonQuery(`
-                INSERT INTO recurring_bookings (
-                    parent_booking_id, studio_id, sender_id,
-                    recurrence_type, recurrence_pattern,
-                    start_date, end_date, next_occurrence,
-                    max_occurrences, is_active
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                RETURNING *
-            `, [
-                booking.id,
-                booking.studio_owner_id || booking.target_id,
-                booking.sender_id,
-                recurrenceType,
-                JSON.stringify(recurrencePattern),
-                bookingDate.toISOString().split('T')[0],
-                endDate || null,
-                nextOccurrence.toISOString().split('T')[0],
-                maxOccurrences ? parseInt(maxOccurrences) : null,
-                true
-            ]);
+            // Create individual bookings for each occurrence using Convex
+            const bookingsToCreate = [];
+            let currentDate = new Date(bookingDate);
+            const maxOccur = maxOccurrences ? parseInt(maxOccurrences) : 12;
+            const end = endDate ? new Date(endDate) : null;
 
-            if (!result || result.length === 0) {
-                throw new Error('Failed to create recurring booking');
+            for (let i = 0; i < maxOccur; i++) {
+                if (end && currentDate > end) break;
+
+                bookingsToCreate.push({
+                    studioId: (booking.studio_owner_id || booking.target_id) as any,
+                    clientId: booking.sender_id as any,
+                    date: currentDate.toISOString().split('T')[0],
+                    status: 'Confirmed',
+                    notes: `Recurring booking (${recurrenceType}, occurrence ${i + 1}/${maxOccur})`,
+                });
+
+                // Calculate next occurrence date
+                if (recurrenceType === 'weekly' && daysOfWeek.length > 0) {
+                    const currentDay = currentDate.getDay();
+                    const nextDay = daysOfWeek.find(d => d > currentDay) || daysOfWeek[0];
+                    const daysToAdd = nextDay - currentDay + (nextDay < currentDay ? 7 : 0);
+                    currentDate = new Date(currentDate.getTime() + (daysToAdd * 24 * 60 * 60 * 1000));
+                } else if (recurrenceType === 'daily') {
+                    currentDate = new Date(currentDate.getTime() + (interval * 24 * 60 * 60 * 1000));
+                } else if (recurrenceType === 'monthly') {
+                    currentDate = new Date(currentDate);
+                    currentDate.setMonth(currentDate.getMonth() + interval);
+                }
             }
 
-            toast.success('Recurring booking created!', { id: toastId });
+            // Create all bookings
+            await Promise.all(
+                bookingsToCreate.map(bookingData =>
+                    createBooking(bookingData)
+                )
+            );
+
+            toast.success(`${bookingsToCreate.length} recurring booking(s) created!`, { id: toastId });
             onSuccess?.();
             onClose();
         } catch (error: any) {

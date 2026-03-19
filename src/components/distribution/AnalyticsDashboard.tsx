@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart2, TrendingUp, DollarSign, Music, Globe, ArrowUpRight, LucideIcon } from 'lucide-react';
 import StatCard from '../shared/StatCard';
-import { getDistributionStats, getStorePerformance, getTopTerritories } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery } from 'convex/react';
+// import { api } from '../../../convex/_generated';
 
 // =====================================================
 // TYPES
@@ -62,23 +64,13 @@ export default function AnalyticsDashboard({ user }: AnalyticsDashboardProps): J
       try {
         setLoading(true);
 
-        // Fetch distribution stats summary
-        const statsData = await getDistributionStats(userId);
-        if (statsData) {
-          setStats({
-            lifetimeStreams: statsData.lifetime_streams || 0,
-            lifetimeEarnings: statsData.lifetime_earnings || 0,
-            monthlyListeners: statsData.monthly_listeners || 0
-          });
-        }
-
-        // Fetch store performance
-        const storeData = await getStorePerformance(userId);
-        setStorePerformance(storeData);
-
-        // Fetch top territories
-        const territoryData = await getTopTerritories(userId, 5);
-        setTopTerritories(territoryData);
+        // TODO: Replace with Convex queries
+        // const statsData = await convexQuery(api.distribution.getStats, { userId });
+        // const storeData = await convexQuery(api.distribution.getStorePerformance, { userId });
+        // const territoryData = await convexQuery(api.distribution.getTopTerritories, { userId, limit: 5 });
+        setStats({ lifetimeStreams: 0, lifetimeEarnings: 0, monthlyListeners: 0 });
+        setStorePerformance([]);
+        setTopTerritories([]);
       } catch (error) {
         console.error('Error fetching distribution analytics:', error);
       } finally {

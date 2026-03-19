@@ -1,376 +1,418 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import * as marketplaceService from '../services/marketplaceService';
-
-// Polling interval for real-time updates (milliseconds)
-const POLL_INTERVAL = 30000;
-
 /**
- * Generic polling hook return value
+ * Marketplace Hook - Convex Only
+ *
+ * All marketplace operations now use Convex for real-time updates.
+ * No more polling - everything is real-time!
  */
-interface PollingResult<T> {
-  data: T[];
-  loading: boolean;
-  refresh: () => void;
-}
 
-/**
- * Use polling hook for real-time data
- */
-function usePolling<T>(
-  fetchFn: () => Promise<T[]>,
-  deps: any[],
-  enabled: boolean = true
-): PollingResult<T> {
-  const [data, setData] = useState<T[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  // Use a ref to store the latest fetchFn to avoid dependency issues
-  const fetchFnRef = useRef(fetchFn);
-  fetchFnRef.current = fetchFn;
-
-  const fetchData = useCallback(async () => {
-    if (!enabled) return;
-    setLoading(true);
-    try {
-      const result = await fetchFnRef.current();
-      setData(result);
-    } catch (error) {
-      console.error('Polling error:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [enabled]);
-
-  useEffect(() => {
-    fetchData();
-    if (!enabled) return;
-
-    const interval = setInterval(fetchData, POLL_INTERVAL);
-    return () => clearInterval(interval);
-  }, [enabled, fetchData, ...deps]);
-
-  return { data, loading, refresh: fetchData };
-}
+import {
+  useMarketItems,
+  useMarketItemsBySeller,
+  useSearchMarketItems,
+  useFeaturedItems,
+  useMarketItem,
+  useMarketItemMutations,
+  useTransactionsByBuyer,
+  useTransactionsBySeller,
+  useTransaction,
+  useTransactionMutations,
+} from '../services/marketplaceService';
 
 // =====================================================
-// GEAR EXCHANGE HOOKS
+// MARKETPLACE ITEMS HOOKS
 // =====================================================
 
 /**
- * Hook for fetching gear listings with polling
+ * Hook for fetching marketplace items
+ * Now uses Convex real-time subscriptions!
  */
-export function useGearListings(options: { limit?: number; status?: string } = {}): PollingResult<any> {
-  return usePolling(
-    async () => {
-      return await marketplaceService.fetchGearListings(options);
-    },
-    [options.limit, options.status]
-  );
-}
+export function useGearListings(options: { limit?: number; status?: string } = {}) {
+  const items = useMarketItems({
+    limit: options.limit,
+  });
 
-/**
- * Hook for fetching a single gear listing
- */
-export function useGearListing(listingId: string | null) {
-  const [listing, setListing] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    if (!listingId) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchListing = async () => {
-      setLoading(true);
-      try {
-        const result = await marketplaceService.fetchGearListing(listingId);
-        setListing(result);
-      } catch (error) {
-        console.error('Error fetching listing:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchListing();
-  }, [listingId]);
-
-  return { listing, loading };
-}
-
-/**
- * Hook for fetching gear orders with polling
- */
-export function useGearOrders(userId: string | null, status?: string | null): PollingResult<any> {
-  return usePolling(
-    async () => {
-      if (!userId) return [];
-      return await marketplaceService.fetchGearOrders({ userId, status: status || undefined });
-    },
-    [userId, status],
-    !!userId
-  );
-}
-
-/**
- * Hook for fetching gear offers with polling
- */
-export function useGearOffers(options: { listingId?: string | null; userId?: string | null } = {}): PollingResult<any> {
-  return usePolling(
-    async () => {
-      if (!options.listingId && !options.userId) return [];
-      return await marketplaceService.fetchGearOffers(options);
-    },
-    [options.listingId, options.userId],
-    !!(options.listingId || options.userId)
-  );
-}
-
-// =====================================================
-// SAFE EXCHANGE HOOKS
-// =====================================================
-
-/**
- * Hook for fetching safe exchange transactions with polling
- */
-export function useSafeExchangeTransactions(userId: string | null, status?: string | null): PollingResult<any> {
-  return usePolling(
-    async () => {
-      if (!userId) return [];
-      return await marketplaceService.fetchSafeExchangeTransactions({ userId, status: status || undefined });
-    },
-    [userId, status],
-    !!userId
-  );
-}
-
-/**
- * Hook for fetching a single safe exchange transaction
- */
-export function useSafeExchangeTransaction(transactionId: string | null) {
-  const [transaction, setTransaction] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    if (!transactionId) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchTransaction = async () => {
-      setLoading(true);
-      try {
-        const result = await marketplaceService.fetchSafeExchangeTransaction(transactionId);
-        setTransaction(result);
-      } catch (error) {
-        console.error('Error fetching transaction:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchTransaction();
-  }, [transactionId]);
-
-  return { transaction, loading };
-}
-
-// =====================================================
-// MARKETPLACE ITEMS (SeshFx) HOOKS
-// =====================================================
-
-/**
- * Hook for fetching marketplace items with polling
- */
-export function useMarketplaceItems(options: { type?: string } = {}): PollingResult<any> {
-  return usePolling(
-    async () => {
-      return await marketplaceService.fetchMarketplaceItems(options);
-    },
-    [options.type]
-  );
+  return {
+    data: items?.filter(item => !options.status || item.status === options.status) || [],
+    loading: items === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
 }
 
 /**
  * Hook for fetching a single marketplace item
+ * Now uses Convex real-time subscriptions!
  */
-export function useMarketplaceItem(itemId: string | null) {
-  const [item, setItem] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+export function useGearListing(listingId: string | null) {
+  const item = useMarketItem(listingId || undefined);
 
-  useEffect(() => {
-    if (!itemId) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchItem = async () => {
-      setLoading(true);
-      try {
-        const result = await marketplaceService.fetchMarketplaceItem(itemId);
-        setItem(result);
-      } catch (error) {
-        console.error('Error fetching marketplace item:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchItem();
-  }, [itemId]);
-
-  return { item, loading };
+  return {
+    listing: item || null,
+    loading: item === undefined,
+  };
 }
 
 /**
- * Hook for fetching user library with polling
+ * Hook for fetching marketplace items by seller
+ * Now uses Convex real-time subscriptions!
  */
-export function useUserLibrary(userId: string | null): PollingResult<any> {
-  return usePolling(
-    async () => {
-      if (!userId) return [];
-      return await marketplaceService.fetchUserLibrary(userId);
+export function useSellerItems(sellerId: string | null, status?: string) {
+  const items = useMarketItemsBySeller(sellerId || undefined, status);
+
+  return {
+    data: items || [],
+    loading: items === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
+}
+
+/**
+ * Hook for searching marketplace items
+ * Now uses Convex real-time subscriptions!
+ */
+export function useSearchMarketItemsHook(searchQuery: string, filters: {
+  category?: string;
+  condition?: string;
+  minPrice?: number;
+  maxPrice?: number;
+  location?: string;
+  itemType?: string;
+  limit?: number;
+} = {}) {
+  const items = useSearchMarketItems({
+    searchQuery,
+    ...filters,
+  });
+
+  return {
+    data: items || [],
+    loading: items === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
+}
+
+/**
+ * Hook for featured marketplace items
+ * Now uses Convex real-time subscriptions!
+ */
+export function useFeaturedMarketItems(limit = 10) {
+  const items = useFeaturedItems(limit);
+
+  return {
+    data: items || [],
+    loading: items === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
+}
+
+// =====================================================
+// MARKETPLACE ITEM (SeshFx) HOOKS
+// =====================================================
+
+/**
+ * Hook for fetching marketplace items (SeshFx store)
+ * Now uses Convex real-time subscriptions!
+ */
+export function useMarketplaceItems(options: { type?: string } = {}) {
+  const items = useMarketItems({
+    type: options.type,
+  });
+
+  return {
+    data: items?.filter(item => !options.type || item.itemType === options.type) || [],
+    loading: items === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
+}
+
+/**
+ * Hook for fetching a single marketplace item
+ * Now uses Convex real-time subscriptions!
+ */
+export function useMarketplaceItem(itemId: string | null) {
+  const item = useMarketItem(itemId || undefined);
+
+  return {
+    item: item || null,
+    loading: item === undefined,
+  };
+}
+
+// =====================================================
+// MARKETPLACE ITEM MUTATIONS
+// =====================================================
+
+/**
+ * Hook for marketplace item mutations
+ */
+export function useMarketplaceItemMutations() {
+  const { create, update, remove, incrementView } = useMarketItemMutations();
+
+  return {
+    createItem: async (itemData: any) => {
+      try {
+        const result = await create(itemData);
+        return result;
+      } catch (error) {
+        console.error('Failed to create item:', error);
+        throw error;
+      }
     },
-    [userId],
-    !!userId
-  );
+
+    updateItem: async (itemId: string, updates: any) => {
+      try {
+        await update({
+          itemId: itemId as any,
+          ...updates,
+        });
+      } catch (error) {
+        console.error('Failed to update item:', error);
+        throw error;
+      }
+    },
+
+    deleteItem: async (itemId: string) => {
+      try {
+        await remove({
+          itemId: itemId as any,
+        });
+      } catch (error) {
+        console.error('Failed to delete item:', error);
+        throw error;
+      }
+    },
+
+    incrementViewCount: async (itemId: string) => {
+      try {
+        await incrementView({
+          itemId: itemId as any,
+        });
+      } catch (error) {
+        console.error('Failed to increment view count:', error);
+        throw error;
+      }
+    },
+  };
+}
+
+// =====================================================
+// TRANSACTIONS HOOKS
+// =====================================================
+
+/**
+ * Hook for fetching gear orders (buyer transactions)
+ * Now uses Convex real-time subscriptions!
+ */
+export function useGearOrders(userId: string | null, status?: string | null) {
+  const transactions = useTransactionsByBuyer(userId || undefined, status || undefined);
+
+  return {
+    data: transactions || [],
+    loading: transactions === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
+}
+
+/**
+ * Hook for fetching gear offers (transactions by item)
+ * Now uses Convex real-time subscriptions!
+ */
+export function useGearOffers(options: { listingId?: string | null; userId?: string | null } = {}) {
+  const transactions = useTransaction(options.listingId || undefined);
+
+  return {
+    data: transactions ? [transactions] : [],
+    loading: transactions === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
+}
+
+/**
+ * Hook for fetching safe exchange transactions
+ * Now uses Convex real-time subscriptions!
+ */
+export function useSafeExchangeTransactions(userId: string | null, status?: string | null) {
+  const transactions = useTransactionsByBuyer(userId || undefined, status || undefined);
+
+  return {
+    data: transactions || [],
+    loading: transactions === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
+}
+
+/**
+ * Hook for fetching a single safe exchange transaction
+ * Now uses Convex real-time subscriptions!
+ */
+export function useSafeExchangeTransaction(transactionId: string | null) {
+  const transaction = useTransaction(transactionId || undefined);
+
+  return {
+    transaction: transaction || null,
+    loading: transaction === undefined,
+  };
+}
+
+/**
+ * Hook for fetching user library (purchased items)
+ * Now uses Convex real-time subscriptions!
+ */
+export function useUserLibrary(userId: string | null) {
+  const transactions = useTransactionsByBuyer(userId || undefined, 'completed');
+
+  return {
+    data: transactions || [],
+    loading: transactions === undefined,
+    refresh: () => {}, // No-op - Convex auto-updates!
+  };
 }
 
 /**
  * Hook for checking item ownership
  */
-export function useItemOwnership(userId: string | null, itemId: string | null): boolean {
-  const [isOwned, setIsOwned] = useState<boolean>(false);
+export function useItemOwnership(userId: string | null, itemId: string | null) {
+  const transactions = useTransactionsByBuyer(userId || undefined, 'completed');
 
-  useEffect(() => {
-    if (!userId || !itemId) {
-      setIsOwned(false);
-      return;
-    }
-
-    const checkOwnership = async () => {
-      try {
-        const result = await marketplaceService.checkOwnership(userId, itemId);
-        setIsOwned(result);
-      } catch (error) {
-        console.error('Error checking ownership:', error);
-      }
-    };
-
-    checkOwnership();
-  }, [userId, itemId]);
+  const isOwned = transactions?.some(t => t.itemId === itemId) || false;
 
   return isOwned;
 }
 
 // =====================================================
-// DISTRIBUTION HOOKS
+// TRANSACTION MUTATIONS
 // =====================================================
 
 /**
- * Hook for fetching distribution releases with polling
+ * Hook for transaction mutations
  */
-export function useDistributionReleases(userId: string | null): PollingResult<any> {
-  return usePolling(
-    async () => {
-      if (!userId) return [];
-      return await marketplaceService.fetchDistributionReleases(userId);
+export function useTransactionMutations() {
+  const { create, acceptOffer, rejectOffer, complete, cancel, addTracking } = useTransactionMutations();
+
+  return {
+    createTransaction: async (transactionData: any) => {
+      try {
+        const result = await create(transactionData);
+        return result;
+      } catch (error) {
+        console.error('Failed to create transaction:', error);
+        throw error;
+      }
     },
-    [userId],
-    !!userId
-  );
+
+    createOffer: async (offerData: any) => {
+      try {
+        const result = await create(offerData);
+        return result;
+      } catch (error) {
+        console.error('Failed to create offer:', error);
+        throw error;
+      }
+    },
+
+    acceptOffer: async (transactionId: string, counterOffer?: number, message?: string) => {
+      try {
+        await acceptOffer({
+          transactionId: transactionId as any,
+          counterOffer,
+          message,
+        });
+      } catch (error) {
+        console.error('Failed to accept offer:', error);
+        throw error;
+      }
+    },
+
+    rejectOffer: async (transactionId: string, reason?: string) => {
+      try {
+        await rejectOffer({
+          transactionId: transactionId as any,
+        });
+      } catch (error) {
+        console.error('Failed to reject offer:', error);
+        throw error;
+      }
+    },
+
+    completeTransaction: async (transactionId: string) => {
+      try {
+        await complete({
+          transactionId: transactionId as any,
+        });
+      } catch (error) {
+        console.error('Failed to complete transaction:', error);
+        throw error;
+      }
+    },
+
+    cancelTransaction: async (transactionId: string) => {
+      try {
+        await cancel({
+          transactionId: transactionId as any,
+        });
+      } catch (error) {
+        console.error('Failed to cancel transaction:', error);
+        throw error;
+      }
+    },
+
+    addTrackingNumber: async (transactionId: string, trackingNumber: string) => {
+      try {
+        await addTracking({
+          transactionId: transactionId as any,
+          trackingNumber,
+        });
+      } catch (error) {
+        console.error('Failed to add tracking number:', error);
+        throw error;
+      }
+    },
+  };
+}
+
+// =====================================================
+// DISTRIBUTION HOOKS (Not yet implemented in Convex)
+// =====================================================
+
+/**
+ * Hook for fetching distribution releases
+ * TODO: Not yet implemented in Convex
+ */
+export function useDistributionReleases(userId: string | null) {
+  return {
+    data: [],
+    loading: false,
+    refresh: () => {},
+  };
 }
 
 /**
  * Hook for fetching a single distribution release
+ * TODO: Not yet implemented in Convex
  */
 export function useDistributionRelease(releaseId: string | null) {
-  const [release, setRelease] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  useEffect(() => {
-    if (!releaseId) {
-      setLoading(false);
-      return;
-    }
-
-    const fetchRelease = async () => {
-      setLoading(true);
-      try {
-        const result = await marketplaceService.fetchDistributionRelease(releaseId);
-        setRelease(result);
-      } catch (error) {
-        console.error('Error fetching release:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchRelease();
-  }, [releaseId]);
-
-  return { release, loading };
+  return {
+    release: null,
+    loading: false,
+  };
 }
 
-// =====================================================
-// MUTATION HOOKS
-// =====================================================
-
 /**
- * Hook for marketplace mutation functions
- * Returns all the mutation functions for creating, updating, and deleting marketplace data
+ * Hook for distribution mutations
+ * TODO: Not yet implemented in Convex
  */
-export function useMarketplaceMutations() {
+export function useDistributionMutations() {
   return {
-    // Gear mutations
-    createListing: async (data: any) => {
-      return await marketplaceService.createListing(data);
-    },
-    updateListingStatus: async (id: string, status: string) => {
-      return await marketplaceService.updateListingStatus(id, status);
-    },
-    createOrder: async (data: any) => {
-      return await marketplaceService.createOrder(data);
-    },
-    updateOrderStatus: async (id: string, status: string) => {
-      return await marketplaceService.updateOrderStatus(id, status);
-    },
-    createOffer: async (data: any) => {
-      return await marketplaceService.createOffer(data);
-    },
-    respondToOffer: async (id: string, response: string) => {
-      return await marketplaceService.respondToOffer(id, response);
-    },
-
-    // Safe exchange mutations
-    createTransaction: async (data: any) => {
-      return await marketplaceService.createTransaction(data);
-    },
-    updateTransaction: async (id: string, data: any) => {
-      return await marketplaceService.updateTransaction(id, data);
-    },
-    addPhoto: async (transactionId: string, photoUrl: string) => {
-      return await marketplaceService.addPhoto(transactionId, photoUrl);
-    },
-
-    // SeshFx mutations
-    createMarketplaceItem: async (data: any) => {
-      return await marketplaceService.createMarketplaceItem(data);
-    },
-    purchaseItem: async (userId: string, itemId: string) => {
-      return await marketplaceService.purchaseItem(userId, itemId);
-    },
-
-    // Distribution mutations
     createRelease: async (data: any) => {
-      return await marketplaceService.createRelease(data);
+      console.warn('Distribution releases not yet implemented in Convex');
+      throw new Error('Not yet implemented');
     },
-    updateRelease: async (id: string, data: any) => {
-      return await marketplaceService.updateRelease(id, data);
+    updateRelease: async (releaseId: string, data: any) => {
+      console.warn('Distribution releases not yet implemented in Convex');
+      throw new Error('Not yet implemented');
     },
-    deleteRelease: async (id: string) => {
-      return await marketplaceService.deleteRelease(id);
+    deleteRelease: async (releaseId: string) => {
+      console.warn('Distribution releases not yet implemented in Convex');
+      throw new Error('Not yet implemented');
     },
   };
 }

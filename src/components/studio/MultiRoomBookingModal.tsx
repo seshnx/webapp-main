@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Home, Plus, X, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { query as neonQuery } from '../../config/neon.js';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated';
 
 /**
  * Room interface
@@ -69,6 +70,9 @@ export default function MultiRoomBookingModal({ booking, rooms, onClose, onSucce
     const [roomTimeSlots, setRoomTimeSlots] = useState<RoomTimeSlots>({});
     const [loading, setLoading] = useState<boolean>(false);
 
+    // Convex mutation for creating bookings
+    const createBooking = useMutation(api.bookings.createBooking);
+
     useEffect(() => {
         // Initialize with booking's time if available
         if (booking?.booking_start && booking?.duration) {
@@ -112,37 +116,27 @@ export default function MultiRoomBookingModal({ booking, rooms, onClose, onSucce
         const toastId = toast.loading('Assigning rooms...');
 
         try {
-            // Create room booking records
-            const roomBookings: RoomBookingData[] = selectedRooms.map(roomId => {
-                const slot = roomTimeSlots[roomId];
-                const startTime = slot?.start ? new Date(slot.start) : new Date(booking.booking_start || booking.date);
-                const endTime = slot?.end ? new Date(slot.end) : new Date(startTime.getTime() + ((booking.duration || 1) * 60 * 60 * 1000));
-
-                const room = rooms.find(r => r.id === roomId);
-                return {
-                    booking_id: booking.id,
-                    room_id: roomId,
-                    room_name: room?.name || `Room ${roomId}`,
-                    start_time: startTime.toISOString(),
-                    end_time: endTime.toISOString()
-                };
-            });
-
-            // Insert room bookings using Neon
+            // Create booking records for each room using Convex
             await Promise.all(
-                roomBookings.map(rb =>
-                    neonQuery(`
-                        INSERT INTO room_bookings (
-                            booking_id, room_id, room_name, start_time, end_time
-                        ) VALUES ($1, $2, $3, $4, $5)
-                    `, [
-                        rb.booking_id,
-                        rb.room_id,
-                        rb.room_name,
-                        rb.start_time,
-                        rb.end_time
-                    ])
-                )
+                selectedRooms.map(async (roomId) => {
+                    const slot = roomTimeSlots[roomId];
+                    const startTime = slot?.start ? new Date(slot.start) : new Date(booking.booking_start || booking.date);
+                    const endTime = slot?.end ? new Date(slot.end) : new Date(startTime.getTime() + ((booking.duration || 1) * 60 * 60 * 1000));
+
+                    const room = rooms.find(r => r.id === roomId);
+
+                    // Create a booking for this room
+                    await createBooking({
+                        studioId: roomId as any, // Using roomId as studioId for this room booking
+                        clientId: booking.sender_id as any || booking.clientId as any,
+                        roomId: roomId as any,
+                        date: startTime.toISOString().split('T')[0],
+                        startTime: startTime.toISOString(),
+                        endTime: endTime.toISOString(),
+                        status: 'Confirmed',
+                        notes: `Room booking for: ${room?.name || roomId}`,
+                    });
+                })
             );
 
             toast.success(`${selectedRooms.length} room(s) assigned!`, { id: toastId });

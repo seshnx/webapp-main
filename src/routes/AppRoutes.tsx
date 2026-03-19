@@ -2,7 +2,8 @@ import React, { lazy, Suspense, useEffect, ComponentType, LazyExoticComponent } 
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth } from '@clerk/react';
 import { Loader2 } from 'lucide-react';
-import { updateProfile } from '../config/neonQueries';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated';
 import type { UserData, AccountType } from '../types';
 
 // =====================================================
@@ -176,6 +177,9 @@ export default function AppRoutes({
 }: AppRoutesProps): JSX.Element {
   const { userId } = useAuth();
 
+  // Convex mutation for profile updates
+  const updateProfile = useMutation(api.users.updateProfile);
+
   return (
     <Routes>
       {/* MainLayout handles these routes internally via activeTab with URL sync */}
@@ -254,10 +258,11 @@ export default function AppRoutes({
               onUpdate={async (newData: UserData | Partial<UserData>) => {
                 // Handle both settings updates (object) and userData updates (UserData object)
                 if (onUserDataUpdate && newData) {
-                  // If it's a settings object (has settings property), save to DB
+                  // If it's a settings object (has settings property), save to Convex
                   if ('settings' in newData && newData.settings && userId) {
                     try {
-                      await updateProfile(userId, {
+                      await updateProfile({
+                        clerkId: userId,
                         settings: newData.settings,
                       });
                       console.log('Settings saved successfully');
@@ -271,11 +276,12 @@ export default function AppRoutes({
                 }
               }}
               onRoleSwitch={async (newRole: AccountType) => {
-                // Role switch - update active role in database using Neon
+                // Role switch - update active role in Convex
                 if (userId) {
                   try {
-                    await updateProfile(userId, {
-                      active_role: newRole,
+                    await updateProfile({
+                      clerkId: userId,
+                      activeRole: newRole,
                     });
                     console.log('Role switched to:', newRole);
                     // Reload page to reflect changes

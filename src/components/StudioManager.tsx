@@ -4,7 +4,9 @@ import {
   Package, Settings, ChevronRight, Briefcase, Users, TrendingUp, LucideIcon
 } from 'lucide-react';
 // Import database functions
-import { getBookings } from '../config/neonQueries';
+// TODO: Replace with Convex query
+// import { useQuery } from 'convex/react';
+// import { api } from '../../convex/_generated';
 // Import sub-components
 import StudioOverview from './studio/StudioOverview';
 import StudioRooms from './studio/StudioRooms';
@@ -104,8 +106,9 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
       const userId = userData?.id || user?.id || user?.uid;
 
       try {
-        // Fetch bookings where user is the studio owner using direct database call
-        const bookings = await getBookings(userId, { limit: 100 });
+        // TODO: Replace with Convex query
+        // const bookings = await convexQuery(api.bookings.getBookingsByStudio, { studioId: userId });
+        const bookings: Booking[] = [];
 
         const pending = bookings.filter(b => b.status === 'Pending' || b.status === 'pending').length;
         const recent = bookings

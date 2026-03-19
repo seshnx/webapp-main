@@ -5,8 +5,14 @@ import {
   SlidersHorizontal, XCircle
 } from 'lucide-react';
 import { TECH_SPECIALTIES, SERVICE_CATALOGUE } from '../../config/constants';
-import { searchTechnicians, type TechnicianProfile } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery } from 'convex/react';
+// import { api } from '../../../convex/_generated';
+
 import type { UserData } from '../../types';
+
+// Inline type until Convex migration
+interface TechnicianProfile { user_id?: string; [key: string]: any; }
 
 /**
  * Props for TechSearch component
@@ -80,24 +86,9 @@ export default function TechSearch({ user, userData, openPublicProfile, onReques
     try {
       const userId = user?.id || user?.uid;
 
-      // Build location filter for search
-      const locationFilter = filters.userLocation ? {
-        lat: filters.userLocation.lat,
-        lng: filters.userLocation.lng,
-        radius: filters.serviceRadius
-      } : undefined;
-
-      const results = await searchTechnicians({
-        specialty: filters.specialty || undefined,
-        location: locationFilter,
-        availability: filters.availability === 'any' ? undefined : filters.availability,
-        minRating: filters.minRating || undefined,
-        maxRate: filters.maxRate,
-        maxResponseTime: filters.responseTime === 'any' ? undefined :
-                          filters.responseTime === '2h' ? 2 :
-                          filters.responseTime === '6h' ? 6 : 24,
-        limit: 50
-      });
+      // TODO: Replace with Convex query
+      // const results = await convexQuery(api.tech.searchTechnicians, { specialty, location, ... });
+      const results: TechnicianProfile[] = [];
 
       // Sort results
       const sorted = sortTechnicians(results, sortBy);

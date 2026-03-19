@@ -1,17 +1,22 @@
-import { useState, useEffect } from 'react';
-import { getSubProfile } from '../config/neonQueries';
-import { useNotifications as useNeonNotifications } from './useNotifications';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated';
 import type { AccountType } from '../types';
-
-// NOTE: Convex real-time hooks for bookings and notifications are not yet implemented.
-// Use polling-based hooks (useMarketplace, useNotifications) for now.
-// See useConvexRealtime.ts for commented-out real-time hooks.
 
 /**
  * Sub-profile data interface
  */
 export interface SubProfileData {
   useRealName?: boolean;
+  displayName?: string;
+  bio?: string;
+  location?: string;
+  skills?: string[];
+  genres?: string[];
+  instruments?: string[];
+  rates?: number;
+  sessionRate?: number;
+  hourlyRate?: number;
+  availabilityStatus?: string;
   [key: string]: any;
 }
 
@@ -37,8 +42,9 @@ export interface UINotification {
 
 /**
  * Hook for loading user sub-profiles based on their roles
+ * Now uses Convex real-time subscriptions - no polling needed!
  *
- * @param uid - User ID
+ * @param clerkUserId - Clerk User ID (string)
  * @param roles - Array of account types/roles
  * @returns Map of role to profile data
  *
@@ -59,54 +65,54 @@ export interface UINotification {
  * }
  */
 export function useUserSubProfiles(
-  uid: string | null | undefined,
+  clerkUserId: string | null | undefined,
   roles: AccountType[] | null | undefined
 ): SubProfilesMap {
-  const [subProfiles, setSubProfiles] = useState<SubProfilesMap>({});
+  // Get all sub-profiles from Convex (real-time!)
+  const subProfiles = useQuery(
+    api.users.getSubProfiles,
+    clerkUserId ? { userId: clerkUserId } : "skip"
+  );
 
-  useEffect(() => {
-    if (!uid || !roles || roles.length === 0) {
-      setSubProfiles({});
-      return;
+  if (!clerkUserId || !roles || roles.length === 0) {
+    return {};
+  }
+
+  // Transform sub-profiles array to map by role
+  const profilesMap: SubProfilesMap = {};
+  const availableProfiles = subProfiles || [];
+
+  roles.forEach(role => {
+    const profile = availableProfiles.find(p => p.role === role);
+    if (profile) {
+      profilesMap[role] = {
+        useRealName: profile.useRealName,
+        displayName: profile.displayName,
+        bio: profile.bio,
+        location: profile.location,
+        skills: profile.skills,
+        genres: profile.genres,
+        instruments: profile.instruments,
+        rates: profile.rates,
+        sessionRate: profile.sessionRate,
+        hourlyRate: profile.hourlyRate,
+        availabilityStatus: profile.availabilityStatus,
+        // Add role-specific fields as needed
+      };
+    } else {
+      // Default profile if none exists for this role
+      profilesMap[role] = { useRealName: true };
     }
+  });
 
-    const loadSubProfiles = async () => {
-      try {
-        const profilesMap: SubProfilesMap = {};
-        await Promise.all(
-          roles.map(async (role) => {
-            try {
-              const profile = await getSubProfile(uid, role);
-              profilesMap[role] = profile || { useRealName: true };
-            } catch (err) {
-              profilesMap[role] = { useRealName: true };
-            }
-          })
-        );
-
-        setSubProfiles(profilesMap);
-      } catch (err) {
-        console.error('Error loading sub profiles:', err);
-      }
-    };
-
-    loadSubProfiles();
-
-    // Poll for changes every 30 seconds (since we don't have real-time subscriptions)
-    const interval = setInterval(loadSubProfiles, 30000);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [uid, JSON.stringify(roles)]);
-
-  return subProfiles;
+  return profilesMap;
 }
 
 /**
  * Hook for getting booking request count
+ * Now uses Convex real-time subscriptions!
  *
- * @param uid - User ID
+ * @param ownerId - Studio owner ID (Clerk ID)
  * @returns Number of pending booking requests
  *
  * @example
@@ -123,17 +129,25 @@ export function useUserSubProfiles(
  *   );
  * }
  */
-export function useBookingRequests(uid: string | null | undefined): number {
-  // TODO: Use pending bookings query from Neon
-  // For now, return 0 as placeholder
-  return 0;
+export function useBookingRequests(ownerId: string | null | undefined): number {
+  // Get bookings by studio owner from Convex (real-time!)
+  const bookings = useQuery(
+    api.bookings.getBookingsByStudio,
+    ownerId ? { ownerId, status: "Pending" } : "skip"
+  );
+
+  if (!ownerId) {
+    return 0;
+  }
+
+  return bookings?.length || 0;
 }
 
 /**
  * Hook for getting notifications (aggregates bookings & messages)
- * Uses Neon-based notifications
+ * Now uses Convex real-time subscriptions!
  *
- * @param uid - User ID
+ * @param clerkUserId - Clerk User ID
  * @returns Array of notifications
  *
  * @example
@@ -150,20 +164,132 @@ export function useBookingRequests(uid: string | null | undefined): number {
  *   );
  * }
  */
-export function useAppDataNotifications(uid: string | null | undefined): UINotification[] {
-  // Use Neon-based notifications hook
-  const { notifications: neonNotifs } = useNeonNotifications(uid || null);
+export function useAppDataNotifications(
+  clerkUserId: string | null | undefined
+): UINotification[] {
+  // Get notifications from Convex (real-time!)
+  const notifications = useQuery(
+    api.notifications.getNotifications,
+    clerkUserId ? { userId: clerkUserId } : "skip"
+  );
 
-  // Transform Neon notifications to the expected format
-  const notifications: UINotification[] = neonNotifs.map(n => ({
-    id: n.id,
+  if (!clerkUserId || !notifications) {
+    return [];
+  }
+
+  // Transform Convex notifications to UI format
+  return notifications.map(n => ({
+    id: n._id,
     type: n.type,
     title: n.title,
     text: n.message,
-    timestamp: new Date(n.created_at),
+    timestamp: new Date(n.createdAt),
     read: n.read,
-    actionData: n.metadata,
+    actionData: n.actionData,
   }));
+}
 
-  return notifications;
+/**
+ * Hook for getting complete user data
+ * Uses Convex real-time subscriptions
+ *
+ * @param clerkUserId - Clerk User ID
+ * @returns User object with all profile data
+ *
+ * @example
+ * function UserProfile({ userId }) {
+ *   const user = useUserData(userId);
+ *
+ *   if (!user) return <div>Loading...</div>;
+ *
+ *   return (
+ *     <div>
+ *       <h1>{user.displayName}</h1>
+ *       <p>{user.bio}</p>
+ *     </div>
+ *   );
+ * }
+ */
+export function useUserData(clerkUserId: string | null | undefined) {
+  // Get user from Convex (real-time!)
+  return useQuery(
+    api.users.getUserByClerkId,
+    clerkUserId ? { clerkId: clerkUserId } : "skip"
+  );
+}
+
+/**
+ * Hook for getting user's active profile data
+ * Returns the main user profile with all fields
+ *
+ * @param clerkUserId - Clerk User ID
+ * @returns User profile data
+ */
+export function useUserProfile(clerkUserId: string | null | undefined) {
+  const user = useUserData(clerkUserId);
+
+  if (!user) {
+    return null;
+  }
+
+  // Return complete user profile with all fields
+  return {
+    id: user._id,
+    clerkId: user.clerkId,
+    displayName: user.displayName,
+    username: user.username,
+    bio: user.bio,
+    headline: user.headline,
+    avatarUrl: user.avatarUrl,
+    bannerUrl: user.bannerUrl,
+    location: user.location,
+    website: user.website,
+    skills: user.skills,
+    genres: user.genres,
+    instruments: user.instruments,
+    accountTypes: user.accountTypes,
+    stats: user.stats,
+    settings: user.settings,
+    // Role-specific fields
+    talentSubRole: user.talentSubRole,
+    vocalRange: user.vocalRange,
+    studioHours: user.studioHours,
+    // Add more fields as needed
+  };
+}
+
+/**
+ * Hook for checking if user has a specific role
+ *
+ * @param clerkUserId - Clerk User ID
+ * @param role - Role to check
+ * @returns Boolean indicating if user has the role
+ */
+export function useHasRole(
+  clerkUserId: string | null | undefined,
+  role: AccountType
+): boolean {
+  const user = useUserData(clerkUserId);
+
+  if (!user || !user.accountTypes) {
+    return false;
+  }
+
+  return user.accountTypes.includes(role);
+}
+
+/**
+ * Hook for getting user's active role
+ *
+ * @param clerkUserId - Clerk User ID
+ * @returns Active role or null
+ */
+export function useActiveRole(clerkUserId: string | null | undefined): AccountType | null {
+  const user = useUserData(clerkUserId);
+
+  if (!user || !user.activeRole) {
+    return null;
+  }
+
+  return user.activeRole as AccountType;
 }

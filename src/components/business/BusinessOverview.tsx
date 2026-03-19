@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getLabelMetrics, getStudioMetrics, getDistributionMetrics, getTechMetrics } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery } from 'convex/react';
+// import { api } from '../../../convex/_generated';
 import LabelOverviewCard from './LabelOverviewCard';
 import StudioOverviewCard from './StudioOverviewCard';
 import DistributionOverviewCard from './DistributionOverviewCard';
@@ -68,26 +70,13 @@ export default function BusinessOverview({ user, userData, setActiveTab }: Busin
             const results: MetricsData = {};
 
             try {
-                // Fetch metrics based on account types
-                if (isLabel) {
-                    const labelData = await getLabelMetrics(userId);
-                    results.label = labelData?.[0] || {};
-                }
-
-                if (isStudio) {
-                    const studioData = await getStudioMetrics(userId);
-                    results.studio = studioData?.[0] || {};
-                }
-
-                if (hasDistribution) {
-                    const distData = await getDistributionMetrics(userId);
-                    results.distribution = distData?.[0] || {};
-                }
-
-                if (isTechnician) {
-                    const techData = await getTechMetrics(userId);
-                    results.tech = techData;
-                }
+                // TODO: Replace with Convex queries per account type
+                // e.g. useQuery(api.labels.getMetrics, { labelId: userId })
+                // Returning empty data until Convex migration is complete
+                if (isLabel) results.label = {};
+                if (isStudio) results.studio = {};
+                if (hasDistribution) results.distribution = {};
+                if (isTechnician) results.tech = {};
 
                 setMetrics(results);
             } catch (error) {

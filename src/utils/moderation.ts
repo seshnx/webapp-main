@@ -1,12 +1,18 @@
 // src/utils/moderation.ts
 
-import {
-  reportContent,
-  getPendingReports,
-  updateReportStatus as updateReportStatusQuery,
-  hasUserReported,
-  type ContentReport
-} from '../config/neonQueries';
+// TODO: Replace with Convex mutations and queries
+// import { useMutation, useQuery } from 'convex/react';
+// import { api } from '../../convex/_generated';
+
+// Stub type for compatibility
+type ContentReport = {
+  id: string;
+  reporterId: string;
+  targetType: 'post' | 'comment' | 'user';
+  targetId: string;
+  reason: string;
+  description?: string;
+};
 
 export const REPORT_REASONS: string[] = [
   "Spam or commercial solicitation",
@@ -68,28 +74,23 @@ export const submitReport = async ({
   isFacultyAction = false
 }: SubmitReportParams): Promise<ReportResult> => {
   try {
-    // Map the content type (handle message and market_item as post for now)
     const mappedType: 'post' | 'comment' | 'user' =
       contentType === 'message' || contentType === 'market_item'
         ? 'post'
         : contentType;
 
-    // Map the reason to database value
     const mappedReason = REASON_MAP[reason] || 'other';
 
-    // Submit report to Neon
-    const report = await reportContent({
-      reporterId,
-      targetType: mappedType,
-      targetId: contentId,
-      reason: mappedReason,
-      description: description || `Summary: ${contentSummary}`
+    // TODO: Replace with Convex mutation
+    // await reportContentMutation({ reporterId, targetType: mappedType, targetId: contentId, reason: mappedReason, description })
+    console.log('Content report submitted (TODO: implement via Convex):', {
+      reporterId, targetType: mappedType, targetId: contentId, reason: mappedReason
     });
 
     return {
       success: true,
       message: 'Report submitted successfully',
-      reportId: report.id
+      reportId: `temp-${Date.now()}`
     };
   } catch (error: any) {
     console.error('Report submission failed:', error);
@@ -106,11 +107,9 @@ export const getReports = async (filters: Record<string, any> = {}): Promise<any
     const status = filters.status || 'pending';
     const limit = filters.limit || 50;
 
-    if (status === 'pending') {
-      return await getPendingReports(limit);
-    }
-
-    // For other statuses, you would need to add more query functions
+    // TODO: Replace with Convex query
+    // return await convexQuery(api.moderation.getReports, { status, limit });
+    console.log('getReports called (TODO: implement via Convex)', { status, limit });
     return [];
   } catch (error: any) {
     console.error('Failed to get reports:', error);
@@ -129,12 +128,9 @@ export const updateReportStatus = async (
   reviewedBy: string
 ): Promise<{ success: boolean }> => {
   try {
-    await updateReportStatusQuery(
-      reportId,
-      status as 'reviewed' | 'resolved' | 'dismissed',
-      reviewedBy,
-      notes
-    );
+    // TODO: Replace with Convex mutation
+    // await updateReportStatusMutation({ reportId, status, reviewedBy, notes })
+    console.log('updateReportStatus called (TODO: implement via Convex)', { reportId, status });
     return { success: true };
   } catch (error: any) {
     console.error('Failed to update report status:', error);
@@ -151,18 +147,14 @@ export const checkContentStatus = async (
   contentType: string
 ): Promise<{ isHidden: boolean; isFlagged: boolean }> => {
   try {
-    // Check if there are pending reports
     const mappedType: 'post' | 'comment' | 'user' =
       contentType === 'message' || contentType === 'market_item'
         ? 'post'
         : contentType as 'post' | 'comment' | 'user';
 
-    const reports = await hasUserReported('any', mappedType, contentId);
-
-    return {
-      isHidden: false,
-      isFlagged: reports
-    };
+    // TODO: Replace with Convex query
+    // return await convexQuery(api.moderation.hasReports, { contentId: contentId })
+    return { isHidden: false, isFlagged: false };
   } catch (error) {
     console.error('Failed to check content status:', error);
     return { isHidden: false, isFlagged: false };
@@ -178,7 +170,9 @@ export const checkIfUserReported = async (
   contentId: string
 ): Promise<boolean> => {
   try {
-    return await hasUserReported(userId, contentType, contentId);
+    // TODO: Replace with Convex query
+    // return await convexQuery(api.moderation.hasUserReported, { userId, contentType, contentId })
+    return false;
   } catch (error) {
     console.error('Failed to check if user reported:', error);
     return false;

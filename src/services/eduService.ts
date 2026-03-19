@@ -1,511 +1,489 @@
 /**
- * EDU Service
+ * EDU Service - Convex Only
  *
- * Handles all education operations using Neon PostgreSQL database.
- * Provides a clean API layer for EDU components to use.
+ * All education operations now use Convex for real-time updates.
+ * No more Neon/PostgreSQL - everything in one place.
  */
 
-import {
-  getSchoolById,
-  getSchools,
-  createSchool,
-  updateSchool,
-  getStudentByUserAndSchool,
-  getStudentsBySchool,
-  createStudent,
-  updateStudent,
-  getStaffByUserAndSchool,
-  getStaffBySchool,
-  createStaff,
-  updateStaff,
-  getCoursesBySchool,
-  getCourseById,
-  getEnrollmentsByStudent,
-  getEnrollmentsByCourse,
-  enrollStudent,
-  getSchoolsByRole,
-  hasRoleAtSchool,
-  recordCheckIn,
-  recordCheckOut,
-  getTodayCheckIn,
-  getTodayCheckOut,
-} from '../config/eduQueries';
+import { api } from '../../convex/_generated';
+import { useQuery, useMutation, Id } from 'convex/react';
 import * as Sentry from '@sentry/react';
 
 // =====================================================
-// SCHOOL FUNCTIONS
+// SCHOOL QUERIES
 // =====================================================
-
-/**
- * Get school by ID
- */
-export async function fetchSchool(schoolId: string) {
-  try {
-    return await getSchoolById(schoolId);
-  } catch (error) {
-    console.error('Failed to fetch school:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchSchool' },
-      extra: { schoolId }
-    });
-    return null;
-  }
-}
 
 /**
  * Get all schools
  */
-export async function fetchSchools(options: { isActive?: boolean; limit?: number } = {}) {
-  try {
-    return await getSchools(options);
-  } catch (error) {
-    console.error('Failed to fetch schools:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchSchools' }
-    });
-    return [];
-  }
+export function useSchools() {
+  return useQuery(api.edu.getSchools);
 }
 
 /**
- * Create a new school
+ * Get school by ID
  */
-export async function createNewSchool(schoolData: {
-  name: string;
-  short_name?: string;
-  description?: string;
-  address?: any;
-  phone?: string;
-  email?: string;
-  website?: string;
-  logo_url?: string;
-  cover_image_url?: string;
-  type?: string;
-  accreditation?: string[];
-  settings?: any;
+export function useSchool(schoolId: string | undefined) {
+  return useQuery(
+    api.edu.getSchoolById,
+    schoolId ? { schoolId: schoolId as Id<"schools"> } : "skip"
+  );
+}
+
+/**
+ * Get schools by owner
+ */
+export function useSchoolsByOwner(ownerId: string | undefined) {
+  return useQuery(
+    api.edu.getSchoolsByOwner,
+    ownerId ? { ownerId } : "skip"
+  );
+}
+
+/**
+ * Search schools
+ */
+export function useSchoolSearch(filters: {
+  searchQuery?: string;
+  city?: string;
+  state?: string;
+  schoolType?: string;
+  limit?: number;
 }) {
-  try {
-    return await createSchool(schoolData);
-  } catch (error) {
-    console.error('Failed to create school:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'createNewSchool' }
-    });
-    throw error;
-  }
-}
-
-/**
- * Update school
- */
-export async function updateExistingSchool(
-  schoolId: string,
-  updates: {
-    name?: string;
-    short_name?: string;
-    description?: string;
-    address?: any;
-    phone?: string;
-    email?: string;
-    website?: string;
-    logo_url?: string;
-    cover_image_url?: string;
-    type?: string;
-    accreditation?: string[];
-    settings?: any;
-    is_active?: boolean;
-  }
-) {
-  try {
-    await updateSchool(schoolId, updates);
-  } catch (error) {
-    console.error('Failed to update school:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'updateExistingSchool' },
-      extra: { schoolId }
-    });
-    throw error;
-  }
+  return useQuery(api.edu.searchSchools, filters);
 }
 
 // =====================================================
-// STUDENT FUNCTIONS
+// SCHOOL MUTATIONS
 // =====================================================
 
 /**
- * Get student by user and school
+ * Hook for school mutations
  */
-export async function fetchStudentByUserAndSchool(userId: string, schoolId: string) {
-  try {
-    return await getStudentByUserAndSchool(userId, schoolId);
-  } catch (error) {
-    console.error('Failed to fetch student:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchStudentByUserAndSchool' },
-      extra: { userId, schoolId }
-    });
-    return null;
-  }
+export function useSchoolMutations() {
+  const create = useMutation(api.edu.createSchool);
+  const update = useMutation(api.edu.updateSchool);
+  const remove = useMutation(api.edu.deleteSchool);
+
+  return {
+    create,
+    update,
+    remove,
+  };
 }
+
+// =====================================================
+// STUDENT QUERIES
+// =====================================================
 
 /**
  * Get students by school
  */
-export async function fetchStudentsBySchool(schoolId: string, options: { status?: string; limit?: number } = {}) {
-  try {
-    return await getStudentsBySchool(schoolId, options);
-  } catch (error) {
-    console.error('Failed to fetch students:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchStudentsBySchool' },
-      extra: { schoolId }
-    });
-    return [];
-  }
-}
-
-/**
- * Create a new student
- */
-export async function createNewStudent(studentData: {
-  user_id: string;
-  school_id: string;
-  student_id?: string;
-  enrollment_date?: string;
-  graduation_date?: string;
-  program?: string;
-  cohort?: string;
-}) {
-  try {
-    return await createStudent(studentData);
-  } catch (error) {
-    console.error('Failed to create student:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'createNewStudent' }
-    });
-    throw error;
-  }
-}
-
-/**
- * Update student
- */
-export async function updateExistingStudent(
-  studentId: string,
-  updates: {
-    status?: string;
-    program?: string;
-    cohort?: string;
-    gpa?: number;
-    credits_earned?: number;
-    internship_studio_id?: string;
-    graduation_date?: string;
-    notes?: string;
-  }
+export function useStudentsBySchool(
+  schoolId: string | undefined,
+  status?: string,
+  limit = 50
 ) {
-  try {
-    await updateStudent(studentId, updates);
-  } catch (error) {
-    console.error('Failed to update student:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'updateExistingStudent' },
-      extra: { studentId }
-    });
-    throw error;
-  }
+  return useQuery(
+    api.edu.getStudentsBySchool,
+    schoolId ? { schoolId: schoolId as Id<"schools">, status, limit } : "skip"
+  );
+}
+
+/**
+ * Get student by user and school
+ */
+export function useStudentByUserAndSchool(
+  userId: string | undefined,
+  schoolId: string | undefined
+) {
+  return useQuery(
+    api.edu.getStudentByUserAndSchool,
+    (userId && schoolId)
+      ? { userId: userId as Id<"users">, schoolId: schoolId as Id<"schools"> }
+      : "skip"
+  );
 }
 
 // =====================================================
-// STAFF FUNCTIONS
+// STUDENT MUTATIONS
 // =====================================================
 
 /**
- * Get staff by user and school
+ * Hook for student mutations
  */
-export async function fetchStaffByUserAndSchool(userId: string, schoolId: string) {
-  try {
-    return await getStaffByUserAndSchool(userId, schoolId);
-  } catch (error) {
-    console.error('Failed to fetch staff:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchStaffByUserAndSchool' },
-      extra: { userId, schoolId }
-    });
-    return null;
-  }
+export function useStudentMutations() {
+  const create = useMutation(api.edu.createStudent);
+  const update = useMutation(api.edu.updateStudent);
+  const remove = useMutation(api.edu.deleteStudent);
+
+  return {
+    create,
+    update,
+    remove,
+  };
 }
+
+// =====================================================
+// STAFF QUERIES
+// =====================================================
 
 /**
  * Get staff by school
  */
-export async function fetchStaffBySchool(schoolId: string, options: { status?: string; limit?: number } = {}) {
-  try {
-    return await getStaffBySchool(schoolId, options);
-  } catch (error) {
-    console.error('Failed to fetch staff:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchStaffBySchool' },
-      extra: { schoolId }
-    });
-    return [];
-  }
-}
-
-/**
- * Create a new staff member
- */
-export async function createNewStaff(staffData: {
-  user_id: string;
-  school_id: string;
-  role_id?: string;
-  title?: string;
-  department?: string;
-  hire_date?: string;
-  permissions?: any;
-}) {
-  try {
-    return await createStaff(staffData);
-  } catch (error) {
-    console.error('Failed to create staff:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'createNewStaff' }
-    });
-    throw error;
-  }
-}
-
-/**
- * Update staff
- */
-export async function updateExistingStaff(
-  staffId: string,
-  updates: {
-    role_id?: string;
-    title?: string;
-    department?: string;
-    status?: string;
-    permissions?: any;
-    notes?: string;
-  }
+export function useStaffBySchool(
+  schoolId: string | undefined,
+  role?: string,
+  limit = 50
 ) {
-  try {
-    await updateStaff(staffId, updates);
-  } catch (error) {
-    console.error('Failed to update staff:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'updateExistingStaff' },
-      extra: { staffId }
-    });
-    throw error;
-  }
+  return useQuery(
+    api.edu.getStaffBySchool,
+    schoolId ? { schoolId: schoolId as Id<"schools">, role, limit } : "skip"
+  );
+}
+
+/**
+ * Get staff by user and school
+ */
+export function useStaffByUserAndSchool(
+  userId: string | undefined,
+  schoolId: string | undefined
+) {
+  return useQuery(
+    api.edu.getStaffByUserAndSchool,
+    (userId && schoolId)
+      ? { userId: userId as Id<"users">, schoolId: schoolId as Id<"schools"> }
+      : "skip"
+  );
 }
 
 // =====================================================
-// COURSE FUNCTIONS
+// STAFF MUTATIONS
+// =====================================================
+
+/**
+ * Hook for staff mutations
+ */
+export function useStaffMutations() {
+  const create = useMutation(api.edu.createStaff);
+  const update = useMutation(api.edu.updateStaff);
+  const remove = useMutation(api.edu.deleteStaff);
+
+  return {
+    create,
+    update,
+    remove,
+  };
+}
+
+// =====================================================
+// COURSE/CLASS QUERIES
 // =====================================================
 
 /**
  * Get courses by school
  */
-export async function fetchCoursesBySchool(schoolId: string, options: { semester?: string; year?: number; status?: string } = {}) {
-  try {
-    return await getCoursesBySchool(schoolId, options);
-  } catch (error) {
-    console.error('Failed to fetch courses:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchCoursesBySchool' },
-      extra: { schoolId }
-    });
-    return [];
-  }
+export function useCoursesBySchool(
+  schoolId: string | undefined,
+  status?: string,
+  limit = 50
+) {
+  return useQuery(
+    api.edu.getCoursesBySchool,
+    schoolId ? { schoolId: schoolId as Id<"schools">, status, limit } : "skip"
+  );
 }
 
 /**
  * Get course by ID
  */
-export async function fetchCourseById(courseId: string) {
-  try {
-    return await getCourseById(courseId);
-  } catch (error) {
-    console.error('Failed to fetch course:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchCourseById' },
-      extra: { courseId }
-    });
-    return null;
-  }
+export function useCourse(courseId: string | undefined) {
+  return useQuery(
+    api.edu.getCourseById,
+    courseId ? { courseId: courseId as Id<"courses"> } : "skip"
+  );
 }
 
 // =====================================================
-// ENROLLMENT FUNCTIONS
+// COURSE/CLASS MUTATIONS
 // =====================================================
 
 /**
- * Get enrollments for student
+ * Hook for course mutations
  */
-export async function fetchEnrollmentsByStudent(studentId: string) {
-  try {
-    return await getEnrollmentsByStudent(studentId);
-  } catch (error) {
-    console.error('Failed to fetch enrollments:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchEnrollmentsByStudent' },
-      extra: { studentId }
-    });
-    return [];
-  }
-}
+export function useCourseMutations() {
+  const create = useMutation(api.edu.createCourse);
+  const update = useMutation(api.edu.updateCourse);
+  const remove = useMutation(api.edu.deleteCourse);
 
-/**
- * Get enrollments for course
- */
-export async function fetchEnrollmentsByCourse(courseId: string) {
-  try {
-    return await getEnrollmentsByCourse(courseId);
-  } catch (error) {
-    console.error('Failed to fetch course enrollments:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchEnrollmentsByCourse' },
-      extra: { courseId }
-    });
-    return [];
-  }
-}
-
-/**
- * Enroll student in course
- */
-export async function enrollStudentInCourse(studentId: string, courseId: string) {
-  try {
-    return await enrollStudent(studentId, courseId);
-  } catch (error) {
-    console.error('Failed to enroll student:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'enrollStudentInCourse' },
-      extra: { studentId, courseId }
-    });
-    throw error;
-  }
+  return {
+    create,
+    update,
+    remove,
+  };
 }
 
 // =====================================================
-// ROLE FUNCTIONS
+// ENROLLMENT QUERIES
 // =====================================================
 
 /**
- * Get schools for a specific role
+ * Get enrollments by student
  */
-export async function fetchSchoolsByRole(userId: string, role: 'Student' | 'Intern' | 'EDUStaff' | 'EDUAdmin'): Promise<string[]> {
-  try {
-    return await getSchoolsByRole(userId, role);
-  } catch (error) {
-    console.error('Failed to fetch schools by role:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'fetchSchoolsByRole' },
-      extra: { userId, role }
-    });
-    return [];
-  }
+export function useEnrollmentsByStudent(
+  studentId: string | undefined,
+  status?: string,
+  limit = 20
+) {
+  return useQuery(
+    api.edu.getEnrollmentsByStudent,
+    studentId ? { studentId: studentId as Id<"students">, status, limit } : "skip"
+  );
 }
 
 /**
- * Check if user has role at school
+ * Get enrollments by course
  */
-export async function checkRoleAtSchool(userId: string, schoolId: string, role: 'Student' | 'Intern' | 'EDUStaff' | 'EDUAdmin'): Promise<boolean> {
-  try {
-    return await hasRoleAtSchool(userId, schoolId, role);
-  } catch (error) {
-    console.error('Failed to check role at school:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'checkRoleAtSchool' },
-      extra: { userId, schoolId, role }
-    });
-    return false;
-  }
+export function useEnrollmentsByCourse(
+  courseId: string | undefined,
+  status?: string,
+  limit = 50
+) {
+  return useQuery(
+    api.edu.getEnrollmentsByCourse,
+    courseId ? { courseId: courseId as Id<"courses">, status, limit } : "skip"
+  );
 }
 
 // =====================================================
-// ATTENDANCE FUNCTIONS
+// ENROLLMENT MUTATIONS
 // =====================================================
 
 /**
- * Check in student
+ * Hook for enrollment mutations
  */
-export async function checkInStudent(studentId: string, schoolId: string) {
-  try {
-    const record = await recordCheckIn(studentId, schoolId);
-    return {
-      success: true,
-      timestamp: record.created_at,
-      error: undefined
-    };
-  } catch (error) {
-    console.error('Failed to check in student:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'checkInStudent' },
-      extra: { studentId, schoolId }
-    });
-    return {
-      success: false,
-      timestamp: undefined,
-      error: error instanceof Error ? error.message : 'Failed to check in'
-    };
-  }
+export function useEnrollmentMutations() {
+  const enroll = useMutation(api.edu.enrollStudent);
+  const update = useMutation(api.edu.updateEnrollment);
+  const withdraw = useMutation(api.eu.withdrawFromCourse);
+
+  return {
+    enroll,
+    update,
+    withdraw,
+  };
+}
+
+// =====================================================
+// INTERNSHIP QUERIES
+// =====================================================
+
+/**
+ * Get internships by student
+ */
+export function useInternshipsByStudent(
+  studentId: string | undefined,
+  status?: string,
+  limit = 20
+) {
+  return useQuery(
+    api.edu.getInternshipsByStudent,
+    studentId ? { studentId: studentId as Id<"students">, status, limit } : "skip"
+  );
 }
 
 /**
- * Check out student
+ * Get internships by school
  */
-export async function checkOutStudent(studentId: string, schoolId: string) {
-  try {
-    const record = await recordCheckOut(studentId, schoolId);
-    return {
-      success: true,
-      timestamp: record.created_at,
-      error: undefined
-    };
-  } catch (error) {
-    console.error('Failed to check out student:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'checkOutStudent' },
-      extra: { studentId, schoolId }
-    });
-    return {
-      success: false,
-      timestamp: undefined,
-      error: error instanceof Error ? error.message : 'Failed to check out'
-    };
-  }
+export function useInternshipsBySchool(
+  schoolId: string | undefined,
+  status?: string,
+  limit = 50
+) {
+  return useQuery(
+    api.edu.getInternshipsBySchool,
+    schoolId ? { schoolId: schoolId as Id<"schools">, status, limit } : "skip"
+  );
 }
 
-/**
- * Get today's check-in status
- */
-export async function getTodayCheckInStatus(studentId: string, schoolId: string) {
-  try {
-    return await getTodayCheckIn(studentId, schoolId);
-  } catch (error) {
-    console.error('Failed to get check-in status:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'getTodayCheckInStatus' },
-      extra: { studentId, schoolId }
-    });
-    return null;
-  }
-}
+// =====================================================
+// INTERNSHIP MUTATIONS
+// =====================================================
 
 /**
- * Get today's check-out status
+ * Hook for internship mutations
  */
-export async function getTodayCheckOutStatus(studentId: string, schoolId: string) {
-  try {
-    return await getTodayCheckOut(studentId, schoolId);
-  } catch (error) {
-    console.error('Failed to get check-out status:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'edu', function: 'getTodayCheckOutStatus' },
-      extra: { studentId, schoolId }
-    });
-    return null;
-  }
+export function useInternshipMutations() {
+  const create = useMutation(api.edu.createInternship);
+  const update = useMutation(api.edu.updateInternship);
+  const remove = useMutation(api.edu.deleteInternship);
+
+  return {
+    create,
+    update,
+    remove,
+  };
 }
+
+// =====================================================
+// LEGACY API FUNCTIONS (DEPRECATED)
+// =====================================================
+// These are kept for backward compatibility but should not be used
+
+export async function fetchSchool(schoolId: string) {
+  console.warn('fetchSchool: Use useSchool hook instead');
+  return null;
+}
+
+export async function fetchSchools(options: { isActive?: boolean; limit?: number } = {}) {
+  console.warn('fetchSchools: Use useSchools hook instead');
+  return [];
+}
+
+export async function createNewSchool(schoolData: any) {
+  console.warn('createNewSchool: Use useSchoolMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function updateSchoolData(schoolId: string, updates: any) {
+  console.warn('updateSchoolData: Use useSchoolMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function fetchStudent(studentId: string) {
+  console.warn('fetchStudent: Use useStudentByUserAndSchool hook instead');
+  return null;
+}
+
+export async function fetchStudentsBySchool(schoolId: string, status?: string, limit = 50) {
+  console.warn('fetchStudentsBySchool: Use useStudentsBySchool hook instead');
+  return [];
+}
+
+export async function createNewStudent(studentData: any) {
+  console.warn('createNewStudent: Use useStudentMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function updateStudentData(studentId: string, updates: any) {
+  console.warn('updateStudentData: Use useStudentMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function fetchStaff(staffId: string) {
+  console.warn('fetchStaff: Use useStaffByUserAndSchool hook instead');
+  return null;
+}
+
+export async function fetchStaffBySchool(schoolId: string, role?: string, limit = 50) {
+  console.warn('fetchStaffBySchool: Use useStaffBySchool hook instead');
+  return [];
+}
+
+export async function createNewStaff(staffData: any) {
+  console.warn('createNewStaff: Use useStaffMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function updateStaffData(staffId: string, updates: any) {
+  console.warn('updateStaffData: Use useStaffMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function fetchCourses(schoolId: string, status?: string, limit = 50) {
+  console.warn('fetchCourses: Use useCoursesBySchool hook instead');
+  return [];
+}
+
+export async function fetchCourse(courseId: string) {
+  console.warn('fetchCourse: Use useCourse hook instead');
+  return null;
+}
+
+export async function createNewCourse(courseData: any) {
+  console.warn('createNewCourse: Use useCourseMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function updateCourseData(courseId: string, updates: any) {
+  console.warn('updateCourseData: Use useCourseMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function fetchEnrollments(studentId: string, status?: string, limit = 20) {
+  console.warn('fetchEnrollments: Use useEnrollmentsByStudent hook instead');
+  return [];
+}
+
+export async function enrollStudentInCourse(enrollmentData: any) {
+  console.warn('enrollStudentInCourse: Use useEnrollmentMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function fetchInternships(studentId: string, status?: string, limit = 20) {
+  console.warn('fetchInternships: Use useInternshipsByStudent hook instead');
+  return [];
+}
+
+export async function createInternship(internshipData: any) {
+  console.warn('createInternship: Use useInternshipMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+export async function updateInternshipData(internshipId: string, updates: any) {
+  console.warn('updateInternshipData: Use useInternshipMutations hook instead');
+  throw new Error('Use Convex mutation directly');
+}
+
+// =====================================================
+// EXPORTS
+// =====================================================
+
+export default {
+  // Queries (use these in components)
+  useSchools,
+  useSchool,
+  useSchoolsByOwner,
+  useSchoolSearch,
+  useStudentsBySchool,
+  useStudentByUserAndSchool,
+  useStaffBySchool,
+  useStaffByUserAndSchool,
+  useCoursesBySchool,
+  useCourse,
+  useEnrollmentsByStudent,
+  useEnrollmentsByCourse,
+  useInternshipsByStudent,
+  useInternshipsBySchool,
+
+  // Mutations (use these in components)
+  useSchoolMutations,
+  useStudentMutations,
+  useStaffMutations,
+  useCourseMutations,
+  useEnrollmentMutations,
+  useInternshipMutations,
+
+  // Legacy functions (deprecated)
+  fetchSchool,
+  fetchSchools,
+  createNewSchool,
+  updateSchoolData,
+  fetchStudent,
+  fetchStudentsBySchool,
+  createNewStudent,
+  updateStudentData,
+  fetchStaff,
+  fetchStaffBySchool,
+  createNewStaff,
+  updateStaffData,
+  fetchCourses,
+  fetchCourse,
+  createNewCourse,
+  updateCourseData,
+  fetchEnrollments,
+  enrollStudentInCourse,
+  fetchInternships,
+  createInternship,
+  updateInternshipData,
+};

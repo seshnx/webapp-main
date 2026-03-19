@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { isConvexAvailable } from '../config/convex';
-import { neonClient } from '../config/neon';
+
 import ChatSidebar from './chat/ChatSidebar';
 import ChatWindow from './chat/ChatWindow';
 import ChatDetailsPane from './chat/ChatDetailsPane';
@@ -116,29 +116,9 @@ export default function ChatInterface({
     const fetchProfilePhotos = async (): Promise<void> => {
       if (!conversationsData) return;
 
-      // Get unique other user IDs from direct chats
-      const otherUserIds = conversationsData
-        .filter(c => c.chatType === 'direct' && c.otherUserId)
-        .map(c => c.otherUserId)
-        .filter((id, index, arr) => arr.indexOf(id) === index);
-
-      if (otherUserIds.length === 0) return;
-
-      try {
-        // Fetch profile photos from Neon using clerk_users
-        const query = `SELECT id, profile_photo_url as avatar_url FROM clerk_users WHERE id = ANY($1)`;
-        const profiles = await neonClient(query, [otherUserIds]);
-
-        if (profiles && profiles.length > 0) {
-          const photosMap: ProfilePhotosMap = {};
-          profiles.forEach(p => {
-            photosMap[p.id] = p.avatar_url;
-          });
-          setProfilePhotos(photosMap);
-        }
-      } catch (error) {
-        console.error('Failed to fetch profile photos:', error);
-      }
+      // Profile photos are already included in Convex conversation data via conv.chatPhoto
+      // No additional fetch needed - photos are populated from Convex user records
+      // TODO: If fresh photos are needed, use: useQuery(api.users.getProfilePhotos, { userIds })
     };
 
     fetchProfilePhotos();

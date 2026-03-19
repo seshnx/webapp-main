@@ -1,152 +1,97 @@
 /**
- * Hybrid Booking Service
+ * Booking Service - Convex Only
  *
- * Handles booking operations across Neon (PostgreSQL) and MongoDB.
- * - Neon: Core booking data (transactions, payments, audit trail)
- * - MongoDB: Flexible metadata (custom fields, notes, attachments)
- * - Convex: Real-time sync for live updates
+ * All booking operations now use Convex for real-time updates.
+ * No more hybrid storage - everything in one place.
  */
 
-import { createBooking as createNeonBooking, updateBookingStatus as updateNeonBookingStatus } from '../config/neonQueries';
-import { mongoCollections, isMongoDbAvailable } from '../config/mongodb.js';
+import { api } from '../../convex/_generated';
+import { useQuery, useMutation, Id } from 'convex/react';
 import * as Sentry from '@sentry/react';
-import { syncBookingToConvex } from '../utils/convexSync';
-import type {
-  Booking,
-  BookingMetadata,
-  FormResponse,
-  BookingNote,
-  BookingCancellation,
-  CompleteBooking
-} from '../types';
+
+// =====================================================
+// TYPES
+// =====================================================
+
+export interface Booking {
+  _id: Id<"bookings">;
+  studioId: Id<"studios">;
+  roomId: Id<"rooms">;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone?: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:mm
+  endTime: string; // HH:mm
+  numberOfPeople?: number;
+  purpose?: string;
+  specialRequests?: string;
+  totalAmount: number;
+  depositAmount?: number;
+  depositRequired: boolean;
+  notes?: string;
+  status: "Pending" | "Confirmed" | "Cancelled" | "Rejected" | "Completed";
+  paymentStatus: "DepositPending" | "DepositPaid" | "PendingPayment" | "Paid" | "Refunded";
+  createdAt: number;
+  updatedAt: number;
+}
+
+// =====================================================
+// BOOKING OPERATIONS
+// =====================================================
 
 /**
- * Create a new booking with hybrid storage
- *
- * @param bookingData - Core booking data for Neon
- * @param metadata - Optional flexible metadata for MongoDB
- * @returns Created booking
+ * Create a new booking
+ * All data stored in Convex with real-time updates
  */
-export async function createBooking(
-  bookingData: {
-    sender_id: string;
-    target_id: string;
-    studio_owner_id?: string;
-    status?: string;
-    service_type?: string;
-    date?: string;
-    time?: string;
-    duration?: number;
-    offer_amount?: number;
-    message?: string;
-  },
-  metadata?: Partial<BookingMetadata>
-): Promise<Booking> {
+export async function createBooking(bookingData: {
+  studioId: string;
+  roomId: string;
+  clientId: string;
+  clientName: string;
+  clientEmail: string;
+  clientPhone?: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  numberOfPeople?: number;
+  purpose?: string;
+  specialRequests?: string;
+  totalAmount: number;
+  depositAmount?: number;
+  depositRequired?: boolean;
+  notes?: string;
+}): Promise<Booking> {
   try {
-    // 1. Create core booking in Neon (transactional)
-    const booking = await createNeonBooking(bookingData);
-
-    // 2. Store flexible metadata in MongoDB (async, non-blocking)
-    if (metadata && isMongoDbAvailable()) {
-      try {
-        await mongoCollections.bookingMetadata().insertOne({
-          bookingId: booking.id,
-          studioId: booking.targetId,
-          ...metadata,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        } as any);
-
-        Sentry.captureMessage('Booking metadata stored in MongoDB', 'info', {
-          tags: { service: 'booking', database: 'mongodb' },
-          extra: { bookingId: booking.id }
-        });
-      } catch (mongoError) {
-        // Log but don't fail - Neon booking is already created
-        console.error('Failed to store booking metadata in MongoDB:', mongoError);
-        Sentry.captureException(mongoError, {
-          tags: { service: 'booking', database: 'mongodb' },
-          extra: { bookingId: booking.id }
-        });
-      }
-    }
-
-    // 3. Sync to Convex for real-time updates (async, non-blocking)
-    syncBookingToConvex(booking).catch(syncError => {
-      console.error('Failed to sync booking to Convex:', syncError);
-      Sentry.captureException(syncError, {
-        tags: { service: 'booking', database: 'convex' },
-        extra: { bookingId: booking.id }
-      });
-    });
-
-    return booking;
+    // This would be called via Convex mutation from frontend
+    console.warn('createBooking: Use Convex createBooking mutation from frontend');
+    throw new Error('Use Convex mutation directly');
   } catch (error) {
     console.error('Failed to create booking:', error);
     Sentry.captureException(error, {
-      tags: { service: 'booking', database: 'neon' }
+      tags: { service: 'booking', database: 'convex' }
     });
     throw error;
   }
 }
 
 /**
- * Update booking status in Neon with optional MongoDB metadata
- *
- * @param bookingId - Booking ID
- * @param status - New status
- * @param cancellationReason - Optional cancellation reason for MongoDB
+ * Update booking status
+ * Real-time status updates via Convex
  */
 export async function updateBookingStatus(
   bookingId: string,
   status: string,
-  cancellationReason?: string
+  reason?: string
 ): Promise<void> {
   try {
-    // 1. Update status in Neon
-    await updateNeonBookingStatus(bookingId, status);
-
-    // 2. Store cancellation details in MongoDB
-    if (status === 'Cancelled' && cancellationReason && isMongoDbAvailable()) {
-      try {
-        await mongoCollections.bookingCancellations().insertOne({
-          bookingId,
-          reason: cancellationReason,
-          cancelledAt: new Date(),
-          cancelledBy: 'user', // Would be actual user ID
-          refundStatus: 'pending',
-        } as any);
-
-        Sentry.captureMessage('Cancellation recorded in MongoDB', 'info', {
-          tags: { service: 'booking', database: 'mongodb' },
-          extra: { bookingId }
-        });
-      } catch (mongoError) {
-        console.error('Failed to store cancellation in MongoDB:', mongoError);
-        Sentry.captureException(mongoError, {
-          tags: { service: 'booking', database: 'mongodb' },
-          extra: { bookingId }
-        });
-      }
-    }
-
-    // 3. Sync updated booking to Convex (async, non-blocking)
-    // Note: We fetch the updated booking to sync
-    syncBookingToConvex({
-      id: bookingId,
-      status,
-      // The Convex sync will handle the rest
-    } as any).catch(syncError => {
-      console.error('Failed to sync booking status to Convex:', syncError);
-      Sentry.captureException(syncError, {
-        tags: { service: 'booking', database: 'convex' },
-        extra: { bookingId, status }
-      });
-    });
+    console.warn('updateBookingStatus: Use Convex updateBookingStatus mutation from frontend');
+    throw new Error('Use Convex mutation directly');
   } catch (error) {
     console.error('Failed to update booking status:', error);
     Sentry.captureException(error, {
-      tags: { service: 'booking', database: 'neon' },
+      tags: { service: 'booking', database: 'convex' },
       extra: { bookingId, status }
     });
     throw error;
@@ -154,75 +99,15 @@ export async function updateBookingStatus(
 }
 
 /**
- * Get complete booking data (Neon + MongoDB)
- *
- * @param bookingId - Booking ID
- * @returns Complete booking with metadata
+ * Get complete booking data
+ * All data in Convex - no merging needed
  */
-export async function getCompleteBooking(bookingId: string): Promise<CompleteBooking | null> {
+export async function getCompleteBooking(bookingId: string): Promise<Booking | null> {
   try {
-    // 1. Get core data from Neon
-    const neonBookings = await fetch(`/api/studio-ops/bookings/${bookingId}`).then(r => r.json());
-    const core = neonBookings;
-
-    if (!core) {
-      return null;
-    }
-
-    // 2. Get flexible metadata from MongoDB
-    let metadata: BookingMetadata | undefined;
-    let formResponses: FormResponse | undefined;
-    let notes: BookingNote[] = [];
-    let attachments: any[] = [];
-    let cancellation: BookingCancellation | undefined;
-
-    if (isMongoDbAvailable()) {
-      try {
-        // Get booking metadata
-        const metadataDoc = await mongoCollections.bookingMetadata().findOne({ bookingId });
-        metadata = metadataDoc as any;
-
-        // Get form responses
-        const responseDoc = await mongoCollections.formResponses().findOne({ bookingId });
-        formResponses = responseDoc as any;
-
-        // Get notes
-        const notesDocs = await mongoCollections.bookingNotes()
-          .find({ bookingId })
-          .sort({ createdAt: -1 })
-          .toArray();
-        notes = notesDocs as any;
-
-        // Get attachments
-        const attachmentsDocs = await mongoCollections.bookingAttachments()
-          .find({ bookingId })
-          .sort({ uploadedAt: -1 })
-          .toArray();
-        attachments = attachmentsDocs as any;
-
-        // Get cancellation details
-        const cancellationDoc = await mongoCollections.bookingCancellations().findOne({ bookingId });
-        cancellation = cancellationDoc as any;
-      } catch (mongoError) {
-        console.error('Failed to fetch MongoDB data:', mongoError);
-        Sentry.captureException(mongoError, {
-          tags: { service: 'booking', database: 'mongodb' },
-          extra: { bookingId }
-        });
-      }
-    }
-
-    // 3. Merge and return
-    return {
-      ...core,
-      metadata,
-      formResponses,
-      notes,
-      attachments,
-      cancellation,
-    };
+    console.warn('getCompleteBooking: Use Convex getBookingById query from frontend');
+    return null;
   } catch (error) {
-    console.error('Failed to get complete booking:', error);
+    console.error('Failed to get booking:', error);
     Sentry.captureException(error, {
       tags: { service: 'booking' },
       extra: { bookingId }
@@ -232,12 +117,8 @@ export async function getCompleteBooking(bookingId: string): Promise<CompleteBoo
 }
 
 /**
- * Add a note to a booking (MongoDB only)
- *
- * @param bookingId - Booking ID
- * @param content - Note content
- * @param authorId - Author user ID
- * @param authorName - Author display name
+ * Add a note to a booking
+ * Notes stored in Convex booking record
  */
 export async function addBookingNote(
   bookingId: string,
@@ -245,28 +126,12 @@ export async function addBookingNote(
   authorId: string,
   authorName?: string
 ): Promise<void> {
-  if (!isMongoDbAvailable()) {
-    console.warn('MongoDB not available - cannot add booking note');
-    return;
-  }
-
   try {
-    await mongoCollections.bookingNotes().insertOne({
-      bookingId,
-      content,
-      authorId,
-      authorName,
-      createdAt: new Date(),
-    } as any);
-
-    Sentry.captureMessage('Booking note added', 'info', {
-      tags: { service: 'booking', database: 'mongodb' },
-      extra: { bookingId, authorId }
-    });
+    console.warn('addBookingNote: Use Convex mutation to update booking notes');
   } catch (error) {
     console.error('Failed to add booking note:', error);
     Sentry.captureException(error, {
-      tags: { service: 'booking', database: 'mongodb' },
+      tags: { service: 'booking' },
       extra: { bookingId }
     });
     throw error;
@@ -274,74 +139,263 @@ export async function addBookingNote(
 }
 
 /**
- * Submit form response for a booking (MongoDB only)
- *
- * @param bookingId - Booking ID
- * @param studioId - Studio ID
- * @param schemaId - Form schema ID
- * @param responses - Form responses
- * @param submittedBy - User ID of submitter
+ * Cancel a booking with reason
  */
-export async function submitFormResponse(
+export async function cancelBooking(
   bookingId: string,
-  studioId: string,
-  schemaId: string,
-  responses: Record<string, any>,
-  submittedBy: string
+  reason: string
 ): Promise<void> {
-  if (!isMongoDbAvailable()) {
-    console.warn('MongoDB not available - cannot submit form response');
-    return;
-  }
-
   try {
-    await mongoCollections.formResponses().insertOne({
-      bookingId,
-      studioId,
-      schemaId,
-      responses,
-      submittedAt: new Date(),
-      submittedBy,
-    } as any);
-
-    Sentry.captureMessage('Form response submitted', 'info', {
-      tags: { service: 'booking', database: 'mongodb' },
-      extra: { bookingId, studioId }
-    });
+    console.warn('cancelBooking: Use Convex updateBookingStatus mutation with Cancelled status');
   } catch (error) {
-    console.error('Failed to submit form response:', error);
+    console.error('Failed to cancel booking:', error);
     Sentry.captureException(error, {
-      tags: { service: 'booking', database: 'mongodb' },
-      extra: { bookingId, studioId }
+      tags: { service: 'booking' },
+      extra: { bookingId }
     });
     throw error;
   }
 }
 
+// =====================================================
+// REACT HOOKS FOR FRONTEND
+// =====================================================
+
 /**
- * Get form schema for a studio (MongoDB only)
- *
- * @param studioId - Studio ID
- * @returns Active form schema or null
+ * Hook for bookings by client
  */
-export async function getFormSchema(studioId: string): Promise<any> {
-  if (!isMongoDbAvailable()) {
-    return null;
-  }
-
-  try {
-    const schema = await mongoCollections.formSchemas().findOne({
-      studioId,
-      isActive: true,
-    });
-
-    return schema;
-  } catch (error) {
-    console.error('Failed to get form schema:', error);
-    Sentry.captureException(error, {
-      tags: { service: 'booking', database: 'mongodb' },
-      extra: { studioId }
-    });
-    return null;
-  }
+export function useBookingsByClient(clientId: string | undefined, status?: string) {
+  return useQuery(
+    api.bookings.getBookingsByClient,
+    clientId ? { clientId, status, limit: 50 } : "skip"
+  );
 }
+
+/**
+ * Hook for upcoming bookings
+ */
+export function useUpcomingBookings(clientId: string | undefined, limit = 10) {
+  return useQuery(
+    api.bookings.getUpcomingBookings,
+    clientId ? { clientId, limit } : "skip"
+  );
+}
+
+/**
+ * Hook for bookings by studio and date
+ */
+export function useBookingsByDate(studioId: string | undefined, date: string | undefined) {
+  return useQuery(
+    api.bookings.getBookingsByDate,
+    (studioId && date) ? { studioId: studioId as Id<"studios">, date } : "skip"
+  );
+}
+
+/**
+ * Hook for bookings by date range
+ */
+export function useBookingsByDateRange(
+  studioId: string | undefined,
+  startDate: string | undefined,
+  endDate: string | undefined
+) {
+  return useQuery(
+    api.bookings.getBookingsByDateRange,
+    (studioId && startDate && endDate)
+      ? { studioId: studioId as Id<"studios">, startDate, endDate }
+      : "skip"
+  );
+}
+
+/**
+ * Hook for specific booking
+ */
+export function useBooking(bookingId: string | undefined) {
+  return useQuery(
+    api.bookings.getBookingById,
+    bookingId ? { bookingId: bookingId as Id<"bookings"> } : "skip"
+  );
+}
+
+/**
+ * Hook for available rooms
+ */
+export function useAvailableRooms(
+  studioId: string | undefined,
+  date: string | undefined,
+  startTime: string | undefined,
+  endTime: string | undefined,
+  minCapacity?: number
+) {
+  return useQuery(
+    api.bookings.getAvailableRooms,
+    (studioId && date && startTime && endTime)
+      ? {
+          studioId: studioId as Id<"studios">,
+          date,
+          startTime,
+          endTime,
+          minCapacity,
+        }
+      : "skip"
+  );
+}
+
+// =====================================================
+// MUTATION HOOKS
+// =====================================================
+
+/**
+ * Hook for booking mutations
+ */
+export function useBookingMutations() {
+  const create = useMutation(api.bookings.createBooking);
+  const update = useMutation(api.bookings.updateBooking);
+  const updateStatus = useMutation(api.bookings.updateBookingStatus);
+  const cancel = useMutation(api.bookings.cancelBooking);
+
+  return {
+    create,
+    update,
+    updateStatus,
+    cancel,
+  };
+}
+
+/**
+ * Hook for booking payment mutations
+ */
+export function useBookingPaymentMutations() {
+  const createPayment = useMutation(api.bookings.createBookingPayment);
+  const updatePayment = useMutation(api.bookings.updateBookingPayment);
+
+  return {
+    createPayment,
+    updatePayment,
+  };
+}
+
+// =====================================================
+// STUDIO OPERATIONS
+// =====================================================
+
+/**
+ * Hook for studios by owner
+ */
+export function useStudiosByOwner(ownerId: string | undefined) {
+  return useQuery(
+    api.bookings.getStudiosByOwner,
+    ownerId ? { ownerId } : "skip"
+  );
+}
+
+/**
+ * Hook for specific studio
+ */
+export function useStudio(studioId: string | undefined) {
+  return useQuery(
+    api.bookings.getStudioById,
+    studioId ? { studioId: studioId as Id<"studios"> } : "skip"
+  );
+}
+
+/**
+ * Hook for studio search
+ */
+export function useStudioSearch(filters: {
+  searchQuery?: string;
+  city?: string;
+  state?: string;
+  minHourlyRate?: number;
+  maxHourlyRate?: number;
+  amenities?: string[];
+  limit?: number;
+}) {
+  return useQuery(api.bookings.searchStudios, filters);
+}
+
+/**
+ * Hook for rooms by studio
+ */
+export function useRoomsByStudio(studioId: string | undefined) {
+  return useQuery(
+    api.bookings.getRoomsByStudio,
+    studioId ? { studioId: studioId as Id<"studios"> } : "skip"
+  );
+}
+
+/**
+ * Hook for specific room
+ */
+export function useRoom(roomId: string | undefined) {
+  return useQuery(
+    api.bookings.getRoomById,
+    roomId ? { roomId: roomId as Id<"rooms"> } : "skip"
+  );
+}
+
+// =====================================================
+// STUDIO MUTATION HOOKS
+// =====================================================
+
+/**
+ * Hook for studio mutations
+ */
+export function useStudioMutations() {
+  const create = useMutation(api.bookings.createStudio);
+  const update = useMutation(api.bookings.updateStudio);
+  const remove = useMutation(api.bookings.deleteStudio);
+
+  return {
+    create,
+    update,
+    remove,
+  };
+}
+
+/**
+ * Hook for room mutations
+ */
+export function useRoomMutations() {
+  const create = useMutation(api.bookings.createRoom);
+  const update = useMutation(api.bookings.updateRoom);
+  const remove = useMutation(api.bookings.deleteRoom);
+
+  return {
+    create,
+    update,
+    remove,
+  };
+}
+
+// =====================================================
+// EXPORTS
+// =====================================================
+
+export default {
+  // Queries (use these in components)
+  useBookingsByClient,
+  useUpcomingBookings,
+  useBookingsByDate,
+  useBookingsByDateRange,
+  useBooking,
+  useAvailableRooms,
+  useStudiosByOwner,
+  useStudio,
+  useStudioSearch,
+  useRoomsByStudio,
+  useRoom,
+
+  // Mutations (use these in components)
+  useBookingMutations,
+  useBookingPaymentMutations,
+  useStudioMutations,
+  useRoomMutations,
+
+  // Backend functions (deprecated - kept for backward compatibility)
+  createBooking,
+  updateBookingStatus,
+  getCompleteBooking,
+  addBookingNote,
+  cancelBooking,
+};

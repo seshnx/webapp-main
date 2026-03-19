@@ -5,10 +5,21 @@ import {
   Package, Truck, Home, Video
 } from 'lucide-react';
 import { SERVICE_CATALOGUE, TECH_SPECIALTIES } from '../../config/constants';
-import { createServiceRequest } from '../../config/neonQueries';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
-import type { TechnicianProfile, ServiceRequest } from '../../config/neonQueries';
 import type { UserData } from '../../types';
+
+// Types
+interface TechnicianProfile {
+  user_id?: string;
+  [key: string]: any;
+}
+
+interface ServiceRequest {
+  id?: string;
+  [key: string]: any;
+}
 
 /**
  * Step configuration
@@ -83,6 +94,9 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
   });
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Convex mutation for creating bookings
+  const createBooking = useMutation(api.bookings.createBooking);
 
   // Auto-save draft to localStorage
   useEffect(() => {
@@ -166,7 +180,26 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
         status: 'Open'
       };
 
-      const request = await createServiceRequest(requestData);
+      // Create service request booking using Convex
+      const request = await createBooking({
+        clientId: user?.id as any,
+        studioId: tech.user_id as any,
+        serviceType: formData.category,
+        date: formData.preferredDate || new Date().toISOString().split('T')[0],
+        notes: formData.issueDescription,
+        status: 'Pending',
+        metadata: {
+          equipmentName: formData.equipmentName,
+          equipmentBrand: formData.equipmentBrand,
+          equipmentModel: formData.equipmentModel,
+          logistics: formData.logistics,
+          location: formData.location,
+          budgetCap: formData.budgetCap,
+          urgency: formData.urgency,
+          priority: formData.urgency === 'urgent' ? 'Urgent' : formData.urgency === 'soon' ? 'High' : 'Normal',
+          additionalNotes: formData.additionalNotes
+        }
+      });
 
       // Clear draft on successful submission
       localStorage.removeItem(`techBookingDraft_${tech.user_id}`);

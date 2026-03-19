@@ -5,7 +5,8 @@ import { MapContainer, TileLayer, Circle, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import { ACCOUNT_TYPES, TALENT_SUBROLES } from '../config/constants';
 import { fetchZipLocation } from '../utils/geocode';
-import { updateProfile, upsertSubProfile } from '../config/neonQueries';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated';
 import AuthWizardBackground from './AuthWizardBackground';
 import type { AccountType } from '../types';
 
@@ -121,6 +122,11 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
   const { user: clerkUser } = useUser();
   const clerk = useClerk();
 
+  // Convex mutations
+  const updateProfile = useMutation(api.users.updateProfile);
+  const createSubProfile = useMutation(api.users.createSubProfile);
+  const updateSubProfile = useMutation(api.users.updateSubProfile);
+
   const [mode, setMode] = useState<AuthMode>(isNewUser ? 'onboarding' : 'login');
   const [step, setStep] = useState<number>(1);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -198,54 +204,24 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         return;
       }
 
-      // Update profile with Neon (legal data only)
+      // Update profile with Convex
       const finalRoles = form.roles.length > 0 ? form.roles : ['Fan'];
       const displayName = `${form.firstName} ${form.lastName}`;
       const activeRole = finalRoles[0];
 
-      await updateProfile(clerkUser.id, {
+      await updateProfile({
+        clerkId: clerkUser.id,
         email: form.email,
-        first_name: form.firstName,
-        last_name: form.lastName,
-        zip_code: form.zip,
-        account_types: finalRoles,
-        active_role: activeRole,
-        preferred_role: activeRole,
-        default_profile_role: activeRole,
-        effective_display_name: displayName,
-        search_terms: [form.firstName, form.lastName, displayName].map(s => s?.toLowerCase()).filter(Boolean),
+        firstName: form.firstName,
+        lastName: form.lastName,
+        zipCode: form.zip,
+        accountTypes: finalRoles,
+        activeRole: activeRole,
+        preferredRole: activeRole,
+        profileName: displayName,
       });
 
-      // Create MongoDB profile with display name and other user-facing data
-      try {
-        const mongoResponse = await fetch('/api/user/profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: clerkUser.id,
-            profile: {
-              display_name: displayName,
-              bio: '',
-              website: '',
-              location: ''
-            },
-            subprofiles: finalRoles.map((role: string) => ({
-              role: role,
-              display_name: displayName,
-              created_at: new Date().toISOString()
-            }))
-          })
-        });
-
-        if (!mongoResponse.ok) {
-          console.warn('MongoDB profile creation failed during signup, but Neon update succeeded');
-        }
-      } catch (mongoErr) {
-        console.warn('MongoDB profile creation error during signup:', mongoErr);
-        // Continue anyway - Neon profile is the critical one
-      }
-
-      // Create sub-profiles for each role (legacy - may be deprecated)
+      // Create sub-profiles for each role
       const profileData = {
         displayName: displayName,
       };
@@ -256,7 +232,13 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
       for (const role of finalRoles) {
         try {
-          await upsertSubProfile(clerkUser.id, role, profileData);
+          // Try to create sub-profile in Convex
+          await createSubProfile({
+            userId: clerkUser.id as any,
+            role: role,
+            displayName: displayName,
+            isActive: true,
+          });
         } catch (err: any) {
           console.warn(`Failed to create sub-profile for ${role}:`, err);
         }

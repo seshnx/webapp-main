@@ -9,8 +9,8 @@ import {
     Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
     FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save, Trash2, LucideIcon
 } from 'lucide-react';
-import { updateProfile, getProfile, getSubProfile, getUserWithProfile } from '../config/neonQueries';
-import { query as neonQuery } from '../config/neon';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { useUserSettings, applySettingsToDom } from '../hooks/useUserSettings';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -364,6 +364,10 @@ export default function SettingsTab({
     const navigate = useNavigate();
     const clerk = useClerk();
 
+    // Convex mutations
+    const updateProfileMutation = useMutation(api.users.updateProfile);
+    const updateSubProfileMutation = useMutation(api.users.updateSubProfile);
+
     // Get settings sub-tab from URL path
     const getSettingsTabFromPath = (path: string): SettingsTabId => {
         const parts = path.split('/').filter(Boolean);
@@ -650,9 +654,9 @@ export default function SettingsTab({
             }
             // Apply immediately and save
             onUpdate?.({ ...userData!, settings: updated });
-            // Auto-save to database using Neon
+            // Auto-save to Convex
             if (user?.id) {
-                updateProfile(user.id, { settings: updated })
+                updateProfileMutation({ clerkId: user.id, settings: updated })
                     .catch(err => console.error('Auto-save failed:', err));
             }
             return updated;
@@ -691,9 +695,10 @@ export default function SettingsTab({
             }
             // Apply immediately and save
             onUpdate?.({ ...userData!, settings: updated });
-            // Auto-save to database using Neon
+            // Auto-save to Convex
             if (user?.id) {
-                updateProfile(user.id, {
+                updateProfileMutation({
+                    clerkId: user.id,
                     settings: updated
                 })
                     .catch(err => console.error('Auto-save failed:', err));
@@ -722,15 +727,9 @@ export default function SettingsTab({
             };
 
             const userId = user?.id || user?.uid;
-            if (userId) {
-                const mongoSaved = await saveMongoSettings(coreSettings);
-                if (!mongoSaved) {
-                    throw new Error('Failed to save settings to MongoDB');
-                }
-            }
-
-            // Also save to profile (for backwards compatibility and other settings)
-            await updateProfile(userId, {
+            // Save to Convex
+            await updateProfileMutation({
+                clerkId: userId,
                 settings: localSettings
             });
 
@@ -791,23 +790,21 @@ export default function SettingsTab({
             //     }
             // }
 
-            // Update clerk_users table with new roles
-            await updateProfile(userId, {
-                account_types: roles,
-                active_role: newActiveRole,
+            // Update user in Convex with new roles
+            await updateProfileMutation({
+                clerkId: userId,
+                accountTypes: roles,
+                activeRole: newActiveRole,
             });
 
-            // Reload fresh user data from database to update all components
-            const freshUserData = await getUserWithProfile(userId);
-
-            // Update parent component's userData with fresh data
-            if (onUpdate && userData && freshUserData) {
+            // Update parent component's userData with new roles
+            // Note: Convex real-time updates will automatically refresh userData
+            if (onUpdate && userData) {
                 const updatedUserData: UserData = {
                     ...userData,
-                    accountTypes: freshUserData.account_types || roles,
-                    activeProfileRole: freshUserData.active_role || newActiveRole,
-                    preferredRole: freshUserData.preferred_role || newActiveRole,
-                    // Merge with fresh data from database
+                    accountTypes: roles,
+                    activeProfileRole: newActiveRole,
+                    preferredRole: newActiveRole,
                     ...freshUserData,
                 };
                 onUpdate(updatedUserData);
@@ -909,17 +906,13 @@ export default function SettingsTab({
         try {
             const userId = user.id;
 
-            // Export data using Neon queries
-            const [profile, bookings, follows, notifications] = await Promise.all([
-                getProfile(userId),
-                neonQuery(`SELECT * FROM bookings WHERE sender_id = $1 OR target_id = $1 LIMIT 1000`, [userId]),
-                neonQuery(`SELECT * FROM follows WHERE follower_id = $1 OR following_id = $1 LIMIT 1000`, [userId]),
-                neonQuery(`SELECT * FROM notifications WHERE user_id = $1 LIMIT 1000`, [userId])
-            ]);
-
+            // Export data using current userData
+            // Note: Full export would require Convex queries for bookings, follows, notifications
             const exportData = {
-                profile: profile || null,
-                bookings: bookings || [],
+                profile: userData || null,
+                bookings: [], // TODO: Implement Convex bookings query
+                follows: [], // TODO: Implement Convex follows query
+                notifications: [], // TODO: Implement Convex notifications query
                 follows: follows || [],
                 notifications: notifications || [],
                 exportDate: new Date().toISOString(),

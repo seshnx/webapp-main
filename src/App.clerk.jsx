@@ -5,7 +5,8 @@ import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { useSettings, initializeSettingsFromStorage } from './hooks/useSettings';
 import { LanguageProvider } from './contexts/LanguageContext';
-import { getUserWithProfile, updateProfile } from './config/neonQueries';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../convex/_generated';
 
 // Lazy load components to avoid initialization order issues
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
@@ -14,7 +15,7 @@ const MainLayout = lazy(() => import('./components/MainLayout'));
 
 export default function App() {
   // Clerk authentication hooks
-  const { isLoaded: clerkLoaded, isSignedIn, userId } = useAuth();
+  const { isLoaded: clerkLoaded, isSignedIn, userId: clerkId } = useAuth();
   const { user } = useUser();
 
   const [userData, setUserData] = useState(null);
@@ -23,6 +24,13 @@ export default function App() {
   // These hooks must be called unconditionally at the top level
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Convex hooks for user data
+  const convexUser = useQuery(
+    api.users.getUserByClerkId,
+    clerkId ? { clerkId } : "skip"
+  );
+  const updateProfileMutation = useMutation(api.users.updateProfile);
 
   // Dark Mode - now synced with user settings
   const [darkMode, setDarkMode] = useState(() => {
@@ -139,109 +147,58 @@ export default function App() {
       return;
     }
 
-    let isMounted = true;
+    // Clear user data if not signed in
+    if (!clerkId || !isSignedIn) {
+      setUserData(null);
+      setLoading(false);
+      return;
+    }
 
-    /**
-     * Load user data from Neon database
-     * Uses Clerk user ID to fetch profile data
-     */
-    const loadUserData = async () => {
-      if (!userId || !isSignedIn) {
-        if (isMounted) {
-          setUserData(null);
-          setLoading(false);
-        }
-        return;
+    // Convex user data is loaded reactively
+    if (convexUser !== undefined) {
+      if (convexUser) {
+        // Construct userData object compatible with existing components
+        const finalUserData = {
+          id: clerkId,
+          firstName: user?.firstName || convexUser.firstName || 'User',
+          lastName: user?.lastName || convexUser.lastName || '',
+          email: user?.primaryEmailAddress?.emailAddress || convexUser.email || '',
+          accountTypes: convexUser.accountTypes || ['Fan'],
+          activeProfileRole: convexUser.activeRole || convexUser.accountTypes?.[0] || 'Fan',
+          preferredRole: convexUser.preferredRole || convexUser.accountTypes?.[0] || 'Fan',
+          photoURL: user?.imageUrl || convexUser.imageUrl || null,
+          settings: convexUser.settings || {},
+          effectiveDisplayName: convexUser.profileName || user?.firstName || convexUser.firstName || 'User',
+          zipCode: convexUser.zipCode,
+          // Include all Convex user fields
+          ...convexUser
+        };
+
+        setUserData(finalUserData);
+        setLoading(false);
+      } else {
+        // Profile doesn't exist in Convex yet - create minimal userData from Clerk
+        const metadata = user?.publicMetadata || {};
+        const minimalUserData = {
+          id: clerkId,
+          firstName: user?.firstName || metadata.firstName || 'User',
+          lastName: user?.lastName || metadata.lastName || '',
+          email: user?.primaryEmailAddress?.emailAddress || '',
+          accountTypes: metadata.accountTypes || ['Fan'],
+          activeProfileRole: metadata.activeRole || 'Fan',
+          photoURL: user?.imageUrl || null,
+          settings: {},
+          effectiveDisplayName: user?.firstName || metadata.firstName || 'User'
+        };
+
+        setUserData(minimalUserData);
+        setLoading(false);
+
+        // Note: User will be created by Clerk webhook or can be created on-demand
+        console.log("User profile not yet created in Convex - will be created by webhook");
       }
-
-      try {
-        // Fetch user with profile from Neon
-        const userWithProfile = await getUserWithProfile(userId);
-
-        if (userWithProfile) {
-          // Construct userData object compatible with existing components
-          const finalUserData = {
-            id: userId,
-            firstName: user?.firstName || userWithProfile.first_name || 'User',
-            lastName: user?.lastName || userWithProfile.last_name || '',
-            email: user?.primaryEmailAddress?.emailAddress || userWithProfile.email || '',
-            accountTypes: userWithProfile.account_types || ['Fan'],
-            activeProfileRole: userWithProfile.active_role || userWithProfile.account_types?.[0] || 'Fan',
-            preferredRole: userWithProfile.preferred_role || userWithProfile.account_types?.[0] || 'Fan',
-            photoURL: user?.imageUrl || userWithProfile.photo_url || userWithProfile.avatar_url || null,
-            settings: userWithProfile.settings || {},
-            effectiveDisplayName: userWithProfile.effective_display_name || user?.firstName || userWithProfile.first_name || 'User',
-            zipCode: userWithProfile.zip_code,
-            // Additional profile fields
-            ...userWithProfile
-          };
-
-          if (isMounted) {
-            setUserData(finalUserData);
-          }
-        } else {
-          // Profile doesn't exist - create minimal userData from Clerk user
-          const metadata = user?.publicMetadata || {};
-          const minimalUserData = {
-            id: userId,
-            firstName: user?.firstName || metadata.first_name || 'User',
-            lastName: user?.lastName || metadata.last_name || '',
-            email: user?.primaryEmailAddress?.emailAddress || '',
-            accountTypes: metadata.account_types || ['Fan'],
-            activeProfileRole: metadata.active_role || 'Fan',
-            photoURL: user?.imageUrl || null,
-            settings: {},
-            effectiveDisplayName: user?.firstName || metadata.first_name || 'User'
-          };
-
-          if (isMounted) {
-            setUserData(minimalUserData);
-          }
-
-          // Try to create profile in background
-          try {
-            await updateProfile(userId, {
-              email: user?.primaryEmailAddress?.emailAddress || '',
-              first_name: user?.firstName || '',
-              last_name: user?.lastName || '',
-              account_types: metadata.account_types || ['Fan'],
-              active_role: metadata.active_role || 'Fan',
-              effective_display_name: user?.fullName || user?.firstName || 'User',
-            });
-          } catch (err) {
-            console.error("Profile creation failed:", err);
-          }
-        }
-
-        if (isMounted) {
-          setLoading(false);
-        }
-      } catch (err) {
-        console.error("Error loading user data:", err);
-        // Set minimal userData on error to prevent crashes
-        if (isMounted) {
-          const metadata = user?.publicMetadata || {};
-          setUserData({
-            id: userId,
-            firstName: user?.firstName || metadata.first_name || 'User',
-            lastName: user?.lastName || metadata.last_name || '',
-            email: user?.primaryEmailAddress?.emailAddress || '',
-            accountTypes: metadata.account_types || ['Fan'],
-            activeProfileRole: metadata.active_role || 'Fan',
-            photoURL: user?.imageUrl || null,
-            settings: {}
-          });
-          setLoading(false);
-        }
-      }
-    };
-
-    loadUserData();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [userId, isSignedIn, clerkLoaded, user]);
+    }
+  }, [clerkId, isSignedIn, clerkLoaded, convexUser, user]);
 
   const handleLogout = useCallback(async () => {
     try {

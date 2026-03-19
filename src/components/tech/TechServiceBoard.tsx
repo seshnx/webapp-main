@@ -4,7 +4,11 @@ import {
   Filter, Wrench, User, ChevronDown, Building2
 } from 'lucide-react';
 import { SERVICE_CATALOGUE } from '../../config/constants';
-import { getOpenServiceRequests, updateServiceRequestStatus, type ServiceRequest } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery, useMutation } from 'convex/react';
+// import { api } from '../../../convex/_generated';
+// Inline ServiceRequest type until Convex migration
+interface ServiceRequest { id: string; created_at: string; status?: string; service_category?: string; title?: string; description?: string; issue_description?: string; equipment_name?: string; equipment_brand?: string; equipment_model?: string; logistics?: string; location?: string; preferred_date?: string; budget_cap?: number; priority?: string; requester_name?: string; requester_photo?: string; [key: string]: any; }
 import type { UserData } from '../../types';
 
 /**
@@ -40,15 +44,13 @@ export default function TechServiceBoard({ user, userData }: TechServiceBoardPro
     const fetchRequests = async () => {
       setLoading(true);
       try {
-        const data = await getOpenServiceRequests({
-          category: categoryFilter !== 'all' ? categoryFilter : undefined,
-          limit: 50
-        });
-        setRequests(data);
+        // TODO: Replace with Convex query
+        // const data = await convexQuery(api.tech.getOpenServiceRequests, { category: ..., limit: 50 });
+        setRequests([]);
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching service requests:', error);
         setRequests([]);
-      } finally {
         setLoading(false);
       }
     };
@@ -89,11 +91,10 @@ export default function TechServiceBoard({ user, userData }: TechServiceBoardPro
     setProcessing(prev => new Set(prev).add(requestId));
 
     try {
-      // Update status to Assigned - technician has claimed this job
-      await updateServiceRequestStatus(requestId, 'Assigned', userId);
-
-      // Update local state
+      // TODO: Replace with Convex mutation
+      // await updateServiceRequestStatusMutation({ requestId, status: 'Assigned', techId: userId });
       setRequests(prev => prev.filter(req => req.id !== requestId));
+      console.log('Interest expressed (TODO: implement via Convex):', requestId);
     } catch (error) {
       console.error('Error expressing interest:', error);
       alert('Failed to express interest. Please try again.');

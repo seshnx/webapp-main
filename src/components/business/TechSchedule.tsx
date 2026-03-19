@@ -3,7 +3,11 @@ import {
   Calendar as CalendarIcon, Clock, MapPin, User,
   ChevronLeft, ChevronRight, Filter, CheckCircle, Wrench
 } from 'lucide-react';
-import { getTechServiceRequests, type ServiceRequest } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery } from 'convex/react';
+// import { api } from '../../../convex/_generated';
+// Inline ServiceRequest type until Convex migration
+interface ServiceRequest { id: string; created_at: string; [key: string]: any; }
 
 /**
  * Props for TechSchedule component
@@ -38,8 +42,9 @@ export default function TechSchedule({ userId }: TechScheduleProps) {
 
       setLoading(true);
       try {
-        const data = await getTechServiceRequests(userId, { limit: 100 });
-        setRequests(data);
+        // TODO: Replace with Convex query
+        // const data = await convexQuery(api.tech.getServiceRequests, { techId: userId, limit: 100 });
+        setRequests([]);
       } catch (error) {
         console.error('Error fetching schedule:', error);
       } finally {

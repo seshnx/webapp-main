@@ -315,9 +315,10 @@ export const createPost = mutation({
     const postId = await ctx.db.insert("posts", {
       authorId: author._id, // Use the native Convex ID
       authorName: author.displayName || author.username || "Unknown",
-      authorPhoto: author.imageUrl || author.avatarUrl,
+      authorPhoto: author.avatarUrl,
       authorUsername: author.username,
-      role: author.activeProfileRole || author.activeRole || "Talent",
+      // Use talentSubRole for Talent users, otherwise use activeRole
+      role: author.talentSubRole || author.activeRole || "Talent",
       content: args.content,
       mediaUrls: args.mediaUrls,
       mediaType: args.mediaType,

@@ -1,24 +1,22 @@
 /**
- * Clerk User Sync Webhook Handler
+ * Clerk User Sync Webhook Handler - Convex Only
  *
  * This endpoint receives webhook events from Clerk and syncs user data
- * to the Neon PostgreSQL database.
+ * to the Convex database (real-time database).
  *
  * Clerk Webhook Documentation: https://clerk.com/docs/integrations/webhooks/sync-data
  *
  * Events handled:
- * - user.created: Insert new user into clerk_users table
- * - user.updated: Update existing user in clerk_users table
- * - user.deleted: Soft delete user (set deleted_at timestamp)
+ * - user.created: Insert new user into Convex
+ * - user.updated: Update existing user in Convex
+ * - user.deleted: Soft delete user in Convex
  */
 
-import { NeonDbError } from '@neondatabase/serverless';
-import { neon } from '@neondatabase/serverless';
 import { Webhook } from 'svix';
+import { fetchAction } from 'convex/server';
 
-// Initialize Neon database connection
-const databaseUrl = process.env.VITE_NEON_DATABASE_URL || process.env.NEON_DATABASE_URL;
-const sql = neon(databaseUrl);
+// Convex deployment URL
+const CONVEX_URL = process.env.VITE_CONVEX_URL || process.env.CONVEX_URL;
 
 /**
  * Main webhook handler
@@ -100,7 +98,7 @@ export default async function handler(req, res) {
 
 /**
  * Handle user.created event
- * Inserts a new user into the clerk_users table
+ * Inserts a new user into Convex using syncUserFromClerk mutation
  */
 async function handleUserCreated(clerkUser) {
   const {
@@ -111,9 +109,6 @@ async function handleUserCreated(clerkUser) {
     last_name,
     username,
     image_url,
-    public_metadata,
-    created_at,
-    updated_at,
   } = clerkUser;
 
   // Get primary email - try multiple strategies
@@ -136,73 +131,36 @@ async function handleUserCreated(clerkUser) {
     }
   }
 
-  // Log if no email found (might be test data)
-  if (!primaryEmail) {
-    console.warn('⚠️  No email found for user:', id);
-  }
-
   // Get primary phone
   const primaryPhone = phone_numbers?.find(p => p.id === clerkUser.primary_phone_number_id)?.phone_number || null;
-
-  // Extract metadata
-  const accountTypes = public_metadata?.account_types || ['Fan'];
-  const activeRole = public_metadata?.active_role || 'Fan';
-  const bio = public_metadata?.bio || null;
-  const zipCode = public_metadata?.zip_code || null;
 
   // For test users without email, use a placeholder
   const finalEmail = primaryEmail || `${id}@clerk.test`;
 
   try {
-    const result = await sql`
-      INSERT INTO clerk_users (
-        id,
-        email,
-        phone,
-        first_name,
-        last_name,
-        username,
-        profile_photo_url,
-        account_types,
-        active_role,
-        bio,
-        zip_code,
-        created_at,
-        updated_at
-      ) VALUES (
-        ${id},
-        ${finalEmail},
-        ${primaryPhone},
-        ${first_name || null},
-        ${last_name || null},
-        ${username || null},
-        ${image_url || null},
-        ${accountTypes},
-        ${activeRole},
-        ${bio},
-        ${zipCode},
-        ${created_at ? new Date(created_at) : new Date()},
-        ${updated_at ? new Date(updated_at) : new Date()}
-      )
-      ON CONFLICT (id) DO NOTHING
-      RETURNING id
-    `;
+    // Call Convex syncUserFromClerk mutation
+    const result = await fetchAction(CONVEX_URL, api.users.syncUserFromClerk, {
+      clerkId: id,
+      email: finalEmail,
+      emailVerified: primaryEmail ? (email_addresses.find(e => e.email_address === primaryEmail)?.verified || false) : false,
+      username: username || undefined,
+      firstName: first_name || undefined,
+      lastName: last_name || undefined,
+      imageUrl: image_url || undefined,
+    });
 
-    console.log('✅ User created in Neon:', result[0]?.id);
-    return { userId: result[0]?.id, action: 'created' };
+    console.log('✅ User synced to Convex:', result);
+    return { userId: id, action: 'created', result };
 
   } catch (error) {
-    if (error instanceof NeonDbError) {
-      console.error('❌ Neon DB error:', error.message);
-      throw new Error(`Database error: ${error.message}`);
-    }
-    throw error;
+    console.error('❌ Convex sync error:', error);
+    throw new Error(`Convex sync error: ${error.message}`);
   }
 }
 
 /**
  * Handle user.updated event
- * Updates an existing user in the clerk_users table
+ * Updates an existing user in Convex using syncUserFromClerk mutation
  */
 async function handleUserUpdated(clerkUser) {
   const {
@@ -213,8 +171,6 @@ async function handleUserUpdated(clerkUser) {
     last_name,
     username,
     image_url,
-    public_metadata,
-    updated_at,
   } = clerkUser;
 
   // Get primary email - try multiple strategies
@@ -240,82 +196,49 @@ async function handleUserUpdated(clerkUser) {
   // Get primary phone
   const primaryPhone = phone_numbers?.find(p => p.id === clerkUser.primary_phone_number_id)?.phone_number || null;
 
-  // Extract metadata
-  const accountTypes = public_metadata?.account_types || ['Fan'];
-  const activeRole = public_metadata?.active_role || 'Fan';
-  const bio = public_metadata?.bio || null;
-  const zipCode = public_metadata?.zip_code || null;
-
   // For test users without email, use a placeholder
   const finalEmail = primaryEmail || `${id}@clerk.test`;
 
   try {
-    const result = await sql`
-      UPDATE clerk_users
-      SET
-        email = ${finalEmail},
-        phone = ${primaryPhone},
-        first_name = ${first_name || null},
-        last_name = ${last_name || null},
-        username = ${username || null},
-        profile_photo_url = ${image_url || null},
-        account_types = ${accountTypes},
-        active_role = ${activeRole},
-        bio = ${bio},
-        zip_code = ${zipCode},
-        updated_at = ${updated_at ? new Date(updated_at) : new Date()}
-      WHERE id = ${id}
-      RETURNING id
-    `;
+    // Call Convex syncUserFromClerk mutation
+    const result = await fetchAction(CONVEX_URL, api.users.syncUserFromClerk, {
+      clerkId: id,
+      email: finalEmail,
+      emailVerified: primaryEmail ? (email_addresses.find(e => e.email_address === primaryEmail)?.verified || false) : false,
+      username: username || undefined,
+      firstName: first_name || undefined,
+      lastName: last_name || undefined,
+      imageUrl: image_url || undefined,
+    });
 
-    if (result.length === 0) {
-      console.warn('⚠️  User not found in Neon, creating instead...');
-      return await handleUserCreated(clerkUser);
-    }
-
-    console.log('✅ User updated in Neon:', result[0]?.id);
-    return { userId: result[0]?.id, action: 'updated' };
+    console.log('✅ User synced to Convex (updated):', result);
+    return { userId: id, action: 'updated', result };
 
   } catch (error) {
-    if (error instanceof NeonDbError) {
-      console.error('❌ Neon DB error:', error.message);
-      throw new Error(`Database error: ${error.message}`);
-    }
-    throw error;
+    console.error('❌ Convex sync error:', error);
+    throw new Error(`Convex sync error: ${error.message}`);
   }
 }
 
 /**
  * Handle user.deleted event
- * Soft deletes a user (sets deleted_at timestamp)
+ * Soft deletes a user in Convex (sets deletedAt timestamp)
  */
 async function handleUserDeleted(clerkUser) {
   const { id } = clerkUser;
 
   try {
-    const result = await sql`
-      UPDATE clerk_users
-      SET
-        deleted_at = NOW(),
-        updated_at = NOW()
-      WHERE id = ${id}
-      RETURNING id
-    `;
+    // Call Convex mutation to soft delete user
+    const result = await fetchAction(CONVEX_URL, api.users.softDeleteUser, {
+      clerkId: id,
+    });
 
-    if (result.length === 0) {
-      console.warn('⚠️  User not found in Neon for deletion:', id);
-      return { userId: id, action: 'not_found' };
-    }
-
-    console.log('✅ User soft-deleted in Neon:', result[0]?.id);
-    return { userId: result[0]?.id, action: 'deleted' };
+    console.log('✅ User soft-deleted in Convex:', id);
+    return { userId: id, action: 'deleted', result };
 
   } catch (error) {
-    if (error instanceof NeonDbError) {
-      console.error('❌ Neon DB error:', error.message);
-      throw new Error(`Database error: ${error.message}`);
-    }
-    throw error;
+    console.error('❌ Convex delete error:', error);
+    throw new Error(`Convex delete error: ${error.message}`);
   }
 }
 

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Inbox, Clock, DollarSign, Star, ChevronRight } from 'lucide-react';
-import type { TechMetricsData } from '../../config/neonQueries';
+// Inline TechMetricsData type until Convex migration
+interface TechMetricsData { [key: string]: any; }
 
 /**
  * Props for TechOverviewCard component

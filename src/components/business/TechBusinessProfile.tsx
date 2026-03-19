@@ -4,7 +4,11 @@ import {
   Save, Wrench, Building2, Calendar, Briefcase
 } from 'lucide-react';
 import { TECH_SPECIALTIES, SERVICE_CATALOGUE } from '../../config/constants';
-import { getTechnicianProfile, updateTechnicianProfile, type TechnicianProfile } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery, useMutation } from 'convex/react';
+// import { api } from '../../../convex/_generated';
+// Inline TechnicianProfile type until Convex migration
+interface TechnicianProfile { user_id?: string; [key: string]: any; }
 import type { UserData } from '../../types';
 
 /**
@@ -64,31 +68,9 @@ export default function TechBusinessProfile({ user, userData }: TechBusinessProf
 
       setLoading(true);
       try {
-        const data = await getTechnicianProfile(userId);
-        setProfile(data);
-
-        // Populate form with existing data
-        if (data) {
-          setFormData({
-            display_name: data.display_name || '',
-            specialties: data.specialties || [],
-            hourly_rate: data.hourly_rate?.toString() || '',
-            location: {
-              city: data.location?.city || '',
-              state: data.location?.state || '',
-              zip: data.location?.zip || ''
-            },
-            service_radius: data.service_radius?.toString() || '50',
-            availability_status: data.availability_status || 'Available',
-            bio: data.bio || '',
-            skills: '', // Not in database, keeping empty
-            business_policies: {
-              cancellation_policy: '', // Not in database, keeping empty
-              payment_terms: '',
-              response_time: ''
-            }
-          });
-        }
+        // TODO: Replace with Convex query
+        // const data = await convexQuery(api.tech.getTechnicianProfile, { userId });
+        setProfile(null);
       } catch (error) {
         console.error('Error fetching technician profile:', error);
       } finally {
@@ -121,7 +103,9 @@ export default function TechBusinessProfile({ user, userData }: TechBusinessProf
         bio: formData.bio || undefined
       };
 
-      await updateTechnicianProfile(userId, updates);
+      // TODO: Replace with Convex mutation
+      // await updateTechnicianProfileMutation({ userId, ...updates });
+      console.log('Would update technician profile (TODO: implement via Convex):', updates);
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);

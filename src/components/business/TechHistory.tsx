@@ -3,7 +3,11 @@ import {
   History, CheckCircle, Star, Calendar, TrendingUp,
   Award, Users, Filter, ChevronDown, Briefcase, Wrench
 } from 'lucide-react';
-import { getTechEarnings, type ServiceRequest } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery } from 'convex/react';
+// import { api } from '../../../convex/_generated';
+// Inline types until Convex migration
+interface ServiceRequest { id: string; created_at: string; [key: string]: any; }
 
 /**
  * Props for TechHistory component
@@ -37,8 +41,9 @@ export default function TechHistory({ userId }: TechHistoryProps) {
 
       setLoading(true);
       try {
-        const data = await getTechEarnings(userId, { limit: 200 });
-        setJobs(data);
+        // TODO: Replace with Convex query
+        // const data = await convexQuery(api.tech.getTechJobHistory, { userId, limit: 200 });
+        setJobs([]);
       } catch (error) {
         console.error('Error fetching job history:', error);
       } finally {

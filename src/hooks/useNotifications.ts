@@ -1,21 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
-import {
-  getNotifications,
-  markNotificationAsRead,
-  markAllNotificationsAsRead,
-  deleteNotification as deleteNotificationQuery,
-  clearAllNotifications as clearAllNotificationsQuery,
-  createNotification as createNotificationQuery,
-  type Notification
-} from '../config/neonQueries';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated';
+import { useMemo } from 'react';
 
 /**
  * Extended notification interface with UI properties
  */
-export interface UINotification extends Notification {
-  timestamp: string | Date;
+export interface UINotification {
+  id: string;
+  type: string;
+  title: string;
+  message?: string | null;
   read: boolean;
-  deleted?: boolean;
+  timestamp: Date;
+  actionData?: Record<string, any>;
+  fromUserId?: string;
+  fromUserName?: string;
+  fromUserPhoto?: string | null;
+  postId?: string | null;
+  postPreview?: string | null;
+  commentId?: string | null;
 }
 
 /**
@@ -59,8 +62,9 @@ export interface UseNotificationsReturn {
 
 /**
  * Hook for managing user notifications
+ * Now uses Convex real-time subscriptions - no polling needed!
  *
- * @param userId - The authenticated user's UID
+ * @param clerkUserId - The authenticated user's Clerk ID
  * @param fetchLimit - Max notifications to fetch (default 50)
  * @returns Notifications state and controls
  *
@@ -89,105 +93,113 @@ export interface UseNotificationsReturn {
  * }
  */
 export function useNotifications(
-  userId: string | null | undefined,
+  clerkUserId: string | null | undefined,
   fetchLimit: number = 50
 ): UseNotificationsReturn {
-  const [notifications, setNotifications] = useState<UINotification[]>([]);
-  const [unreadCount, setUnreadCount] = useState<number>(0);
-  const [loading, setLoading] = useState<boolean>(true);
+  // Get notifications from Convex (real-time!)
+  const notifications = useQuery(
+    api.notifications.getNotifications,
+    clerkUserId ? { userId: clerkUserId, limit: fetchLimit } : "skip"
+  );
 
-  // Subscribe to notifications
-  useEffect(() => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
+  // Get unread count from Convex
+  const unreadCountData = useQuery(
+    api.notifications.getUnreadCount,
+    clerkUserId ? { userId: clerkUserId } : "skip"
+  );
 
-    const loadNotifications = async () => {
-      try {
-        const data = await getNotifications(userId, { limit: fetchLimit });
+  // Mutations
+  const markAsReadMutation = useMutation(api.notifications.markAsRead);
+  const markAllAsReadMutation = useMutation(api.notifications.markAllAsRead);
+  const deleteMutation = useMutation(api.notifications.deleteNotification);
+  const clearAllMutation = useMutation(api.notifications.clearAll);
 
-        const notifList: UINotification[] = data.map(notif => ({
-          id: notif.id,
-          ...notif,
-          timestamp: notif.created_at || new Date(),
-          read: notif.read || false
-        }));
-        setNotifications(notifList);
-        setUnreadCount(notifList.filter(n => !n.read).length);
-        setLoading(false);
-      } catch (error) {
-        console.error('Notifications fetch error:', error);
-        setLoading(false);
-      }
-    };
+  // Transform Convex notifications to UI format
+  const uiNotifications: UINotification[] = useMemo(() => {
+    if (!notifications) return [];
 
-    loadNotifications();
+    return notifications.map(notif => ({
+      id: notif._id,
+      type: notif.type,
+      title: notif.title,
+      message: notif.message,
+      read: notif.read,
+      timestamp: new Date(notif.createdAt),
+      actionData: notif.actionData,
+      fromUserId: notif.actionData?.fromUserId,
+      fromUserName: notif.actionData?.fromUserName,
+      fromUserPhoto: notif.actionData?.fromUserPhoto,
+      postId: notif.actionData?.postId,
+      postPreview: notif.actionData?.postPreview,
+      commentId: notif.actionData?.commentId,
+    }));
+  }, [notifications]);
 
-    // Set up polling (every 30 seconds)
-    const pollInterval = setInterval(() => {
-      loadNotifications();
-    }, 30000);
-
-    return () => {
-      clearInterval(pollInterval);
-    };
-  }, [userId, fetchLimit]);
+  const unreadCount = unreadCountData?.count || 0;
+  const loading = notifications === undefined;
 
   /**
    * Mark a single notification as read
    */
-  const markAsRead = useCallback(async (notificationId: string): Promise<void> => {
-    if (!userId) return;
+  const markAsRead = async (notificationId: string): Promise<void> => {
+    if (!clerkUserId) return;
 
     try {
-      await markNotificationAsRead(notificationId);
+      await markAsReadMutation({
+        notificationId: notificationId as any,
+      });
     } catch (error) {
       console.error('Mark as read error:', error);
     }
-  }, [userId]);
+  };
 
   /**
    * Mark all notifications as read
    */
-  const markAllAsRead = useCallback(async (): Promise<void> => {
-    if (!userId || unreadCount === 0) return;
+  const markAllAsRead = async (): Promise<void> => {
+    if (!clerkUserId || unreadCount === 0) return;
 
     try {
-      await markAllNotificationsAsRead(userId);
+      await markAllAsReadMutation({
+        userId: clerkUserId,
+      });
     } catch (error) {
       console.error('Mark all as read error:', error);
     }
-  }, [userId, unreadCount]);
+  };
 
   /**
    * Delete a notification
    */
-  const deleteNotification = useCallback(async (notificationId: string): Promise<void> => {
-    if (!userId) return;
+  const deleteNotification = async (notificationId: string): Promise<void> => {
+    if (!clerkUserId) return;
 
     try {
-      await deleteNotificationQuery(notificationId);
+      await deleteMutation({
+        notificationId: notificationId as any,
+      });
     } catch (error) {
       console.error('Delete notification error:', error);
     }
-  }, [userId]);
+  };
 
   /**
    * Clear all notifications (soft delete)
    */
-  const clearAll = useCallback(async (): Promise<void> => {
-    if (!userId) return;
+  const clearAll = async (): Promise<void> => {
+    if (!clerkUserId) return;
 
     try {
-      await clearAllNotificationsQuery(userId);
+      await clearAllMutation({
+        userId: clerkUserId,
+      });
     } catch (error) {
       console.error('Clear all error:', error);
     }
-  }, [userId]);
+  };
 
   return {
-    notifications: notifications.filter(n => !n.deleted),
+    notifications: uiNotifications,
     unreadCount,
     loading,
     markAsRead,
@@ -237,28 +249,9 @@ export async function createNotification(params: CreateNotificationParams): Prom
 
   if (!targetUserId || targetUserId === fromUserId) return; // Don't notify yourself
 
-  try {
-    await createNotificationQuery({
-      user_id: targetUserId,
-      type,
-      from_user_id: fromUserId,
-      from_user_name: fromUserName,
-      from_user_photo: fromUserPhoto,
-      post_id: postId,
-      post_preview: postPreview,
-      comment_id: commentId,
-      message,
-      metadata: {
-        postId,
-        postPreview,
-        commentId,
-        fromUserName,
-        fromUserPhoto
-      }
-    });
-  } catch (error) {
-    console.error('Create notification error:', error);
-  }
+  // This would need to be called from a context where we have access to Convex client
+  // For now, log a warning - this should be called via Convex mutation from the action
+  console.warn('createNotification: Use Convex mutation api.notifications.create from your action handler');
 }
 
 /**
@@ -290,3 +283,15 @@ export const getNotificationIcon = (type: NotificationType): string => {
   };
   return icons[type] || 'Bell';
 };
+
+/**
+ * Hook for notification mutations
+ * Use this to create notifications from user actions
+ */
+export function useNotificationMutations() {
+  const create = useMutation(api.notifications.createNotification);
+
+  return {
+    create,
+  };
+}

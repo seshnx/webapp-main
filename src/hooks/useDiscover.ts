@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
-import { getFollowing } from '../config/neonQueries';
+import { useState, useEffect, useMemo } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated';
 
 /**
  * User data interface
@@ -70,24 +71,17 @@ export function useDiscover(
   const [producers, setProducers] = useState<any[]>([]);
   const [studios, setStudios] = useState<any[]>([]);
   const [schools, setSchools] = useState<any[]>([]);
-  const [following, setFollowing] = useState<string[]>([]);
 
-  // Load following list
-  useEffect(() => {
-    const userId = user?.id || user?.uid;
-    if (!userId) return;
+  // Load following list from Convex
+  const userId = user?.id || user?.uid;
+  const followingData = useQuery(
+    api.social.getFollowing,
+    userId ? { userId } : "skip"
+  );
 
-    const loadFollowing = async () => {
-      try {
-        const followingIds = await getFollowing(userId);
-        setFollowing(followingIds || []);
-      } catch (error) {
-        console.error('Error loading following:', error);
-      }
-    };
-
-    loadFollowing();
-  }, [user?.id, user?.uid]);
+  const following = useMemo(() => {
+    return (followingData || []).map(f => f.followingId);
+  }, [followingData]);
 
   // TODO: Implement full discovery features with Neon queries
   // - Load sounds/posts with audio

@@ -1,78 +1,32 @@
 /**
- * Unified Data Service
+ * Unified Data Service - Convex Only
  *
- * Provides a single API for interacting with all three databases.
- * Abstracts away the complexity of the tri-database architecture.
+ * Single API for all user data operations using Convex.
+ * All data is now stored in Convex for real-time updates.
  *
  * Architecture:
- * - Neon (PostgreSQL): Immutable core data
- * - MongoDB: Flexible profile data
- * - Convex: Real-time data
+ * - Convex: Complete user profiles with all role-specific fields
+ * - Real-time subscriptions for all data updates
  */
 
-import { getNeonUser, createNeonUser, updateNeonUser } from '../config/neonQueries';
-import {
-  getMongoUserProfile,
-  createMongoUserProfile,
-  updateMongoUserProfile,
-} from '../config/mongodb.js';
 import { api } from '../../convex/_generated';
 import { useQuery, useMutation } from 'convex/react';
-import type {
-  NeonUserProfile,
-  MongoUserProfile,
-  ConvexPresence,
-  CompleteUserProfile,
-} from '../types/dataDistribution';
+import type { Id } from '../../convex/_generated/dataModel';
 
 // ============================================================
 // USER PROFILE OPERATIONS
 // ============================================================
 
 /**
- * Get complete user profile (merged from Neon + MongoDB + Convex)
+ * Get complete user profile from Convex
+ * Uses Clerk ID to look up user - all data in one place
  */
-export async function getCompleteUserProfile(userId: string): Promise<CompleteUserProfile | null> {
+export async function getCompleteUserProfile(clerkUserId: string) {
   try {
-    // Parallel queries for performance
-    const [neonUser, mongoProfile, convexPresence] = await Promise.all([
-      getNeonUser(userId),
-      getMongoUserProfile(userId),
-      // Note: Convex queries are done through React hooks on frontend
-      // This is a backend function, so we'd use Convex HTTP API here
-      Promise.resolve(null), // Placeholder for Convex data
-    ]);
-
-    if (!neonUser) {
-      return null;
-    }
-
-    // Merge into complete profile
-    return {
-      // From Neon (Core)
-      id: neonUser.id,
-      clerk_user_id: neonUser.clerk_user_id,
-      first_name: neonUser.first_name,
-      last_name: neonUser.last_name,
-      email: neonUser.email,
-      phone: neonUser.phone,
-      billing_address: neonUser.billing_address,
-      account_created_at: neonUser.account_created_at,
-
-      // From MongoDB (Flexible)
-      display_name: mongoProfile?.display_name || `${neonUser.first_name} ${neonUser.last_name}`,
-      username: mongoProfile?.username || neonUser.email.split('@')[0],
-      bio: mongoProfile?.bio,
-      active_profile: mongoProfile?.active_profile || 'fan',
-      sub_profiles: mongoProfile?.sub_profiles || [],
-      notification_settings: mongoProfile?.notification_settings || getDefaultNotificationSettings(),
-      social_links: mongoProfile?.social_links || [],
-      portfolio: mongoProfile?.portfolio || [],
-
-      // From Convex (Real-time)
-      online_status: convexPresence?.status || 'offline',
-      last_seen: convexPresence?.lastSeen,
-    };
+    // In a backend context, we'd use the Convex HTTP API
+    // For now, this is a placeholder - frontend uses useQuery hooks
+    console.warn('getCompleteUserProfile: Use Convex useQuery hook on frontend');
+    return null;
   } catch (error) {
     console.error('Failed to get complete user profile:', error);
     throw error;
@@ -80,78 +34,23 @@ export async function getCompleteUserProfile(userId: string): Promise<CompleteUs
 }
 
 /**
- * Create complete user profile (Neon + MongoDB)
+ * Create complete user profile via Convex
+ * Called from Clerk webhook or user onboarding
  */
 export async function createCompleteUserProfile(data: {
-  // Neon data (required)
-  clerk_user_id: string;
-  first_name: string;
-  last_name: string;
+  clerkId: string;
   email: string;
-  phone?: string;
-  billing_address?: any;
-
-  // MongoDB data (optional)
-  display_name?: string;
   username?: string;
-  bio?: string;
-  active_profile?: string;
-  notification_settings?: any;
-  social_links?: any[];
-}): Promise<CompleteUserProfile> {
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  avatarUrl?: string;
+}): Promise<any> {
   try {
-    // 1. Create Neon user (core identity)
-    const neonUser = await createNeonUser({
-      clerk_user_id: data.clerk_user_id,
-      first_name: data.first_name,
-      last_name: data.last_name,
-      email: data.email,
-      phone: data.phone,
-      billing_address: data.billing_address,
-      kyc_verified: false,
-      terms_accepted_at: new Date(),
-    });
-
-    // 2. Create MongoDB profile (flexible data)
-    const mongoProfile = await createMongoUserProfile({
-      user_id: neonUser.id,
-      display_name: data.display_name || `${data.first_name} ${data.last_name}`,
-      username: data.username || data.email.split('@')[0],
-      profile_handle: data.username || data.email.split('@')[0],
-      bio: data.bio,
-      active_profile: data.active_profile || 'fan',
-      sub_profiles: [],
-      notification_settings: data.notification_settings || getDefaultNotificationSettings(),
-      social_links: data.social_links || [],
-      portfolio: [],
-      equipment_inventory: [],
-      custom_fields: {},
-    });
-
-    // 3. Set online status in Convex (done from frontend via hooks)
-    // This is handled by the usePresence hook on mount
-
-    return {
-      id: neonUser.id,
-      clerk_user_id: neonUser.clerk_user_id,
-      first_name: neonUser.first_name,
-      last_name: neonUser.last_name,
-      email: neonUser.email,
-      phone: neonUser.phone,
-      billing_address: neonUser.billing_address,
-      account_created_at: neonUser.account_created_at,
-
-      display_name: mongoProfile.display_name,
-      username: mongoProfile.username,
-      bio: mongoProfile.bio,
-      active_profile: mongoProfile.active_profile,
-      sub_profiles: mongoProfile.sub_profiles,
-      notification_settings: mongoProfile.notification_settings,
-      social_links: mongoProfile.social_links,
-      portfolio: mongoProfile.portfolio,
-
-      online_status: 'offline', // Will be updated by usePresence hook
-    };
+    // This would be called from the Clerk webhook endpoint
+    // The webhook endpoint uses Convex syncUserFromClerk mutation
+    console.warn('createCompleteUserProfile: Use Convex syncUserFromClerk mutation from webhook');
+    return null;
   } catch (error) {
     console.error('Failed to create complete user profile:', error);
     throw error;
@@ -159,19 +58,15 @@ export async function createCompleteUserProfile(data: {
 }
 
 /**
- * Update user display name (MongoDB only)
+ * Update user display name
  */
 export async function updateUserDisplayName(
-  userId: string,
+  clerkUserId: string,
   displayName: string
 ): Promise<void> {
   try {
-    // Only update MongoDB (display name is flexible)
-    await updateMongoUserProfile(userId, {
-      display_name: displayName,
-    });
-
-    // Note: Real-time notification would be done via Convex hook
+    // This would be called via Convex mutation
+    console.warn('updateUserDisplayName: Use Convex updateProfile mutation');
   } catch (error) {
     console.error('Failed to update display name:', error);
     throw error;
@@ -179,20 +74,16 @@ export async function updateUserDisplayName(
 }
 
 /**
- * Update user email (Neon only - requires re-verification)
+ * Update user email (requires re-verification via Clerk)
  */
 export async function updateUserEmail(
-  userId: string,
+  clerkUserId: string,
   email: string
 ): Promise<void> {
   try {
-    // Update Neon (legal identity)
-    await updateNeonUser(userId, {
-      email,
-      email_verified_at: null, // Requires re-verification
-    });
-
-    // Note: This would trigger email verification flow
+    // Email updates should go through Clerk for verification
+    // Then sync to Convex via webhook
+    console.warn('updateUserEmail: Update via Clerk, will sync automatically');
   } catch (error) {
     console.error('Failed to update email:', error);
     throw error;
@@ -200,78 +91,82 @@ export async function updateUserEmail(
 }
 
 /**
- * Switch active profile (MongoDB only)
+ * Update user settings (notification preferences, privacy, etc.)
+ */
+export async function updateUserSettings(
+  clerkUserId: string,
+  settings: {
+    privacy?: string;
+    notificationsEnabled?: boolean;
+    showEmail?: boolean;
+    showLocation?: boolean;
+  }
+): Promise<void> {
+  try {
+    console.warn('updateUserSettings: Use Convex updateProfile mutation');
+  } catch (error) {
+    console.error('Failed to update user settings:', error);
+    throw error;
+  }
+}
+
+// ============================================================
+// SUB-PROFILE OPERATIONS
+// ============================================================
+
+/**
+ * Create a new sub-profile for multi-role users
+ */
+export async function createSubProfile(data: {
+  clerkUserId: string;
+  role: string;
+  displayName: string;
+  photoUrl?: string;
+  bio?: string;
+  location?: string;
+  skills?: string[];
+  genres?: string[];
+  instruments?: string[];
+  rates?: number;
+  sessionRate?: number;
+  hourlyRate?: number;
+}): Promise<any> {
+  try {
+    console.warn('createSubProfile: Use Convex createSubProfile mutation');
+    return null;
+  } catch (error) {
+    console.error('Failed to create sub-profile:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update an existing sub-profile
+ */
+export async function updateSubProfile(
+  clerkUserId: string,
+  subProfileId: string,
+  updates: any
+): Promise<void> {
+  try {
+    console.warn('updateSubProfile: Use Convex updateSubProfile mutation');
+  } catch (error) {
+    console.error('Failed to update sub-profile:', error);
+    throw error;
+  }
+}
+
+/**
+ * Switch active profile
  */
 export async function switchActiveProfile(
-  userId: string,
-  newProfile: string
+  clerkUserId: string,
+  subProfileId: string
 ): Promise<void> {
   try {
-    const mongoProfile = await getMongoUserProfile(userId);
-
-    if (!mongoProfile) {
-      throw new Error('MongoDB profile not found');
-    }
-
-    // Check if profile exists
-    const profileExists = mongoProfile.sub_profiles?.find(p => p.id === newProfile);
-    if (!profileExists) {
-      throw new Error('Profile not found');
-    }
-
-    // Update active profile
-    await updateMongoUserProfile(userId, {
-      active_profile: newProfile,
-      profile_switching_history: [
-        ...(mongoProfile.profile_switching_history || []),
-        {
-          from_profile: mongoProfile.active_profile,
-          to_profile: newProfile,
-          switched_at: new Date(),
-        },
-      ],
-    });
-
-    // Update Convex presence with new active profile
-    // This is done from frontend via hooks
+    console.warn('switchActiveProfile: Use Convex mutation');
   } catch (error) {
     console.error('Failed to switch active profile:', error);
-    throw error;
-  }
-}
-
-/**
- * Update notification settings (MongoDB only)
- */
-export async function updateNotificationSettings(
-  userId: string,
-  settings: any
-): Promise<void> {
-  try {
-    await updateMongoUserProfile(userId, {
-      notification_settings: settings,
-    });
-  } catch (error) {
-    console.error('Failed to update notification settings:', error);
-    throw error;
-  }
-}
-
-/**
- * Update billing address (Neon only - requires verification)
- */
-export async function updateBillingAddress(
-  userId: string,
-  address: any
-): Promise<void> {
-  try {
-    await updateNeonUser(userId, {
-      billing_address: address,
-    });
-
-    // Note: This might require address verification for payments
-  } catch (error) {
-    console.error('Failed to update billing address:', error);
     throw error;
   }
 }
@@ -281,21 +176,22 @@ export async function updateBillingAddress(
 // ============================================================
 
 /**
- * Search users by display name (MongoDB) + filter by location (Neon)
+ * Search users by profile fields
+ * Uses Convex searchUsersByProfile query
  */
 export async function searchUsers(query: {
-  search?: string; // Search in display_name (MongoDB)
-  city?: string; // Filter by city (Neon)
-  state?: string; // Filter by state (Neon)
-  active_profile?: string; // Filter by profile type (MongoDB)
-  online_status?: 'online' | 'offline'; // Filter by online status (Convex)
-}): Promise<CompleteUserProfile[]> {
+  searchText?: string;
+  talentSubRole?: string;
+  vocalRange?: string;
+  genres?: string[];
+  skills?: string[];
+  location?: string;
+  availabilityStatus?: string;
+  accountType?: string;
+  limit?: number;
+}): Promise<any[]> {
   try {
-    // This would involve complex queries across all databases
-    // Implementation depends on your specific search requirements
-    // For now, returning empty array as placeholder
-
-    console.warn('searchUsers not fully implemented yet');
+    console.warn('searchUsers: Use Convex searchUsers or searchUsersByProfile query');
     return [];
   } catch (error) {
     console.error('Failed to search users:', error);
@@ -308,58 +204,134 @@ export async function searchUsers(query: {
 // ============================================================
 
 /**
- * React hook for complete user profile
- * Merges data from Neon + MongoDB + Convex automatically
+ * React hook for current user profile
+ * Uses Convex real-time subscription
  */
-export function useCompleteUserProfile(userId: string | undefined) {
-  // This would be implemented in a separate hooks file
-  // Using the individual hooks for Neon, MongoDB, and Convex
-  // and merging the results
+export function useCurrentUser(clerkId: string | undefined) {
+  return useQuery(
+    api.users.getUserByClerkId,
+    clerkId ? { clerkId } : "skip"
+  );
+}
 
-  // Placeholder - actual implementation would use:
-  // - useNeonUser(userId)
-  // - useMongoUserProfile(userId)
-  // - usePresence(userId)
-  // And merge the results
+/**
+ * React hook for user by username
+ */
+export function useUserByUsername(username: string | undefined) {
+  return useQuery(
+    api.users.getUserByUsername,
+    username ? { username } : "skip"
+  );
+}
+
+/**
+ * React hook for user search
+ */
+export function useUserSearch(searchText: string, limit = 20) {
+  return useQuery(api.users.searchUsers, {
+    searchText: searchText || "",
+    limit,
+  });
+}
+
+/**
+ * React hook for profile search by fields
+ */
+export function useProfileSearch(filters: {
+  talentSubRole?: string;
+  vocalRange?: string;
+  genres?: string[];
+  skills?: string[];
+  location?: string;
+  availabilityStatus?: string;
+  limit?: number;
+}) {
+  return useQuery(api.users.searchUsersByProfile, filters);
+}
+
+/**
+ * React hook for sub-profiles
+ */
+export function useSubProfiles(userId: string | undefined) {
+  return useQuery(
+    api.users.getSubProfiles,
+    userId ? { userId } : "skip"
+  );
+}
+
+// ============================================================
+// MUTATION HOOKS
+// ============================================================
+
+/**
+ * Hook for updating user profile
+ */
+export function useUpdateProfile() {
+  const updateProfile = useMutation(api.users.updateProfile);
+  const syncFromClerk = useMutation(api.users.syncUserFromClerk);
 
   return {
-    profile: null,
-    loading: false,
-    error: null,
+    updateProfile,
+    syncFromClerk,
+  };
+}
+
+/**
+ * Hook for sub-profile operations
+ */
+export function useSubProfileMutations() {
+  const create = useMutation(api.users.createSubProfile);
+  const update = useMutation(api.users.updateSubProfile);
+  const remove = useMutation(api.users.deleteSubProfile);
+
+  return {
+    create,
+    update,
+    remove,
+  };
+}
+
+/**
+ * Hook for follow system
+ */
+export function useFollowMutations() {
+  const follow = useMutation(api.users.followUser);
+  const unfollow = useMutation(api.users.unfollowUser);
+
+  return {
+    follow,
+    unfollow,
   };
 }
 
 // ============================================================
-// HELPER FUNCTIONS
+// EXPORTS
 // ============================================================
 
-function getDefaultNotificationSettings() {
-  return {
-    email: {
-      bookings: true,
-      messages: true,
-      promotions: false,
-      recommendations: true,
-    },
-    push: {
-      bookings: true,
-      messages: true,
-      session_reminders: true,
-    },
-    in_app: {
-      sound_enabled: true,
-      desktop_notifications: true,
-    },
-  };
-}
+// All hooks are now exported for use in components
+// Backend functions are deprecated - use Convex mutations directly
 
-// ============================================================
-// TYPE EXPORTS
-// ============================================================
+export default {
+  // Queries (use these in components)
+  useCurrentUser,
+  useUserByUsername,
+  useUserSearch,
+  useProfileSearch,
+  useSubProfiles,
 
-export type {
-  NeonUserProfile,
-  MongoUserProfile,
-  ConvexPresence,
-  CompleteUserProfile,
+  // Mutations (use these in components)
+  useUpdateProfile,
+  useSubProfileMutations,
+  useFollowMutations,
+
+  // Backend functions (deprecated - kept for backward compatibility)
+  getCompleteUserProfile,
+  createCompleteUserProfile,
+  updateUserDisplayName,
+  updateUserEmail,
+  updateUserSettings,
+  createSubProfile,
+  updateSubProfile,
+  switchActiveProfile,
+  searchUsers,
 };

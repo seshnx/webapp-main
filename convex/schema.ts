@@ -21,6 +21,12 @@ export default defineSchema({
     username: v.optional(v.string()),
     emailVerified: v.boolean(),
 
+    // Name fields
+    useRealName: v.optional(v.boolean()),
+    firstName: v.optional(v.string()),
+    lastName: v.optional(v.string()),
+    profileName: v.optional(v.string()), // Stage/artist name
+
     // Profile display
     displayName: v.optional(v.string()),
     bio: v.optional(v.string()),
@@ -28,7 +34,16 @@ export default defineSchema({
     avatarUrl: v.optional(v.string()),
     bannerUrl: v.optional(v.string()),
     location: v.optional(v.string()),
+    address: v.optional(v.string()),
+    zipCode: v.optional(v.string()),
     website: v.optional(v.string()),
+
+    // Portfolio links
+    portfolioUrls: v.optional(v.array(v.object({
+      title: v.string(),
+      url: v.string(),
+      type: v.string(), // soundcloud, spotify, youtube, website, other
+    }))),
 
     // Professional info
     skills: v.optional(v.array(v.string())),
@@ -40,6 +55,82 @@ export default defineSchema({
     accountTypes: v.array(v.string()), // [Talent, Engineer, Producer, etc.]
     activeRole: v.optional(v.string()),
     subRoles: v.optional(v.array(v.string())), // [Singer, Rapper, DJ, etc.]
+
+    // Professional rates
+    rates: v.optional(v.number()), // Base booking rate
+    sessionRate: v.optional(v.number()), // Per-hour session rate
+    dayRate: v.optional(v.number()), // Full day rate
+    hourlyRate: v.optional(v.number()), // General hourly rate
+    projectRate: v.optional(v.number()), // Per-project rate
+
+    // Availability
+    availabilityStatus: v.optional(v.string()), // available, busy, unavailable, touring
+
+    // Talent-specific fields
+    talentSubRole: v.optional(v.string()), // Singer, Rapper, DJ, etc.
+    vocalRange: v.optional(v.string()), // Soprano, Tenor, etc.
+    vocalStyles: v.optional(v.array(v.string())), // Pop, R&B, Rock, etc.
+    primaryInstrument: v.optional(v.string()),
+    playingExperience: v.optional(v.string()), // Beginner, Intermediate, etc.
+    canReadMusic: v.optional(v.string()), // None, Lead Sheets, etc.
+    ownGear: v.optional(v.string()), // Yes - Full Rig, etc.
+    gearHighlights: v.optional(v.string()), // Key equipment description
+    readingSkill: v.optional(v.string()), // Sight reading level
+    remoteWork: v.optional(v.string()), // Yes, No
+    label: v.optional(v.string()), // Record label
+    touring: v.optional(v.string()), // Yes, No
+    travelDist: v.optional(v.number()), // Max travel miles
+
+    // DJ-specific
+    djStyles: v.optional(v.array(v.string())), // Club, Hip Hop, etc.
+    djSetup: v.optional(v.string()), // CDJs, Turntables, etc.
+    canProvidePa: v.optional(v.string()), // PA system availability
+
+    // Demo/media links
+    demoReelUrl: v.optional(v.string()),
+    sampleWorkUrl: v.optional(v.string()),
+    reelUrl: v.optional(v.string()), // Composer reel
+
+    // Studio-specific fields
+    studioHours: v.optional(v.string()),
+    liveRoomDimensions: v.optional(v.string()),
+    parking: v.optional(v.string()),
+    amenities: v.optional(v.array(v.string())), // Wi-Fi, Kitchen, etc.
+    virtualTourUrl: v.optional(v.string()),
+    gearList: v.optional(v.string()),
+
+    // Engineer-specific fields
+    daw: v.optional(v.array(v.string())), // DAWs
+    outboard: v.optional(v.string()), // Favorite outboard gear
+    credits: v.optional(v.string()), // Selected credits
+    hasStudio: v.optional(v.string()), // Studio ownership status
+
+    // Producer-specific fields
+    productionStyles: v.optional(v.array(v.string())), // Hip Hop, Pop, etc.
+    beatLeasePrice: v.optional(v.number()),
+    exclusivePrice: v.optional(v.number()),
+    customBeatPrice: v.optional(v.number()),
+    acceptsCollabs: v.optional(v.string()), // Yes, Paid Only, No
+
+    // Composer-specific fields
+    compType: v.optional(v.array(v.string())), // Film/TV, Game Audio, etc.
+    libraries: v.optional(v.string()), // Key sample libraries
+    canOrchestrate: v.optional(v.string()),
+    turnaroundTime: v.optional(v.string()), // 24-48 hours, etc.
+
+    // Agent-specific fields
+    agencyName: v.optional(v.string()),
+    rosterSize: v.optional(v.number()),
+    territory: v.optional(v.string()),
+
+    // Label-specific fields
+    acceptingDemos: v.optional(v.string()), // Yes, No
+
+    // Fan-specific fields
+    lookingFor: v.optional(v.array(v.string())), // Discovering Music, etc.
+
+    // Technician-specific fields
+    technicianSkills: v.optional(v.string()), // Skills description (textarea)
 
     // Stats
     stats: v.optional(v.object({
@@ -72,7 +163,10 @@ export default defineSchema({
     .index("by_username", ["username"])
     .index("by_email", ["email"])
     .index("by_school", ["schoolId"])
-    .index("by_last_active", ["lastActiveAt"]),
+    .index("by_last_active", ["lastActiveAt"])
+    .index("by_availability", ["availabilityStatus", "lastActiveAt"])
+    .index("by_talent_subrole", ["talentSubRole"])
+    .index("by_location", ["location", "availabilityStatus"]),
 
   // Sub-profiles (for users with multiple roles)
   subProfiles: defineTable({
@@ -82,10 +176,79 @@ export default defineSchema({
     photoUrl: v.optional(v.string()),
     bio: v.optional(v.string()),
 
-    // Role-specific data
+    // Location
+    location: v.optional(v.string()),
+    address: v.optional(v.string()),
+    zipCode: v.optional(v.string()),
+
+    // Professional arrays
     skills: v.optional(v.array(v.string())),
     genres: v.optional(v.array(v.string())),
-    location: v.optional(v.string()),
+    instruments: v.optional(v.array(v.string())),
+    software: v.optional(v.array(v.string())),
+
+    // Portfolio & media
+    portfolioUrls: v.optional(v.array(v.object({
+      title: v.string(),
+      url: v.string(),
+      type: v.string(),
+    }))),
+    demoReelUrl: v.optional(v.string()),
+    sampleWorkUrl: v.optional(v.string()),
+
+    // Pricing
+    rates: v.optional(v.number()),
+    sessionRate: v.optional(v.number()),
+    dayRate: v.optional(v.number()),
+    hourlyRate: v.optional(v.number()),
+    projectRate: v.optional(v.number()),
+    availabilityStatus: v.optional(v.string()),
+
+    // Talent-specific (only used when role === "Talent")
+    talentSubRole: v.optional(v.string()),
+    vocalRange: v.optional(v.string()),
+    vocalStyles: v.optional(v.array(v.string())),
+    primaryInstrument: v.optional(v.string()),
+    playingExperience: v.optional(v.string()),
+    gearHighlights: v.optional(v.string()),
+    djStyles: v.optional(v.array(v.string())),
+    label: v.optional(v.string()),
+    touring: v.optional(v.string()),
+
+    // Studio-specific (only used when role === "Studio")
+    liveRoomDimensions: v.optional(v.string()),
+    parking: v.optional(v.string()),
+    amenities: v.optional(v.array(v.string())),
+    virtualTourUrl: v.optional(v.string()),
+    gearList: v.optional(v.string()),
+
+    // Engineer-specific (only used when role === "Engineer")
+    daw: v.optional(v.array(v.string())),
+    outboard: v.optional(v.string()),
+    credits: v.optional(v.string()),
+    hasStudio: v.optional(v.string()),
+
+    // Producer-specific (only used when role === "Producer")
+    productionStyles: v.optional(v.array(v.string())),
+    beatLeasePrice: v.optional(v.number()),
+    exclusivePrice: v.optional(v.number()),
+    customBeatPrice: v.optional(v.number()),
+    acceptsCollabs: v.optional(v.string()),
+
+    // Composer-specific (only used when role === "Composer")
+    compType: v.optional(v.array(v.string())),
+    libraries: v.optional(v.string()),
+    canOrchestrate: v.optional(v.string()),
+    turnaroundTime: v.optional(v.string()),
+    reelUrl: v.optional(v.string()),
+
+    // Agent-specific (only used when role === "Agent")
+    agencyName: v.optional(v.string()),
+    rosterSize: v.optional(v.number()),
+    territory: v.optional(v.string()),
+
+    // Label-specific (only used when role === "Label")
+    acceptingDemos: v.optional(v.string()),
 
     // Stats for this sub-profile
     stats: v.optional(v.object({
@@ -98,7 +261,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_user", ["userId"])
-    .index("by_role", ["role"]),
+    .index("by_role", ["role"])
+    .index("by_user_role", ["userId", "role"]),
 
   // =====================================================
   // SOCIAL FEED

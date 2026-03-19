@@ -13,7 +13,8 @@ import { PROFILE_SCHEMAS, GENRE_DATA, INSTRUMENT_DATA } from '../config/constant
 import { MultiSelect, NestedSelect } from './shared/Inputs';
 import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
 import SoftwareAutocomplete from './shared/SoftwareAutocomplete';
-import { updateProfile, upsertSubProfile, getProfile } from '../config/neonQueries';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../convex/_generated';
 
 // --- Validation Schemas ---
 const mainProfileSchema = z.object({
@@ -35,6 +36,11 @@ const getInitials = (first, last, display) => {
 export default function ProfileManager({ user, userData, subProfiles = {}, handleLogout, openPublicProfile, onSubProfileUpdate, onRoleSwitch }) {
     const location = useLocation();
     const navigate = useNavigate();
+
+    // Convex mutations
+    const updateProfileMutation = useMutation(api.users.updateProfile);
+    const createSubProfileMutation = useMutation(api.users.createSubProfile);
+    const updateSubProfileMutation = useMutation(api.users.updateSubProfile);
 
     // Get active tab from URL path
     const getTabFromPath = (path) => {
@@ -129,19 +135,16 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
 
             const userId = user?.id || user?.uid;
 
-            // Update main profile using Neon
-            await updateProfile(userId, {
-                first_name: data.firstName,
-                last_name: data.lastName,
-                display_name: data.displayName || null,
+            // Update main profile using Convex
+            await updateProfileMutation({
+                clerkId: userId,
+                firstName: data.firstName,
+                lastName: data.lastName,
+                profileName: data.displayName || null,
                 bio: data.bio || null,
-                zip: data.zip || null,
-                hourly_rate: data.hourlyRate || null,
+                zipCode: data.zip || null,
+                hourlyRate: data.hourlyRate || null,
                 website: data.website || null,
-                use_legal_name_only: useLegalNameOnly,
-                use_user_name_only: useUserNameOnly,
-                effective_display_name: effectiveName,
-                search_terms: searchTerms,
             });
 
             toast.success('Profile Updated & Synced!', { id: toastId });
@@ -162,10 +165,10 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
         try {
             const url = await uploadImage(file, 'profile-photos');
 
-            // Update profile using Neon
-            await updateProfile(userId, {
-                avatar_url: url,
-                photo_url: url, // Update both fields for compatibility
+            // Update profile using Convex
+            await updateProfileMutation({
+                clerkId: userId,
+                imageUrl: url,
             });
 
             toast.success('Photo updated!', { id: toastId });
@@ -187,9 +190,10 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
             // Upload to Vercel Blob
             const url = await uploadImage(file, 'profile-banners');
 
-            // Update profile using Neon
-            await updateProfile(userId, {
-                banner_url: url,
+            // Update profile using Convex
+            await updateProfileMutation({
+                clerkId: userId,
+                bannerUrl: url,
             });
 
             toast.success('Cover banner updated!', { id: toastId });
@@ -205,8 +209,9 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
     const handleSettingsUpdate = async (newSettings) => {
         const userId = user?.id || user?.uid;
         try {
-            // Update settings using Neon
-            await updateProfile(userId, {
+            // Update settings using Convex
+            await updateProfileMutation({
+                clerkId: userId,
                 settings: newSettings,
             });
 
@@ -381,25 +386,42 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
 
             const userId = user?.id || user?.uid;
 
-            // Save sub-profile data using Neon
+            // Save sub-profile data using Convex
             const dataToSave = { ...formData, followMainProfile, useLegalNameOnly, useUserNameOnly, syncStudioOps, displayName: effectiveName };
 
-            // Upsert sub-profile
-            await upsertSubProfile(userId, role, dataToSave);
+            // Check if sub-profile exists and create or update
+            const existingSubProfile = subProfiles?.[role];
+            if (existingSubProfile) {
+                await updateSubProfileMutation({
+                    subProfileId: existingSubProfile._id as any,
+                    displayName: effectiveName,
+                    bio: dataToSave.bio,
+                    location: dataToSave.location,
+                });
+            } else {
+                await createSubProfileMutation({
+                    userId: userId as any,
+                    role: role,
+                    displayName: effectiveName,
+                    bio: dataToSave.bio,
+                    location: dataToSave.location,
+                    isActive: true,
+                });
+            }
 
             // Update main profile if this is the active role
             if (userData.activeProfileRole === role) {
-                await updateProfile(userId, {
-                    display_name: effectiveName,
-                    effective_display_name: effectiveName,
-                    search_terms: [effectiveName.toLowerCase()],
+                await updateProfileMutation({
+                    clerkId: userId,
+                    profileName: effectiveName,
                 });
             }
 
             // Update studio name if applicable
             if (role === 'Studio' && syncStudioOps) {
-                await updateProfile(userId, {
-                    studio_name: effectiveName,
+                await updateProfileMutation({
+                    clerkId: userId,
+                    studioName: effectiveName,
                 });
             }
 

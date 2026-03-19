@@ -9,7 +9,11 @@ import TechEarnings from './TechEarnings';
 import TechSchedule from './TechSchedule';
 import TechHistory from './TechHistory';
 import TechBusinessProfile from './TechBusinessProfile';
-import { getTechMetrics, type TechMetricsData } from '../../config/neonQueries';
+// TODO: Replace with Convex queries
+// import { useQuery } from 'convex/react';
+// import { api } from '../../../convex/_generated';
+// Inline TechMetricsData type until Convex migration
+interface TechMetricsData { [key: string]: any; }
 
 /**
  * Tech tab IDs
@@ -177,8 +181,9 @@ function TechOverview({ userId, setActiveTab }: TechOverviewProps) {
 
       setLoading(true);
       try {
-        const data = await getTechMetrics(userId);
-        setMetrics(data);
+        // TODO: Replace with Convex query
+        // const data = await convexQuery(api.tech.getTechMetrics, { userId });
+        setMetrics(null);
       } catch (error) {
         console.error('Error fetching tech metrics:', error);
       } finally {

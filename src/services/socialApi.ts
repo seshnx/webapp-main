@@ -1,105 +1,353 @@
 /**
- * Social API Service
+ * Social API Service - Convex Only
  *
- * All social features now use MongoDB via API endpoints
+ * All social features now use Convex for real-time updates.
+ * Direct Convex mutations and queries - no API endpoints needed.
  */
 
-const API_BASE = '/api/social';
+import { api } from '../../convex/_generated';
+import { useQuery, useMutation, Id } from 'convex/react';
 
-// ============================================================================
-// Helper function for API calls
-// ============================================================================
+// =====================================================
+// POST QUERIES
+// =====================================================
 
-async function apiCall(endpoint: string, options?: RequestInit) {
-  const url = `${API_BASE}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+/**
+ * Get main feed
+ */
+export function useFeed(category?: string, limit = 20, skip = 0) {
+  return useQuery(api.social.getFeed, {
+    category: category || "All",
+    limit,
+    skip,
   });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`API error: ${response.status} - ${error}`);
-  }
-
-  return response.json();
 }
 
-// ============================================================================
-// Posts
-// ============================================================================
+/**
+ * Get home feed (following + own posts)
+ */
+export function useHomeFeed(userId: string | undefined, limit = 20, skip = 0) {
+  return useQuery(
+    api.social.getHomeFeed,
+    userId ? { userId, limit, skip } : "skip"
+  );
+}
+
+/**
+ * Get trending posts
+ */
+export function useTrendingPosts(limit = 10) {
+  return useQuery(api.social.getTrendingPosts, { limit });
+}
+
+/**
+ * Search posts
+ */
+export function useSearchPosts(searchQuery: string, limit = 20) {
+  return useQuery(
+    api.social.searchPosts,
+    searchQuery ? { searchQuery, limit } : "skip"
+  );
+}
+
+/**
+ * Get posts by author
+ */
+export function usePostsByAuthor(authorId: string | undefined, limit = 20, skip = 0) {
+  return useQuery(
+    api.social.getPostsByAuthor,
+    authorId ? { authorId: authorId as Id<"users">, limit, skip } : "skip"
+  );
+}
+
+/**
+ * Get posts by category
+ */
+export function usePostsByCategory(category: string, limit = 20, skip = 0) {
+  return useQuery(api.social.getPostsByCategory, { category, limit, skip });
+}
+
+/**
+ * Get single post
+ */
+export function usePost(postId: string | undefined) {
+  return useQuery(
+    api.social.getPost,
+    postId ? { postId: postId as Id<"posts"> } : "skip"
+  );
+}
+
+// =====================================================
+// POST MUTATIONS
+// =====================================================
+
+/**
+ * Hook for post mutations
+ */
+export function usePostMutations() {
+  const create = useMutation(api.social.createPost);
+  const delete = useMutation(api.social.deletePost);
+  const repost = useMutation(api.social.repostPost);
+
+  return {
+    create,
+    delete,
+    repost,
+  };
+}
+
+// =====================================================
+// COMMENT QUERIES
+// =====================================================
+
+/**
+ * Get comments for a post
+ */
+export function useComments(postId: string | undefined, limit = 50, skip = 0) {
+  return useQuery(
+    api.social.getComments,
+    postId ? { postId: postId as Id<"posts">, limit, skip } : "skip"
+  );
+}
+
+/**
+ * Get replies for a comment
+ */
+export function useReplies(commentId: string | undefined, limit = 20, skip = 0) {
+  return useQuery(
+    api.social.getReplies,
+    commentId ? { commentId: commentId as Id<"comments">, limit, skip } : "skip"
+  );
+}
+
+// =====================================================
+// COMMENT MUTATIONS
+// =====================================================
+
+/**
+ * Hook for comment mutations
+ */
+export function useCommentMutations() {
+  const create = useMutation(api.social.createComment);
+  const delete = useMutation(api.social.deleteComment);
+
+  return {
+    create,
+    delete,
+  };
+}
+
+// =====================================================
+// REACTION QUERIES
+// =====================================================
+
+/**
+ * Get reactions for a post or comment
+ */
+export function useReactions(targetId: string | undefined, targetType: 'post' | 'comment') {
+  // This would need a query in Convex - for now using placeholder
+  return { reactions: [], loading: false };
+}
+
+/**
+ * Check if user reacted to a post/comment
+ */
+export function useUserReaction(
+  userId: string | undefined,
+  targetId: string | undefined,
+  targetType: 'post' | 'comment'
+) {
+  // This would need a query in Convex - for now using placeholder
+  return { reacted: false, emoji: null, loading: false };
+}
+
+// =====================================================
+// REACTION MUTATIONS
+// =====================================================
+
+/**
+ * Hook for reaction mutations
+ */
+export function useReactionMutations() {
+  const toggle = useMutation(api.social.toggleReaction);
+
+  return {
+    toggle,
+  };
+}
+
+// =====================================================
+// FOLLOW QUERIES
+// =====================================================
+
+/**
+ * Get followers for a user
+ */
+export function useFollowers(userId: string | undefined) {
+  return useQuery(
+    api.social.getFollowers,
+    userId ? { userId: userId as Id<"users"> } : "skip"
+  );
+}
+
+/**
+ * Get following for a user
+ */
+export function useFollowing(userId: string | undefined) {
+  return useQuery(
+    api.social.getFollowing,
+    userId ? { userId: userId as Id<"users"> } : "skip"
+  );
+}
+
+/**
+ * Check if user is following another user
+ */
+export function useIsFollowing(
+  followerId: string | undefined,
+  followingId: string | undefined
+) {
+  return useQuery(
+    api.social.isFollowing,
+    (followerId && followingId)
+      ? { followerId: followerId as Id<"users">, followingId: followingId as Id<"users"> }
+      : "skip"
+  );
+}
+
+// =====================================================
+// FOLLOW MUTATIONS
+// =====================================================
+
+/**
+ * Hook for follow mutations
+ */
+export function useFollowMutations() {
+  const follow = useMutation(api.social.followUser);
+  const unfollow = useMutation(api.social.unfollowUser);
+
+  return {
+    follow,
+    unfollow,
+  };
+}
+
+// =====================================================
+// SAVED POSTS
+// =====================================================
+
+/**
+ * Get saved posts for a user
+ */
+export function useSavedPosts(userId: string | undefined, limit = 20) {
+  return useQuery(
+    api.social.getSavedPosts,
+    userId ? { userId: userId as Id<"users">, limit } : "skip"
+  );
+}
+
+/**
+ * Check if post is saved by user
+ */
+export function useIsPostSaved(userId: string | undefined, postId: string | undefined) {
+  return useQuery(
+    api.social.isPostSaved,
+    (userId && postId)
+      ? { userId: userId as Id<"users">, postId: postId as Id<"posts"> }
+      : "skip"
+  );
+}
+
+// =====================================================
+// SAVED POSTS MUTATIONS
+// =====================================================
+
+/**
+ * Hook for saved posts mutations
+ */
+export function useSavedPostsMutations() {
+  const save = useMutation(api.social.savePost);
+  const unsave = useMutation(api.social.unsavePost);
+
+  return {
+    save,
+    unsave,
+  };
+}
+
+// =====================================================
+// BLOCKED USERS
+// =====================================================
+
+/**
+ * Get blocked users
+ */
+export function useBlockedUsers(userId: string | undefined) {
+  return useQuery(
+    api.social.getBlockedUsers,
+    userId ? { userId: userId as Id<"users"> } : "skip"
+  );
+}
+
+// =====================================================
+// BLOCKED USERS MUTATIONS
+// =====================================================
+
+/**
+ * Hook for blocking mutations
+ */
+export function useBlockMutations() {
+  const block = useMutation(api.social.blockUser);
+  const unblock = useMutation(api.social.unblockUser);
+
+  return {
+    block,
+    unblock,
+  };
+}
+
+// =====================================================
+// LEGACY API FUNCTIONS (DEPRECATED)
+// =====================================================
+// These are kept for backward compatibility but should not be used
 
 export async function getPosts(filters?: any, limit = 20, skip = 0) {
-  const params = new URLSearchParams({
-    limit: limit.toString(),
-    skip: skip.toString(),
-  });
-
-  if (filters?.user_id) params.append('author_id', filters.user_id);
-  if (filters?.category) params.append('category', filters.category);
-
-  return apiCall(`/posts?${params}`);
+  console.warn('getPosts: Use useFeed or useHomeFeed hook instead');
+  return [];
 }
 
 export async function createPost(postData: any) {
-  return apiCall('/posts', {
-    method: 'POST',
-    body: JSON.stringify(postData),
-  });
+  console.warn('createPost: Use usePostMutations hook instead');
+  return null;
 }
 
 export async function updatePost(postId: string, updates: any) {
-  return apiCall(`/posts?id=${postId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ ...updates, id: postId }),
-  });
+  console.warn('updatePost: Not supported - delete and recreate instead');
+  return null;
 }
 
 export async function deletePost(postId: string, authorId: string) {
-  const params = new URLSearchParams({
-    post_id: postId,
-    author_id: authorId,
-  });
-
-  return apiCall(`/posts?${params}`, {
-    method: 'DELETE',
-  });
+  console.warn('deletePost: Use usePostMutations hook instead');
 }
 
-// ============================================================================
-// Comments
-// ============================================================================
-
 export async function getComments(postId: string) {
-  return apiCall(`/comments?post_id=${postId}`);
+  console.warn('getComments: Use useComments hook instead');
+  return [];
 }
 
 export async function createComment(commentData: any) {
-  return apiCall('/comments', {
-    method: 'POST',
-    body: JSON.stringify(commentData),
-  });
+  console.warn('createComment: Use useCommentMutations hook instead');
+  return null;
 }
 
 export async function deleteComment(commentId: string) {
-  return apiCall(`/comments?id=${commentId}`, {
-    method: 'DELETE',
-  });
+  console.warn('deleteComment: Use useCommentMutations hook instead');
 }
 
 export async function updateComment(commentId: string, content: string) {
-  return apiCall(`/comments?id=${commentId}`, {
-    method: 'PUT',
-    body: JSON.stringify({ content, id: commentId }),
-  });
+  console.warn('updateComment: Not supported - delete and recreate instead');
+  return null;
 }
-
-// ============================================================================
-// Reactions (via MongoDB API)
-// ============================================================================
 
 export async function toggleReaction(
   targetId: string,
@@ -107,108 +355,122 @@ export async function toggleReaction(
   emoji: string,
   userId: string
 ) {
-  return apiCall('/reactions', {
-    method: 'POST',
-    body: JSON.stringify({ target_id: targetId, target_type: targetType, emoji, user_id: userId }),
-  });
+  console.warn('toggleReaction: Use useReactionMutations hook instead');
+  return null;
 }
 
 export async function getReactions(targetId: string, targetType: 'post' | 'comment') {
-  return apiCall(`/reactions?target_id=${targetId}&target_type=${targetType}`);
+  console.warn('getReactions: Use useReactions hook instead');
+  return [];
 }
 
-// ============================================================================
-// Follows (via MongoDB API)
-// ============================================================================
-
 export async function followUser(followerId: string, followingId: string) {
-  return apiCall('/follows', {
-    method: 'POST',
-    body: JSON.stringify({ follower_id: followerId, following_id: followingId }),
-  });
+  console.warn('followUser: Use useFollowMutations hook instead');
+  return null;
 }
 
 export async function unfollowUser(followerId: string, followingId: string) {
-  return apiCall(`/follows?follower_id=${followerId}&following_id=${followingId}`, {
-    method: 'DELETE',
-  });
+  console.warn('unfollowUser: Use useFollowMutations hook instead');
+  return null;
 }
 
 export async function getFollowers(userId: string) {
-  return apiCall(`/follows?user_id=${userId}&type=followers`);
+  console.warn('getFollowers: Use useFollowers hook instead');
+  return [];
 }
 
 export async function getFollowing(userId: string) {
-  return apiCall(`/follows?user_id=${userId}&type=following`);
+  console.warn('getFollowing: Use useFollowing hook instead');
+  return [];
 }
 
-// ============================================================================
-// Saved Posts (via MongoDB API)
-// ============================================================================
-
 export async function savePost(userId: string, postId: string) {
-  return apiCall('/saved', {
-    method: 'POST',
-    body: JSON.stringify({ user_id: userId, post_id: postId }),
-  });
+  console.warn('savePost: Use useSavedPostsMutations hook instead');
+  return null;
 }
 
 export async function unsavePost(userId: string, postId: string) {
-  return apiCall(`/saved?user_id=${userId}&post_id=${postId}`, {
-    method: 'DELETE',
-  });
+  console.warn('unsavePost: Use useSavedPostsMutations hook instead');
+  return null;
 }
 
 export async function checkIsSaved(userId: string, postId: string): Promise<boolean> {
-  const result = await apiCall(`/saved?user_id=${userId}&post_id=${postId}&check=true`);
-  return result.saved;
+  console.warn('checkIsSaved: Use useIsPostSaved hook instead');
+  return false;
 }
 
-export async function getSavedPosts(userId: string) {
-  return apiCall(`/saved?user_id=${userId}`);
+export async function getSavedPostsList(userId: string) {
+  console.warn('getSavedPostsList: Use useSavedPosts hook instead');
+  return [];
 }
-
-export async function updatePostSaveCount(postId: string) {
-  // Handled internally by API endpoints
-}
-
-// ============================================================================
-// Reposts (via MongoDB API)
-// ============================================================================
 
 export async function repostPost(userId: string, originalPostId: string, comment?: string) {
-  return apiCall('/posts', {
-    method: 'POST',
-    body: JSON.stringify({
-      author_id: userId,
-      repost_of: originalPostId,
-      content: comment || '',
-    }),
-  });
+  console.warn('repostPost: Use usePostMutations hook instead');
+  return null;
 }
 
 export async function hasUserReposted(userId: string, postId: string): Promise<boolean> {
-  const result = await apiCall(`/posts?user_id=${userId}&post_id=${postId}&check-repost=true`);
-  return result.reposted;
+  console.warn('hasUserReposted: Check user posts instead');
+  return false;
 }
-
-// ============================================================================
-// Comments Count Update
-// ============================================================================
-
-export async function updatePostCommentCount(postId: string) {
-  // Handled internally by API endpoints
-}
-
-// ============================================================================
-// Helper
-// ============================================================================
 
 export async function isSocialApiAvailable(): Promise<boolean> {
-  try {
-    await apiCall('/health');
-    return true;
-  } catch {
-    return false;
-  }
+  // Convex is always available
+  return true;
 }
+
+// =====================================================
+// EXPORTS
+// =====================================================
+
+export default {
+  // Queries (use these in components)
+  useFeed,
+  useHomeFeed,
+  useTrendingPosts,
+  useSearchPosts,
+  usePostsByAuthor,
+  usePostsByCategory,
+  usePost,
+  useComments,
+  useReplies,
+  useReactions,
+  useUserReaction,
+  useFollowers,
+  useFollowing,
+  useIsFollowing,
+  useSavedPosts,
+  useIsPostSaved,
+  useBlockedUsers,
+
+  // Mutations (use these in components)
+  usePostMutations,
+  useCommentMutations,
+  useReactionMutations,
+  useFollowMutations,
+  useSavedPostsMutations,
+  useBlockMutations,
+
+  // Legacy functions (deprecated)
+  getPosts,
+  createPost,
+  updatePost,
+  deletePost,
+  getComments,
+  createComment,
+  deleteComment,
+  updateComment,
+  toggleReaction,
+  getReactions,
+  followUser,
+  unfollowUser,
+  getFollowers,
+  getFollowing,
+  savePost,
+  unsavePost,
+  checkIsSaved,
+  getSavedPostsList,
+  repostPost,
+  hasUserReposted,
+  isSocialApiAvailable,
+};

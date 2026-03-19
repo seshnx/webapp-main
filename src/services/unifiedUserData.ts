@@ -8,7 +8,21 @@
  * MONGODB = Display profile, skills, settings, social (flexible, frequent changes)
  */
 
-import { getCoreUserProfile, updateProfile as updateNeonProfile } from '../config/neonQueries';
+// TODO: Replace Neon profile functions with Convex equivalents
+// import { fetchQuery, fetchMutation } from 'convex/server';
+// import { api } from '../../convex/_generated';
+
+// Stub for getCoreUserProfile - returns null until Convex migration is complete
+const getCoreUserProfile = async (userId: string): Promise<any> => {
+  // TODO: Replace with: return await fetchQuery(api.users.getCoreProfile, { userId });
+  return null;
+};
+
+// Stub for updateNeonProfile - no-op until Convex migration is complete
+const updateNeonProfile = async (userId: string, updates: Record<string, any>): Promise<void> => {
+  // TODO: Replace with: await fetchMutation(api.users.updateProfile, { userId, ...updates });
+  console.log('updateNeonProfile (TODO: implement via Convex):', { userId, fields: Object.keys(updates) });
+};
 import {
   getProfile as getMongoProfile,
   upsertProfile as upsertMongoProfile,
@@ -271,7 +285,7 @@ export async function updateUserProfile(
     }
 
     // Parallel updates to both databases
-    const updates = await Promise.all([
+    const _results = await Promise.all([
       Object.keys(neonUpdates).length > 0
         ? updateNeonProfile(clerkUserId, neonUpdates)
         : Promise.resolve(null),
