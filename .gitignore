@@ -12,4 +12,5 @@ supabase-schema-fixed.sql
 .env*.local
 .sentryclirc
 
-convex/_generated
+# convex/_generated is committed (stub files needed for build before npx convex dev)
+# Real generated files are overwritten by 'npx convex dev'
