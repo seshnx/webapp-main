@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:api": "node server-mock-api.js",
     "dev:full": "concurrently \"npm:dev:api\" \"npm:dev\"",
-    "prebuild": "node scripts/validate-env.cjs .env",
+    "prebuild": "npx convex codegen && node scripts/validate-env.cjs .env",
     "build": "vite build",
     "build:vercel": "vite build",
     "build:analyze": "ANALYZE=true vite build",
