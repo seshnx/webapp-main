@@ -1,5 +1,5 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex-values";
+import { v } from "convex/values";
 
 // =============================================================================
 // EDU ANNOUNCEMENTS (School Communication System)
