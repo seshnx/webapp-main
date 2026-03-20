@@ -534,6 +534,8 @@ export default defineSchema({
     ownerId: v.id("users"),
     description: v.optional(v.string()),
     location: v.optional(v.string()),
+    city: v.optional(v.string()),
+    state: v.optional(v.string()),
     coordinates: v.optional(v.object({
       lat: v.number(),
       lng: v.number(),
@@ -543,20 +545,24 @@ export default defineSchema({
     photos: v.optional(v.array(v.string())),
     logoUrl: v.optional(v.string()),
 
-    // Details
+    // Pricing
     hourlyRate: v.optional(v.number()),
+    minHourlyRate: v.optional(v.number()),
+    maxHourlyRate: v.optional(v.number()),
     currency: v.optional(v.string()),
 
     // Settings
     isActive: v.boolean(),
     requiresApproval: v.boolean(),
+    deletedAt: v.optional(v.number()), // Soft delete support
 
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_owner", ["ownerId"])
-    .index("by_location", ["location"]),
+    .index("by_location", ["location"])
+    .index("by_city_state", ["city", "state"]),
 
   // Rooms table (for multi-room studios)
   rooms: defineTable({
@@ -586,10 +592,27 @@ export default defineSchema({
     duration: v.optional(v.number()),
     status: v.string(), // Pending, Confirmed, Completed, Cancelled, InProgress
 
+    // Time-based bookings (for recurring/multi-day bookings)
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+    startTime: v.optional(v.string()),
+    endTime: v.optional(v.string()),
+
     // Pricing
     offerAmount: v.optional(v.number()),
     finalAmount: v.optional(v.number()),
+    totalAmount: v.optional(v.number()),
+    depositAmount: v.optional(v.number()),
+    depositRequired: v.optional(v.boolean()),
     currency: v.optional(v.string()),
+
+    // Payment tracking
+    paymentStatus: v.optional(v.string()), // PendingPayment, DepositPending, PartiallyPaid, FullyPaid, Overpaid, Refunded
+
+    // Cancellation tracking
+    cancelledBy: v.optional(v.id("users")),
+    cancelledAt: v.optional(v.number()),
+    cancellationReason: v.optional(v.string()),
 
     // EDU mode fields
     isClassBooking: v.optional(v.boolean()),
@@ -604,11 +627,13 @@ export default defineSchema({
     message: v.optional(v.string()),
     clientNotes: v.optional(v.string()),
     studioNotes: v.optional(v.string()),
+    reason: v.optional(v.string()), // For booking requests/rejections
 
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_studio", ["studioId"])
     .index("by_studio_status", ["studioId", "status"])
     .index("by_client", ["clientId", "createdAt"])
     .index("by_studio_date", ["studioId", "date"])
@@ -648,6 +673,7 @@ export default defineSchema({
     stripePaymentIntentId: v.optional(v.string()),
     createdAt: v.number(),
     completedAt: v.optional(v.number()),
+    updatedAt: v.number(),
   })
     .index("by_booking", ["bookingId"])
     .index("by_status", ["status", "createdAt"]),
