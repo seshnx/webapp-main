@@ -374,7 +374,7 @@ export default defineSchema({
   })
     .index("by_follower", ["followerId", "createdAt"])
     .index("by_following", ["followingId", "createdAt"])
-    .index("by_pair", ["followerId", "followingId"], { unique: true }),
+    .index("by_pair", ["followerId", "followingId"]),
 
   // Saved posts (bookmarks)
   savedPosts: defineTable({
@@ -384,7 +384,7 @@ export default defineSchema({
   })
     .index("by_user", ["userId", "createdAt"])
     .index("by_post", ["postId"])
-    .index("by_user_post", ["userId", "postId"], { unique: true }),
+    .index("by_user_post", ["userId", "postId"]),
 
   // User blocks
   userBlocks: defineTable({
@@ -394,7 +394,7 @@ export default defineSchema({
   })
     .index("by_blocker", ["blockerId", "createdAt"])
     .index("by_blocked", ["blockedId", "createdAt"])
-    .index("by_pair", ["blockerId", "blockedId"], { unique: true }),
+    .index("by_pair", ["blockerId", "blockedId"]),
 
   // =====================================================
   // NOTIFICATIONS
@@ -720,7 +720,7 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_code", ["code"], { unique: true })
+    .index("by_code", ["code"])
     .index("by_admin", ["adminId"])
     .index("by_active", ["isActive"]),
 
@@ -782,7 +782,7 @@ export default defineSchema({
   })
     .index("by_class", ["classId"])
     .index("by_student", ["studentId"])
-    .index("by_class_student", ["classId", "studentId"], { unique: true }),
+    .index("by_class_student", ["classId", "studentId"]),
 
   // Internships table
   internships: defineTable({
@@ -815,7 +815,7 @@ export default defineSchema({
   })
     .index("by_internship", ["internshipId"])
     .index("by_student", ["studentId"])
-    .index("by_week", ["internshipId", "weekNumber"], { unique: true }),
+    .index("by_week", ["internshipId", "weekNumber"]),
 
   // EduAnnouncements table (school announcements/communications)
   eduAnnouncements: defineTable({
@@ -876,7 +876,7 @@ export default defineSchema({
   })
     .index("by_announcement", ["announcementId"])
     .index("by_user", ["userId"])
-    .index("by_announcement_user", ["announcementId", "userId"], { unique: true }),
+    .index("by_announcement_user", ["announcementId", "userId"]),
 
   // =====================================================
   // MARKETPLACE
@@ -962,7 +962,7 @@ export default defineSchema({
   })
     .index("by_label", ["labelId"])
     .index("by_artist", ["artistId"])
-    .index("by_label_artist", ["labelId", "artistId"], { unique: true }),
+    .index("by_label_artist", ["labelId", "artistId"]),
 
   // Contracts
   contracts: defineTable({
@@ -1126,7 +1126,7 @@ export default defineSchema({
     // Timestamps
     updatedAt: v.number(),
   })
-    .index("by_user", ["userId"], { unique: true }),
+    .index("by_user", ["userId"]),
 
   // Notification settings (granular control)
   notificationSettings: defineTable({
@@ -1170,7 +1170,7 @@ export default defineSchema({
     // Timestamp
     updatedAt: v.number(),
   })
-    .index("by_user", ["userId"], { unique: true }),
+    .index("by_user", ["userId"]),
 
   // Privacy settings (detailed privacy controls)
   privacySettings: defineTable({
@@ -1206,7 +1206,7 @@ export default defineSchema({
     // Timestamp
     updatedAt: v.number(),
   })
-    .index("by_user", ["userId"], { unique: true }),
+    .index("by_user", ["userId"]),
 
   // Security settings (account security)
   securitySettings: defineTable({
@@ -1253,7 +1253,7 @@ export default defineSchema({
     // Timestamp
     updatedAt: v.number(),
   })
-    .index("by_user", ["userId"], { unique: true }),
+    .index("by_user", ["userId"]),
 
   // Application settings (platform-wide settings)
   appSettings: defineTable({
@@ -1269,7 +1269,7 @@ export default defineSchema({
     updatedAt: v.number(),
     updatedBy: v.optional(v.id("users")),
   })
-    .index("by_key", ["key"], { unique: true })
+    .index("by_key", ["key"])
     .index("by_category", ["category"]),
 
   // System configuration
@@ -1278,7 +1278,7 @@ export default defineSchema({
     value: v.any(),
     updatedAt: v.number(),
   })
-    .index("by_key", ["key"], { unique: true }),
+    .index("by_key", ["key"]),
 
   // Audit log
   auditLog: defineTable({

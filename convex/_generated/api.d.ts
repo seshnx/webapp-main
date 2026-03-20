@@ -14,31 +14,9 @@ import type * as comments from "../comments.js";
 import type * as conversations from "../conversations.js";
 import type * as edu from "../edu.js";
 import type * as eduAnnouncements from "../eduAnnouncements.js";
-import type * as enhancedPresence from "../enhancedPresence.js";
 import type * as enhancedSchema from "../enhancedSchema.js";
-import type * as follows from "../follows.js";
-import type * as http from "../http.js";
-import type * as kiosk from "../kiosk.js";
-import type * as marketplace from "../marketplace.js";
-import type * as messages from "../messages.js";
-import type * as messenger from "../messenger.js";
-import type * as migrate from "../migrate.js";
-import type * as migrateExtended from "../migrateExtended.js";
 import type * as migrateProfileFields from "../migrateProfileFields.js";
-import type * as moderation from "../moderation.js";
-import type * as notifications from "../notifications.js";
-import type * as posts from "../posts.js";
-import type * as presence from "../presence.js";
-import type * as profileUpdates from "../profileUpdates.js";
-import type * as reactions from "../reactions.js";
-import type * as readReceipts from "../readReceipts.js";
 import type * as schema_expanded from "../schema_expanded.js";
-import type * as settings from "../settings.js";
-import type * as social from "../social.js";
-import type * as socialEnhanced from "../socialEnhanced.js";
-import type * as socialNotifications from "../socialNotifications.js";
-import type * as socialSearch from "../socialSearch.js";
-import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -53,31 +31,9 @@ declare const fullApi: ApiFromModules<{
   conversations: typeof conversations;
   edu: typeof edu;
   eduAnnouncements: typeof eduAnnouncements;
-  enhancedPresence: typeof enhancedPresence;
   enhancedSchema: typeof enhancedSchema;
-  follows: typeof follows;
-  http: typeof http;
-  kiosk: typeof kiosk;
-  marketplace: typeof marketplace;
-  messages: typeof messages;
-  messenger: typeof messenger;
-  migrate: typeof migrate;
-  migrateExtended: typeof migrateExtended;
   migrateProfileFields: typeof migrateProfileFields;
-  moderation: typeof moderation;
-  notifications: typeof notifications;
-  posts: typeof posts;
-  presence: typeof presence;
-  profileUpdates: typeof profileUpdates;
-  reactions: typeof reactions;
-  readReceipts: typeof readReceipts;
   schema_expanded: typeof schema_expanded;
-  settings: typeof settings;
-  social: typeof social;
-  socialEnhanced: typeof socialEnhanced;
-  socialNotifications: typeof socialNotifications;
-  socialSearch: typeof socialSearch;
-  users: typeof users;
 }>;
 
 /**

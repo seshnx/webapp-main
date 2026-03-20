@@ -93,7 +93,8 @@ export default function Dashboard({
         });
       }
 
-      // Load activity feed
+      // Load activity feed - now using real data from activityFeed service
+      // which queries Convex for posts, comments, bookings, etc.
       if (activeRole !== 'Fan') {
         const feed = await fetchActivityFeed(user.id, { limit: 10 });
         setActivityFeed(feed);

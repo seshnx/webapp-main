@@ -116,23 +116,33 @@ export const getScheduledEduAnnouncements = query({
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    let q = ctx.db.query("eduAnnouncements");
+    let announcements;
 
     if (args.schoolId) {
-      q = q.withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId));
-    } else {
-      q = q.withIndex("by_school_created");
-    }
-
-    const announcements = await q
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("status"), "scheduled"),
-          q.gt(q.field("scheduledFor"), now),
-          q.eq(q.field("deletedAt"), undefined)
+      announcements = await ctx.db
+        .query("eduAnnouncements")
+        .withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId!))
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("status"), "scheduled"),
+            q.gt(q.field("scheduledFor"), now),
+            q.eq(q.field("deletedAt"), undefined)
+          )
         )
-      )
-      .collect();
+        .collect();
+    } else {
+      announcements = await ctx.db
+        .query("eduAnnouncements")
+        .withIndex("by_school_created")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("status"), "scheduled"),
+            q.gt(q.field("scheduledFor"), now),
+            q.eq(q.field("deletedAt"), undefined)
+          )
+        )
+        .collect();
+    }
 
     // Sort by scheduled date
     announcements.sort((a, b) => a.scheduledFor! - b.scheduledFor!);
@@ -393,8 +403,9 @@ export const incrementReadCount = mutation({
     const existingRead = await ctx.db
       .query("eduAnnouncementReads")
       .withIndex("by_announcement_user", (q) =>
-        q.eq("announcementId", args.announcementId).eq("userId", args.userId)
+        q.eq("announcementId", args.announcementId)
       )
+      .filter((q) => q.eq(q.field("userId"), args.userId))
       .first();
 
     if (existingRead) {
@@ -428,8 +439,9 @@ export const markEduAnnouncementAsRead = mutation({
     const existingRead = await ctx.db
       .query("eduAnnouncementReads")
       .withIndex("by_announcement_user", (q) =>
-        q.eq("announcementId", args.announcementId).eq("userId", args.userId)
+        q.eq("announcementId", args.announcementId)
       )
+      .filter((q) => q.eq(q.field("userId"), args.userId))
       .first();
 
     if (existingRead) {

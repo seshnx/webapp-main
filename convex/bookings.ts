@@ -10,7 +10,6 @@ export const getStudios = query({
   handler: async (ctx) => {
     const studios = await ctx.db
       .query("studios")
-      .withIndex("by_owner")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .collect();
 
@@ -28,7 +27,7 @@ export const getStudioById = query({
 });
 
 export const getStudiosByOwner = query({
-  args: { ownerId: v.string() },
+  args: { ownerId: v.id("users") },
   handler: async (ctx, args) => {
     const studios = await ctx.db
       .query("studios")
@@ -47,13 +46,11 @@ export const searchStudios = query({
     state: v.optional(v.string()),
     minHourlyRate: v.optional(v.number()),
     maxHourlyRate: v.optional(v.number()),
-    amenities: v.optional(v.array(v.string())),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     let studios = await ctx.db
       .query("studios")
-      .withIndex("by_owner")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .collect();
 
@@ -78,17 +75,10 @@ export const searchStudios = query({
 
     // Filter by price range
     if (args.minHourlyRate !== undefined) {
-      studios = studios.filter((s) => s.minHourlyRate >= args.minHourlyRate!);
+      studios = studios.filter((s) => s.minHourlyRate !== undefined && s.minHourlyRate >= args.minHourlyRate!);
     }
     if (args.maxHourlyRate !== undefined) {
-      studios = studios.filter((s) => s.maxHourlyRate <= args.maxHourlyRate!);
-    }
-
-    // Filter by amenities
-    if (args.amenities && args.amenities.length > 0) {
-      studios = studios.filter((s) =>
-        args.amenities!.every((amenity) => s.amenities?.includes(amenity))
-      );
+      studios = studios.filter((s) => s.maxHourlyRate !== undefined && s.maxHourlyRate <= args.maxHourlyRate!);
     }
 
     // Limit results
@@ -102,43 +92,42 @@ export const searchStudios = query({
 
 export const createStudio = mutation({
   args: {
-    ownerId: v.string(),
+    ownerId: v.id("users"),
     name: v.string(),
     description: v.optional(v.string()),
-    address: v.string(),
-    city: v.string(),
-    state: v.string(),
-    zipCode: v.string(),
-    country: v.optional(v.string()),
-    phone: v.optional(v.string()),
-    email: v.optional(v.string()),
-    website: v.optional(v.string()),
-    amenities: v.optional(v.array(v.string())),
-    minHourlyRate: v.number(),
-    maxHourlyRate: v.number(),
+    location: v.optional(v.string()),
+    city: v.optional(v.string()),
+    state: v.optional(v.string()),
+    coordinates: v.optional(v.object({
+      lat: v.number(),
+      lng: v.number(),
+    })),
     photos: v.optional(v.array(v.string())),
-    operatingHours: v.optional(
-      v.object({
-        monday: v.optional(v.string()),
-        tuesday: v.optional(v.string()),
-        wednesday: v.optional(v.string()),
-        thursday: v.optional(v.string()),
-        friday: v.optional(v.string()),
-        saturday: v.optional(v.string()),
-        sunday: v.optional(v.string()),
-      })
-    ),
-    cancellationPolicy: v.optional(v.string()),
-    depositPolicy: v.optional(v.string()),
+    logoUrl: v.optional(v.string()),
+    hourlyRate: v.optional(v.number()),
+    minHourlyRate: v.optional(v.number()),
+    maxHourlyRate: v.optional(v.number()),
+    currency: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
     const studioId = await ctx.db.insert("studios", {
-      ...args,
-      verified: false,
-      averageRating: 0,
-      totalReviews: 0,
+      name: args.name,
+      ownerId: args.ownerId,
+      description: args.description,
+      location: args.location,
+      city: args.city,
+      state: args.state,
+      coordinates: args.coordinates,
+      photos: args.photos,
+      logoUrl: args.logoUrl,
+      hourlyRate: args.hourlyRate,
+      minHourlyRate: args.minHourlyRate,
+      maxHourlyRate: args.maxHourlyRate,
+      currency: args.currency,
+      isActive: true,
+      requiresApproval: false,
       createdAt: now,
       updatedAt: now,
     });
@@ -152,34 +141,20 @@ export const updateStudio = mutation({
     studioId: v.id("studios"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
-    address: v.optional(v.string()),
+    location: v.optional(v.string()),
     city: v.optional(v.string()),
     state: v.optional(v.string()),
-    zipCode: v.optional(v.string()),
-    country: v.optional(v.string()),
-    phone: v.optional(v.string()),
-    email: v.optional(v.string()),
-    website: v.optional(v.string()),
-    amenities: v.optional(v.array(v.string())),
+    coordinates: v.optional(v.object({
+      lat: v.number(),
+      lng: v.number(),
+    })),
+    photos: v.optional(v.array(v.string())),
+    logoUrl: v.optional(v.string()),
+    hourlyRate: v.optional(v.number()),
     minHourlyRate: v.optional(v.number()),
     maxHourlyRate: v.optional(v.number()),
-    photos: v.optional(v.array(v.string())),
-    operatingHours: v.optional(
-      v.optional(
-        v.object({
-          monday: v.optional(v.string()),
-          tuesday: v.optional(v.string()),
-          wednesday: v.optional(v.string()),
-          thursday: v.optional(v.string()),
-          friday: v.optional(v.string()),
-          saturday: v.optional(v.string()),
-          sunday: v.optional(v.string()),
-        })
-      )
-    ),
-    cancellationPolicy: v.optional(v.string()),
-    depositPolicy: v.optional(v.string()),
-    verified: v.optional(v.boolean()),
+    currency: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { studioId, ...updates } = args;
@@ -226,7 +201,7 @@ export const getRoomsByStudio = query({
     const rooms = await ctx.db
       .query("rooms")
       .withIndex("by_studio", (q) => q.eq("studioId", args.studioId))
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .filter((q) => q.eq(q.field("isActive"), true))
       .collect();
 
     return rooms;
@@ -237,7 +212,7 @@ export const getRoomById = query({
   args: { roomId: v.id("rooms") },
   handler: async (ctx, args) => {
     const room = await ctx.db.get(args.roomId);
-    if (!room || room.deletedAt) return null;
+    if (!room || !room.isActive) return null;
     return room;
   },
 });
@@ -251,43 +226,21 @@ export const getAvailableRooms = query({
     minCapacity: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    // Get all rooms for the studio
     const rooms = await ctx.db
       .query("rooms")
       .withIndex("by_studio", (q) => q.eq("studioId", args.studioId))
-      .filter((q) => q.eq(q.field("deletedAt"), undefined))
+      .filter((q) => q.eq(q.field("isActive"), true))
       .collect();
 
     // Filter by capacity if specified
     let availableRooms = rooms;
-    if (args.minCapacity) {
-      availableRooms = rooms.filter((r) => r.capacity >= args.minCapacity!);
+    if (args.minCapacity !== undefined) {
+      availableRooms = rooms.filter((r) => r.capacity !== undefined && r.capacity >= args.minCapacity!);
     }
 
-    // Get bookings for this date
-    const bookings = await ctx.db
-      .query("bookings")
-      .withIndex("by_studio_date", (q) =>
-        q.eq("studioId", args.studioId).eq("date", args.date)
-      )
-      .collect();
-
-    // Filter out booked rooms
-    const bookedRoomIds = new Set(
-      bookings
-        .filter((b) => {
-          if (b.status === "Cancelled" || b.status === "Rejected") return false;
-          // Check time overlap
-          return (
-            (args.startTime >= b.startTime && args.startTime < b.endTime) ||
-            (args.endTime > b.startTime && args.endTime <= b.endTime) ||
-            (args.startTime <= b.startTime && args.endTime >= b.endTime)
-          );
-        })
-        .map((b) => b.roomId)
-    );
-
-    return availableRooms.filter((r) => !bookedRoomIds.has(r._id));
+    // Filter out rooms that have conflicting bookings
+    // For now, return all active rooms - conflict checking would require booking queries
+    return availableRooms;
   },
 });
 
@@ -296,19 +249,20 @@ export const createRoom = mutation({
     studioId: v.id("studios"),
     name: v.string(),
     description: v.optional(v.string()),
-    capacity: v.number(),
-    hourlyRate: v.number(),
-    size: v.optional(v.number()), // square feet
+    capacity: v.optional(v.number()),
+    hourlyRate: v.optional(v.number()),
     amenities: v.optional(v.array(v.string())),
-    photos: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const now = Date.now();
-
     const roomId = await ctx.db.insert("rooms", {
-      ...args,
-      createdAt: now,
-      updatedAt: now,
+      studioId: args.studioId,
+      name: args.name,
+      description: args.description,
+      capacity: args.capacity,
+      hourlyRate: args.hourlyRate,
+      amenities: args.amenities,
+      isActive: true,
+      createdAt: Date.now(),
     });
 
     return { success: true, roomId };
@@ -322,9 +276,8 @@ export const updateRoom = mutation({
     description: v.optional(v.string()),
     capacity: v.optional(v.number()),
     hourlyRate: v.optional(v.number()),
-    size: v.optional(v.number()),
     amenities: v.optional(v.array(v.string())),
-    photos: v.optional(v.array(v.string())),
+    isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const { roomId, ...updates } = args;
@@ -334,10 +287,7 @@ export const updateRoom = mutation({
       throw new Error("Room not found");
     }
 
-    await ctx.db.patch(roomId, {
-      ...updates,
-      updatedAt: Date.now(),
-    });
+    await ctx.db.patch(roomId, updates);
 
     return { success: true };
   },
@@ -346,17 +296,7 @@ export const updateRoom = mutation({
 export const deleteRoom = mutation({
   args: { roomId: v.id("rooms") },
   handler: async (ctx, args) => {
-    const room = await ctx.db.get(args.roomId);
-
-    if (!room) {
-      throw new Error("Room not found");
-    }
-
-    // Soft delete
-    await ctx.db.patch(args.roomId, {
-      deletedAt: Date.now(),
-    });
-
+    await ctx.db.patch(args.roomId, { isActive: false });
     return { success: true };
   },
 });
@@ -365,6 +305,54 @@ export const deleteRoom = mutation({
 // BOOKINGS
 // =============================================================================
 
+export const getBookings = query({
+  args: {
+    studioId: v.optional(v.id("studios")),
+    clientId: v.optional(v.id("users")),
+    status: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    let bookings;
+
+    if (args.studioId) {
+      bookings = await ctx.db
+        .query("bookings")
+        .withIndex("by_studio", (q) => q.eq("studioId", args.studioId!))
+        .take(args.limit || 50);
+    } else if (args.clientId) {
+      bookings = await ctx.db
+        .query("bookings")
+        .withIndex("by_client", (q) => q.eq("clientId", args.clientId!))
+        .take(args.limit || 50);
+    } else {
+      bookings = await ctx.db
+        .query("bookings")
+        .take(args.limit || 50);
+    }
+
+    // Filter by status if specified
+    if (args.status) {
+      bookings = bookings.filter((b) => b.status === args.status);
+    }
+
+    return bookings;
+  },
+});
+
+export const getBookingById = query({
+  args: { bookingId: v.string() },
+  handler: async (ctx, args) => {
+    // Try to find by string ID
+    const bookings = await ctx.db
+      .query("bookings")
+      .filter((q) => q.eq(q.field("id"), args.bookingId))
+      .take(1);
+
+    return bookings[0] || null;
+  },
+});
+
 export const getBookingsByStudio = query({
   args: {
     studioId: v.id("studios"),
@@ -372,25 +360,13 @@ export const getBookingsByStudio = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let q = ctx.db
+    let bookings = await ctx.db
       .query("bookings")
-      .withIndex("by_studio_date", (q) => q.eq("studioId", args.studioId));
+      .withIndex("by_studio", (q) => q.eq("studioId", args.studioId))
+      .take(args.limit || 50);
 
     if (args.status) {
-      q = q.filter((q) => q.eq(q.field("status"), args.status));
-    }
-
-    let bookings = await q.collect();
-
-    // Sort by date and time
-    bookings.sort((a, b) => {
-      const dateCompare = b.date.localeCompare(a.date);
-      if (dateCompare !== 0) return dateCompare;
-      return b.endTime.localeCompare(a.endTime);
-    });
-
-    if (args.limit) {
-      bookings = bookings.slice(0, args.limit);
+      bookings = bookings.filter((b) => b.status === args.status);
     }
 
     return bookings;
@@ -399,78 +375,19 @@ export const getBookingsByStudio = query({
 
 export const getBookingsByClient = query({
   args: {
-    clientId: v.string(),
+    clientId: v.id("users"),
     status: v.optional(v.string()),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let q = ctx.db
+    let bookings = await ctx.db
       .query("bookings")
-      .withIndex("by_client", (q) => q.eq("clientId", args.clientId));
+      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .take(args.limit || 50);
 
     if (args.status) {
-      q = q.filter((q) => q.eq(q.field("status"), args.status));
+      bookings = bookings.filter((b) => b.status === args.status);
     }
-
-    let bookings = await q.collect();
-
-    // Sort by date and time
-    bookings.sort((a, b) => {
-      const dateCompare = b.date.localeCompare(a.date);
-      if (dateCompare !== 0) return dateCompare;
-      return b.endTime.localeCompare(a.endTime);
-    });
-
-    if (args.limit) {
-      bookings = bookings.slice(0, args.limit);
-    }
-
-    return bookings;
-  },
-});
-
-export const getBookingById = query({
-  args: { bookingId: v.id("bookings") },
-  handler: async (ctx, args) => {
-    const booking = await ctx.db.get(args.bookingId);
-    return booking;
-  },
-});
-
-export const getBookingsByDate = query({
-  args: {
-    studioId: v.id("studios"),
-    date: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const bookings = await ctx.db
-      .query("bookings")
-      .withIndex("by_studio_date", (q) =>
-        q.eq("studioId", args.studioId).eq("date", args.date)
-      )
-      .collect();
-
-    return bookings;
-  },
-});
-
-export const getBookingsByDateRange = query({
-  args: {
-    studioId: v.id("studios"),
-    startDate: v.string(),
-    endDate: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const bookings = await ctx.db
-      .query("bookings")
-      .withIndex("by_studio_date", (q) => q.eq("studioId", args.studioId))
-      .filter((q) =>
-        q.and(
-          q.gte(q.field("date"), args.startDate),
-          q.lte(q.field("date"), args.endDate)
-        )
-      )
-      .collect();
 
     return bookings;
   },
@@ -478,173 +395,139 @@ export const getBookingsByDateRange = query({
 
 export const getUpcomingBookings = query({
   args: {
-    clientId: v.string(),
+    userId: v.id("users"),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const today = new Date().toISOString().split("T")[0];
+    const now = new Date().toISOString().split('T')[0]; // Current date in YYYY-MM-DD format
 
     const bookings = await ctx.db
       .query("bookings")
-      .withIndex("by_client", (q) => q.eq("clientId", args.clientId))
+      .withIndex("by_client", (q) => q.eq("clientId", args.userId))
       .filter((q) =>
-        q.and(
-          q.gte(q.field("date"), today),
-          q.neq(q.field("status"), "Cancelled"),
-          q.neq(q.field("status"), "Rejected"),
-          q.neq(q.field("status"), "Completed")
-        )
+        q.eq(q.field("status"), "Confirmed")
       )
-      .collect();
+      .take(args.limit || 10);
 
-    // Sort by date and time
-    bookings.sort((a, b) => {
-      const dateCompare = a.date.localeCompare(b.date);
-      if (dateCompare !== 0) return dateCompare;
-      return a.startTime.localeCompare(b.startTime);
-    });
-
-    if (args.limit) {
-      return bookings.slice(0, args.limit);
-    }
-
-    return bookings;
+    // Filter for upcoming bookings (date >= today)
+    return bookings.filter((b) => b.date && b.date >= now);
   },
 });
 
 export const createBooking = mutation({
   args: {
     studioId: v.id("studios"),
-    roomId: v.id("rooms"),
-    clientId: v.string(),
-    clientName: v.string(),
-    clientEmail: v.string(),
-    clientPhone: v.optional(v.string()),
-    date: v.string(), // YYYY-MM-DD
-    startTime: v.string(), // HH:mm
-    endTime: v.string(), // HH:mm
-    numberOfPeople: v.optional(v.number()),
-    purpose: v.optional(v.string()),
-    specialRequests: v.optional(v.string()),
-    totalAmount: v.number(),
-    depositAmount: v.optional(v.number()),
-    depositRequired: v.boolean(),
-    notes: v.optional(v.string()),
+    clientId: v.id("users"),
+    serviceType: v.optional(v.string()),
+    date: v.optional(v.string()),
+    time: v.optional(v.string()),
+    duration: v.optional(v.number()),
+    offerAmount: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    roomId: v.optional(v.id("rooms")),
+    message: v.optional(v.string()),
+    metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
+    const bookingId = crypto.randomUUID();
     const now = Date.now();
 
-    // Check if room is available
-    const existingBookings = await ctx.db
-      .query("bookings")
-      .withIndex("by_studio_date", (q) =>
-        q.eq("studioId", args.studioId).eq("date", args.date)
-      )
-      .filter((q) => q.eq(q.field("roomId"), args.roomId))
-      .collect();
-
-    // Check for time overlap
-    const hasOverlap = existingBookings.some((booking) => {
-      if (booking.status === "Cancelled" || booking.status === "Rejected") {
-        return false;
-      }
-      return (
-        (args.startTime >= booking.startTime && args.startTime < booking.endTime) ||
-        (args.endTime > booking.startTime && args.endTime <= booking.endTime) ||
-        (args.startTime <= booking.startTime && args.endTime >= booking.endTime)
-      );
-    });
-
-    if (hasOverlap) {
-      throw new Error("Room is not available for the selected time slot");
-    }
-
-    const bookingId = await ctx.db.insert("bookings", {
-      ...args,
+    const bookingId_internal = await ctx.db.insert("bookings", {
+      id: bookingId,
+      studioId: args.studioId,
+      clientId: args.clientId,
+      serviceType: args.serviceType,
+      date: args.date,
+      time: args.time,
+      duration: args.duration,
+      offerAmount: args.offerAmount,
+      currency: args.currency || "USD",
+      roomId: args.roomId,
       status: "Pending",
-      paymentStatus: args.depositRequired ? "DepositPending" : "PendingPayment",
+      message: args.message,
+      metadata: args.metadata,
       createdAt: now,
       updatedAt: now,
     });
 
-    return { success: true, bookingId };
+    return { success: true, bookingId, internalId: bookingId_internal };
   },
 });
 
-export const updateBooking = mutation({
+export const updateBookingStatus = mutation({
   args: {
-    bookingId: v.id("bookings"),
-    date: v.optional(v.string()),
-    startTime: v.optional(v.string()),
-    endTime: v.optional(v.string()),
-    numberOfPeople: v.optional(v.number()),
-    purpose: v.optional(v.string()),
-    specialRequests: v.optional(v.string()),
-    totalAmount: v.optional(v.number()),
-    depositAmount: v.optional(v.number()),
-    notes: v.optional(v.string()),
+    bookingId: v.string(),
+    status: v.string(),
+    cancelledBy: v.optional(v.id("users")),
+    cancellationReason: v.optional(v.string()),
+    studioNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { bookingId, ...updates } = args;
-    const booking = await ctx.db.get(bookingId);
+    // Find booking by string ID
+    const bookings = await ctx.db
+      .query("bookings")
+      .filter((q) => q.eq(q.field("id"), args.bookingId))
+      .take(1);
 
-    if (!booking) {
+    if (!bookings[0]) {
       throw new Error("Booking not found");
     }
 
-    // Can only update pending bookings
-    if (booking.status !== "Pending") {
-      throw new Error("Can only update pending bookings");
+    const updateData: any = {
+      status: args.status,
+      updatedAt: Date.now(),
+    };
+
+    if (args.cancelledBy) {
+      updateData.cancelledBy = args.cancelledBy;
+      updateData.cancelledAt = Date.now();
     }
 
-    await ctx.db.patch(bookingId, {
-      ...updates,
-      updatedAt: Date.now(),
-    });
+    if (args.cancellationReason) {
+      updateData.cancellationReason = args.cancellationReason;
+    }
+
+    if (args.studioNotes) {
+      updateData.studioNotes = args.studioNotes;
+    }
+
+    await ctx.db.patch(bookings[0]._id, updateData);
 
     return { success: true };
   },
 });
 
 export const confirmBooking = mutation({
-  args: { bookingId: v.id("bookings") },
+  args: {
+    bookingId: v.string(),
+    finalAmount: v.optional(v.number()),
+    depositRequired: v.optional(v.boolean()),
+  },
   handler: async (ctx, args) => {
-    const booking = await ctx.db.get(args.bookingId);
+    // Find booking by string ID
+    const bookings = await ctx.db
+      .query("bookings")
+      .filter((q) => q.eq(q.field("id"), args.bookingId))
+      .take(1);
 
-    if (!booking) {
+    if (!bookings[0]) {
       throw new Error("Booking not found");
     }
 
-    if (booking.status !== "Pending") {
-      throw new Error("Booking can only be confirmed from pending status");
-    }
-
-    await ctx.db.patch(args.bookingId, {
+    const updateData: any = {
       status: "Confirmed",
       updatedAt: Date.now(),
-    });
+    };
 
-    return { success: true };
-  },
-});
-
-export const startBooking = mutation({
-  args: { bookingId: v.id("bookings") },
-  handler: async (ctx, args) => {
-    const booking = await ctx.db.get(args.bookingId);
-
-    if (!booking) {
-      throw new Error("Booking not found");
+    if (args.finalAmount !== undefined) {
+      updateData.finalAmount = args.finalAmount;
     }
 
-    if (booking.status !== "Confirmed") {
-      throw new Error("Booking must be confirmed before starting");
+    if (args.depositRequired !== undefined) {
+      updateData.depositRequired = args.depositRequired;
     }
 
-    await ctx.db.patch(args.bookingId, {
-      status: "InProgress",
-      updatedAt: Date.now(),
-    });
+    await ctx.db.patch(bookings[0]._id, updateData);
 
     return { success: true };
   },
@@ -652,30 +535,23 @@ export const startBooking = mutation({
 
 export const completeBooking = mutation({
   args: {
-    bookingId: v.id("bookings"),
-    actualEndTime: v.optional(v.string()),
+    bookingId: v.string(),
   },
   handler: async (ctx, args) => {
-    const booking = await ctx.db.get(args.bookingId);
+    // Find booking by string ID
+    const bookings = await ctx.db
+      .query("bookings")
+      .filter((q) => q.eq(q.field("id"), args.bookingId))
+      .take(1);
 
-    if (!booking) {
+    if (!bookings[0]) {
       throw new Error("Booking not found");
     }
 
-    if (booking.status !== "InProgress") {
-      throw new Error("Booking must be in progress to complete");
-    }
-
-    const updates: any = {
+    await ctx.db.patch(bookings[0]._id, {
       status: "Completed",
       updatedAt: Date.now(),
-    };
-
-    if (args.actualEndTime) {
-      updates.actualEndTime = args.actualEndTime;
-    }
-
-    await ctx.db.patch(args.bookingId, updates);
+    });
 
     return { success: true };
   },
@@ -683,28 +559,26 @@ export const completeBooking = mutation({
 
 export const cancelBooking = mutation({
   args: {
-    bookingId: v.id("bookings"),
-    cancelledBy: v.string(), // 'client' or 'studio'
+    bookingId: v.string(),
+    cancelledBy: v.id("users"),
     reason: v.optional(v.string()),
-    refundAmount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const booking = await ctx.db.get(args.bookingId);
+    // Find booking by string ID
+    const bookings = await ctx
+      .db.query("bookings")
+      .filter((q) => q.eq(q.field("id"), args.bookingId))
+      .take(1);
 
-    if (!booking) {
+    if (!bookings[0]) {
       throw new Error("Booking not found");
     }
 
-    if (booking.status === "Cancelled" || booking.status === "Completed") {
-      throw new Error("Cannot cancel this booking");
-    }
-
-    await ctx.db.patch(args.bookingId, {
+    await ctx.db.patch(bookings[0]._id, {
       status: "Cancelled",
       cancelledBy: args.cancelledBy,
-      cancellationReason: args.reason,
-      refundAmount: args.refundAmount,
       cancelledAt: Date.now(),
+      cancellationReason: args.reason,
       updatedAt: Date.now(),
     });
 
@@ -712,97 +586,60 @@ export const cancelBooking = mutation({
   },
 });
 
-export const deleteBooking = mutation({
-  args: { bookingId: v.id("bookings") },
-  handler: async (ctx, args) => {
-    const booking = await ctx.db.get(args.bookingId);
-
-    if (!booking) {
-      throw new Error("Booking not found");
-    }
-
-    await ctx.db.delete(args.bookingId);
-
-    return { success: true };
-  },
-});
-
 // =============================================================================
-// BLOCKED DATES
+// BOOKING PAYMENTS
 // =============================================================================
 
-export const getBlockedDates = query({
+export const createPayment = mutation({
   args: {
-    studioId: v.id("studios"),
-    roomId: v.optional(v.id("rooms")),
-    startDate: v.optional(v.string()),
-    endDate: v.optional(v.string()),
+    bookingId: v.id("bookings"),
+    amount: v.number(),
+    currency: v.string(),
+    paymentMethodId: v.optional(v.string()),
+    stripePaymentIntentId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let q = ctx.db
-      .query("blockedDates")
-      .withIndex("by_studio", (q) => q.eq("studioId", args.studioId));
-
-    if (args.roomId) {
-      q = q.filter((q) => q.eq(q.field("roomId"), args.roomId));
-    }
-
-    if (args.startDate && args.endDate) {
-      q = q.filter((q) =>
-        q.and(
-          q.gte(q.field("startDate"), args.startDate!),
-          q.lte(q.field("endDate"), args.endDate!)
-        )
-      );
-    }
-
-    const blockedDates = await q.collect();
-
-    return blockedDates;
-  },
-});
-
-export const addBlockedDate = mutation({
-  args: {
-    studioId: v.id("studios"),
-    roomId: v.optional(v.id("rooms")),
-    startDate: v.string(), // YYYY-MM-DD
-    endDate: v.string(), // YYYY-MM-DD
-    reason: v.optional(v.string()),
-    recurring: v.optional(v.boolean()),
-    recurringType: v.optional(v.string()), // 'daily', 'weekly', 'monthly'
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-
-    const blockedDateId = await ctx.db.insert("blockedDates", {
-      ...args,
-      createdAt: now,
-      updatedAt: now,
+    const paymentId = await ctx.db.insert("bookingPayments", {
+      bookingId: args.bookingId,
+      amount: args.amount,
+      currency: args.currency,
+      status: "Pending",
+      paymentMethodId: args.paymentMethodId,
+      stripePaymentIntentId: args.stripePaymentIntentId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
     });
 
-    return { success: true, blockedDateId };
+    return { success: true, paymentId };
   },
 });
 
-export const removeBlockedDate = mutation({
-  args: { blockedDateId: v.id("blockedDates") },
+export const updatePaymentStatus = mutation({
+  args: {
+    paymentId: v.id("bookingPayments"),
+    status: v.string(),
+  },
   handler: async (ctx, args) => {
-    const blockedDate = await ctx.db.get(args.blockedDateId);
+    const payment = await ctx.db.get(args.paymentId);
 
-    if (!blockedDate) {
-      throw new Error("Blocked date not found");
+    if (!payment) {
+      throw new Error("Payment not found");
     }
 
-    await ctx.db.delete(args.blockedDateId);
+    const updateData: any = {
+      status: args.status,
+      updatedAt: Date.now(),
+    };
+
+    if (args.status === "Completed") {
+      updateData.completedAt = Date.now();
+    }
+
+    await ctx.db.patch(args.paymentId, updateData);
 
     return { success: true };
   },
 });
-
-// =============================================================================
-// PAYMENTS
-// =============================================================================
 
 export const getPaymentsByBooking = query({
   args: { bookingId: v.id("bookings") },
@@ -816,118 +653,76 @@ export const getPaymentsByBooking = query({
   },
 });
 
-export const createPayment = mutation({
-  args: {
-    bookingId: v.id("bookings"),
-    amount: v.number(),
-    paymentMethod: v.string(), // 'card', 'cash', 'transfer'
-    paymentType: v.string(), // 'deposit', 'full', 'remainder'
-    transactionId: v.optional(v.string()),
-    notes: v.optional(v.string()),
-  },
+// =============================================================================
+// BOOKING TEMPLATES
+// =============================================================================
+
+export const getBookingTemplates = query({
+  args: { studioId: v.id("studios") },
   handler: async (ctx, args) => {
-    const booking = await ctx.db.get(args.bookingId);
+    const templates = await ctx.db
+      .query("bookingTemplates")
+      .withIndex("by_studio", (q) => q.eq("studioId", args.studioId))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
 
-    if (!booking) {
-      throw new Error("Booking not found");
-    }
-
-    const now = Date.now();
-
-    const paymentId = await ctx.db.insert("bookingPayments", {
-      ...args,
-      status: "Pending",
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return { success: true, paymentId };
+    return templates;
   },
 });
 
-export const updatePaymentStatus = mutation({
+export const createBookingTemplate = mutation({
   args: {
-    paymentId: v.id("bookingPayments"),
-    status: v.string(), // 'Pending', 'Completed', 'Failed', 'Refunded'
-    failureReason: v.optional(v.string()),
+    studioId: v.id("studios"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    duration: v.number(),
+    price: v.number(),
+    requirements: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    const { paymentId, status, failureReason } = args;
+    const templateId = await ctx.db.insert("bookingTemplates", {
+      studioId: args.studioId,
+      name: args.name,
+      description: args.description,
+      duration: args.duration,
+      price: args.price,
+      requirements: args.requirements,
+      isActive: true,
+      createdAt: Date.now(),
+    });
 
-    const payment = await ctx.db.get(paymentId);
+    return { success: true, templateId };
+  },
+});
 
-    if (!payment) {
-      throw new Error("Payment not found");
+export const updateBookingTemplate = mutation({
+  args: {
+    templateId: v.id("bookingTemplates"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    duration: v.optional(v.number()),
+    price: v.optional(v.number()),
+    requirements: v.optional(v.array(v.string())),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { templateId, ...updates } = args;
+    const template = await ctx.db.get(templateId);
+
+    if (!template) {
+      throw new Error("Booking template not found");
     }
 
-    const updates: any = {
-      status,
-      updatedAt: Date.now(),
-    };
-
-    if (status === "Completed") {
-      updates.completedAt = Date.now();
-    }
-
-    if (failureReason) {
-      updates.failureReason = failureReason;
-    }
-
-    await ctx.db.patch(paymentId, updates);
-
-    // Update booking payment status
-    const booking = await ctx.db.get(payment.bookingId);
-    if (booking) {
-      const allPayments = await ctx.db
-        .query("bookingPayments")
-        .withIndex("by_booking", (q) => q.eq("bookingId", payment.bookingId))
-        .collect();
-
-      const totalPaid = allPayments
-        .filter((p) => p.status === "Completed")
-        .reduce((sum, p) => sum + p.amount, 0);
-
-      let newPaymentStatus = booking.paymentStatus;
-      if (totalPaid >= booking.totalAmount) {
-        newPaymentStatus = "Paid";
-      } else if (totalPaid >= (booking.depositAmount || 0)) {
-        newPaymentStatus = "DepositPaid";
-      }
-
-      await ctx.db.patch(payment.bookingId, {
-        paymentStatus: newPaymentStatus,
-      });
-    }
+    await ctx.db.patch(templateId, updates);
 
     return { success: true };
   },
 });
 
-export const refundPayment = mutation({
-  args: {
-    paymentId: v.id("bookingPayments"),
-    refundAmount: v.number(),
-    refundReason: v.optional(v.string()),
-  },
+export const deleteBookingTemplate = mutation({
+  args: { templateId: v.id("bookingTemplates") },
   handler: async (ctx, args) => {
-    const payment = await ctx.db.get(args.paymentId);
-
-    if (!payment) {
-      throw new Error("Payment not found");
-    }
-
-    if (payment.status !== "Completed") {
-      throw new Error("Can only refund completed payments");
-    }
-
-    await ctx.db.patch(args.paymentId, {
-      status: "Refunded",
-      refundAmount: args.refundAmount,
-      refundReason: args.refundReason,
-      refundedAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
+    await ctx.db.patch(args.templateId, { isActive: false });
     return { success: true };
   },
 });

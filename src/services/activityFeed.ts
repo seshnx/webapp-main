@@ -1,21 +1,17 @@
 /**
  * Activity Feed Service
  *
- * Aggregates activity data from multiple sources (Neon + MongoDB)
+ * Aggregates activity data from Convex (social, bookings, EDU, notifications)
  * to create a unified activity feed for the dashboard.
  */
 
 import type { ActivityItem, ActivityFilter } from '../types/dashboard';
-// import { getPosts } from '../config/mongoSocial';
-// import { getSocialNotifications } from '../config/mongoSocial';
-
-const getPosts = async (args: any) => [];
-const getSocialNotifications = async (userId: string, limit: number) => [];
-
-// Import Neon queries when available
-// import { getBookings, getPayments } from '../config/neonQueries';
-
 import { MessageCircle, Calendar, TrendingUp, Bell, AlertTriangle, Sparkles } from 'lucide-react';
+
+// Import Convex functions
+import { fetchQuery } from 'convex/nextjs';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 
 // =====================================================
 // ICON MAPPING
@@ -44,16 +40,18 @@ export async function fetchActivityFeed(
   const activities: ActivityItem[] = [];
 
   try {
-    // Fetch data from multiple sources in parallel
-    const [posts, notifications] = await Promise.all([
+    // Fetch data from multiple sources in parallel using Convex
+    const [posts, bookings, eduAnnouncements] = await Promise.all([
       fetchPostActivity(userId, filter?.limit),
-      fetchNotificationActivity(userId, filter?.limit)
-      // TODO: Add Neon data sources
-      // fetchBookingActivity(userId, filter?.limit),
+      fetchBookingActivity(userId, filter?.limit),
+      fetchEDUAnnouncementActivity(userId, filter?.limit)
+      // TODO: Add notification activity when implemented
+      // fetchNotificationActivity(userId, filter?.limit),
+      // TODO: Add payment activity when implemented
       // fetchPaymentActivity(userId, filter?.limit)
     ]);
 
-    activities.push(...posts, ...notifications);
+    activities.push(...posts, ...bookings, ...eduAnnouncements);
 
     // Sort by timestamp (newest first)
     activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
@@ -93,30 +91,31 @@ export async function fetchActivityFeed(
  */
 async function fetchPostActivity(userId: string, limit = 10): Promise<ActivityItem[]> {
   try {
-    const posts = await getPosts({
-      author_id: userId,
+    // Fetch posts from Convex
+    const posts = await fetchQuery(api.social.getPostsByAuthor, {
+      authorId: userId,
       limit
     });
 
-    return posts.map(post => ({
-      id: `post-${post.id}`,
+    return (posts || []).map(post => ({
+      id: `post-${post._id}`,
       type: 'post' as const,
-      timestamp: new Date(post.created_at),
+      timestamp: new Date(post.createdAt),
       actor: {
-        id: post.author_id,
-        displayName: post.display_name || 'Unknown',
-        photoURL: post.author_photo
+        id: post.authorId,
+        displayName: post.authorName || 'Unknown',
+        photoURL: post.authorPhoto
       },
       content: {
         title: 'New post created',
         description: post.content?.substring(0, 100) + (post.content?.length > 100 ? '...' : ''),
         metadata: {
-          postId: post.id,
-          likesCount: post.engagement?.likes_count || 0,
-          commentsCount: post.engagement?.comments_count || 0
+          postId: post._id,
+          likesCount: post.likeCount || 0,
+          commentsCount: post.commentCount || 0
         }
       },
-      actionUrl: `/feed/post/${post.id}`,
+      actionUrl: `/feed/post/${post._id}`,
       icon: ACTIVITY_ICONS.post,
       priority: 'medium' as const,
       read: false
@@ -128,66 +127,33 @@ async function fetchPostActivity(userId: string, limit = 10): Promise<ActivityIt
 }
 
 /**
- * Fetch notifications as activity items
- */
-async function fetchNotificationActivity(userId: string, limit = 10): Promise<ActivityItem[]> {
-  try {
-    const notifications = await getSocialNotifications(userId, limit);
-
-    return notifications.map(notification => ({
-      id: `notification-${notification._id || notification.id}`,
-      type: 'notification' as const,
-      timestamp: new Date(notification.created_at),
-      actor: notification.actor_id ? {
-        id: notification.actor_id,
-        displayName: notification.actor_display_name || 'Someone',
-        photoURL: notification.actor_photo
-      } : undefined,
-      content: {
-        title: notification.title || 'Notification',
-        description: notification.message,
-        metadata: {
-          notificationId: notification._id || notification.id,
-          type: notification.type
-        }
-      },
-      actionUrl: notification.action_url,
-      icon: ACTIVITY_ICONS.notification,
-      priority: notification.priority as ActivityItem['priority'] || 'medium',
-      read: notification.read
-    }));
-  } catch (error) {
-    console.error('Error fetching notification activity:', error);
-    return [];
-  }
-}
-
-/**
  * Fetch recent bookings as activity items
- * TODO: Implement when Neon booking queries are available
  */
 async function fetchBookingActivity(userId: string, limit = 5): Promise<ActivityItem[]> {
   try {
-    // const bookings = await getBookings(userId, { limit, status: 'Confirmed' });
+    // Fetch upcoming bookings from Convex
+    const bookings = await fetchQuery(api.bookings.getUpcomingBookings, {
+      clientId: userId,
+      limit
+    });
 
-    // Mock data for now
-    return [];
-    /*
-    return bookings.map(booking => ({
-      id: `booking-${booking.id}`,
+    return (bookings || []).map(booking => ({
+      id: `booking-${booking._id}`,
       type: 'booking' as const,
-      timestamp: new Date(booking.start_time),
+      timestamp: new Date(booking.startTime),
       content: {
         title: 'Booking confirmed',
-        description: `${booking.venue_name} - ${formatDate(booking.start_time)}`,
-        metadata: { bookingId: booking.id }
+        description: `${booking.roomName} - ${new Date(booking.startTime).toLocaleDateString()}`,
+        metadata: {
+          bookingId: booking._id,
+          studioName: booking.studioName
+        }
       },
-      actionUrl: `/bookings/${booking.id}`,
+      actionUrl: `/bookings/${booking._id}`,
       icon: ACTIVITY_ICONS.booking,
       priority: 'high' as const,
       read: false
     }));
-    */
   } catch (error) {
     console.error('Error fetching booking activity:', error);
     return [];
@@ -195,31 +161,66 @@ async function fetchBookingActivity(userId: string, limit = 5): Promise<Activity
 }
 
 /**
+ * Fetch EDU announcements as activity items
+ */
+async function fetchEDUAnnouncementActivity(userId: string, limit = 5): Promise<ActivityItem[]> {
+  try {
+    // Get user's school ID and type from their profile
+    const user = await fetchQuery(api.users.getUserByClerkId, { clerkId: userId });
+
+    if (!user?.schoolId) {
+      return [];
+    }
+
+    // Determine user type
+    const userType = user?.accountTypes?.includes('Student') ? 'student' : 'staff';
+
+    // Fetch unread announcements
+    const announcements = await fetchQuery(api.eduAnnouncements.getUnreadEduAnnouncements, {
+      userId,
+      schoolId: user.schoolId,
+      userType
+    });
+
+    return (announcements || []).slice(0, limit).map(announcement => ({
+      id: `announcement-${announcement._id}`,
+      type: 'announcement' as const,
+      timestamp: new Date(announcement.createdAt),
+      actor: announcement.createdByName ? {
+        id: announcement.createdBy,
+        displayName: announcement.createdByName,
+        photoURL: announcement.createdByPhoto
+      } : undefined,
+      content: {
+        title: announcement.title,
+        description: announcement.content?.substring(0, 100) + (announcement.content?.length > 100 ? '...' : ''),
+        metadata: {
+          announcementId: announcement._id,
+          priority: announcement.priority,
+          category: announcement.category
+        }
+      },
+      actionUrl: `/edu/announcements/${announcement._id}`,
+      icon: ACTIVITY_ICONS.announcement,
+      priority: (announcement.priority === 'urgent' ? 'high' : announcement.priority === 'low' ? 'low' : 'medium') as ActivityItem['priority'],
+      read: false
+    }));
+  } catch (error) {
+    console.error('Error fetching EDU announcement activity:', error);
+    return [];
+  }
+}
+
+/**
  * Fetch recent payments as activity items
- * TODO: Implement when Neon payment queries are available
+ * TODO: Implement when payment system is ready
  */
 async function fetchPaymentActivity(userId: string, limit = 5): Promise<ActivityItem[]> {
   try {
-    // const payments = await getPayments(userId, { limit });
+    // const payments = await fetchQuery(api.bookings.getPaymentsByUser, { userId, limit });
 
-    // Mock data for now
+    // Not implemented yet
     return [];
-    /*
-    return payments.map(payment => ({
-      id: `payment-${payment.id}`,
-      type: 'payment' as const,
-      timestamp: new Date(payment.created_at),
-      content: {
-        title: 'Payment received',
-        description: `$${payment.amount} - ${payment.description}`,
-        metadata: { paymentId: payment.id }
-      },
-      actionUrl: `/payments/${payment.id}`,
-      icon: ACTIVITY_ICONS.payment,
-      priority: 'high' as const,
-      read: false
-    }));
-    */
   } catch (error) {
     console.error('Error fetching payment activity:', error);
     return [];
