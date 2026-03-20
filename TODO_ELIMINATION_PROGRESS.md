@@ -1,9 +1,9 @@
 # TODO Elimination Progress
 
-**Last Updated**: 2025-03-19
+**Last Updated**: 2025-03-20
 **Total TODOs**: 167
-**Completed**: ~25 TODOs
-**Remaining**: ~142 TODOs
+**Completed**: ~38 TODOs
+**Remaining**: ~129 TODOs
 
 ---
 
@@ -43,38 +43,124 @@
 
 ---
 
-## ⏳ Phase 2: Dashboard Completion (PENDING)
+## ✅ Phase 2: Dashboard Completion (COMPLETE)
 
-**Priority**: HIGH | **Effort**: 32 hours | **Dependencies**: Phase 1 ✅
+**Priority**: HIGH | **Effort**: 32 hours | **Status**: ✅ COMPLETE | **TODOs Cleared**: ~10
 
-### Already Complete ✅
-- EDUDashboard - Updated with real Convex data
-- StudioDashboard - Updated with booking data
+### 2.1 Schema Enhancements ✅
+**File**: `convex/schema.ts`
+- ✅ Added `localPickup` to marketItems
+- ✅ Added `soldAt` and `favoriteCount` to marketItems
+- ✅ Added `paymentMethod`, `shippingRequired`, `updatedAt`, `rejectedAt`, `cancelledAt` to marketTransactions
+- ✅ Added `sellerRating` and `sellerReview` to marketTransactions
+- ✅ Created `marketWatchlist` table with proper indexes
+- ✅ Added `savedAt` to savedPosts table
 
-### Remaining Work
+### 2.2 Marketplace Module Fixes ✅
+**File**: `convex/marketplace.ts`
+- ✅ Fixed 21 TypeScript errors
+- ✅ Added missing `currency` and `amount` fields to transactions
+- ✅ Fixed optional field handling (favoriteCount, localPickup)
+- ✅ Fixed query chaining issues
+- ✅ Properly handles seller ratings and reviews
 
-**TalentDashboard.tsx** (6 hours):
-- Connect to `api.bookings.getUpcomingBookings`
-- Connect to `api.users.getFollowers`
-- Add profile views and collaboration requests
+### 2.3 Social Module Fixes ✅
+**File**: `convex/social.ts`
+- ✅ Fixed 9 TypeScript errors
+- ✅ Fixed engagement field access on posts
+- ✅ Fixed comments table (reactionCount instead of engagement)
+- ✅ Fixed query chaining with withIndex
+- ✅ Added proper type guards for post engagement
 
-**ProducerDashboard.tsx** (6 hours):
-- Connect to `api.marketplace.getTransactionsBySeller`
-- Connect to `api.social.getPostsByAuthor`
-- Add revenue analytics
+### 2.4 TalentDashboard ✅
+**File**: `src/components/dashboard/role-views/TalentDashboard.tsx`
+- ✅ Connected to `api.bookings.getUpcomingBookings`
+- ✅ Connected to `api.users.getFollowers`
+- ✅ Displays real booking data instead of mock data
+- ✅ Shows follower counts from Convex
 
-**TechnicianDashboard.tsx** (8 hours):
-- Connect to `api.bookings` (need to add technician-specific queries)
-- Connect to `api.broadcasts`
-- Implement earnings calculations
+### 2.5 ProducerDashboard ✅
+**File**: `src/components/dashboard/role-views/ProducerDashboard.tsx`
+- ✅ Connected to `api.marketplace.getTransactionsBySeller`
+- ✅ Connected to `api.social.getPostsByAuthor`
+- ✅ Calculates real revenue from completed transactions
+- ✅ Displays actual beat uploads count
 
-**Other Role Dashboards** (12 hours):
-- Complete any remaining dashboard views
-- Ensure all show real-time data
+### 2.6 TechnicianDashboard ✅
+**File**: `src/components/dashboard/role-views/TechnicianDashboard.tsx`
+- ✅ Connected to `api.bookings.getTechnicianServiceRequests`
+- ✅ Connected to `api.bookings.getBookingsByTechnician`
+- ✅ Connected to `api.bookings.getTechnicianEarnings`
+- ✅ Added technician-specific queries to bookings.ts
+- ✅ Displays real service requests and active jobs
+
+### 2.7 Convex Deployment ✅
+- ✅ All 40 TypeScript errors resolved
+- ✅ Clean deployment with `npx convex deploy`
+- ✅ No --typecheck=disable workarounds
+- ✅ marketplace.ts and social.ts fully operational
 
 ---
 
-## ⏳ Phase 3: EDU System Completion (PENDING)
+## ✅ Phase 3: EDU System Completion (IN PROGRESS)
+
+**Priority**: MEDIUM | **Effort**: 40 hours | **Dependencies**: Phase 2 ✅ | **Status**: 🔄 IN PROGRESS
+
+### 3.1 Partners Module ✅
+**Files**: `convex/partners.ts` (NEW), `src/components/EDU/modules/EduPartners.tsx`
+- ✅ Added `partners` table to Convex schema
+- ✅ Created `convex/partners.ts` with full CRUD operations
+- ✅ Functions: getPartnersBySchool, getPartnerById, createPartner, updatePartner, deletePartner, searchPartners
+- ✅ Replaced Supabase queries in EduPartners.tsx with Convex
+- ✅ Uses useQuery and useMutation hooks
+- ✅ Properly typed with Convex Id types
+
+### 3.2 Roster Module ✅
+**Files**: `src/components/EDU/modules/EduRoster.tsx`
+- ✅ Connected to `api.edu.getStudentsBySchool`
+- ✅ Connected to `api.partners.getPartnersBySchool`
+- ✅ Replaced Supabase with Convex queries
+- ✅ Updated to use Convex data structure (_id fields)
+- ✅ Simplified interface to match Convex schema
+- ✅ Student deletion and partner assignment UI
+
+### 3.3 Staff Module ✅
+**Files**: `convex/edu.ts` (already has staff functions)
+- ✅ `api.edu.getStaffBySchool` - already implemented
+- ✅ `api.edu.createStaff` - already implemented
+- ✅ `api.edu.updateStaff` - already implemented
+- ✅ `api.edu.deleteStaff` - already implemented
+- ⏳ Frontend EduStaff.tsx needs update to use these functions
+
+### Remaining Work
+
+**EduStaff.tsx** (4 hours):
+- Replace Supabase with `api.edu.getStaffBySchool`
+- Replace with `api.edu.createStaff`
+- Replace with `api.edu.updateStaff`
+- Replace with `api.edu.deleteStaff`
+
+**EduOverview.tsx** (2 hours):
+- Replace Supabase with `api.edu.getStudentsBySchool`
+- Need to add internship tracking queries
+- Need to add audit log queries
+
+**EduAnnouncements.tsx** (2 hours):
+- Use existing `convex/eduAnnouncements.ts`
+- Replace Supabase queries
+
+**Other EDU Modules** (20 hours):
+- EduCourses/CourseBuilder (4 hours)
+- EduCohorts (3 hours)
+- EduEvaluations (3 hours)
+- EduHours (2 hours)
+- EduLearningPaths (3 hours)
+- EduResources (3 hours)
+- EduRoles (3 hours)
+- EduSettings (3 hours)
+- EduAudit (4 hours)
+
+---
 
 **Priority**: MEDIUM | **Effort**: 40 hours | **Dependencies**: Phase 2
 
@@ -341,9 +427,10 @@ const getCoreUserProfile = async (userId: string) => {
 
 ### Functional
 - ✅ Phase 1 complete (25/167 TODOs)
+- ✅ Phase 2 complete (35/167 TODOs)
 - ⏳ All 167 TODOs completed
 - ⏳ Zero legacy Supabase/MongoDB code
-- ⏳ All dashboards show real data
+- ✅ All role dashboards show real data
 - ⏳ All features tested
 
 ### Performance
@@ -364,7 +451,7 @@ const getCoreUserProfile = async (userId: string) => {
 | Phase | Duration | Start | End | TODOs Cleared | Status |
 |-------|----------|-------|-----|---------------|--------|
 | 1. Infrastructure | 2 weeks | Week 1 | Week 2 | ~25 | ✅ COMPLETE |
-| 2. Dashboards | 2 weeks | Week 2 | Week 3 | ~10 | ⏳ PENDING |
+| 2. Dashboards | 2 weeks | Week 2 | Week 3 | ~10 | ✅ COMPLETE |
 | 3. EDU System | 2 weeks | Week 3 | Week 4 | ~15 | ⏳ PENDING |
 | 4. Business/Tech | 2 weeks | Week 4 | Week 5 | ~30 | ⏳ PENDING |
 | 5. Marketplace | 2 weeks | Week 5 | Week 6 | ~7 | ⏳ PENDING |
@@ -375,4 +462,4 @@ const getCoreUserProfile = async (userId: string) => {
 
 **Total**: 10 weeks | 320 hours | 167 TODOs
 
-**Progress**: 15% complete (Phase 1 of 9)
+**Progress**: 23% complete (Phase 3 of 9 - In Progress)

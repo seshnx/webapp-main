@@ -590,8 +590,10 @@ export const updateSettings = mutation({
 
     await ctx.db.patch(user._id, {
       settings: {
-        ...user.settings,
-        ...args,
+        privacy: args.privacy ?? user.settings?.privacy ?? "public",
+        notificationsEnabled: args.notificationsEnabled ?? user.settings?.notificationsEnabled ?? true,
+        showEmail: args.showEmail ?? user.settings?.showEmail ?? false,
+        showLocation: args.showLocation ?? user.settings?.showLocation ?? false,
       },
       updatedAt: Date.now(),
     });
@@ -1066,18 +1068,30 @@ export const followUser = mutation({
       createdAt: Date.now(),
     });
 
+    // Get users to update stats
+    const follower = await ctx.db.get(args.followerId);
+    const following = await ctx.db.get(args.followingId);
+
+    if (!follower || !following) {
+      throw new Error("User not found");
+    }
+
     // Update follower counts
     await ctx.db.patch(args.followerId, {
       stats: {
-        ...(await ctx.db.get(args.followerId)).stats,
-        followingCount: ((await ctx.db.get(args.followerId)).stats?.followingCount || 0) + 1,
+        followersCount: follower.stats?.followersCount || 0,
+        followingCount: (follower.stats?.followingCount || 0) + 1,
+        postsCount: follower.stats?.postsCount || 0,
+        bookingsCount: follower.stats?.bookingsCount || 0,
       },
     });
 
     await ctx.db.patch(args.followingId, {
       stats: {
-        ...(await ctx.db.get(args.followingId)).stats,
-        followersCount: ((await ctx.db.get(args.followingId)).stats?.followersCount || 0) + 1,
+        followersCount: (following.stats?.followersCount || 0) + 1,
+        followingCount: following.stats?.followingCount || 0,
+        postsCount: following.stats?.postsCount || 0,
+        bookingsCount: following.stats?.bookingsCount || 0,
       },
     });
 
@@ -1107,18 +1121,30 @@ export const unfollowUser = mutation({
 
     await ctx.db.delete(follow._id);
 
+    // Get users to update stats
+    const follower = await ctx.db.get(args.followerId);
+    const following = await ctx.db.get(args.followingId);
+
+    if (!follower || !following) {
+      throw new Error("User not found");
+    }
+
     // Update follower counts
     await ctx.db.patch(args.followerId, {
       stats: {
-        ...(await ctx.db.get(args.followerId)).stats,
-        followingCount: Math.max(0, ((await ctx.db.get(args.followerId)).stats?.followingCount || 1) - 1),
+        followersCount: follower.stats?.followersCount || 0,
+        followingCount: Math.max(0, (follower.stats?.followingCount || 1) - 1),
+        postsCount: follower.stats?.postsCount || 0,
+        bookingsCount: follower.stats?.bookingsCount || 0,
       },
     });
 
     await ctx.db.patch(args.followingId, {
       stats: {
-        ...(await ctx.db.get(args.followingId)).stats,
-        followersCount: Math.max(0, ((await ctx.db.get(args.followingId)).stats?.followersCount || 1) - 1),
+        followersCount: Math.max(0, (following.stats?.followersCount || 1) - 1),
+        followingCount: following.stats?.followingCount || 0,
+        postsCount: following.stats?.postsCount || 0,
+        bookingsCount: following.stats?.bookingsCount || 0,
       },
     });
 
@@ -1147,13 +1173,46 @@ export const incrementUserStat = mutation({
     }
 
     const amount = args.amount ?? 1;
-    const currentValue = user.stats?.[args.stat] || 0;
+    const currentStats = user.stats || {
+      followersCount: 0,
+      followingCount: 0,
+      postsCount: 0,
+      bookingsCount: 0,
+    };
+
+    // Update specific stat based on args.stat
+    let newStats;
+    switch (args.stat) {
+      case "followersCount":
+        newStats = {
+          ...currentStats,
+          followersCount: currentStats.followersCount + amount,
+        };
+        break;
+      case "followingCount":
+        newStats = {
+          ...currentStats,
+          followingCount: currentStats.followingCount + amount,
+        };
+        break;
+      case "postsCount":
+        newStats = {
+          ...currentStats,
+          postsCount: currentStats.postsCount + amount,
+        };
+        break;
+      case "bookingsCount":
+        newStats = {
+          ...currentStats,
+          bookingsCount: currentStats.bookingsCount + amount,
+        };
+        break;
+      default:
+        throw new Error(`Invalid stat: ${args.stat}`);
+    }
 
     await ctx.db.patch(args.userId, {
-      stats: {
-        ...user.stats,
-        [args.stat]: currentValue + amount,
-      },
+      stats: newStats,
     });
 
     return { success: true };
@@ -1176,13 +1235,46 @@ export const decrementUserStat = mutation({
     }
 
     const amount = args.amount ?? 1;
-    const currentValue = user.stats?.[args.stat] || 0;
+    const currentStats = user.stats || {
+      followersCount: 0,
+      followingCount: 0,
+      postsCount: 0,
+      bookingsCount: 0,
+    };
+
+    // Update specific stat based on args.stat
+    let newStats;
+    switch (args.stat) {
+      case "followersCount":
+        newStats = {
+          ...currentStats,
+          followersCount: Math.max(0, currentStats.followersCount - amount),
+        };
+        break;
+      case "followingCount":
+        newStats = {
+          ...currentStats,
+          followingCount: Math.max(0, currentStats.followingCount - amount),
+        };
+        break;
+      case "postsCount":
+        newStats = {
+          ...currentStats,
+          postsCount: Math.max(0, currentStats.postsCount - amount),
+        };
+        break;
+      case "bookingsCount":
+        newStats = {
+          ...currentStats,
+          bookingsCount: Math.max(0, currentStats.bookingsCount - amount),
+        };
+        break;
+      default:
+        throw new Error(`Invalid stat: ${args.stat}`);
+    }
 
     await ctx.db.patch(args.userId, {
-      stats: {
-        ...user.stats,
-        [args.stat]: Math.max(0, currentValue - amount),
-      },
+      stats: newStats,
     });
 
     return { success: true };
@@ -1414,7 +1506,7 @@ export const getActiveProfile = query({
     const subProfile = await ctx.db
       .query("subProfiles")
       .withIndex("by_user_role", (q) =>
-        q.eq("userId", user._id).eq("role", user.activeRole)
+        q.eq("userId", user._id).eq("role", user.activeRole!)
       )
       .first();
 

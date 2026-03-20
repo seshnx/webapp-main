@@ -52,8 +52,8 @@ export const submitReport = mutation({
       reviewedBy: undefined,
       reviewedAt: undefined,
       reviewNotes: undefined,
+      actionTaken: undefined,
       createdAt: Date.now(),
-      updatedAt: Date.now(),
     });
 
     return { success: true, reportId };
@@ -72,19 +72,22 @@ export const getReports = query({
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let reportsQuery = ctx.db.query("contentReports");
+    let reports;
 
     // Filter by status if provided
     if (args.status) {
-      reportsQuery = reportsQuery.withIndex("by_status", (q) =>
-        q.eq("status", args.status!)
-      );
+      reports = await ctx.db
+        .query("contentReports")
+        .withIndex("by_status", (q) => q.eq("status", args.status!))
+        .order("desc")
+        .take(args.limit || 50);
     } else {
-      reportsQuery = reportsQuery.withIndex("by_created");
+      reports = await ctx.db
+        .query("contentReports")
+        .withIndex("by_created")
+        .order("desc")
+        .take(args.limit || 50);
     }
-
-    // Fetch reports
-    let reports = await reportsQuery.order("desc").take(args.limit || 50);
 
     // Filter by targetType if provided (post-filter since no composite index)
     if (args.targetType) {
@@ -214,7 +217,6 @@ export const updateReportStatus = mutation({
       reviewedAt: Date.now(),
       reviewNotes: args.reviewNotes,
       actionTaken: args.actionTaken as any,
-      updatedAt: Date.now(),
     });
 
     // If action is to hide or remove content, update the content

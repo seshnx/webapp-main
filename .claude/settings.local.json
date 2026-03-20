@@ -46,7 +46,9 @@
       "Bash(SOCIAL_MIGRATION_SUMMARY.md:*)",
       "Bash(npm list:*)",
       "Bash(cd:*)",
-      "Bash(git pull:*)"
+      "Bash(git pull:*)",
+      "Bash(cd convex:*)",
+      "mcp__Sanity__search_docs"
     ]
   }
 }

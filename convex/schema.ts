@@ -381,6 +381,7 @@ export default defineSchema({
     userId: v.id("users"),
     postId: v.id("posts"),
     createdAt: v.number(),
+    savedAt: v.optional(v.number()), // When the post was saved (may differ from createdAt)
   })
     .index("by_user", ["userId", "createdAt"])
     .index("by_post", ["postId"])
@@ -584,6 +585,7 @@ export default defineSchema({
     studioId: v.id("studios"),
     roomId: v.optional(v.id("rooms")),
     clientId: v.id("users"),
+    technicianId: v.optional(v.id("users")), // For technician-assigned bookings
 
     // Booking details
     serviceType: v.optional(v.string()),
@@ -636,6 +638,7 @@ export default defineSchema({
     .index("by_studio", ["studioId"])
     .index("by_studio_status", ["studioId", "status"])
     .index("by_client", ["clientId", "createdAt"])
+    .index("by_technician", ["technicianId", "status"])
     .index("by_studio_date", ["studioId", "date"])
     .index("by_room_date", ["roomId", "date"]),
 
@@ -784,6 +787,20 @@ export default defineSchema({
     .index("by_student", ["studentId"])
     .index("by_class_student", ["classId", "studentId"]),
 
+  // School partners table
+  partners: defineTable({
+    schoolId: v.id("schools"),
+    name: v.string(),
+    address: v.optional(v.string()),
+    website: v.optional(v.string()),
+    contactEmail: v.optional(v.string()),
+    status: v.string(), // Active, Inactive
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_school", ["schoolId", "name"])
+    .index("by_status", ["status", "name"]),
+
   // Internships table
   internships: defineTable({
     studentId: v.id("users"),
@@ -884,27 +901,40 @@ export default defineSchema({
 
   // Market items table
   marketItems: defineTable({
-    sellerId: v.id("users"),
+    sellerId: v.string(), // Clerk ID of the seller
     title: v.string(),
     description: v.optional(v.string()),
     category: v.string(), // Gear, Software, Services, etc.
+    itemType: v.optional(v.string()), // Sub-category
+    brand: v.optional(v.string()),
+    model: v.optional(v.string()),
     price: v.number(),
     currency: v.string(),
     condition: v.optional(v.string()), // New, Used, Refurbished
     images: v.optional(v.array(v.string())),
     location: v.optional(v.string()),
+    negotiable: v.optional(v.boolean()),
+    featured: v.optional(v.boolean()),
+    viewCount: v.optional(v.number()),
+    favoriteCount: v.optional(v.number()), // Number of users who favorited this item
 
     // Status
     status: v.string(), // Active, Sold, Pending, Removed
+    soldAt: v.optional(v.number()), // When the item was sold
 
     // Shipping
     shippingAvailable: v.optional(v.boolean()),
     shippingCost: v.optional(v.number()),
+    localPickup: v.optional(v.boolean()), // Whether local pickup is available
+
+    // Soft delete
+    deletedAt: v.optional(v.number()),
 
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_created", ["createdAt"])
     .index("by_seller", ["sellerId", "createdAt"])
     .index("by_category", ["category", "createdAt"])
     .index("by_status", ["status", "createdAt"])
@@ -913,19 +943,43 @@ export default defineSchema({
   // Market transactions
   marketTransactions: defineTable({
     itemId: v.id("marketItems"),
-    buyerId: v.id("users"),
-    sellerId: v.id("users"),
+    buyerId: v.string(), // Clerk ID of the buyer
+    sellerId: v.string(), // Clerk ID of the seller
+    offerAmount: v.optional(v.number()), // Initial offer amount
     amount: v.number(),
     currency: v.string(),
     status: v.string(), // Pending, Completed, Cancelled, Refunded
+    paymentMethod: v.optional(v.string()), // stripe, paypal, local, etc.
+    rejectionReason: v.optional(v.string()), // Reason for cancellation/rejection
+    cancellationReason: v.optional(v.string()), // Alias for rejectionReason
+    cancelledBy: v.optional(v.string()), // Clerk ID of user who cancelled
+    shippingRequired: v.optional(v.boolean()), // Whether shipping is required
     stripePaymentIntentId: v.optional(v.string()),
+    sellerRating: v.optional(v.number()), // Rating given by buyer to seller (1-5)
+    sellerReview: v.optional(v.string()), // Review text from buyer
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()), // Last update timestamp
     completedAt: v.optional(v.number()),
+    rejectedAt: v.optional(v.number()), // When the transaction was rejected
+    cancelledAt: v.optional(v.number()), // When the transaction was cancelled
+    soldAt: v.optional(v.number()), // When the item was marked as sold
   })
     .index("by_item", ["itemId"])
     .index("by_buyer", ["buyerId", "createdAt"])
     .index("by_seller", ["sellerId", "createdAt"])
     .index("by_status", ["status", "createdAt"]),
+
+  // Market watchlist - users watching items for price drops/availability
+  marketWatchlist: defineTable({
+    userId: v.string(), // Clerk ID of user watching the item
+    itemId: v.id("marketItems"),
+    createdAt: v.number(),
+    addedAt: v.optional(v.number()), // When the item was added to watchlist
+    notificationSent: v.optional(v.boolean()), // Whether user was notified of changes
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_item", ["itemId"])
+    .index("by_user_item", ["userId", "itemId"]),
 
   // =====================================================
   // LABELS & DISTRIBUTION
@@ -1056,11 +1110,14 @@ export default defineSchema({
     reviewedBy: v.optional(v.id("users")),
     reviewedAt: v.optional(v.number()),
     resolution: v.optional(v.string()),
+    reviewNotes: v.optional(v.string()), // Moderator notes about the review
+    actionTaken: v.optional(v.string()), // Action taken: hidden, removed, warned, none
     createdAt: v.number(),
   })
     .index("by_target", ["targetId", "targetType"])
     .index("by_status", ["status", "createdAt"])
-    .index("by_reporter", ["reporterId", "createdAt"]),
+    .index("by_reporter", ["reporterId", "createdAt"])
+    .index("by_created", ["createdAt"]),
 
   // =====================================================
   // SYSTEM & CONFIGURATION

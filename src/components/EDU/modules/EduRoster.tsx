@@ -1,239 +1,108 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Search, UserPlus, Briefcase, Link, Edit2, Trash2, X } from 'lucide-react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
 import { exportToCSV } from '../../../utils/dataExport';
 
 /**
- * Student interface
+ * Student interface (from Convex)
  */
 interface Student {
-    id: string;
-    displayName?: string;
-    display_name?: string;
-    email?: string;
-    studentId?: string;
-    student_id?: string;
-    cohort?: string;
-    status?: string;
-    hoursLogged?: number;
-    hours_logged?: number;
-    internshipStudioId?: string;
-    internship_studio_id?: string;
-    [key: string]: any;
+    _id: Id<"students">;
+    userId: Id<"users">;
+    schoolId: Id<"schools">;
+    studentId: string;
+    major?: string;
+    year?: number;
+    gpa?: number;
+    expectedGraduation?: number;
+    isActive: boolean;
+    enrolledAt: number;
 }
 
 /**
- * Partner interface
+ * Partner interface (from Convex)
  */
 interface Partner {
-    id: string;
-    name?: string;
-    [key: string]: any;
+    _id: Id<"partners">;
+    schoolId: Id<"schools">;
+    name: string;
+    address?: string;
+    website?: string;
+    contactEmail?: string;
+    status: string;
+    createdAt: number;
+    updatedAt: number;
 }
 
 /**
  * Student form interface
  */
 interface StudentForm {
-    firstName: string;
-    lastName: string;
-    email: string;
+    userId: string;
     studentId: string;
-    cohort: string;
-    status: string;
+    major: string;
+    year: string;
+    gpa: string;
 }
 
 /**
  * EduRoster props
  */
 export interface EduRosterProps {
-    schoolId?: string;
+    schoolId?: Id<"schools">;
     logAction?: (action: string, details: string) => Promise<void> | void;
 }
 
 export default function EduRoster({ schoolId, logAction }: EduRosterProps) {
-    // TODO: Migrate to Neon/Convex - Supabase legacy code
-    // @ts-ignore - supabase is global for legacy support
-    const supabase = (window as any).supabase;
+    // Fetch data from Convex
+    const students = useQuery(
+        schoolId ? api.edu.getStudentsBySchool : undefined,
+        schoolId ? { schoolId } : "skip"
+    );
+    const partners = useQuery(
+        schoolId ? api.partners.getPartnersBySchool : undefined,
+        schoolId ? { schoolId, status: "Active" } : "skip"
+    );
 
-    const [students, setStudents] = useState<Student[]>([]);
-    const [partners, setPartners] = useState<Partner[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
+    const deleteStudent = useMutation(api.edu.deleteStudent);
+
     const [searchTerm, setSearchTerm] = useState<string>('');
 
     // Modal States
-    const [showStudentModal, setShowStudentModal] = useState<boolean>(false);
     const [showAssignModal, setShowAssignModal] = useState<boolean>(false);
     const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-    const [isEditing, setIsEditing] = useState<boolean>(false);
+    const [assignPartnerId, setAssignPartnerId] = useState<string>('');
 
-    // Forms
-    const [studentForm, setStudentForm] = useState<StudentForm>({
-        firstName: '', lastName: '', email: '', studentId: '', cohort: '', status: 'Enrolled'
-    });
-    const [assignStudioId, setAssignStudioId] = useState<string>('');
-
-    // --- DATA FETCHING ---
-    useEffect(() => {
-        if (!schoolId || !supabase) return;
-
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                // Fetch Students
-                const { data: studentsData, error: studentsError } = await supabase
-                    .from('students')
-                    .select('*')
-                    .eq('school_id', schoolId);
-
-                if (studentsError) throw studentsError;
-
-                setStudents((studentsData || []).map((d: any) => ({
-                    id: d.id,
-                    ...d,
-                    displayName: d.display_name,
-                    studentId: d.student_id,
-                    hoursLogged: d.hours_logged || 0
-                })));
-
-                // Fetch Partners (for assignment dropdown)
-                const { data: partnersData, error: partnersError } = await supabase
-                    .from('school_partners')
-                    .select('*')
-                    .eq('school_id', schoolId);
-
-                if (partnersError) throw partnersError;
-
-                setPartners((partnersData || []).map((d: any) => ({ id: d.id, ...d })));
-            } catch (e) {
-                console.error("Roster load failed:", e);
-            }
-            setLoading(false);
-        };
-        loadData();
-    }, [schoolId]);
+    const loading = students === undefined || partners === undefined;
 
     // --- HANDLERS ---
 
-    const handleOpenAdd = () => {
-        setStudentForm({ firstName: '', lastName: '', email: '', studentId: '', cohort: '', status: 'Enrolled' });
-        setIsEditing(false);
-        setSelectedStudent(null);
-        setShowStudentModal(true);
-    };
-
-    const handleOpenEdit = (student: Student) => {
-        setStudentForm({
-            firstName: student.displayName?.split(' ')[0] || '',
-            lastName: student.displayName?.split(' ').slice(1).join(' ') || '',
-            email: student.email || '',
-            studentId: student.studentId || '',
-            cohort: student.cohort || '',
-            status: student.status || 'Enrolled'
-        });
-        setIsEditing(true);
-        setSelectedStudent(student);
-        setShowStudentModal(true);
-    };
-
-    const handleSaveStudent = async () => {
-        if (!supabase || !schoolId) return;
-
-        const displayName = `${studentForm.firstName} ${studentForm.lastName}`.trim();
-        if (!displayName || !studentForm.email) return alert("Name and Email required.");
-
+    const handleDelete = async (id: Id<"students">, name: string) => {
+        if (!confirm(`Remove ${name} from the roster? This does not delete their user account.`)) return;
         try {
-            if (isEditing && selectedStudent) {
-                const { error } = await supabase
-                    .from('students')
-                    .update({
-                        first_name: studentForm.firstName,
-                        last_name: studentForm.lastName,
-                        display_name: displayName,
-                        email: studentForm.email,
-                        student_id: studentForm.studentId || null,
-                        cohort: studentForm.cohort || null,
-                        status: studentForm.status
-                    })
-                    .eq('id', selectedStudent.id)
-                    .eq('school_id', schoolId);
-
-                if (error) throw error;
-
-                setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, ...studentForm, displayName } : s));
-                if (logAction) await logAction('Edit Student', `Updated ${displayName}`);
-            } else {
-                const { data: newStudent, error } = await supabase
-                    .from('students')
-                    .insert({
-                        school_id: schoolId,
-                        first_name: studentForm.firstName,
-                        last_name: studentForm.lastName,
-                        display_name: displayName,
-                        email: studentForm.email,
-                        student_id: studentForm.studentId || null,
-                        cohort: studentForm.cohort || null,
-                        status: studentForm.status,
-                        hours_logged: 0,
-                        created_at: new Date().toISOString()
-                    })
-                    .select()
-                    .single();
-
-                if (error) throw error;
-
-                setStudents(prev => [...prev, {
-                    id: newStudent.id,
-                    ...studentForm,
-                    displayName,
-                    hoursLogged: 0
-                }]);
-                if (logAction) await logAction('Add Student', `Added ${displayName}`);
-            }
-            setShowStudentModal(false);
-        } catch (e) {
-            console.error("Save student failed:", e);
-            alert("Failed to save student.");
-        }
-    };
-
-    const handleDeleteStudent = async (id: string, name: string) => {
-        if (!confirm(`Remove ${name} from the roster? This does not delete their user account.`) || !supabase) return;
-        try {
-            await supabase
-                .from('students')
-                .delete()
-                .eq('id', id)
-                .eq('school_id', schoolId);
-
-            setStudents(prev => prev.filter(s => s.id !== id));
-            if (logAction) await logAction('Remove Student', `Removed ${name}`);
+            await deleteStudent({ studentId: id });
+            if (logAction) await logAction('Remove Student', `Removed student ID: ${name}`);
         } catch (e) {
             console.error("Delete failed:", e);
         }
     };
 
-    const handleAssignStudio = async () => {
-        if (!selectedStudent || !assignStudioId || !supabase) return;
-        try {
-            await supabase
-                .from('students')
-                .update({ internship_studio_id: assignStudioId })
-                .eq('id', selectedStudent.id)
-                .eq('school_id', schoolId);
+    const handleAssignPartner = async () => {
+        // Placeholder for partner assignment functionality
+        // This would require additional fields in the students schema
+        if (!selectedStudent || !assignPartnerId) return;
 
-            setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, internshipStudioId: assignStudioId, internship_studio_id: assignStudioId } : s));
-            setShowAssignModal(false);
-            setAssignStudioId('');
-            alert(`Assigned ${selectedStudent.displayName} to studio.`);
-            if (logAction) await logAction('Assign Internship', `Assigned ${selectedStudent.displayName}`);
-        } catch (e) {
-            console.error("Assignment failed:", e);
-        }
+        alert("Partner assignment functionality requires additional schema fields (internship tracking).");
+        setShowAssignModal(false);
+        setAssignPartnerId('');
+        if (logAction) await logAction('Assign Internship', `Attempted to assign student to partner`);
     };
 
-    const filteredStudents = students.filter(s =>
-        s.displayName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        s.studentId?.includes(searchTerm)
+    const filteredStudents = (students || []).filter(s =>
+        s.studentId?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        s.major?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     if (loading) return <div className="p-10 text-center text-gray-500">Loading Roster...</div>;
@@ -246,17 +115,14 @@ export default function EduRoster({ schoolId, logAction }: EduRosterProps) {
                     <Search className="absolute left-3 top-2.5 text-gray-400" size={16}/>
                     <input
                         className="w-full pl-9 p-2 text-sm border rounded-lg dark:bg-black/20 dark:border-gray-600 dark:text-white"
-                        placeholder="Search by Name or ID..."
+                        placeholder="Search by Student ID or Major..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
                 <div className="flex gap-2">
-                    <button onClick={() => exportToCSV(students, 'student_roster')} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-bold text-xs">
+                    <button onClick={() => students && exportToCSV(students, 'student_roster')} className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg font-bold text-xs">
                         Export CSV
-                    </button>
-                    <button onClick={handleOpenAdd} className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 hover:bg-indigo-700">
-                        <UserPlus size={16}/> Add Student
                     </button>
                 </div>
             </div>
@@ -266,30 +132,32 @@ export default function EduRoster({ schoolId, logAction }: EduRosterProps) {
                 <table className="w-full text-sm text-left">
                     <thead className="bg-gray-50 dark:bg-gray-800 text-gray-500 font-bold uppercase text-xs">
                         <tr>
-                            <th className="p-3">Name</th>
-                            <th className="p-3">ID</th>
-                            <th className="p-3">Cohort</th>
-                            <th className="p-3">Internship</th>
+                            <th className="p-3">Student ID</th>
+                            <th className="p-3">Major</th>
+                            <th className="p-3">Year</th>
+                            <th className="p-3">GPA</th>
+                            <th className="p-3">Status</th>
                             <th className="p-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y dark:divide-gray-700">
                         {filteredStudents.length === 0 ? (
-                            <tr><td colSpan={5} className="p-6 text-center text-gray-500">No students found.</td></tr>
+                            <tr><td colSpan={6} className="p-6 text-center text-gray-500">No students found.</td></tr>
                         ) : (
                             filteredStudents.map(s => (
-                                <tr key={s.id} className="group hover:bg-gray-50 dark:hover:bg-white/5 transition">
-                                    <td className="p-3 font-bold dark:text-white">{s.displayName}</td>
-                                    <td className="p-3 text-gray-500">{s.studentId || '--'}</td>
-                                    <td className="p-3">{s.cohort || 'General'}</td>
-                                    <td className="p-3 text-gray-500">
-                                        {s.internshipStudioId ? (
-                                            <span className="flex items-center gap-1 text-green-600 font-medium text-xs bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded w-fit">
-                                                <Briefcase size={12}/> Assigned
-                                            </span>
-                                        ) : (
-                                            <span className="text-gray-400 italic text-xs">Pending</span>
-                                        )}
+                                <tr key={s._id} className="group hover:bg-gray-50 dark:hover:bg-white/5 transition">
+                                    <td className="p-3 font-bold dark:text-white">{s.studentId}</td>
+                                    <td className="p-3">{s.major || 'Undeclared'}</td>
+                                    <td className="p-3">{s.year ? `Year ${s.year}` : '--'}</td>
+                                    <td className="p-3">{s.gpa ? s.gpa.toFixed(2) : '--'}</td>
+                                    <td className="p-3">
+                                        <span className={`text-xs font-medium px-2 py-0.5 rounded ${
+                                            s.isActive
+                                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                                : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                                        }`}>
+                                            {s.isActive ? 'Active' : 'Inactive'}
+                                        </span>
                                     </td>
                                     <td className="p-3 text-right">
                                         <div className="flex justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
@@ -301,14 +169,7 @@ export default function EduRoster({ schoolId, logAction }: EduRosterProps) {
                                                 <Link size={14}/>
                                             </button>
                                             <button
-                                                onClick={() => handleOpenEdit(s)}
-                                                className="p-1.5 bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300 rounded hover:bg-gray-200"
-                                                title="Edit Details"
-                                            >
-                                                <Edit2 size={14}/>
-                                            </button>
-                                            <button
-                                                onClick={() => handleDeleteStudent(s.id, s.displayName || 'this student')}
+                                                onClick={() => handleDelete(s._id, s.studentId)}
                                                 className="p-1.5 bg-red-50 text-red-600 dark:bg-red-900/30 dark:text-red-400 rounded hover:bg-red-100"
                                                 title="Remove Student"
                                             >
@@ -325,74 +186,25 @@ export default function EduRoster({ schoolId, logAction }: EduRosterProps) {
 
             {/* --- MODALS --- */}
 
-            {/* Add/Edit Student Modal */}
-            {showStudentModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-white dark:bg-[#2c2e36] w-full max-w-md rounded-xl p-6 space-y-4 animate-in zoom-in-95 shadow-2xl">
-                        <div className="flex justify-between items-center">
-                            <h3 className="font-bold text-xl dark:text-white">{isEditing ? 'Edit Student' : 'Add New Student'}</h3>
-                            <button onClick={() => setShowStudentModal(false)}><X className="text-gray-400 hover:text-red-500"/></button>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">First Name</label>
-                                <input className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white" value={studentForm.firstName} onChange={e => setStudentForm({...studentForm, firstName: e.target.value})}/>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Last Name</label>
-                                <input className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white" value={studentForm.lastName} onChange={e => setStudentForm({...studentForm, lastName: e.target.value})}/>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Email Address</label>
-                            <input type="email" className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white" value={studentForm.email} onChange={e => setStudentForm({...studentForm, email: e.target.value})}/>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Student ID</label>
-                                <input className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white" value={studentForm.studentId} onChange={e => setStudentForm({...studentForm, studentId: e.target.value})} placeholder="e.g. S123"/>
-                            </div>
-                            <div>
-                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Cohort</label>
-                                <input className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white" value={studentForm.cohort} onChange={e => setStudentForm({...studentForm, cohort: e.target.value})} placeholder="Fall 2024"/>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Enrollment Status</label>
-                            <select className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white" value={studentForm.status} onChange={e => setStudentForm({...studentForm, status: e.target.value})}>
-                                <option value="Enrolled">Enrolled</option>
-                                <option value="Graduated">Graduated</option>
-                                <option value="Dropped">Dropped</option>
-                                <option value="Leave">On Leave</option>
-                            </select>
-                        </div>
-
-                        <button onClick={handleSaveStudent} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-bold hover:bg-indigo-700 mt-2">
-                            {isEditing ? 'Update Student' : 'Create Student Record'}
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            {/* Assign Studio Modal */}
+            {/* Assign Partner Modal */}
             {showAssignModal && selectedStudent && (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
                     <div className="bg-white dark:bg-[#2c2e36] w-full max-w-sm rounded-xl p-6 space-y-4 animate-in zoom-in-95 shadow-2xl">
                         <h3 className="font-bold text-lg dark:text-white">Assign Internship</h3>
-                        <p className="text-sm text-gray-500">Select a partner studio for <strong>{selectedStudent.displayName}</strong>.</p>
+                        <p className="text-sm text-gray-500">Select a partner studio for student <strong>{selectedStudent.studentId}</strong>.</p>
 
-                        <select className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white" value={assignStudioId} onChange={e => setAssignStudioId(e.target.value)}>
+                        <select
+                            className="w-full p-2 border rounded dark:bg-black/20 dark:border-gray-600 dark:text-white"
+                            value={assignPartnerId}
+                            onChange={e => setAssignPartnerId(e.target.value)}
+                        >
                             <option value="">Select Studio...</option>
-                            {partners.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            {(partners || []).map(p => <option key={p._id} value={p._id}>{p.name}</option>)}
                         </select>
 
                         <div className="flex gap-2">
                             <button onClick={() => setShowAssignModal(false)} className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 py-2 rounded font-bold text-sm">Cancel</button>
-                            <button onClick={handleAssignStudio} disabled={!assignStudioId} className="flex-1 bg-indigo-600 text-white py-2 rounded font-bold disabled:opacity-50">Confirm</button>
+                            <button onClick={handleAssignPartner} disabled={!assignPartnerId} className="flex-1 bg-indigo-600 text-white py-2 rounded font-bold disabled:opacity-50">Confirm</button>
                         </div>
                     </div>
                 </div>

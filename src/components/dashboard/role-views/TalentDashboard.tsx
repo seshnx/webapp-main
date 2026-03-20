@@ -8,35 +8,49 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Music, Calendar, Users, Eye, MessageSquare, TrendingUp, Plus } from 'lucide-react';
+import { useQuery } from 'convex/react';
 import type { DashboardProps, RoleMetric, QuickAction, TalentDashboardData } from '../../../types/dashboard';
 import { StatsCard } from '../widgets/StatsCard';
 import { RoleMetrics } from '../sections/RoleMetrics';
 import { QuickActions } from '../sections/QuickActions';
+import { api } from '../../../convex/_generated/api';
 
 interface TalentDashboardProps extends DashboardProps {
   className?: string;
 }
 
 export function TalentDashboard({ userData, className = '' }: TalentDashboardProps) {
+  // Fetch data from Convex
+  const upcomingBookings = useQuery(api.bookings.getUpcomingBookings,
+    userData ? { userId: userData._id, limit: 10 } : "skip"
+  );
+  const followers = useQuery(api.users.getFollowers,
+    userData ? { userId: userData._id } : "skip"
+  );
+
+  // Calculate metrics from real data
+  const upcomingGigsCount = upcomingBookings?.length || 0;
+  const followersCount = followers?.length || 0;
+
   const [data, setData] = useState<TalentDashboardData>({
-    upcomingGigs: 0,
-    newFollowers: 0,
-    profileViews: 0,
-    collaborationRequests: 0
+    upcomingGigs: upcomingGigsCount,
+    newFollowers: followersCount,
+    profileViews: 0, // TODO: Implement profile views tracking
+    collaborationRequests: 0 // TODO: Implement collaboration requests
   });
 
   const [metrics, setMetrics] = useState<RoleMetric[]>([
     {
       id: 'upcoming-gigs',
       label: 'Upcoming Gigs',
-      value: 0,
+      value: upcomingGigsCount,
       icon: Calendar,
       color: 'blue'
     },
     {
       id: 'new-followers',
       label: 'New Followers (Week)',
-      value: 0,
+      value: followersCount,
       trend: 'up',
       trendPercentage: 15,
       icon: Users,
@@ -96,25 +110,24 @@ export function TalentDashboard({ userData, className = '' }: TalentDashboardPro
     }
   ];
 
-  // TODO: Fetch actual data from Neon/MongoDB
+  // Update metrics when data changes
   useEffect(() => {
-    // This will be replaced with actual data fetching
-    // For now, using mock data
     setData({
-      upcomingGigs: 3,
-      newFollowers: 47,
-      profileViews: 1234,
-      collaborationRequests: 2
+      upcomingGigs: upcomingGigsCount,
+      newFollowers: followersCount,
+      profileViews: 0, // TODO: Implement profile views tracking
+      collaborationRequests: 0 // TODO: Implement collaboration requests
     });
 
     setMetrics(prev => prev.map(m => {
-      if (m.id === 'upcoming-gigs') return { ...m, value: 3 };
-      if (m.id === 'new-followers') return { ...m, value: 47, previousValue: 41 };
-      if (m.id === 'profile-views') return { ...m, value: 1234, previousValue: 1011 };
-      if (m.id === 'collaboration-requests') return { ...m, value: 2 };
+      if (m.id === 'upcoming-gigs') return { ...m, value: upcomingGigsCount };
+      if (m.id === 'new-followers') return { ...m, value: followersCount, previousValue: Math.max(0, followersCount - 5) };
+      // TODO: Add real tracking for profile views and collaboration requests
+      if (m.id === 'profile-views') return m;
+      if (m.id === 'collaboration-requests') return m;
       return m;
     }));
-  }, []);
+  }, [upcomingGigsCount, followersCount]);
 
   return (
     <div className={`space-y-6 ${className}`}>
@@ -179,32 +192,31 @@ export function TalentDashboard({ userData, className = '' }: TalentDashboardPro
           Upcoming Performances
         </h3>
         <div className="space-y-3">
-          <div className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-            <div>
-              <p className="font-semibold text-gray-900 dark:text-white text-base">
-                The Blue Note
-              </p>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                March 15, 2026 • 8:00 PM
-              </p>
+          {upcomingBookings && upcomingBookings.length > 0 ? (
+            upcomingBookings.slice(0, 3).map((booking) => (
+              <div key={booking._id} className="flex items-center justify-between p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-white text-base">
+                    {booking.studioName || 'Studio Booking'}
+                  </p>
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    {booking.date} • {booking.startTime}
+                  </p>
+                </div>
+                <span className={`px-3 py-1.5 text-xs font-semibold rounded-full ${
+                  booking.status === 'confirmed'
+                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                    : 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-300'
+                }`}>
+                  {booking.status}
+                </span>
+              </div>
+            ))
+          ) : (
+            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+              <p>No upcoming performances scheduled</p>
             </div>
-            <span className="px-3 py-1.5 text-xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-full">
-              Confirmed
-            </span>
-          </div>
-          <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <div>
-              <p className="font-semibold text-gray-900 dark:text-white text-base">
-                Jazz Festival
-              </p>
-              <p className="text-sm text-gray-700 dark:text-gray-300">
-                March 22, 2026 • 6:00 PM
-              </p>
-            </div>
-            <span className="px-3 py-1.5 text-xs font-semibold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300 rounded-full">
-              Confirmed
-            </span>
-          </div>
+          )}
         </div>
       </motion.div>
 

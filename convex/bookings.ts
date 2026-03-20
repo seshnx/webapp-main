@@ -726,3 +726,143 @@ export const deleteBookingTemplate = mutation({
     return { success: true };
   },
 });
+
+// =====================================================
+// TECHNICIAN QUERIES
+// =====================================================
+
+/**
+ * Get bookings assigned to a technician
+ */
+export const getBookingsByTechnician = query({
+  args: {
+    technicianId: v.id("users"),
+    status: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const bookings = await ctx.db
+      .query("bookings")
+      .withIndex("by_technician", (q) => q.eq("technicianId", args.technicianId))
+      .take(args.limit || 50);
+
+    // Filter by status in memory
+    const filteredBookings = args.status
+      ? bookings.filter((b) => b.status === args.status)
+      : bookings;
+
+    // Fetch studio details for each booking
+    const bookingsWithStudios = await Promise.all(
+      filteredBookings.map(async (booking) => {
+        const studio = await ctx.db.get(booking.studioId);
+        return {
+          ...booking,
+          studioName: studio?.name || "Unknown Studio",
+          studioLocation: studio?.location,
+        };
+      })
+    );
+
+    return bookingsWithStudios;
+  },
+});
+
+/**
+ * Get service requests for a technician
+ * (bookings that need technician services)
+ */
+export const getTechnicianServiceRequests = query({
+  args: {
+    technicianId: v.id("users"),
+    status: v.optional(v.string()), // pending, confirmed, etc.
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const now = new Date().toISOString().split('T')[0];
+
+    const bookings = await ctx.db
+      .query("bookings")
+      .withIndex("by_technician", (q) => q.eq("technicianId", args.technicianId))
+      .take(args.limit || 20);
+
+    // Filter by date (upcoming only) and status in memory
+    let filteredBookings = bookings.filter((b) => {
+      // Filter by date (upcoming only)
+      if (b.date && b.date < now) return false;
+      if (b.startDate && b.startDate < now) return false;
+
+      // Filter by status
+      if (args.status) {
+        return b.status === args.status;
+      } else {
+        // Default to pending and confirmed
+        return b.status === "pending" || b.status === "confirmed";
+      }
+    });
+
+    // Fetch studio details for each request
+    const requestsWithStudios = await Promise.all(
+      filteredBookings.map(async (request) => {
+        const studio = await ctx.db.get(request.studioId);
+        return {
+          ...request,
+          studioName: studio?.name || "Unknown Studio",
+          studioLocation: studio?.location,
+          equipment: studio?.photos || [], // Using photos as equipment list for now
+        };
+      })
+    );
+
+    return requestsWithStudios;
+  },
+});
+
+/**
+ * Calculate technician earnings from completed bookings
+ */
+export const getTechnicianEarnings = query({
+  args: {
+    technicianId: v.id("users"),
+    startDate: v.optional(v.string()),
+    endDate: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const bookings = await ctx.db
+      .query("bookings")
+      .withIndex("by_technician", (q) => q.eq("technicianId", args.technicianId))
+      .take(1000); // Get all bookings for this technician
+
+    // Filter by status and date range in memory
+    const filteredBookings = bookings.filter((b) => {
+      // Only completed bookings
+      if (b.status !== "completed") return false;
+
+      // Filter by date range if provided
+      if (args.startDate && b.date && b.date < args.startDate) return false;
+      if (args.endDate && b.date && b.date > args.endDate) return false;
+
+      return true;
+    });
+
+    // Calculate earnings
+    const totalEarnings = filteredBookings.reduce((sum, b) => {
+      const technicianShare = b.finalAmount || b.totalAmount || 0;
+      return sum + technicianShare;
+    }, 0);
+
+    const completedCount = filteredBookings.length;
+
+    return {
+      totalEarnings,
+      completedCount,
+      averageEarning: completedCount > 0 ? totalEarnings / completedCount : 0,
+      bookings: filteredBookings.map((b) => ({
+        id: b._id,
+        date: b.date,
+        studioId: b.studioId,
+        amount: b.finalAmount || b.totalAmount || 0,
+        status: b.status,
+      })),
+    };
+  },
+});

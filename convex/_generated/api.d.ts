@@ -15,8 +15,14 @@ import type * as conversations from "../conversations.js";
 import type * as edu from "../edu.js";
 import type * as eduAnnouncements from "../eduAnnouncements.js";
 import type * as enhancedSchema from "../enhancedSchema.js";
+import type * as marketplace from "../marketplace.js";
 import type * as migrateProfileFields from "../migrateProfileFields.js";
+import type * as moderation from "../moderation.js";
+import type * as notifications from "../notifications.js";
+import type * as partners from "../partners.js";
 import type * as schema_expanded from "../schema_expanded.js";
+import type * as social from "../social.js";
+import type * as users from "../users.js";
 
 import type {
   ApiFromModules,
@@ -32,8 +38,14 @@ declare const fullApi: ApiFromModules<{
   edu: typeof edu;
   eduAnnouncements: typeof eduAnnouncements;
   enhancedSchema: typeof enhancedSchema;
+  marketplace: typeof marketplace;
   migrateProfileFields: typeof migrateProfileFields;
+  moderation: typeof moderation;
+  notifications: typeof notifications;
+  partners: typeof partners;
   schema_expanded: typeof schema_expanded;
+  social: typeof social;
+  users: typeof users;
 }>;
 
 /**

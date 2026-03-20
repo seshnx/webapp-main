@@ -50,15 +50,19 @@ export const getFeed = query({
     const skip = args.skip ?? 0;
 
     try {
-      let q = ctx.db.query("posts");
-      
-      if (args.category && args.category !== "All") {
-        q = q.withIndex("by_category", (q) => q.eq("category", args.category));
-      } else {
-        q = q.withIndex("by_created");
-      }
+      let rawPosts;
 
-      const rawPosts = await q.order("desc").take(limit + skip + 50);
+      if (args.category && args.category !== "All") {
+        rawPosts = await ctx.db.query("posts")
+          .withIndex("by_category", (q) => q.eq("category", args.category))
+          .order("desc")
+          .take(limit + skip + 50);
+      } else {
+        rawPosts = await ctx.db.query("posts")
+          .withIndex("by_created")
+          .order("desc")
+          .take(limit + skip + 50);
+      }
       
       // Filter out soft-deleted posts and ensure visibility
       const validPosts = rawPosts.filter(p => !p.deletedAt && p.visibility === "public");
@@ -488,7 +492,7 @@ export const createComment = mutation({
       authorId: author._id,
       content: args.content,
       parentId: args.parentId,
-      engagement: { likesCount: 0, repliesCount: 0 },
+      reactionCount: 0,
       createdAt: Date.now(),
     });
 
@@ -616,7 +620,7 @@ export const toggleReaction = mutation({
       // Remove a like logically via patch
       if (args.targetType === "post") {
          const post = await ctx.db.get(args.targetId as any);
-         if (post) await ctx.db.patch(post._id, { engagement: { ...post.engagement, likesCount: Math.max(0, (post.engagement?.likesCount || 0) - 1) }});
+         if (post && "engagement" in post) await ctx.db.patch(post._id, { engagement: { ...post.engagement, likesCount: Math.max(0, (post.engagement?.likesCount || 0) - 1) }});
       }
       return { added: false };
     } else {
@@ -630,7 +634,7 @@ export const toggleReaction = mutation({
       // Add a like logically via patch
       if (args.targetType === "post") {
          const post = await ctx.db.get(args.targetId as any);
-         if (post) await ctx.db.patch(post._id, { engagement: { ...post.engagement, likesCount: (post.engagement?.likesCount || 0) + 1 }});
+         if (post && "engagement" in post) await ctx.db.patch(post._id, { engagement: { ...post.engagement, likesCount: (post.engagement?.likesCount || 0) + 1 }});
       }
       return { added: true };
     }
@@ -816,7 +820,7 @@ export const isSaved = query({
     const saved = await ctx.db
       .query("savedPosts")
       .withIndex("by_user_post", (q) =>
-        q.eq("userId", args.userId).eq("postId", args.postId)
+        q.eq("userId", args.userId!).eq("postId", args.postId)
       )
       .first();
 
@@ -852,12 +856,13 @@ export const savePost = mutation({
     await ctx.db.insert("savedPosts", {
       userId: user._id,
       postId: args.postId,
+      createdAt: Date.now(),
       savedAt: Date.now(),
     });
-    
+
     // Optionally increment save count
     const post = await ctx.db.get(args.postId);
-    if (post) {
+    if (post && "engagement" in post) {
       await ctx.db.patch(post._id, {
         engagement: {
           ...post.engagement,

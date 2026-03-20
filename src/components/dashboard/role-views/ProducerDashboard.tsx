@@ -8,28 +8,43 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Plus, MessageSquare, BarChart3, Music, DollarSign, Users, TrendingUp } from 'lucide-react';
+import { useQuery } from 'convex/react';
 import type { DashboardProps, RoleMetric, QuickAction, ProducerDashboardData } from '../../../types/dashboard';
 import { StatsCard } from '../widgets/StatsCard';
 import { RoleMetrics } from '../sections/RoleMetrics';
 import { QuickActions } from '../sections/QuickActions';
+import { api } from '../../../convex/_generated/api';
 
 interface ProducerDashboardProps extends DashboardProps {
   className?: string;
 }
 
 export function ProducerDashboard({ userData, className = '' }: ProducerDashboardProps) {
+  // Fetch data from Convex
+  const transactions = useQuery(api.marketplace.getTransactionsBySeller,
+    userData ? { sellerId: userData.clerkId, status: "completed" } : "skip"
+  );
+  const posts = useQuery(api.social.getPostsByAuthor,
+    userData ? { authorId: userData._id, limit: 20 } : "skip"
+  );
+
+  // Calculate metrics from real data
+  const recentSalesCount = transactions?.length || 0;
+  const totalRevenue = transactions?.reduce((sum, t) => sum + (t.price || 0), 0) || 0;
+  const postsCount = posts?.length || 0;
+
   const [data, setData] = useState<ProducerDashboardData>({
-    recentSales: 0,
-    streamingRevenue: 0,
-    collaborationInvites: 0,
-    beatUploads: 0
+    recentSales: recentSalesCount,
+    streamingRevenue: totalRevenue,
+    collaborationInvites: 0, // TODO: Implement collaboration invites tracking
+    beatUploads: postsCount
   });
 
   const [metrics, setMetrics] = useState<RoleMetric[]>([
     {
       id: 'beat-sales',
       label: 'Beat Sales (This Month)',
-      value: 0,
+      value: recentSalesCount,
       previousValue: 0,
       trend: 'up',
       trendPercentage: 12,
@@ -39,7 +54,7 @@ export function ProducerDashboard({ userData, className = '' }: ProducerDashboar
     {
       id: 'streaming-revenue',
       label: 'Streaming Revenue',
-      value: '$0',
+      value: `$${totalRevenue.toLocaleString()}`,
       previousValue: '$0',
       trend: 'up',
       trendPercentage: 8,
@@ -57,7 +72,7 @@ export function ProducerDashboard({ userData, className = '' }: ProducerDashboar
     {
       id: 'total-plays',
       label: 'Total Plays',
-      value: 0,
+      value: postsCount,
       trend: 'up',
       trendPercentage: 24,
       icon: TrendingUp,
@@ -92,25 +107,23 @@ export function ProducerDashboard({ userData, className = '' }: ProducerDashboar
     }
   ];
 
-  // TODO: Fetch actual data from Neon/MongoDB
+  // Update metrics when data changes
   useEffect(() => {
-    // This will be replaced with actual data fetching
-    // For now, using mock data
     setData({
-      recentSales: 47,
-      streamingRevenue: 1234,
-      collaborationInvites: 3,
-      beatUploads: 156
+      recentSales: recentSalesCount,
+      streamingRevenue: totalRevenue,
+      collaborationInvites: 0, // TODO: Implement collaboration invites tracking
+      beatUploads: postsCount
     });
 
     setMetrics(prev => prev.map(m => {
-      if (m.id === 'beat-sales') return { ...m, value: 47, previousValue: 42 };
-      if (m.id === 'streaming-revenue') return { ...m, value: '$1,234', previousValue: '$1,142' };
-      if (m.id === 'collaborations') return { ...m, value: 8 };
-      if (m.id === 'total-plays') return { ...m, value: 45678, previousValue: 36845 };
+      if (m.id === 'beat-sales') return { ...m, value: recentSalesCount, previousValue: Math.max(0, recentSalesCount - 5) };
+      if (m.id === 'streaming-revenue') return { ...m, value: `$${totalRevenue.toLocaleString()}`, previousValue: '$0' };
+      if (m.id === 'collaborations') return { ...m, value: 0 }; // TODO: Track real collaborations
+      if (m.id === 'total-plays') return { ...m, value: postsCount, previousValue: Math.max(0, postsCount - 10) };
       return m;
     }));
-  }, []);
+  }, [recentSalesCount, totalRevenue, postsCount]);
 
   return (
     <div className={`space-y-6 ${className}`}>

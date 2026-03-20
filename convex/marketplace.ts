@@ -204,6 +204,7 @@ export const createMarketItem = mutation({
       status: "available",
       viewCount: 0,
       favoriteCount: 0,
+      currency: "USD", // Default to USD
       createdAt: now,
       updatedAt: now,
     });
@@ -405,8 +406,12 @@ export const createTransaction = mutation({
     const now = Date.now();
 
     const transactionId = await ctx.db.insert("marketTransactions", {
-      ...args,
+      itemId: args.itemId,
+      buyerId: args.buyerId,
+      sellerId: args.sellerId,
       offerAmount: args.offerAmount || item.price,
+      amount: args.offerAmount || item.price,
+      currency: item.currency || "USD",
       status: "pending",
       paymentMethod: args.paymentMethod || "cash",
       shippingRequired: args.shippingRequired || false,
@@ -674,6 +679,7 @@ export const addToWatchlist = mutation({
     await ctx.db.insert("marketWatchlist", {
       userId: args.userId,
       itemId: args.itemId,
+      createdAt: now,
       addedAt: now,
     });
 
@@ -710,9 +716,9 @@ export const removeFromWatchlist = mutation({
 
     // Decrement favorite count on item
     const item = await ctx.db.get(args.itemId);
-    if (item && item.favoriteCount > 0) {
+    if (item && (item.favoriteCount || 0) > 0) {
       await ctx.db.patch(args.itemId, {
-        favoriteCount: item.favoriteCount - 1,
+        favoriteCount: (item.favoriteCount || 0) - 1,
       });
     }
 

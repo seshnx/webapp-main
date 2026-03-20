@@ -1,19 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Briefcase, MapPin, Phone, Plus, Trash2, ExternalLink } from 'lucide-react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
 import AddressAutocomplete from '../../shared/AddressAutocomplete';
 
 /**
  * Partner interface
  */
 interface Partner {
-    id: string;
+    _id: Id<"partners">;
     name?: string;
     address?: string;
     website?: string;
-    contact_email?: string;
     contactEmail?: string;
     status?: string;
-    [key: string]: any;
+    schoolId: Id<"schools">;
+    createdAt: number;
+    updatedAt: number;
 }
 
 /**
@@ -39,17 +43,18 @@ interface AddressData {
  * EduPartners props
  */
 export interface EduPartnersProps {
-    schoolId?: string;
+    schoolId?: Id<"schools">;
     logAction?: (action: string, details: string) => Promise<void> | void;
 }
 
 export default function EduPartners({ schoolId, logAction }: EduPartnersProps) {
-    // TODO: Migrate to Neon/Convex - Supabase legacy code
-    // @ts-ignore - supabase is global for legacy support
-    const supabase = (window as any).supabase;
-
-    const [partners, setPartners] = useState<Partner[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
+    // Fetch partners from Convex
+    const partners = useQuery(
+        schoolId ? api.partners.getPartnersBySchool : undefined,
+        schoolId ? { schoolId, status: "Active" } : "skip"
+    );
+    const createPartner = useMutation(api.partners.createPartner);
+    const deletePartner = useMutation(api.partners.deletePartner);
 
     const [form, setForm] = useState<PartnerForm>({
         name: '',
@@ -58,55 +63,26 @@ export default function EduPartners({ schoolId, logAction }: EduPartnersProps) {
         contactEmail: ''
     });
 
-    // --- DATA FETCHING ---
-    useEffect(() => {
-        if (!schoolId || !supabase) return;
-
-        const fetchPartners = async () => {
-            setLoading(true);
-            try {
-                const { data: partnersData, error } = await supabase
-                    .from('school_partners')
-                    .select('*')
-                    .eq('school_id', schoolId)
-                    .order('name', { ascending: true });
-
-                if (error) throw error;
-
-                setPartners((partnersData || []).map((p: any) => ({ id: p.id, ...p })));
-            } catch (e) {
-                console.error("Error loading partners:", e);
-            }
-            setLoading(false);
-        };
-        fetchPartners();
-    }, [schoolId]);
+    const loading = partners === undefined;
 
     // --- ACTIONS ---
 
     const handleAdd = async () => {
-        if (!form.name || !supabase || !schoolId) {
+        if (!form.name || !schoolId) {
             if (!form.name) alert("Partner Name is required.");
             return;
         }
 
         try {
-            const { data: newPartner, error } = await supabase
-                .from('school_partners')
-                .insert({
-                    school_id: schoolId,
-                    name: form.name,
-                    address: form.address || null,
-                    website: form.website || null,
-                    contact_email: form.contactEmail || null,
-                    status: 'Approved'
-                })
-                .select()
-                .single();
+            await createPartner({
+                schoolId: schoolId,
+                name: form.name,
+                address: form.address || undefined,
+                website: form.website || undefined,
+                contactEmail: form.contactEmail || undefined,
+                status: "Active"
+            });
 
-            if (error) throw error;
-
-            setPartners(prev => [...prev, { id: newPartner.id, ...newPartner }]);
             if (logAction) await logAction('Add Partner', `Added studio: ${form.name}`);
 
             // Reset
@@ -117,16 +93,10 @@ export default function EduPartners({ schoolId, logAction }: EduPartnersProps) {
         }
     };
 
-    const handleDelete = async (id: string, name: string) => {
-        if(!confirm(`Remove ${name} from approved partners?`) || !supabase || !schoolId) return;
+    const handleDelete = async (id: Id<"partners">, name: string) => {
+        if(!confirm(`Remove ${name} from approved partners?`)) return;
         try {
-            await supabase
-                .from('school_partners')
-                .delete()
-                .eq('id', id)
-                .eq('school_id', schoolId);
-
-            setPartners(prev => prev.filter(p => p.id !== id));
+            await deletePartner({ partnerId: id });
             if (logAction) await logAction('Remove Partner', `Removed: ${name}`);
         } catch (e) {
             console.error("Delete failed:", e);
@@ -194,17 +164,17 @@ export default function EduPartners({ schoolId, logAction }: EduPartnersProps) {
 
             {/* Partners List */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {partners.length === 0 ? (
+                {!partners || partners.length === 0 ? (
                     <div className="col-span-full text-center py-10 text-gray-500 border-2 border-dashed dark:border-gray-700 rounded-xl">
                         No partners added yet.
                     </div>
                 ) : (
                     partners.map(p => (
-                        <div key={p.id} className="bg-white dark:bg-[#2c2e36] p-4 rounded-xl border dark:border-gray-700 shadow-sm hover:shadow-md transition group relative">
+                        <div key={p._id} className="bg-white dark:bg-[#2c2e36] p-4 rounded-xl border dark:border-gray-700 shadow-sm hover:shadow-md transition group relative">
                             <div className="flex justify-between items-start mb-2">
                                 <h4 className="font-bold dark:text-white text-lg truncate pr-8">{p.name}</h4>
                                 <button
-                                    onClick={() => handleDelete(p.id, p.name || 'this partner')}
+                                    onClick={() => handleDelete(p._id, p.name || 'this partner')}
                                     className="text-gray-400 hover:text-red-500 absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition"
                                 >
                                     <Trash2 size={16}/>
@@ -228,7 +198,7 @@ export default function EduPartners({ schoolId, logAction }: EduPartnersProps) {
 
                             <div className="mt-4 pt-3 border-t dark:border-gray-700 flex justify-between items-center">
                                 <span className="text-[10px] font-bold uppercase text-green-600 bg-green-50 dark:bg-green-900/20 px-2 py-0.5 rounded border border-green-200 dark:border-green-800">
-                                    Approved
+                                    {p.status || "Active"}
                                 </span>
                                 {p.website && (
                                     <a href={p.website} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-indigo-500">

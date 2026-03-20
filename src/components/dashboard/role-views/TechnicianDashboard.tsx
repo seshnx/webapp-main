@@ -8,41 +8,60 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Wrench, Calendar, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
+import { useQuery } from 'convex/react';
 import type { DashboardProps, RoleMetric, QuickAction, TechnicianDashboardData } from '../../../types/dashboard';
 import { StatsCard } from '../widgets/StatsCard';
 import { RoleMetrics } from '../sections/RoleMetrics';
 import { QuickActions } from '../sections/QuickActions';
+import { api } from '../../../convex/_generated/api';
 
 interface TechnicianDashboardProps extends DashboardProps {
   className?: string;
 }
 
 export function TechnicianDashboard({ userData, className = '' }: TechnicianDashboardProps) {
+  // Fetch data from Convex
+  const serviceRequests = useQuery(api.bookings.getTechnicianServiceRequests,
+    userData ? { technicianId: userData._id, status: "pending" } : "skip"
+  );
+  const activeJobs = useQuery(api.bookings.getBookingsByTechnician,
+    userData ? { technicianId: userData._id, status: "confirmed" } : "skip"
+  );
+  const earnings = useQuery(api.bookings.getTechnicianEarnings,
+    userData ? { technicianId: userData._id } : "skip"
+  );
+
+  // Calculate metrics from real data
+  const pendingRequestsCount = serviceRequests?.length || 0;
+  const activeJobsCount = activeJobs?.length || 0;
+  const completedTodayCount = 0; // TODO: Implement completed today tracking
+  const totalEarnings = earnings?.totalEarnings || 0;
+
   const [data, setData] = useState<TechnicianDashboardData>({
-    serviceRequests: [],
-    activeJobs: [],
-    equipmentWarnings: []
+    serviceRequests: serviceRequests || [],
+    activeJobs: activeJobs || [],
+    equipmentWarnings: [] // TODO: Implement equipment warnings tracking
   });
 
   const [metrics, setMetrics] = useState<RoleMetric[]>([
     {
       id: 'pending-requests',
       label: 'Pending Service Requests',
-      value: 0,
+      value: pendingRequestsCount,
       icon: Wrench,
       color: 'blue'
     },
     {
       id: 'active-jobs',
       label: 'Active Jobs',
-      value: 0,
+      value: activeJobsCount,
       icon: Clock,
       color: 'green'
     },
     {
       id: 'completed-today',
       label: 'Completed Today',
-      value: 0,
+      value: completedTodayCount,
       icon: CheckCircle,
       color: 'purple'
     },
@@ -82,54 +101,22 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
     }
   ];
 
-  // TODO: Fetch actual data from Neon/MongoDB
+  // Update metrics when data changes
   useEffect(() => {
-    // This will be replaced with actual data fetching
-    // For now, using mock data
     setData({
-      serviceRequests: [
-        {
-          id: '1',
-          studioId: 'studio-1',
-          equipment: 'SSL Console',
-          issue: 'Channel 3 not responding',
-          priority: 'high',
-          status: 'pending'
-        },
-        {
-          id: '2',
-          studioId: 'studio-2',
-          equipment: 'Studio Monitors',
-          issue: 'Left speaker buzzing',
-          priority: 'medium',
-          status: 'pending'
-        }
-      ],
-      activeJobs: [
-        {
-          id: '1',
-          location: 'Studio A',
-          task: 'Microphone repair',
-          startTime: new Date('2026-03-10T14:00:00')
-        }
-      ],
-      equipmentWarnings: [
-        {
-          equipmentId: 'eq-1',
-          equipmentName: 'Neumann U87',
-          warning: 'Calibration due in 2 days'
-        }
-      ]
+      serviceRequests: serviceRequests || [],
+      activeJobs: activeJobs || [],
+      equipmentWarnings: [] // TODO: Implement equipment warnings tracking
     });
 
     setMetrics(prev => prev.map(m => {
-      if (m.id === 'pending-requests') return { ...m, value: 2 };
-      if (m.id === 'active-jobs') return { ...m, value: 1 };
-      if (m.id === 'completed-today') return { ...m, value: 3 };
-      if (m.id === 'equipment-warnings') return { ...m, value: 1 };
+      if (m.id === 'pending-requests') return { ...m, value: pendingRequestsCount };
+      if (m.id === 'active-jobs') return { ...m, value: activeJobsCount };
+      if (m.id === 'completed-today') return { ...m, value: completedTodayCount };
+      if (m.id === 'equipment-warnings') return { ...m, value: 0 }; // TODO: Track equipment warnings
       return m;
     }));
-  }, []);
+  }, [pendingRequestsCount, activeJobsCount, completedTodayCount, serviceRequests, activeJobs]);
 
   return (
     <div className={`space-y-6 ${className}`}>
@@ -188,28 +175,29 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
           <div className="space-y-3">
             {data.serviceRequests.map(request => (
               <div
-                key={request.id}
+                key={request._id}
                 className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-gray-900 dark:text-white text-base">
-                    {request.equipment}
+                    {request.serviceType || 'Studio Service'}
                   </p>
                   <p className="text-sm text-gray-700 dark:text-gray-300 mt-1">
-                    {request.issue}
+                    {request.studioName || 'Studio Service Request'}
                   </p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1">
-                    <span className="font-medium">Studio:</span> {request.studioId}
+                    <span className="font-medium">Studio:</span> {request.studioName || request.studioId}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    {request.date} at {request.startTime}
                   </p>
                 </div>
                 <span className={`px-3 py-1.5 text-xs font-semibold rounded-full ml-4 flex-shrink-0 ${
-                  request.priority === "high"
-                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
-                    : request.priority === "medium"
+                  request.status === "pending"
                     ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                    : "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300"
+                    : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                 }`}>
-                  {request.priority.charAt(0).toUpperCase() + request.priority.slice(1)}
+                  {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
                 </span>
               </div>
             ))}
@@ -231,23 +219,23 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
           <div className="space-y-3">
             {data.activeJobs.map(job => (
               <div
-                key={job.id}
+                key={job._id}
                 className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800"
               >
                 <div className="flex items-start justify-between">
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">
-                      {job.task}
+                      {job.studioName || 'Studio Service'}
                     </p>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {job.location}
+                      {job.serviceType || 'General Service'}
                     </p>
                     <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                      Started: {job.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {job.date} at {job.startTime}
                     </p>
                   </div>
                   <span className="px-3 py-1 text-xs font-medium bg-green-100 text-green-700 rounded-full">
-                    In Progress
+                    {job.status}
                   </span>
                 </div>
               </div>
