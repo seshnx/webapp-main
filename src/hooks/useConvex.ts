@@ -638,20 +638,20 @@ export function useSellerReviews(sellerId: string, limit = 10) {
 // =====================================================
 
 /**
- * Get broadcasts for a school
+ * Get eduAnnouncements for a school
  */
-export function useBroadcasts(schoolId: Id<'schools'>, status?: string) {
-  return useQuery(api.broadcasts.getBroadcastsBySchool, {
+export function useEduAnnouncements(schoolId: Id<'schools'>, status?: string) {
+  return useQuery(api.eduAnnouncements.getEduAnnouncementsBySchool, {
     schoolId,
     status,
   });
 }
 
 /**
- * Get unread broadcasts for a user
+ * Get unread eduAnnouncements for a user
  */
-export function useUnreadBroadcasts(userId: string, schoolId: Id<'schools'>, userType: 'student' | 'staff') {
-  return useQuery(api.broadcasts.getUnreadBroadcasts, {
+export function useUnreadEduAnnouncements(userId: string, schoolId: Id<'schools'>, userType: 'student' | 'staff') {
+  return useQuery(api.eduAnnouncements.getUnreadEduAnnouncements, {
     userId,
     schoolId,
     userType,
@@ -659,64 +659,64 @@ export function useUnreadBroadcasts(userId: string, schoolId: Id<'schools'>, use
 }
 
 /**
- * Get active broadcasts
+ * Get active eduAnnouncements
  */
-export function useActiveBroadcasts(schoolId: Id<'schools'>) {
-  return useQuery(api.broadcasts.getActiveBroadcasts, {
+export function useActiveEduAnnouncements(schoolId: Id<'schools'>) {
+  return useQuery(api.eduAnnouncements.getActiveEduAnnouncements, {
     schoolId,
   });
 }
 
 /**
- * Get draft broadcasts
+ * Get draft eduAnnouncements
  */
-export function useDraftBroadcasts(schoolId: Id<'schools'>, createdBy?: string) {
-  return useQuery(api.broadcasts.getDraftBroadcasts, {
+export function useDraftEduAnnouncements(schoolId: Id<'schools'>, createdBy?: string) {
+  return useQuery(api.eduAnnouncements.getDraftEduAnnouncements, {
     schoolId,
     createdBy,
   });
 }
 
 /**
- * Create broadcast
+ * Create eduAnnouncement
  */
-export function useCreateBroadcast() {
-  return useMutation(api.broadcasts.createBroadcast);
+export function useCreateEduAnnouncement() {
+  return useMutation(api.eduAnnouncements.createEduAnnouncement);
 }
 
 /**
- * Update broadcast
+ * Update eduAnnouncement
  */
-export function useUpdateBroadcast() {
-  return useMutation(api.broadcasts.updateBroadcast);
+export function useUpdateEduAnnouncement() {
+  return useMutation(api.eduAnnouncements.updateEduAnnouncement);
 }
 
 /**
- * Publish broadcast
+ * Publish eduAnnouncement
  */
-export function usePublishBroadcast() {
-  return useMutation(api.broadcasts.publishBroadcast);
+export function usePublishEduAnnouncement() {
+  return useMutation(api.eduAnnouncements.publishEduAnnouncement);
 }
 
 /**
- * Archive broadcast
+ * Archive eduAnnouncement
  */
-export function useArchiveBroadcast() {
-  return useMutation(api.broadcasts.archiveBroadcast);
+export function useArchiveEduAnnouncement() {
+  return useMutation(api.eduAnnouncements.archiveEduAnnouncement);
 }
 
 /**
- * Mark broadcast as read
+ * Mark eduAnnouncement as read
  */
-export function useMarkBroadcastAsRead() {
-  return useMutation(api.broadcasts.markBroadcastAsRead);
+export function useMarkEduAnnouncementAsRead() {
+  return useMutation(api.eduAnnouncements.markEduAnnouncementAsRead);
 }
 
 /**
- * Get broadcast stats
+ * Get eduAnnouncement stats
  */
-export function useBroadcastStats(schoolId: Id<'schools'>) {
-  return useQuery(api.broadcasts.getBroadcastStats, {
+export function useEduAnnouncementStats(schoolId: Id<'schools'>) {
+  return useQuery(api.eduAnnouncements.getEduAnnouncementStats, {
     schoolId,
   });
 }
@@ -852,4 +852,232 @@ export function useStartInternship() {
  */
 export function useCompleteInternship() {
   return useMutation(api.edu.completeInternship);
+}
+
+// =====================================================
+// SETTINGS
+// =====================================================
+
+/**
+ * Get all user settings
+ */
+export function useAllUserSettings(userId: string) {
+  return useQuery(api.settings.getAllUserSettings, { userId });
+}
+
+/**
+ * Get user settings
+ */
+export function useUserSettings(userId: string) {
+  return useQuery(api.settings.getUserSettings, { userId });
+}
+
+/**
+ * Update user settings
+ */
+export function useUpdateUserSettings() {
+  return useMutation(api.settings.updateUserSettings);
+}
+
+/**
+ * Reset user settings to defaults
+ */
+export function useResetUserSettings() {
+  return useMutation(api.settings.resetUserSettings);
+}
+
+/**
+ * Get notification settings
+ */
+export function useNotificationSettings(userId: string) {
+  return useQuery(api.settings.getNotificationSettings, { userId });
+}
+
+/**
+ * Update notification settings
+ */
+export function useUpdateNotificationSettings() {
+  return useMutation(api.settings.updateNotificationSettings);
+}
+
+/**
+ * Update social notification settings
+ */
+export function useUpdateSocialNotificationSettings() {
+  return useMutation(api.settings.updateSocialNotificationSettings);
+}
+
+/**
+ * Update messenger notification settings
+ */
+export function useUpdateMessengerNotificationSettings() {
+  return useMutation(api.settings.updateMessengerNotificationSettings);
+}
+
+/**
+ * Update booking notification settings
+ */
+export function useUpdateBookingNotificationSettings() {
+  return useMutation(api.settings.updateBookingNotificationSettings);
+}
+
+/**
+ * Update EDU notification settings
+ */
+export function useUpdateEDUNotificationSettings() {
+  return useMutation(api.settings.updateEDUNotificationSettings);
+}
+
+/**
+ * Update marketplace notification settings
+ */
+export function useUpdateMarketplaceNotificationSettings() {
+  return useMutation(api.settings.updateMarketplaceNotificationSettings);
+}
+
+/**
+ * Enable all notifications
+ */
+export function useEnableAllNotifications() {
+  return useMutation(api.settings.enableAllNotifications);
+}
+
+/**
+ * Disable all notifications
+ */
+export function useDisableAllNotifications() {
+  return useMutation(api.settings.disableAllNotifications);
+}
+
+/**
+ * Get privacy settings
+ */
+export function usePrivacySettings(userId: string) {
+  return useQuery(api.settings.getPrivacySettings, { userId });
+}
+
+/**
+ * Update privacy settings
+ */
+export function useUpdatePrivacySettings() {
+  return useMutation(api.settings.updatePrivacySettings);
+}
+
+/**
+ * Block user
+ */
+export function useBlockUser() {
+  return useMutation(api.settings.blockUser);
+}
+
+/**
+ * Unblock user
+ */
+export function useUnblockUser() {
+  return useMutation(api.settings.unblockUser);
+}
+
+/**
+ * Mute user
+ */
+export function useMuteUser() {
+  return useMutation(api.settings.muteUser);
+}
+
+/**
+ * Unmute user
+ */
+export function useUnmuteUser() {
+  return useMutation(api.settings.unmuteUser);
+}
+
+/**
+ * Get security settings
+ */
+export function useSecuritySettings(userId: string) {
+  return useQuery(api.settings.getSecuritySettings, { userId });
+}
+
+/**
+ * Update security settings
+ */
+export function useUpdateSecuritySettings() {
+  return useMutation(api.settings.updateSecuritySettings);
+}
+
+/**
+ * Record login attempt
+ */
+export function useRecordLoginAttempt() {
+  return useMutation(api.settings.recordLoginAttempt);
+}
+
+/**
+ * Enable two-factor authentication
+ */
+export function useEnableTwoFactor() {
+  return useMutation(api.settings.enableTwoFactor);
+}
+
+/**
+ * Disable two-factor authentication
+ */
+export function useDisableTwoFactor() {
+  return useMutation(api.settings.disableTwoFactor);
+}
+
+/**
+ * Lock account
+ */
+export function useLockAccount() {
+  return useMutation(api.settings.lockAccount);
+}
+
+/**
+ * Unlock account
+ */
+export function useUnlockAccount() {
+  return useMutation(api.settings.unlockAccount);
+}
+
+/**
+ * Get app settings
+ */
+export function useAppSettings(category?: string) {
+  return useQuery(api.settings.getAppSettings, category ? { category } : {});
+}
+
+/**
+ * Get public app settings
+ */
+export function usePublicAppSettings() {
+  return useQuery(api.settings.getPublicAppSettings);
+}
+
+/**
+ * Get app setting by key
+ */
+export function useAppSetting(key: string) {
+  return useQuery(api.settings.getAppSetting, { key });
+}
+
+/**
+ * Set app setting
+ */
+export function useSetAppSetting() {
+  return useMutation(api.settings.setAppSetting);
+}
+
+/**
+ * Export user data
+ */
+export function useExportUserData() {
+  return useMutation(api.settings.exportUserData);
+}
+
+/**
+ * Delete user account
+ */
+export function useDeleteUserAccount() {
+  return useMutation(api.settings.deleteUserAccount);
 }

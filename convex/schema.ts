@@ -652,6 +652,23 @@ export default defineSchema({
     .index("by_booking", ["bookingId"])
     .index("by_status", ["status", "createdAt"]),
 
+  // Booking reminders
+  bookingReminders: defineTable({
+    bookingId: v.id("bookings"),
+    userId: v.id("users"), // User to receive the reminder
+    reminderType: v.string(), // day_before, hours_before
+    reminderHours: v.number(), // Hours before booking to send reminder
+    scheduledFor: v.number(), // Timestamp when reminder should be sent
+    sent: v.boolean(), // Whether reminder has been sent
+    cancelled: v.optional(v.boolean()), // Whether reminder was cancelled
+    sentAt: v.optional(v.number()), // When reminder was actually sent
+    createdAt: v.number(),
+  })
+    .index("by_booking", ["bookingId"])
+    .index("by_user", ["userId"])
+    .index("by_scheduled", ["scheduledFor", "sent"])
+    .index("by_pending", ["sent", "scheduledFor"]),
+
   // =====================================================
   // EDUCATION (EDU)
   // =====================================================
@@ -773,6 +790,67 @@ export default defineSchema({
     .index("by_internship", ["internshipId"])
     .index("by_student", ["studentId"])
     .index("by_week", ["internshipId", "weekNumber"], { unique: true }),
+
+  // EduAnnouncements table (school announcements/communications)
+  eduAnnouncements: defineTable({
+    // School
+    schoolId: v.id("schools"),
+
+    // Creator
+    createdBy: v.string(),
+    createdByName: v.string(),
+    createdByPhoto: v.optional(v.string()),
+
+    // Announcement details
+    title: v.string(),
+    content: v.string(),
+    targetType: v.string(), // 'all', 'students', 'staff', 'specific'
+    targetId: v.optional(v.string()), // User ID for 'specific' targeting
+    priority: v.string(), // 'urgent', 'high', 'normal', 'low'
+    status: v.string(), // 'draft', 'published', 'scheduled', 'archived'
+
+    // Scheduling
+    scheduledFor: v.optional(v.number()), // Timestamp for scheduled announcements
+    publishedAt: v.optional(v.number()),
+    archivedAt: v.optional(v.number()),
+    expiresAt: v.optional(v.number()), // Timestamp for expiration
+
+    // Categorization
+    category: v.optional(v.string()), // 'announcement', 'emergency', 'event', 'reminder', 'news'
+
+    // Media & links
+    attachments: v.optional(v.array(v.string())), // URLs to files/images
+    linkUrl: v.optional(v.string()),
+    linkLabel: v.optional(v.string()),
+
+    // Delivery settings
+    sendPush: v.optional(v.boolean()),
+    sendEmail: v.optional(v.boolean()),
+
+    // Engagement
+    readCount: v.number(),
+
+    // Soft delete
+    deletedAt: v.optional(v.number()),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_school_created", ["schoolId", "createdAt"])
+    .index("by_status", ["status", "createdAt"])
+    .index("by_priority", ["priority", "createdAt"])
+    .index("by_category", ["category", "createdAt"]),
+
+  // EduAnnouncementReads table (read tracking for announcements)
+  eduAnnouncementReads: defineTable({
+    announcementId: v.id("eduAnnouncements"),
+    userId: v.string(),
+    readAt: v.number(),
+  })
+    .index("by_announcement", ["announcementId"])
+    .index("by_user", ["userId"])
+    .index("by_announcement_user", ["announcementId", "userId"], { unique: true }),
 
   // =====================================================
   // MARKETPLACE
@@ -976,6 +1054,197 @@ export default defineSchema({
   })
     .index("by_active", ["isActive", "createdAt"])
     .index("by_priority", ["priority", "createdAt"]),
+
+  // =====================================================
+  // SETTINGS & PREFERENCES
+  // =====================================================
+
+  // User settings (personal preferences)
+  userSettings: defineTable({
+    userId: v.id("users"),
+
+    // Display settings
+    theme: v.optional(v.string()), // 'light', 'dark', 'system'
+    language: v.optional(v.string()), // 'en', 'es', 'fr', etc.
+    timezone: v.optional(v.string()), // IANA timezone
+    dateFormat: v.optional(v.string()), // 'MM/DD/YYYY', 'DD/MM/YYYY', 'YYYY-MM-DD'
+    timeFormat: v.optional(v.string()), // '12h', '24h'
+    currency: v.optional(v.string()), // 'USD', 'EUR', 'GBP', etc.
+    numberFormat: v.optional(v.string()), // '1,000.00', '1.000,00', '1 000.00'
+
+    // Accessibility
+    fontSize: v.optional(v.string()), // 'small', 'medium', 'large', 'xlarge'
+    reducedMotion: v.optional(v.boolean()),
+    highContrast: v.optional(v.boolean()),
+    screenReader: v.optional(v.boolean()),
+
+    // Notifications
+    emailNotifications: v.optional(v.boolean()),
+    pushNotifications: v.optional(v.boolean()),
+    smsNotifications: v.optional(v.boolean()),
+    marketingEmails: v.optional(v.boolean()),
+
+    // Privacy
+    profileVisibility: v.optional(v.string()), // 'public', 'followers', 'private'
+    showEmail: v.optional(v.boolean()),
+    showLocation: v.optional(v.boolean()),
+    showOnlineStatus: v.optional(v.boolean()),
+    allowMessagesFrom: v.optional(v.string()), // 'everyone', 'followers', 'none'
+    allowTagging: v.optional(v.boolean()),
+
+    // Content preferences
+    matureContentFilter: v.optional(v.boolean()),
+    autoPlayVideos: v.optional(v.boolean()),
+    showSensitiveContent: v.optional(v.boolean()),
+
+    // Timestamps
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"], { unique: true }),
+
+  // Notification settings (granular control)
+  notificationSettings: defineTable({
+    userId: v.id("users"),
+
+    // Social notifications
+    newFollower: v.optional(v.boolean()),
+    newComment: v.optional(v.boolean()),
+    newLike: v.optional(v.boolean()),
+    newMention: v.optional(v.boolean()),
+    newShare: v.optional(v.boolean()),
+    newPost: v.optional(v.boolean()),
+
+    // Messenger notifications
+    newMessage: v.optional(v.boolean()),
+    messageRead: v.optional(v.boolean()),
+    typingIndicator: v.optional(v.boolean()),
+
+    // Booking notifications
+    bookingRequest: v.optional(v.boolean()),
+    bookingConfirmed: v.optional(v.boolean()),
+    bookingReminder: v.optional(v.boolean()),
+    bookingCancelled: v.optional(v.boolean()),
+
+    // EDU notifications
+    classAnnouncement: v.optional(v.boolean()),
+    assignmentDue: v.optional(v.boolean()),
+    gradePosted: v.optional(v.boolean()),
+    schoolEvent: v.optional(v.boolean()),
+
+    // Marketplace notifications
+    itemSold: v.optional(v.boolean()),
+    bidReceived: v.optional(v.boolean()),
+    priceDrop: v.optional(v.boolean()),
+
+    // System notifications
+    securityAlert: v.optional(v.boolean()),
+    productUpdate: v.optional(v.boolean()),
+    featureAnnouncement: v.optional(v.boolean()),
+
+    // Timestamp
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"], { unique: true }),
+
+  // Privacy settings (detailed privacy controls)
+  privacySettings: defineTable({
+    userId: v.id("users"),
+
+    // Profile visibility
+    whoCanViewProfile: v.optional(v.string()), // 'everyone', 'followers', 'mutual', 'none'
+    whoCanSendMessage: v.optional(v.string()), // 'everyone', 'followers', 'mutual', 'none'
+    whoCanSeeActivity: v.optional(v.string()), // 'everyone', 'followers', 'private'
+    whoCanSeeFollowers: v.optional(v.string()), // 'everyone', 'followers', 'private'
+    whoCanSeeFollowing: v.optional(v.string()), // 'everyone', 'followers', 'private'
+
+    // Content visibility
+    defaultPostVisibility: v.optional(v.string()), // 'public', 'followers', 'private'
+    showOnlineStatus: v.optional(v.boolean()),
+    showLastSeen: v.optional(v.boolean()),
+    showPresence: v.optional(v.boolean()),
+
+    // Data controls
+    allowDataCollection: v.optional(v.boolean()),
+    allowPersonalizedAds: v.optional(v.boolean()),
+    allowSearchEngines: v.optional(v.boolean()),
+
+    // Blocking
+    blockedUsers: v.optional(v.array(v.id("users"))),
+    mutedUsers: v.optional(v.array(v.id("users"))),
+    restrictedWords: v.optional(v.array(v.string())),
+
+    // Two-factor authentication
+    twoFactorEnabled: v.optional(v.boolean()),
+    twoFactorMethod: v.optional(v.string()), // 'sms', 'email', 'app'
+
+    // Timestamp
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"], { unique: true }),
+
+  // Security settings (account security)
+  securitySettings: defineTable({
+    userId: v.id("users"),
+
+    // Login security
+    twoFactorEnabled: v.optional(v.boolean()),
+    twoFactorSecret: v.optional(v.string()),
+    backupCodes: v.optional(v.array(v.string())),
+    loginNotifications: v.optional(v.boolean()),
+
+    // Session management
+    sessionTimeout: v.optional(v.number()), // minutes
+    maxSessions: v.optional(v.number()), // max concurrent sessions
+    rememberDevice: v.optional(v.boolean()),
+
+    // Password requirements
+    lastPasswordChange: v.optional(v.number()),
+    passwordExpiresIn: v.optional(v.number()), // days, 0 = never
+    requirePasswordChange: v.optional(v.boolean()),
+
+    // Login history
+    lastLoginAt: v.optional(v.number()),
+    lastLoginIp: v.optional(v.string()),
+    lastLoginLocation: v.optional(v.string()),
+    failedLoginAttempts: v.optional(v.number()),
+    accountLocked: v.optional(v.boolean()),
+    accountLockedUntil: v.optional(v.number()),
+
+    // Recovery
+    recoveryEmail: v.optional(v.string()),
+    recoveryPhone: v.optional(v.string()),
+    recoveryEmailVerified: v.optional(v.boolean()),
+    recoveryPhoneVerified: v.optional(v.boolean()),
+
+    // Security preferences
+    logoutOnNewDevice: v.optional(v.boolean()),
+    verifyNewDevice: v.optional(v.boolean()),
+    securityQuestions: v.optional(v.array(v.object({
+      question: v.string(),
+      answerHash: v.string(),
+    }))),
+
+    // Timestamp
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"], { unique: true }),
+
+  // Application settings (platform-wide settings)
+  appSettings: defineTable({
+    key: v.string(),
+    value: v.any(),
+
+    // Metadata
+    category: v.optional(v.string()), // 'general', 'features', 'limits', 'integrations'
+    description: v.optional(v.string()),
+    isPublic: v.optional(v.boolean()), // Whether non-admin users can read
+
+    // Timestamps
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.id("users")),
+  })
+    .index("by_key", ["key"], { unique: true })
+    .index("by_category", ["category"]),
 
   // System configuration
   systemConfig: defineTable({

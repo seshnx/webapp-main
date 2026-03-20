@@ -5,11 +5,12 @@
  * that reuses existing EDU dashboard components.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { GraduationCap, BookOpen, Users, Calendar } from 'lucide-react';
 import type { DashboardProps, EDUDashboardData } from '../../../types/dashboard';
 import { StatsCard } from '../widgets/StatsCard';
+import { useClassesBySchool, useEnrollmentsByStudent, useUnreadEduAnnouncements, useStudentByUserId, useStaffByUserId } from '../../../hooks/useConvex';
 
 interface EDUDashboardProps extends DashboardProps {
   eduRole?: 'EDUAdmin' | 'EDUStaff' | 'Student' | 'Intern';
@@ -22,26 +23,68 @@ export function EDUDashboard({ userData, eduRole, className = '' }: EDUDashboard
     t.startsWith('EDU') || t === 'Student' || t === 'Intern'
   ) as any) || 'Student';
 
-  // Mock data - in production, this would come from EDU-specific services
-  const data: EDUDashboardData = {
-    activeCourses: role === 'Student' ? 4 : 12,
-    enrolledStudents: role === 'Student' ? 0 : 156,
-    upcomingClasses: [
-      {
-        id: '1',
-        courseName: 'Music Production 101',
-        startTime: new Date('2026-03-10T10:00:00'),
-        enrolled: 24
-      },
-      {
-        id: '2',
-        courseName: 'Advanced Mixing',
-        startTime: new Date('2026-03-10T14:00:00'),
-        enrolled: 18
-      }
-    ],
-    assignmentsPending: role === 'Student' ? 3 : 15
-  };
+  // Get school ID from userData
+  const schoolId = userData?.schoolId;
+
+  // Fetch real data from Convex
+  const { data: classes } = useClassesBySchool(schoolId, 'active');
+
+  // For students, get their enrollments
+  const isStudent = role === 'Student' || role === 'Intern';
+  const { data: studentProfile } = useStudentByUserId(userData?.userId || '');
+  const { data: enrollments } = useEnrollmentsByStudent(studentProfile?._id, 'active');
+
+  // For staff, get staff profile and unread announcements
+  const { data: staffProfile } = useStaffByUserId(userData?.userId || '');
+  const userType = isStudent ? 'student' : 'staff';
+  const { data: unreadAnnouncements } = useUnreadEduAnnouncements(
+    userData?.userId || '',
+    schoolId,
+    userType
+  );
+
+  // Calculate real dashboard data
+  const data: EDUDashboardData = useMemo(() => {
+    // Get today's classes (classes scheduled for today)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const upcomingClasses = (classes || [])
+      .filter(cls => {
+        const classDate = new Date(cls.startTime);
+        return classDate >= today && classDate < tomorrow;
+      })
+      .map(cls => ({
+        id: cls._id,
+        courseName: cls.name,
+        startTime: new Date(cls.startTime),
+        enrolled: cls.enrolledCount || 0
+      }))
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
+      .slice(0, 5);
+
+    // Active courses count
+    const activeCourses = isStudent
+      ? (enrollments || []).length
+      : (classes || []).filter(c => c.status === 'active').length;
+
+    // Enrolled students (for staff) or 0 for students
+    const enrolledStudents = isStudent
+      ? 0
+      : (classes || []).reduce((sum, cls) => sum + (cls.enrolledCount || 0), 0);
+
+    // Assignments/announcements pending
+    const assignmentsPending = (unreadAnnouncements || []).length;
+
+    return {
+      activeCourses,
+      enrolledStudents,
+      upcomingClasses,
+      assignmentsPending
+    };
+  }, [classes, enrollments, unreadAnnouncements, isStudent, role]);
 
   return (
     <div className={`space-y-6 ${className}`}>

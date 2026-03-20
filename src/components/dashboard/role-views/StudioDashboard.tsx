@@ -5,13 +5,18 @@
  * room utilization, equipment alerts, and technician availability.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, AlertTriangle, Users, Wrench, Clock, TrendingUp } from 'lucide-react';
 import type { DashboardProps, RoleMetric, QuickAction, StudioDashboardData } from '../../../types/dashboard';
 import { StatsCard } from '../widgets/StatsCard';
 import { RoleMetrics } from '../sections/RoleMetrics';
 import { QuickActions } from '../sections/QuickActions';
+import {
+  useBookingsByStudio,
+  useUpcomingBookings,
+  useRoomsByStudio
+} from '../../../hooks/useConvex';
 
 interface StudioDashboardProps extends DashboardProps {
   subProfiles?: Record<string, any>;
@@ -19,25 +24,68 @@ interface StudioDashboardProps extends DashboardProps {
 }
 
 export function StudioDashboard({ userData, subProfiles, className = '' }: StudioDashboardProps) {
-  const [data, setStudioData] = useState<StudioDashboardData>({
-    todayBookings: [],
-    roomUtilization: 0,
-    pendingMaintenance: [],
-    availableTechs: []
-  });
+  // Get studio ID from subProfiles
+  const studioId = subProfiles?.Studio?.studioId;
 
-  const [metrics, setMetrics] = useState<RoleMetric[]>([
+  // Fetch real data from Convex
+  const { data: allBookings } = useBookingsByStudio(studioId);
+  const { data: upcomingBookings } = useUpcomingBookings(userData?.userId || '', 10);
+  const { data: rooms } = useRoomsByStudio(studioId);
+
+  // Calculate real dashboard data
+  const data: StudioDashboardData = useMemo(() => {
+    // Get today's bookings
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayBookings = (allBookings || [])
+      .filter(booking => {
+        const bookingDate = new Date(booking.startTime);
+        return bookingDate >= today && bookingDate < tomorrow;
+      })
+      .map(booking => ({
+        id: booking._id,
+        startTime: new Date(booking.startTime),
+        endTime: new Date(booking.endTime),
+        clientName: booking.clientName || 'Client',
+        roomName: booking.roomName || 'Studio',
+        status: booking.status
+      }))
+      .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+    // Calculate room utilization
+    const totalRooms = (rooms || []).length;
+    const bookedRooms = new Set(todayBookings.map(b => b.roomId)).size;
+    const roomUtilization = totalRooms > 0 ? Math.round((bookedRooms / totalRooms) * 100) : 0;
+
+    // Pending maintenance (TODO: connect to maintenance system when implemented)
+    const pendingMaintenance: any[] = [];
+
+    // Available technicians (TODO: connect to technician availability when implemented)
+    const availableTechs: any[] = [];
+
+    return {
+      todayBookings,
+      roomUtilization,
+      pendingMaintenance,
+      availableTechs
+    };
+  }, [allBookings, rooms]);
+
+  const metrics: RoleMetric[] = useMemo(() => [
     {
       id: 'today-bookings',
       label: "Today's Bookings",
-      value: 0,
+      value: data.todayBookings.length,
       icon: Calendar,
       color: 'blue'
     },
     {
       id: 'utilization',
       label: 'Room Utilization',
-      value: '0%',
+      value: `${data.roomUtilization}%`,
       trend: 'up',
       trendPercentage: 5,
       icon: TrendingUp,
@@ -46,18 +94,18 @@ export function StudioDashboard({ userData, subProfiles, className = '' }: Studi
     {
       id: 'maintenance',
       label: 'Pending Maintenance',
-      value: 0,
+      value: data.pendingMaintenance.length,
       icon: Wrench,
       color: 'amber'
     },
     {
       id: 'available-techs',
       label: 'Available Technicians',
-      value: 0,
+      value: data.availableTechs.length,
       icon: Users,
       color: 'purple'
     }
-  ]);
+  ], [data]);
 
   const quickActions: QuickAction[] = [
     {
@@ -85,63 +133,6 @@ export function StudioDashboard({ userData, subProfiles, className = '' }: Studi
       roles: ['Studio', '*']
     }
   ];
-
-  // TODO: Fetch actual data from Neon/MongoDB
-  useEffect(() => {
-    // This will be replaced with actual data fetching
-    // For now, using mock data
-    const rooms = subProfiles?.Studio?.rooms || [];
-
-    setStudioData({
-      todayBookings: [
-        {
-          id: '1',
-          startTime: new Date('2026-03-10T10:00:00'),
-          endTime: new Date('2026-03-10T14:00:00'),
-          clientName: 'John Doe',
-          roomName: 'Studio A',
-          status: 'Confirmed'
-        },
-        {
-          id: '2',
-          startTime: new Date('2026-03-10T15:00:00'),
-          endTime: new Date('2026-03-10T18:00:00'),
-          clientName: 'Jane Smith',
-          roomName: 'Studio B',
-          status: 'Confirmed'
-        }
-      ],
-      roomUtilization: 78,
-      pendingMaintenance: [
-        {
-          id: '1',
-          equipment: 'Neumann U87 Microphone',
-          priority: 'high',
-          reportedDate: new Date('2026-03-09')
-        }
-      ],
-      availableTechs: [
-        {
-          id: '1',
-          name: 'Mike Johnson',
-          specialties: ['Recording', 'Mixing']
-        },
-        {
-          id: '2',
-          name: 'Sarah Williams',
-          specialties: ['Mastering', 'Production']
-        }
-      ]
-    });
-
-    setMetrics(prev => prev.map(m => {
-      if (m.id === 'today-bookings') return { ...m, value: 2 };
-      if (m.id === 'utilization') return { ...m, value: '78%', previousValue: '73%' };
-      if (m.id === 'maintenance') return { ...m, value: 1 };
-      if (m.id === 'available-techs') return { ...m, value: 2 };
-      return m;
-    }));
-  }, [subProfiles]);
 
   return (
     <div className={`space-y-6 ${className}`}>

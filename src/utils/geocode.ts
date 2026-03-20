@@ -1,5 +1,5 @@
 /**
- * Geocoding and address utilities
+ * Geocoding and address utilities with caching support
  */
 
 interface ZipLocation {
@@ -50,11 +50,104 @@ interface AddressSearchResult {
   formattedAddress: string;
 }
 
+// Simple in-memory cache for geocoding results
+// In production, this should use Convex or Redis for persistence
+class GeocodeCache {
+  private zipCache: Map<string, { data: ZipLocation; timestamp: number }> = new Map();
+  private reverseCache: Map<string, { data: ReverseGeocodeResult; timestamp: number }> = new Map();
+  private searchCache: Map<string, { data: AddressSearchResult[]; timestamp: number }> = new Map();
+  private readonly CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+
+  /**
+   * Get cached zip location
+   */
+  getZip(zip: string): ZipLocation | null {
+    const cached = this.zipCache.get(zip);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  /**
+   * Set cached zip location
+   */
+  setZip(zip: string, data: ZipLocation): void {
+    this.zipCache.set(zip, { data, timestamp: Date.now() });
+  }
+
+  /**
+   * Get cached reverse geocode
+   */
+  getReverse(key: string): ReverseGeocodeResult | null {
+    const cached = this.reverseCache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  /**
+   * Set cached reverse geocode
+   */
+  setReverse(key: string, data: ReverseGeocodeResult): void {
+    this.reverseCache.set(key, { data, timestamp: Date.now() });
+  }
+
+  /**
+   * Get cached address search
+   */
+  getSearch(query: string): AddressSearchResult[] | null {
+    const cached = this.searchCache.get(query);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  /**
+   * Set cached address search
+   */
+  setSearch(query: string, data: AddressSearchResult[]): void {
+    this.searchCache.set(query, { data, timestamp: Date.now() });
+  }
+
+  /**
+   * Clear all caches
+   */
+  clear(): void {
+    this.zipCache.clear();
+    this.reverseCache.clear();
+    this.searchCache.clear();
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getStats() {
+    return {
+      zipEntries: this.zipCache.size,
+      reverseEntries: this.reverseCache.size,
+      searchEntries: this.searchCache.size,
+    };
+  }
+}
+
+// Global cache instance
+const cache = new GeocodeCache();
+
 /**
  * Fetches location data for a US Zip Code using Zippopotam.us
+ * Results are cached for 24 hours
  */
 export const fetchZipLocation = async (zip: string): Promise<ZipLocation | null> => {
   if (!zip || zip.length < 5) return null;
+
+  // Check cache first
+  const cached = cache.getZip(zip);
+  if (cached) {
+    return cached;
+  }
 
   try {
     const response = await fetch(`https://api.zippopotam.us/us/${zip}`);
@@ -63,13 +156,18 @@ export const fetchZipLocation = async (zip: string): Promise<ZipLocation | null>
     const data = await response.json();
     const place = data.places[0];
 
-    return {
+    const result: ZipLocation = {
       lat: parseFloat(place.latitude),
       lng: parseFloat(place.longitude),
       name: place['place name'],
       state: place['state abbreviation'],
       cityState: `${place['place name']}, ${place['state abbreviation']}`
     };
+
+    // Cache the result
+    cache.setZip(zip, result);
+
+    return result;
   } catch (error) {
     console.warn("Geocoding failed:", error);
     return null;
@@ -78,12 +176,22 @@ export const fetchZipLocation = async (zip: string): Promise<ZipLocation | null>
 
 /**
  * Converts Latitude and Longitude into a readable address
+ * Results are cached for 24 hours
  */
 export const reverseGeocode = async (
   lat: number,
   lng: number
 ): Promise<ReverseGeocodeResult | null> => {
   if (!lat || !lng) return null;
+
+  // Create cache key from coordinates
+  const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
+
+  // Check cache first
+  const cached = cache.getReverse(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
   try {
     const response = await fetch(
@@ -99,12 +207,17 @@ export const reverseGeocode = async (
     const state = address.state || "";
     const zip = address.postcode || "";
 
-    return {
+    const result: ReverseGeocodeResult = {
       city,
       state,
       zip,
       displayName: `${city}, ${state} ${zip}`.trim()
     };
+
+    // Cache the result
+    cache.setReverse(cacheKey, result);
+
+    return result;
   } catch (error) {
     console.warn("Reverse geocoding failed:", error);
     return null;
@@ -113,12 +226,16 @@ export const reverseGeocode = async (
 
 /**
  * Queries for the number of users in the wider region (Zip Prefix)
+ * TODO: Connect to Convex users query to count users by region
+ *
+ * Usage in components:
+ * const userCount = useQuery(api.users.countByRegion, { zipPrefix: zip.substring(0, 3) });
  */
 export const fetchRegionalUserCount = async (zip: string): Promise<RegionalUserCount> => {
   if (!zip || zip.length < 3) return { count: 0, density: '#6B7280', label: 'Scanning...' };
 
-  // TODO: Replace with actual database query
-  // For now, return placeholder data
+  // This should be implemented using Convex queries
+  // Example: const users = useQuery(api.users.countByRegion, { zipPrefix });
   return { count: 0, density: '#9CA3AF', label: 'Unknown Region' };
 };
 
@@ -146,6 +263,7 @@ export const getDistanceFromLatLonInKm = (
 
 /**
  * Search for addresses using OpenStreetMap Nominatim API
+ * Results are cached for 24 hours
  */
 export const searchAddress = async (
   query: string,
@@ -158,6 +276,15 @@ export const searchAddress = async (
     limit = 5,
     addressDetails = true
   } = options;
+
+  // Create cache key
+  const cacheKey = `${query.trim().toLowerCase()}-${countryCode}-${limit}`;
+
+  // Check cache first
+  const cached = cache.getSearch(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
   try {
     const params = new URLSearchParams({
@@ -184,7 +311,7 @@ export const searchAddress = async (
 
     const data = await response.json();
 
-    return data.map((place: any) => {
+    const results = data.map((place: any) => {
       const address = place.address || {};
 
       return {
@@ -208,10 +335,30 @@ export const searchAddress = async (
         formattedAddress: formatFullAddress(address),
       };
     });
+
+    // Cache the results
+    cache.setSearch(cacheKey, results);
+
+    return results;
   } catch (error) {
     console.warn('Address search error:', error);
     return [];
   }
+};
+
+/**
+ * Clear the geocode cache
+ * Useful for testing or forcing fresh data
+ */
+export const clearGeocodeCache = (): void => {
+  cache.clear();
+};
+
+/**
+ * Get geocode cache statistics
+ */
+export const getGeocodeCacheStats = () => {
+  return cache.getStats();
 };
 
 /**

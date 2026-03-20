@@ -1,33 +1,33 @@
 import { query, mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { v } from "convex-values";
 
 // =============================================================================
-// BROADCASTS
+// EDU ANNOUNCEMENTS (School Communication System)
 // =============================================================================
 
-export const getBroadcasts = query({
+export const getEduAnnouncements = query({
   args: {},
   handler: async (ctx) => {
-    const broadcasts = await ctx.db
-      .query("broadcasts")
+    const announcements = await ctx.db
+      .query("eduAnnouncements")
       .withIndex("by_school_created")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .collect();
 
-    return broadcasts;
+    return announcements;
   },
 });
 
-export const getBroadcastById = query({
-  args: { broadcastId: v.id("broadcasts") },
+export const getEduAnnouncementById = query({
+  args: { announcementId: v.id("eduAnnouncements") },
   handler: async (ctx, args) => {
-    const broadcast = await ctx.db.get(args.broadcastId);
-    if (!broadcast || broadcast.deletedAt) return null;
-    return broadcast;
+    const announcement = await ctx.db.get(args.announcementId);
+    if (!announcement || announcement.deletedAt) return null;
+    return announcement;
   },
 });
 
-export const getBroadcastsBySchool = query({
+export const getEduAnnouncementsBySchool = query({
   args: {
     schoolId: v.id("schools"),
     status: v.optional(v.string()),
@@ -35,7 +35,7 @@ export const getBroadcastsBySchool = query({
   },
   handler: async (ctx, args) => {
     let q = ctx.db
-      .query("broadcasts")
+      .query("eduAnnouncements")
       .withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId));
 
     if (args.status) {
@@ -44,20 +44,20 @@ export const getBroadcastsBySchool = query({
       q = q.filter((q) => q.eq(q.field("deletedAt"), undefined));
     }
 
-    let broadcasts = await q.collect();
+    let announcements = await q.collect();
 
     // Sort by created date (newest first)
-    broadcasts.sort((a, b) => b.createdAt - a.createdAt);
+    announcements.sort((a, b) => b.createdAt - a.createdAt);
 
     if (args.limit) {
-      broadcasts = broadcasts.slice(0, args.limit);
+      announcements = announcements.slice(0, args.limit);
     }
 
-    return broadcasts;
+    return announcements;
   },
 });
 
-export const getBroadcastsByTarget = query({
+export const getEduAnnouncementsByTarget = query({
   args: {
     schoolId: v.id("schools"),
     targetType: v.string(), // 'all', 'students', 'staff', 'specific'
@@ -67,29 +67,29 @@ export const getBroadcastsByTarget = query({
   },
   handler: async (ctx, args) => {
     let q = ctx.db
-      .query("broadcasts")
+      .query("eduAnnouncements")
       .withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId));
 
-    let broadcasts = await q.collect();
+    let announcements = await q.collect();
 
     // Filter by target type
-    broadcasts = broadcasts.filter((b) => {
-      if (b.targetType === "all") return true;
-      if (b.targetType === args.targetType) return true;
-      if (b.targetType === "specific" && b.targetId === args.targetId) return true;
+    announcements = announcements.filter((a) => {
+      if (a.targetType === "all") return true;
+      if (a.targetType === args.targetType) return true;
+      if (a.targetType === "specific" && a.targetId === args.targetId) return true;
       return false;
     });
 
     // Filter by status if provided
     if (args.status) {
-      broadcasts = broadcasts.filter((b) => b.status === args.status);
+      announcements = announcements.filter((a) => a.status === args.status);
     }
 
     // Filter out deleted
-    broadcasts = broadcasts.filter((b) => !b.deletedAt);
+    announcements = announcements.filter((a) => !a.deletedAt);
 
     // Sort by priority and created date
-    broadcasts.sort((a, b) => {
+    announcements.sort((a, b) => {
       const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
       const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 2;
       const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 2;
@@ -102,21 +102,21 @@ export const getBroadcastsByTarget = query({
     });
 
     if (args.limit) {
-      broadcasts = broadcasts.slice(0, args.limit);
+      announcements = announcements.slice(0, args.limit);
     }
 
-    return broadcasts;
+    return announcements;
   },
 });
 
-export const getScheduledBroadcasts = query({
+export const getScheduledEduAnnouncements = query({
   args: {
     schoolId: v.optional(v.id("schools")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    let q = ctx.db.query("broadcasts");
+    let q = ctx.db.query("eduAnnouncements");
 
     if (args.schoolId) {
       q = q.withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId));
@@ -124,7 +124,7 @@ export const getScheduledBroadcasts = query({
       q = q.withIndex("by_school_created");
     }
 
-    const broadcasts = await q
+    const announcements = await q
       .filter((q) =>
         q.and(
           q.eq(q.field("status"), "scheduled"),
@@ -135,21 +135,21 @@ export const getScheduledBroadcasts = query({
       .collect();
 
     // Sort by scheduled date
-    broadcasts.sort((a, b) => a.scheduledFor! - b.scheduledFor!);
+    announcements.sort((a, b) => a.scheduledFor! - b.scheduledFor!);
 
-    return broadcasts;
+    return announcements;
   },
 });
 
-export const getActiveBroadcasts = query({
+export const getActiveEduAnnouncements = query({
   args: {
     schoolId: v.id("schools"),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    const broadcasts = await ctx.db
-      .query("broadcasts")
+    const announcements = await ctx.db
+      .query("eduAnnouncements")
       .withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId))
       .filter((q) =>
         q.and(
@@ -164,7 +164,7 @@ export const getActiveBroadcasts = query({
       .collect();
 
     // Sort by priority and created date
-    broadcasts.sort((a, b) => {
+    announcements.sort((a, b) => {
       const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
       const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 2;
       const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 2;
@@ -176,54 +176,54 @@ export const getActiveBroadcasts = query({
       return b.createdAt - a.createdAt;
     });
 
-    return broadcasts;
+    return announcements;
   },
 });
 
-export const getDraftBroadcasts = query({
+export const getDraftEduAnnouncements = query({
   args: {
     schoolId: v.id("schools"),
     createdBy: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let q = ctx.db
-      .query("broadcasts")
+      .query("eduAnnouncements")
       .withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId));
 
-    let broadcasts = await q.collect();
+    let announcements = await q.collect();
 
-    broadcasts = broadcasts.filter((b) =>
-      b.status === "draft" &&
-      !b.deletedAt &&
-      (!args.createdBy || b.createdBy === args.createdBy)
+    announcements = announcements.filter((a) =>
+      a.status === "draft" &&
+      !a.deletedAt &&
+      (!args.createdBy || a.createdBy === args.createdBy)
     );
 
     // Sort by created date (newest first)
-    broadcasts.sort((a, b) => b.createdAt - a.createdAt);
+    announcements.sort((a, b) => b.createdAt - a.createdAt);
 
-    return broadcasts;
+    return announcements;
   },
 });
 
-export const searchBroadcasts = query({
+export const searchEduAnnouncements = query({
   args: {
     schoolId: v.id("schools"),
     searchQuery: v.string(),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const allBroadcasts = await ctx.db
-      .query("broadcasts")
+    const allAnnouncements = await ctx.db
+      .query("eduAnnouncements")
       .withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId))
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .collect();
 
     const query = args.searchQuery.toLowerCase();
-    const filtered = allBroadcasts.filter(
-      (b) =>
-        b.title.toLowerCase().includes(query) ||
-        b.content.toLowerCase().includes(query) ||
-        b.createdByName?.toLowerCase().includes(query)
+    const filtered = allAnnouncements.filter(
+      (a) =>
+        a.title.toLowerCase().includes(query) ||
+        a.content.toLowerCase().includes(query) ||
+        a.createdByName?.toLowerCase().includes(query)
     );
 
     if (args.limit) {
@@ -234,7 +234,7 @@ export const searchBroadcasts = query({
   },
 });
 
-export const createBroadcast = mutation({
+export const createEduAnnouncement = mutation({
   args: {
     schoolId: v.id("schools"),
     createdBy: v.string(),
@@ -246,7 +246,7 @@ export const createBroadcast = mutation({
     targetId: v.optional(v.string()), // User ID for 'specific' targeting
     priority: v.optional(v.string()), // 'urgent', 'high', 'normal', 'low'
     status: v.optional(v.string()), // 'draft', 'published', 'scheduled', 'archived'
-    scheduledFor: v.optional(v.number()), // Timestamp for scheduled broadcasts
+    scheduledFor: v.optional(v.number()), // Timestamp for scheduled announcements
     expiresAt: v.optional(v.number()), // Timestamp for expiration
     category: v.optional(v.string()), // 'announcement', 'emergency', 'event', 'reminder', 'news'
     attachments: v.optional(v.array(v.string())), // URLs to files/images
@@ -258,7 +258,7 @@ export const createBroadcast = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    const broadcastId = await ctx.db.insert("broadcasts", {
+    const announcementId = await ctx.db.insert("eduAnnouncements", {
       ...args,
       priority: args.priority || "normal",
       status: args.status || "draft",
@@ -267,13 +267,13 @@ export const createBroadcast = mutation({
       updatedAt: now,
     });
 
-    return { success: true, broadcastId };
+    return { success: true, announcementId };
   },
 });
 
-export const updateBroadcast = mutation({
+export const updateEduAnnouncement = mutation({
   args: {
-    broadcastId: v.id("broadcasts"),
+    announcementId: v.id("eduAnnouncements"),
     title: v.optional(v.string()),
     content: v.optional(v.string()),
     targetType: v.optional(v.string()),
@@ -290,14 +290,14 @@ export const updateBroadcast = mutation({
     sendEmail: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { broadcastId, ...updates } = args;
-    const broadcast = await ctx.db.get(broadcastId);
+    const { announcementId, ...updates } = args;
+    const announcement = await ctx.db.get(announcementId);
 
-    if (!broadcast) {
-      throw new Error("Broadcast not found");
+    if (!announcement) {
+      throw new Error("Announcement not found");
     }
 
-    await ctx.db.patch(broadcastId, {
+    await ctx.db.patch(announcementId, {
       ...updates,
       updatedAt: Date.now(),
     });
@@ -306,20 +306,20 @@ export const updateBroadcast = mutation({
   },
 });
 
-export const publishBroadcast = mutation({
+export const publishEduAnnouncement = mutation({
   args: {
-    broadcastId: v.id("broadcasts"),
+    announcementId: v.id("eduAnnouncements"),
     publishImmediately: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const broadcast = await ctx.db.get(args.broadcastId);
+    const announcement = await ctx.db.get(args.announcementId);
 
-    if (!broadcast) {
-      throw new Error("Broadcast not found");
+    if (!announcement) {
+      throw new Error("Announcement not found");
     }
 
-    if (broadcast.status === "published") {
-      throw new Error("Broadcast is already published");
+    if (announcement.status === "published") {
+      throw new Error("Announcement is already published");
     }
 
     const now = Date.now();
@@ -330,26 +330,26 @@ export const publishBroadcast = mutation({
     };
 
     // If scheduled, keep as scheduled until time comes
-    if (broadcast.scheduledFor && broadcast.scheduledFor > now && !args.publishImmediately) {
+    if (announcement.scheduledFor && announcement.scheduledFor > now && !args.publishImmediately) {
       updates.status = "scheduled";
     }
 
-    await ctx.db.patch(args.broadcastId, updates);
+    await ctx.db.patch(args.announcementId, updates);
 
     return { success: true };
   },
 });
 
-export const archiveBroadcast = mutation({
-  args: { broadcastId: v.id("broadcasts") },
+export const archiveEduAnnouncement = mutation({
+  args: { announcementId: v.id("eduAnnouncements") },
   handler: async (ctx, args) => {
-    const broadcast = await ctx.db.get(args.broadcastId);
+    const announcement = await ctx.db.get(args.announcementId);
 
-    if (!broadcast) {
-      throw new Error("Broadcast not found");
+    if (!announcement) {
+      throw new Error("Announcement not found");
     }
 
-    await ctx.db.patch(args.broadcastId, {
+    await ctx.db.patch(args.announcementId, {
       status: "archived",
       archivedAt: Date.now(),
       updatedAt: Date.now(),
@@ -359,17 +359,17 @@ export const archiveBroadcast = mutation({
   },
 });
 
-export const deleteBroadcast = mutation({
-  args: { broadcastId: v.id("broadcasts") },
+export const deleteEduAnnouncement = mutation({
+  args: { announcementId: v.id("eduAnnouncements") },
   handler: async (ctx, args) => {
-    const broadcast = await ctx.db.get(args.broadcastId);
+    const announcement = await ctx.db.get(args.announcementId);
 
-    if (!broadcast) {
-      throw new Error("Broadcast not found");
+    if (!announcement) {
+      throw new Error("Announcement not found");
     }
 
     // Soft delete
-    await ctx.db.patch(args.broadcastId, {
+    await ctx.db.patch(args.announcementId, {
       deletedAt: Date.now(),
     });
 
@@ -379,21 +379,21 @@ export const deleteBroadcast = mutation({
 
 export const incrementReadCount = mutation({
   args: {
-    broadcastId: v.id("broadcasts"),
+    announcementId: v.id("eduAnnouncements"),
     userId: v.string(),
   },
   handler: async (ctx, args) => {
-    const broadcast = await ctx.db.get(args.broadcastId);
+    const announcement = await ctx.db.get(args.announcementId);
 
-    if (!broadcast) {
-      throw new Error("Broadcast not found");
+    if (!announcement) {
+      throw new Error("Announcement not found");
     }
 
-    // Check if user already read this broadcast
+    // Check if user already read this announcement
     const existingRead = await ctx.db
-      .query("broadcastReads")
-      .withIndex("by_broadcast_user", (q) =>
-        q.eq("broadcastId", args.broadcastId).eq("userId", args.userId)
+      .query("eduAnnouncementReads")
+      .withIndex("by_announcement_user", (q) =>
+        q.eq("announcementId", args.announcementId).eq("userId", args.userId)
       )
       .first();
 
@@ -403,32 +403,32 @@ export const incrementReadCount = mutation({
     }
 
     // Mark as read
-    await ctx.db.insert("broadcastReads", {
-      broadcastId: args.broadcastId,
+    await ctx.db.insert("eduAnnouncementReads", {
+      announcementId: args.announcementId,
       userId: args.userId,
       readAt: Date.now(),
     });
 
     // Increment read count
-    await ctx.db.patch(args.broadcastId, {
-      readCount: (broadcast.readCount || 0) + 1,
+    await ctx.db.patch(args.announcementId, {
+      readCount: (announcement.readCount || 0) + 1,
     });
 
     return { success: true, alreadyRead: false };
   },
 });
 
-export const markBroadcastAsRead = mutation({
+export const markEduAnnouncementAsRead = mutation({
   args: {
-    broadcastId: v.id("broadcasts"),
+    announcementId: v.id("eduAnnouncements"),
     userId: v.string(),
   },
   handler: async (ctx, args) => {
     // Check if already read
     const existingRead = await ctx.db
-      .query("broadcastReads")
-      .withIndex("by_broadcast_user", (q) =>
-        q.eq("broadcastId", args.broadcastId).eq("userId", args.userId)
+      .query("eduAnnouncementReads")
+      .withIndex("by_announcement_user", (q) =>
+        q.eq("announcementId", args.announcementId).eq("userId", args.userId)
       )
       .first();
 
@@ -437,8 +437,8 @@ export const markBroadcastAsRead = mutation({
     }
 
     // Mark as read
-    await ctx.db.insert("broadcastReads", {
-      broadcastId: args.broadcastId,
+    await ctx.db.insert("eduAnnouncementReads", {
+      announcementId: args.announcementId,
       userId: args.userId,
       readAt: Date.now(),
     });
@@ -447,15 +447,15 @@ export const markBroadcastAsRead = mutation({
   },
 });
 
-export const getBroadcastReads = query({
+export const getEduAnnouncementReads = query({
   args: {
-    broadcastId: v.id("broadcasts"),
+    announcementId: v.id("eduAnnouncements"),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     let q = ctx.db
-      .query("broadcastReads")
-      .withIndex("by_broadcast", (q) => q.eq("broadcastId", args.broadcastId));
+      .query("eduAnnouncementReads")
+      .withIndex("by_announcement", (q) => q.eq("announcementId", args.announcementId));
 
     let reads = await q.collect();
 
@@ -470,7 +470,7 @@ export const getBroadcastReads = query({
   },
 });
 
-export const getUserReadBroadcasts = query({
+export const getUserReadEduAnnouncements = query({
   args: {
     userId: v.string(),
     schoolId: v.optional(v.id("schools")),
@@ -478,38 +478,38 @@ export const getUserReadBroadcasts = query({
   },
   handler: async (ctx, args) => {
     let q = ctx.db
-      .query("broadcastReads")
+      .query("eduAnnouncementReads")
       .withIndex("by_user", (q) => q.eq("userId", args.userId));
 
     let reads = await q.collect();
 
-    // Get broadcast details
-    const broadcasts = await Promise.all(
+    // Get announcement details
+    const announcements = await Promise.all(
       reads.map(async (read) => {
-        const broadcast = await ctx.db.get(read.broadcastId);
-        if (!broadcast || broadcast.deletedAt) return null;
-        if (args.schoolId && broadcast.schoolId !== args.schoolId) return null;
+        const announcement = await ctx.db.get(read.announcementId);
+        if (!announcement || announcement.deletedAt) return null;
+        if (args.schoolId && announcement.schoolId !== args.schoolId) return null;
         return {
           ...read,
-          broadcast,
+          announcement,
         };
       })
     );
 
-    const validBroadcasts = broadcasts.filter((b) => b !== null);
+    const validAnnouncements = announcements.filter((a) => a !== null);
 
     // Sort by read date
-    validBroadcasts.sort((a, b) => b!.readAt - a!.readAt);
+    validAnnouncements.sort((a, b) => b!.readAt - a!.readAt);
 
     if (args.limit) {
-      return validBroadcasts.slice(0, args.limit);
+      return validAnnouncements.slice(0, args.limit);
     }
 
-    return validBroadcasts;
+    return validAnnouncements;
   },
 });
 
-export const getUnreadBroadcasts = query({
+export const getUnreadEduAnnouncements = query({
   args: {
     userId: v.string(),
     schoolId: v.id("schools"),
@@ -518,9 +518,9 @@ export const getUnreadBroadcasts = query({
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    // Get all published broadcasts for this school
-    const allBroadcasts = await ctx.db
-      .query("broadcasts")
+    // Get all published announcements for this school
+    const allAnnouncements = await ctx.db
+      .query("eduAnnouncements")
       .withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId))
       .filter((q) =>
         q.and(
@@ -534,29 +534,29 @@ export const getUnreadBroadcasts = query({
       )
       .collect();
 
-    // Get broadcasts that target this user
-    const targetedBroadcasts = allBroadcasts.filter((broadcast) => {
-      if (broadcast.targetType === "all") return true;
-      if (broadcast.targetType === args.userType) return true;
-      if (broadcast.targetType === "specific" && broadcast.targetId === args.userId) return true;
+    // Get announcements that target this user
+    const targetedAnnouncements = allAnnouncements.filter((announcement) => {
+      if (announcement.targetType === "all") return true;
+      if (announcement.targetType === args.userType) return true;
+      if (announcement.targetType === "specific" && announcement.targetId === args.userId) return true;
       return false;
     });
 
-    // Get user's read broadcasts
-    const readBroadcasts = await ctx.db
-      .query("broadcastReads")
+    // Get user's read announcements
+    const readAnnouncements = await ctx.db
+      .query("eduAnnouncementReads")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .collect();
 
-    const readBroadcastIds = new Set(readBroadcasts.map((r) => r.broadcastId.toString()));
+    const readAnnouncementIds = new Set(readAnnouncements.map((r) => r.announcementId.toString()));
 
-    // Filter out read broadcasts
-    const unreadBroadcasts = targetedBroadcasts.filter(
-      (b) => !readBroadcastIds.has(b._id.toString())
+    // Filter out read announcements
+    const unreadAnnouncements = targetedAnnouncements.filter(
+      (a) => !readAnnouncementIds.has(a._id.toString())
     );
 
     // Sort by priority and created date
-    unreadBroadcasts.sort((a, b) => {
+    unreadAnnouncements.sort((a, b) => {
       const priorityOrder = { urgent: 0, high: 1, normal: 2, low: 3 };
       const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 2;
       const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 2;
@@ -568,11 +568,11 @@ export const getUnreadBroadcasts = query({
       return b.createdAt - a.createdAt;
     });
 
-    return unreadBroadcasts;
+    return unreadAnnouncements;
   },
 });
 
-export const getBroadcastStats = query({
+export const getEduAnnouncementStats = query({
   args: {
     schoolId: v.id("schools"),
     startDate: v.optional(v.number()),
@@ -580,50 +580,50 @@ export const getBroadcastStats = query({
   },
   handler: async (ctx, args) => {
     let q = ctx.db
-      .query("broadcasts")
+      .query("eduAnnouncements")
       .withIndex("by_school_created", (q) => q.eq("schoolId", args.schoolId));
 
-    let broadcasts = await q.collect();
+    let announcements = await q.collect();
 
     // Filter by date range if provided
     if (args.startDate || args.endDate) {
-      broadcasts = broadcasts.filter((b) => {
-        if (args.startDate && b.createdAt < args.startDate!) return false;
-        if (args.endDate && b.createdAt > args.endDate!) return false;
+      announcements = announcements.filter((a) => {
+        if (args.startDate && a.createdAt < args.startDate!) return false;
+        if (args.endDate && a.createdAt > args.endDate!) return false;
         return true;
       });
     }
 
     // Filter out deleted
-    broadcasts = broadcasts.filter((b) => !b.deletedAt);
+    announcements = announcements.filter((a) => !a.deletedAt);
 
     // Calculate stats
-    const total = broadcasts.length;
-    const published = broadcasts.filter((b) => b.status === "published").length;
-    const draft = broadcasts.filter((b) => b.status === "draft").length;
-    const scheduled = broadcasts.filter((b) => b.status === "scheduled").length;
-    const archived = broadcasts.filter((b) => b.status === "archived").length;
+    const total = announcements.length;
+    const published = announcements.filter((a) => a.status === "published").length;
+    const draft = announcements.filter((a) => a.status === "draft").length;
+    const scheduled = announcements.filter((a) => a.status === "scheduled").length;
+    const archived = announcements.filter((a) => a.status === "archived").length;
 
     const byPriority = {
-      urgent: broadcasts.filter((b) => b.priority === "urgent").length,
-      high: broadcasts.filter((b) => b.priority === "high").length,
-      normal: broadcasts.filter((b) => b.priority === "normal").length,
-      low: broadcasts.filter((b) => b.priority === "low").length,
+      urgent: announcements.filter((a) => a.priority === "urgent").length,
+      high: announcements.filter((a) => a.priority === "high").length,
+      normal: announcements.filter((a) => a.priority === "normal").length,
+      low: announcements.filter((a) => a.priority === "low").length,
     };
 
-    const byCategory = broadcasts.reduce((acc, b) => {
-      const category = b.category || "uncategorized";
+    const byCategory = announcements.reduce((acc, a) => {
+      const category = a.category || "uncategorized";
       acc[category] = (acc[category] || 0) + 1;
       return acc;
     }, {} as Record<string, number>);
 
-    const totalReads = broadcasts.reduce((sum, b) => sum + (b.readCount || 0), 0);
+    const totalReads = announcements.reduce((sum, a) => sum + (a.readCount || 0), 0);
 
     const byTargetType = {
-      all: broadcasts.filter((b) => b.targetType === "all").length,
-      students: broadcasts.filter((b) => b.targetType === "students").length,
-      staff: broadcasts.filter((b) => b.targetType === "staff").length,
-      specific: broadcasts.filter((b) => b.targetType === "specific").length,
+      all: announcements.filter((a) => a.targetType === "all").length,
+      students: announcements.filter((a) => a.targetType === "students").length,
+      staff: announcements.filter((a) => a.targetType === "staff").length,
+      specific: announcements.filter((a) => a.targetType === "specific").length,
     };
 
     return {
@@ -638,7 +638,7 @@ export const getBroadcastStats = query({
       byCategory,
       byTargetType,
       totalReads,
-      avgReadsPerBroadcast: total > 0 ? Math.round(totalReads / total) : 0,
+      avgReadsPerAnnouncement: total > 0 ? Math.round(totalReads / total) : 0,
     };
   },
 });
