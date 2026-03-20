@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Search, UserPlus, Briefcase, Link, Edit2, Trash2, X } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { exportToCSV } from '../../../utils/dataExport';
 

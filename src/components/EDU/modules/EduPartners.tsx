@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Briefcase, MapPin, Phone, Plus, Trash2, ExternalLink } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import AddressAutocomplete from '../../shared/AddressAutocomplete';
 

@@ -13,7 +13,7 @@ import type { DashboardProps, RoleMetric, QuickAction, ProducerDashboardData } f
 import { StatsCard } from '../widgets/StatsCard';
 import { RoleMetrics } from '../sections/RoleMetrics';
 import { QuickActions } from '../sections/QuickActions';
-import { api } from '../../../convex/_generated/api';
+import { api } from '../../../../convex/_generated/api';
 
 interface ProducerDashboardProps extends DashboardProps {
   className?: string;
