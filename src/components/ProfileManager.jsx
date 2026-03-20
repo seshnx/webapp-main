@@ -140,11 +140,11 @@ export default function ProfileManager({ user, userData, subProfiles = {}, handl
                 clerkId: userId,
                 firstName: data.firstName,
                 lastName: data.lastName,
-                profileName: data.displayName || null,
-                bio: data.bio || null,
-                zipCode: data.zip || null,
-                hourlyRate: data.hourlyRate || null,
-                website: data.website || null,
+                profileName: data.displayName || undefined,
+                bio: data.bio || undefined,
+                zipCode: data.zip || undefined,
+                hourlyRate: data.hourlyRate || undefined,
+                website: data.website || undefined,
             });
 
             toast.success('Profile Updated & Synced!', { id: toastId });
