@@ -1,33 +1,34 @@
-SeshNx WebApp
+**SeshNx WebApp**
+
 SeshNx is a multi-sided platform designed for the music industry, connecting studios, talent (artists/producers), technicians, and educational institutions. The platform is currently undergoing a major architectural consolidation to a Convex-only backend to provide superior real-time capabilities and a simplified developer experience.
 
-🚀 Tech Stack
+**🚀 Tech Stack**
 Frontend: React 18 with Vite
 
-Styling: Tailwind CSS & Framer Motion
+**Styling:** Tailwind CSS & Framer Motion
 
-Authentication: Clerk
+**Authentication:** Clerk
 
-Database & Real-time: Convex (Primary)
+**Database & Real-time:** Convex (Primary)
 
-Payments: Stripe
+**Payments:** Stripe
 
-Hosting: Vercel
+**Hosting:** Vercel
 
-Media: Vercel Blob & Wavesurfer.js
+**Media:** Vercel Blob & Wavesurfer.js
 
-🛠️ Core Modules
-Social Feed: A real-time engagement platform for sharing media, posts, and networking within the industry.
+**🛠️ Core Modules**
+**Social Feed:** A real-time engagement platform for sharing media, posts, and networking within the industry.
 
-Booking System: Comprehensive studio and technician booking management with automated reminders and conflict detection.
+**Booking System:** Comprehensive studio and technician booking management with automated reminders and conflict detection.
 
-Marketplace: A secure exchange for gear (SeshFx) and digital assets like beat uploads, featuring safe-exchange tracking and photo verification.
+**Marketplace:** A secure exchange for gear (SeshFx) and digital assets like beat uploads, featuring safe-exchange tracking and photo verification.
 
-EDU System: A dedicated portal for music schools to manage rosters, staff, partners, and internship tracking.
+**EDU System:** A dedicated portal for music schools to manage rosters, staff, partners, and internship tracking.
 
-Business Center: Specialized dashboards for different roles (Producers, Studios, Technicians) to track earnings and active jobs.
+**Business Center:** Specialized dashboards for different roles (Producers, Studios, Technicians) to track earnings and active jobs.
 
-📈 Project Status: Phase 3 (EDU System)
+**📈 Project Status: Phase 3 (EDU System)**
 The project has successfully cleared several critical infrastructure milestones:
 
 Phase 1 & 2 Complete: Implemented core notifications, moderation systems, and role-specific dashboards (Talent, Producer, Technician).
@@ -35,11 +36,3 @@ Phase 1 & 2 Complete: Implemented core notifications, moderation systems, and ro
 Current Focus: Migrating EDU modules (Partners, Roster, Staff) from legacy providers to Convex.
 
 Key Remaining Work: Global search functionality, full Stripe payment integration, and PWA offline enhancements.
-
-💻 Getting Started
-Prerequisites
-Node.js installed
-
-A Convex project for the backend
-
-Clerk API keys for authentication
