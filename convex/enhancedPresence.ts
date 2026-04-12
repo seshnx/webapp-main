@@ -4,6 +4,7 @@
  * Adds advanced presence features:
  * - Enhanced presence with location tracking
  * - Active sessions for collaboration
+ * - Push notification management
  * - Unread counts & dashboard stats
  * - Activity feed
  */
@@ -14,75 +15,6 @@ import { v } from "convex/values";
 // ============================================================
 // ENHANCED PRESENCE
 // ============================================================
-
-/**
- * Internal helper to upsert enhanced presence record.
- * Cannot call Convex mutations directly from other handlers.
- */
-async function upsertEnhancedPresence(
-  ctx: any,
-  args: {
-    userId: string;
-    status: "online" | "offline" | "away" | "busy" | "in_session";
-    currentLocation?: {
-      type: "studio" | "room" | "session";
-      id: string;
-      name: string;
-    } | null;
-    deviceInfo?: {
-      type: "desktop" | "mobile" | "tablet";
-      browser?: string;
-    } | null;
-    activeProfile?: string | null;
-  }
-) {
-  const now = Date.now();
-
-  const existing = await ctx.db
-    .query("enhancedPresence")
-    .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
-    .first();
-
-  if (existing) {
-    await ctx.db.patch(existing._id, {
-      status: args.status,
-      lastSeen: now,
-      currentLocation: args.currentLocation ?? undefined,
-      deviceInfo: args.deviceInfo ?? undefined,
-      activeProfile: args.activeProfile ?? undefined,
-    });
-  } else {
-    await ctx.db.insert("enhancedPresence", {
-      userId: args.userId,
-      status: args.status,
-      lastSeen: now,
-      currentLocation: args.currentLocation ?? undefined,
-      deviceInfo: args.deviceInfo ?? undefined,
-      activeProfile: args.activeProfile ?? undefined,
-    });
-  }
-
-  // Also update basic presence for compatibility
-  const basicPresence = await ctx.db
-    .query("presence")
-    .withIndex("by_user", (q: any) => q.eq("userId", args.userId))
-    .first();
-
-  if (basicPresence) {
-    await ctx.db.patch(basicPresence._id, {
-      online: args.status !== "offline",
-      lastSeen: now,
-    });
-  } else {
-    await ctx.db.insert("presence", {
-      userId: args.userId,
-      online: args.status !== "offline",
-      lastSeen: now,
-    });
-  }
-
-  return { success: true, timestamp: now };
-}
 
 /**
  * Set enhanced user presence (status, location, device, active profile)
@@ -110,16 +42,63 @@ export const setEnhancedPresence = mutation({
         browser: v.optional(v.string()),
       })
     ),
-    activeProfile: v.optional(v.string()),
+    activeProfile: v.optional(v.string()), // From MongoDB (active_profile)
   },
   handler: async (ctx, args) => {
-    return await upsertEnhancedPresence(ctx, {
-      userId: args.userId,
-      status: args.status,
-      currentLocation: args.currentLocation ?? undefined,
-      deviceInfo: args.deviceInfo ?? undefined,
-      activeProfile: args.activeProfile ?? undefined,
-    });
+    const now = Date.now();
+
+    // Check if user has enhanced presence record
+    const existing = await ctx.db
+      .query("enhancedPresence")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (existing) {
+      // Update existing
+      await ctx.db.patch(existing._id, {
+        status: args.status,
+        lastSeen: now,
+        currentLocation: args.currentLocation,
+        deviceInfo: args.deviceInfo,
+        activeProfile: args.activeProfile,
+      });
+    } else {
+      // Create new
+      await ctx.db.insert("enhancedPresence", {
+        userId: args.userId,
+        status: args.status,
+        lastSeen: now,
+        currentLocation: args.currentLocation,
+        deviceInfo: args.deviceInfo,
+        activeProfile: args.activeProfile,
+      });
+    }
+
+    // Also update basic presence (for compatibility)
+    const basicPresence = await ctx.db
+      .query("presence")
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .first();
+
+    if (basicPresence) {
+      await ctx.db.patch(basicPresence._id, {
+        online: args.status !== "offline",
+        lastSeen: now,
+      });
+    } else {
+      await ctx.db.insert("presence", {
+        userId: args.userId,
+        online: args.status !== "offline",
+        lastSeen: now,
+      });
+    }
+
+    // Update unread counts when user comes online
+    if (args.status === "online") {
+      await updateUnreadCounts(ctx, args.userId);
+    }
+
+    return { success: true, timestamp: now };
   },
 });
 
@@ -171,14 +150,18 @@ export const getOnlineUsersEnhanced = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const allPresence = await ctx.db
+    let query = ctx.db
       .query("enhancedPresence")
-      .withIndex("by_status", (q) => q.eq("status", "online"))
-      .collect();
+      .withIndex("by_status", (q) =>
+        q.eq("status", "online").order("desc")
+      );
 
-    const onlineUsers = allPresence.filter(p => p.status === "online" || p.status === "in_session");
+    if (args.limit) {
+      query = query.take(args.limit);
+    }
 
-    return args.limit ? onlineUsers.slice(0, args.limit) : onlineUsers;
+    const users = await query.collect();
+    return users;
   },
 });
 
@@ -191,16 +174,16 @@ export const getUsersInLocation = query({
     locationId: v.string(),
   },
   handler: async (ctx, args) => {
-    const allPresence = await ctx.db
+    const users = await ctx.db
       .query("enhancedPresence")
-      .withIndex("by_status", (q) => q.eq("status", "online"))
+      .withIndex("by_location", (q) =>
+        q
+          .eq("currentLocation", { type: args.locationType, id: args.locationId })
+          .eq("status", "online")
+      )
       .collect();
 
-    return allPresence.filter(p => {
-      if (!p.currentLocation) return false;
-      return p.currentLocation.type === args.locationType &&
-        p.currentLocation.id === args.locationId;
-    });
+    return users;
   },
 });
 
@@ -221,7 +204,7 @@ export const createActiveSession = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    await ctx.db.insert("activeSessions", {
+    const sessionId = await ctx.db.insert("activeSessions", {
       sessionId: args.sessionId,
       bookingId: args.bookingId,
       status: "active",
@@ -244,7 +227,7 @@ export const createActiveSession = mutation({
     });
 
     // Update host's presence to in_session
-    await upsertEnhancedPresence(ctx, {
+    await setEnhancedPresence(ctx, {
       userId: args.hostId,
       status: "in_session",
       currentLocation: {
@@ -254,7 +237,7 @@ export const createActiveSession = mutation({
       },
     });
 
-    return { sessionId: args.sessionId };
+    return { sessionId };
   },
 });
 
@@ -291,6 +274,7 @@ export const joinActiveSession = mutation({
       .first();
 
     if (existingParticipant) {
+      // User is already in session
       return { alreadyInSession: true };
     }
 
@@ -312,7 +296,7 @@ export const joinActiveSession = mutation({
     });
 
     // Update user's presence
-    await upsertEnhancedPresence(ctx, {
+    await setEnhancedPresence(ctx, {
       userId: args.userId,
       status: "in_session",
       currentLocation: {
@@ -369,7 +353,7 @@ export const leaveActiveSession = mutation({
     }
 
     // Update user's presence
-    await upsertEnhancedPresence(ctx, {
+    await setEnhancedPresence(ctx, {
       userId: args.userId,
       status: "online",
       currentLocation: undefined,
@@ -423,8 +407,9 @@ export const endActiveSession = mutation({
         isActive: false,
         leftAt: now,
       });
+
       // Update all participants' presence
-      await upsertEnhancedPresence(ctx, {
+      await setEnhancedPresence(ctx, {
         userId: participant.userId,
         status: "online",
         currentLocation: undefined,
@@ -496,56 +481,137 @@ export const getUserActiveSession = query({
 });
 
 // ============================================================
+// PUSH NOTIFICATION TOKENS
+// ============================================================
+
+/**
+ * Register push notification token
+ */
+export const registerPushToken = mutation({
+  args: {
+    userId: v.string(),
+    token: v.string(),
+    platform: v.union(v.literal("ios"), v.literal("android"), v.literal("web")),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Check if token already exists
+    const existing = await ctx.db
+      .query("pushTokens")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .first();
+
+    if (existing) {
+      // Update existing
+      await ctx.db.patch(existing._id, {
+        userId: args.userId,
+        platform: args.platform,
+        isActive: true,
+        updatedAt: now,
+      });
+    } else {
+      // Create new
+      await ctx.db.insert("pushTokens", {
+        userId: args.userId,
+        token: args.token,
+        platform: args.platform,
+        createdAt: now,
+        updatedAt: now,
+        isActive: true,
+      });
+    }
+
+    return { registered: true };
+  },
+});
+
+/**
+ * Unregister push notification token
+ */
+export const unregisterPushToken = mutation({
+  args: {
+    token: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("pushTokens")
+      .withIndex("by_token", (q) => q.eq("token", args.token))
+      .first();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        isActive: false,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { unregistered: true };
+  },
+});
+
+/**
+ * Get active push tokens for a user
+ */
+export const getPushTokens = query({
+  args: {
+    userId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const tokens = await ctx.db
+      .query("pushTokens")
+      .withIndex("by_user", (q) =>
+        q.eq("userId", args.userId).eq("isActive", true)
+      )
+      .collect();
+
+    return tokens;
+  },
+});
+
+// ============================================================
 // UNREAD COUNTS
 // ============================================================
 
+/**
+ * Update unread counts for a user
+ */
 async function updateUnreadCounts(
   ctx: any,
   userId: string
 ): Promise<void> {
   const now = Date.now();
 
+  // Get current unread counts
   const existing = await ctx.db
     .query("unreadCounts")
-    .withIndex("by_user", (q: any) => q.eq("userId", userId))
+    .withIndex("by_user", (q) => q.eq("userId", userId))
     .first();
 
-  // Count unread messages from conversations
-  let unreadMessages = 0;
-  try {
-    const convos = await ctx.db
-      .query("conversations")
-      .filter((q: any) => q.eq(q.field("userId"), userId))
-      .collect();
-    unreadMessages = convos.reduce((sum: number, c: any) => sum + (c.unreadCount || 0), 0);
-  } catch {
-    // conversations table may not have the index yet
-  }
+  // Count unread messages
+  const unreadMessages = await ctx.db
+    .query("conversations")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .collect()
+    .then((convos) => convos.reduce((sum, c) => sum + (c.unreadCount || 0), 0));
 
   // Count unread notifications
-  let unreadNotifications = 0;
-  try {
-    const notifs = await ctx.db
-      .query("notifications")
-      .filter((q: any) => q.eq(q.field("userId"), userId).eq(q.field("read"), false))
-      .collect();
-    unreadNotifications = notifs.length;
-  } catch {
-    // notifications table may not have expected fields
-  }
+  const unreadNotifications = await ctx.db
+    .query("notifications")
+    .withIndex("by_user_read", (q) =>
+      q.eq("userId", userId).eq("read", false)
+    )
+    .count()
+    .then((count) => count || 0);
 
   // Count pending booking requests
-  let pendingBookings = 0;
-  try {
-    const bookings = await ctx.db
-      .query("sbookings")
-      .filter((q: any) => q.eq(q.field("status"), "Pending"))
-      .collect();
-    // Filter to bookings where user is the studio owner
-    pendingBookings = bookings.length;
-  } catch {
-    // bookings table may not have expected fields
-  }
+  const pendingBookings = await ctx.db
+    .query("bookings")
+    .withIndex("by_target_status", (q) =>
+      q.eq("targetId", userId).eq("status", "Pending")
+    )
+    .count()
+    .then((count) => count || 0);
 
   if (existing) {
     await ctx.db.patch(existing._id, {
@@ -592,7 +658,7 @@ export const getUnreadCounts = query({
 });
 
 /**
- * Force refresh unread counts
+ * Force refresh unread counts (call after significant changes)
  */
 export const refreshUnreadCounts = mutation({
   args: {
@@ -621,6 +687,8 @@ export const updateDashboardStats = mutation({
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+
+    // Get existing stats
     const existing = await ctx.db
       .query("dashboardStats")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
@@ -686,7 +754,7 @@ export const getDashboardStats = query({
  */
 export const addActivity = mutation({
   args: {
-    userId: v.string(),
+    userId: v.string(), // User who performed the action
     actionType: v.union(
       v.literal("booking_created"),
       v.literal("booking_confirmed"),
@@ -704,6 +772,7 @@ export const addActivity = mutation({
   handler: async (ctx, args) => {
     const now = Date.now();
     const activityId = `${args.userId}-${args.actionType}-${now}`;
+
     await ctx.db.insert("activityFeed", {
       id: activityId,
       userId: args.userId,
@@ -712,6 +781,7 @@ export const addActivity = mutation({
       metadata: args.metadata,
       createdAt: now,
     });
+
     return { activityId };
   },
 });
@@ -721,19 +791,21 @@ export const addActivity = mutation({
  */
 export const getActivityFeed = query({
   args: {
-    userId: v.string(),
+    userId: v.string(), // User to get feed for
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let activities = await ctx.db
+    let query = ctx.db
       .query("activityFeed")
       .withIndex("by_target", (q) => q.eq("targetUserId", args.userId))
-      .collect();
+      .order("desc");
 
-    // Sort by createdAt descending
-    activities.sort((a, b) => b.createdAt - a.createdAt);
+    if (args.limit) {
+      query = query.take(args.limit);
+    }
 
-    return args.limit ? activities.slice(0, args.limit) : activities;
+    const activities = await query.collect();
+    return activities;
   },
 });
 
@@ -745,11 +817,14 @@ export const getRecentActivity = query({
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const allActivities = await ctx.db
+    let query = ctx.db
       .query("activityFeed")
-      .order("desc")
-      .collect();
+      .withIndex("by_created", (q) => q.order("desc"));
 
-    return args.limit ? allActivities.slice(0, args.limit) : allActivities;
+    if (args.limit) {
+      query = query.take(args.limit);
+    }
+
+    return await query.collect();
   },
 });
