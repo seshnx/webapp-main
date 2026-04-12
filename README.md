@@ -1,112 +1,99 @@
-# SeshNx WebApp
+SeshNx WebApp
+The Unified Operating System for the Music Industry & Post-Production.
 
-**The Operating System for Music Creators**
+SeshNx is a multi-sided ecosystem designed to bridge the gap between studios, talent, technicians, and educational institutions. By consolidating fragmented workflows into a single real-time platform, SeshNx enables seamless booking, networking, physical infrastructure deployment, and digital asset management.
 
-SeshNx is a comprehensive platform designed to streamline the music production workflow. It combines social networking, studio booking, talent discovery, marketplace features, and educational tools into a single Progressive Web App (PWA).
+📂 System Architecture & Repositories
+The Core WebApp: seshnx/webapp
 
-**Part of the SeshNx Platform by Amalia Media LLC**
+The Admin Terminal: seshnx/seshnx-admin
 
-## 🚀 Features
+The Marketing Front: seshnx/webhome
 
-* **Social Network**: User profiles, activity feeds, and networking tools for creators.
-* **Booking System**: Management for studio sessions, equipment, and talent booking.
-* **Real-time Chat**: Instant messaging, presence indicators, and group chats powered by Convex.
-* **Marketplace**: Buy/Sell gear and "SeshFx" (digital assets).
-* **Education (EDU)**: Learning management system for students, interns, and staff.
-* **Studio Management**: Tools for managing studio operations, payments, and legal docs.
-* **PWA Support**: Installable on mobile and desktop devices with offline capabilities.
+🏗️ Infrastructure & Tech Stack
+Frontend: React 18 (Vite) | Styling: Tailwind CSS & Framer Motion
 
-## 🛠 Tech Stack
+Authentication: Clerk (Org-based multi-tenancy & Tiered Billing)
 
-### Frontend
-* **Framework**: React 18 (Vite)
-* **Styling**: Tailwind CSS, clsx
-* **Animations**: Framer Motion
-* **State/Routing**: React Router DOM, Context API
-* **Maps**: Leaflet / React-Leaflet
-* **Audio**: Wavesurfer.js
-* **Forms**: React Hook Form + Zod
+Real-Time Backend: Convex (Primary transactional & RBAC)
 
-### Backend & Database (Hybrid Architecture)
-* **Supabase**:
-    * **Auth**: User authentication and session management (PKCE flow).
-    * **PostgreSQL**: Primary database for profiles, feeds, marketplace, and bookings.
-    * **Storage**: Media and file storage.
-* **Convex**:
-    * **Reactive DB**: Specialized high-performance backend for the Chat system, presence, and read receipts.
+Data Warehouse: Neon (PostgreSQL) — Historical market analytics & AI training.
 
-### Infrastructure
-* **Deployment**: Vercel
-* **CI/CD**: GitHub Actions
+Storage & Media: Cloudflare R2 (Global CDN) & Wavesurfer.js
 
-## 🏗 Architecture
+Payments: Stripe (Union/Non-Union logic & Insurance Premiums)
 
-SeshNx uses a **Hybrid Architecture** to balance cost, ease of use, and real-time performance.
+Deployment: Vercel
 
-1.  **Identity**: Firebase Auth provides the `UID` used across both Firestore and Convex.
-2.  **Core Data**: Firestore handles document-heavy data (Users, Products, Posts).
-3.  **Real-Time**: Convex handles high-frequency updates (Messages, Typing Indicators) to avoid cold-start issues and complex synchronization logic.
+🛠️ Core Modules
+Bookings & Smart Scheduling (The Operational Core)
+Real-Time Availability: Unified calendar system for studios, rooms, technicians, and venues with ultra-low latency updates via Convex.
 
-## 📦 Installation & Setup
+Intelligent Conflict Detection: Automated logic to prevent double-bookings across multi-room facilities and overlapping technician schedules.
 
-### Prerequisites
-* Node.js (v18+ recommended)
-* npm or yarn
+Integrated Legal Triggers: Bookings are automatically linked to the Legal Clearinghouse, triggering the generation and signing of Split Sheets and Smart Contracts as a prerequisite for session start.
 
-### 1. Clone the repository
-```bash
-git clone [https://github.com/seshnx/webapp.git](https://github.com/seshnx/webapp.git)
-cd webapp
-```
+Automated Reminders: SMS and email notification system for all stakeholders, including automated technical riders and check-in instructions.
 
-### 2. Install dependencies
-```bash
-npm install
-```
+Escrow Integration: Booking confirmation can trigger partial or full deposit holds via Stripe, ensuring financial security for both the venue and the talent.
 
-### 3. Start development server
-```bash
-npm run dev
-```
+Technician Services (The Engineering Backbone)
+On-Demand Maintenance: Dedicated module to book specialized technicians for hardware repair, studio wiring, and preventative maintenance.
 
-Open [http://localhost:5173](http://localhost:5173) in your browser.
+Specialized Talent: Direct access to experts in Electronics Repair and high-end analog systems (SSL, etc.).
 
-## 🏗 Architecture
+SeshNx Studios Support: Technicians serve as the primary service providers for the Franchisee Modernization and Studio Tech Services insurance plans.
 
-SeshNx uses a **Hybrid Architecture** to balance cost, ease of use, and real-time performance.
+SeshFx Marketplace (Digital & Physical Assets)
+Asset Exchange: A secure marketplace for trading physical studio gear and digital assets (beats, sample packs, SFX libraries).
 
-### Updated Backend Architecture (Current)
-1.  **Identity**: Supabase Auth provides the `UID` used across both Supabase and Convex.
-2.  **Core Data**: Supabase (PostgreSQL) handles document-heavy data (Users, Products, Posts).
-3.  **Real-Time**: Convex handles high-frequency updates (Messages, Typing Indicators) to avoid cold-start issues and complex synchronization logic.
-4.  **Payments**: Stripe integration for marketplace transactions.
+Automated Workflow: Digital Asset Preview Generation, automatically creating snippets and low-bitrate previews for uploaded content.
 
-### Previous Architecture (Legacy)
-The codebase previously used Firebase. Legacy imports have been mapped to empty adapters in `vite.config.js`.
+Reach Archive Integration: Exclusive access to licensed recordings from humanitarian missions.
 
-## 📚 Documentation
+Legal & Financial Clearinghouse (The "Trust Layer")
+Automated Split Sheets: Real-time generation of digital split agreements for recording and songwriting.
 
-- `CLAUDE.md` - Architecture and development guidance
-- `README_INTEGRATION.md` - Cross-platform integration guide
-- `WEBAPP_BCM.md` - Business component mapping
+Smart Contracting: Automated legal handling for session gigs, theatrical runs, and live shows.
 
-## 🚀 Deployment
+Escrow-Style Payouts: Funds are secured and distributed according to verified legal splits upon project completion.
 
-Deploy to Vercel:
-```bash
-npm run build:vercel
-```
+EDU System & Discovery (Education & Growth)
+EDU Discovery: Skill-based search engine for Vocals, Instruments, Electronics Repair, and Audio Engineering.
 
-## 📄 License
+Institutional Management: Portal for schools to manage student rosters, faculty, and internship pipelines.
 
-Copyright (c) 2024 Amalia Media LLC. All rights reserved.
+SeshNx Scholarships: Merit-based financial aid for promising high school talent to attend the school of their choice.
 
-Proprietary software - Distribution prohibited without explicit permission.
+SeshNx Studios (Infrastructure & Franchisee)
+Franchisee Modernization: Upgrading legacy studios to SeshNx tech standards in exchange for branding and revenue sharing.
 
-## 🔧 Support
+Corporate Backstop: SeshNx Corporate operates facilities in high-value markets where no local claims are initiated.
 
-For technical support, bug reports, or feature requests, contact the development team.
+Studio Tech Services: Dedicated insurance wing for hardware protection (consoles, mics, outboard gear).
 
----
+SeshNx Reach (Humanitarian Arm)
+The Mobile Studio Initiative: Mercedes-Benz Sprinter units deployed globally to document musical and oral histories via user voting.
 
-*Part of the [SeshNx Platform](https://seshnx.com) by Amalia Media LLC*
+Impact Funding: Sustained by a voluntary user "Fee-for-Good" model and a rigid 5% of Corporate income commitment.
+
+Venues, Theater & Post-Production
+Monopoly-Free Booking: Direct-to-venue booking bypassing legacy media monopolies.
+
+SeshNx Theater: Production management for Broadway-style shows in local theaters and schools.
+
+SeshNx Post: Specialized talent hub for Voice Acting, ADR, and Foley with Union-compliant payment logic.
+
+🔐 Security & Social Intelligence
+Immutable Org Sessions: OrgId is hashed and locked at login, neutralizing session tampering.
+
+Silent Recommendation Agent: Weights activity to curate professional networking and asset suggestions.
+
+Contextual AI Moderation: Automated scans for harmful content with a "Human-in-the-Loop" verification flow.
+
+Kiosk Mode: Specialized dashboard interfaces for onsite terminal hardware, matching the studio’s custom branding.
+
+🚀 Corporate Trajectory
+Fundraising: Currently executing a $2 Million Seed / VC round to scale engineering and infrastructure deployment.
+
+NAMM 2027: Official large-scale rollout to the global pro-audio industry.
