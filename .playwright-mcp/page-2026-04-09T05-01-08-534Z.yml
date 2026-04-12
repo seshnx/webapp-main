@@ -1,0 +1,6 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - heading "One sec..." [level=1] [ref=e3]
+    - paragraph [ref=e4]: We'll fix it in the mix.
+    - paragraph [ref=e5]: (If this hangs, we're probably troubleshooting a ground loop.)
+  - img [ref=e8]

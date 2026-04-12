@@ -129,31 +129,65 @@ export default function SocialFeed({
     ? homeFeedPosts
     : feedPosts;
 
+  // Detect media type from URL extension
+  const detectMediaType = (url: string): 'image' | 'video' | 'audio' => {
+    const path = url.split('?')[0].toLowerCase();
+    if (/\.(mp4|webm|mov|avi|mkv|m4v)(\/|$)/i.test(path) || path.includes('video')) return 'video';
+    if (/\.(mp3|wav|ogg|aac|flac|m4a|wma)(\/|$)/i.test(path) || path.includes('audio')) return 'audio';
+    return 'image';
+  };
+
   // Process posts and map to expected format
   const posts = useMemo(() => {
     if (!rawPosts) return []; // Loading
     if (rawPosts === null) return []; // Error
 
-    return rawPosts.map((post: any): Post => ({
-      id: post._id,
-      userId: post.authorId,
-      displayName: post.authorName || 'Unknown User',
-      authorPhoto: post.authorPhoto || null,
-      username: post.authorUsername,
-      text: post.content,
-      attachments: post.mediaUrls?.map((url: string, idx: number) => ({
-        type: 'image',
-        url: url,
-        thumbnail: url,
-        name: `Attachment ${idx + 1}`,
-        isGif: false
-      })),
-      timestamp: post.createdAt,
-      commentCount: post.engagement?.commentsCount || 0,
-      reactionCount: post.engagement?.likesCount || 0,
-      saveCount: post.engagement?.savesCount || 0,
-      role: post.role
-    }));
+    // DEBUG: Log first raw Convex post to inspect media fields
+    if (rawPosts.length > 0) {
+      const sample = rawPosts[0];
+      console.log('[SocialFeed DEBUG] Raw Convex post sample:', {
+        _id: sample._id,
+        content: sample.content?.substring(0, 60),
+        mediaUrls: sample.mediaUrls,
+        mediaAttachments: sample.mediaAttachments,
+        mediaType: sample.mediaType,
+      });
+    }
+
+    return rawPosts.map((post: any): Post => {
+      // mediaAttachments stores structured {url, type} objects (new posts)
+      // mediaUrls stores plain strings (legacy posts)
+      const attachments = post.mediaAttachments?.length > 0
+        ? post.mediaAttachments.map((att: any, idx: number) => ({
+            type: att.type || detectMediaType(att.url),
+            url: att.url,
+            thumbnail: att.url,
+            name: att.name || `Attachment ${idx + 1}`,
+            isGif: false
+          }))
+        : post.mediaUrls?.map((url: string, idx: number) => ({
+            type: detectMediaType(url),
+            url: url,
+            thumbnail: url,
+            name: `Attachment ${idx + 1}`,
+            isGif: false
+          }));
+
+      return {
+        id: post._id,
+        userId: post.authorId,
+        displayName: post.authorName || 'Unknown User',
+        authorPhoto: post.authorPhoto || null,
+        username: post.authorUsername,
+        text: post.content,
+        attachments,
+        timestamp: post.createdAt,
+        commentCount: post.engagement?.commentsCount || 0,
+        reactionCount: post.engagement?.likesCount || 0,
+        saveCount: post.engagement?.savesCount || 0,
+        role: post.role
+      };
+    });
   }, [rawPosts]);
 
   // Combined loading state
@@ -264,21 +298,19 @@ export default function SocialFeed({
                          `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || null;
       const authorPhoto = activeProfile?.photo_url || userData?.photoURL || user?.imageUrl || null;
 
-      // Process attachments from postPayload
+      // Process attachments from postPayload — preserve type info
       const attachments = postPayload.attachments || [];
-      const mediaUrls = attachments.map(a => a.url);
-
-      // Extract mentions and hashtags from text
-      const mentions = (postPayload.text?.match(/@(\w+)/g) || []).map(m => m.substring(1));
-      const hashtags = (postPayload.text?.match(/#(\w+)/g) || []).map(h => h.substring(1));
+      const mediaAttachments = attachments.map(a => ({
+        url: a.url,
+        type: a.type || 'image',
+        name: a.name || null,
+      }));
 
       // Create post using Convex mutation
       await createPost({
         authorId: clerkId,
         content: postPayload.text || '',
-        mediaUrls: mediaUrls.length > 0 ? mediaUrls : undefined,
-        hashtags: hashtags.length > 0 ? hashtags : undefined,
-        mentions: mentions.length > 0 ? mentions : undefined,
+        mediaAttachments: mediaAttachments.length > 0 ? mediaAttachments : undefined,
         visibility: 'public',
         category: activeRole,
       });

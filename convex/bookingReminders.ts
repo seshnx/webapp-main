@@ -11,7 +11,8 @@ import { v } from "convex/values";
  */
 export const scheduleReminders = mutation({
   args: {
-    bookingId: v.id("bookings"),
+    bookingId: v.string(),           // ID of either sbookings or bookings record
+    bookingType: v.union(v.literal("studio"), v.literal("talent")),
     userId: v.string(), // Clerk ID of user to remind
     reminderHours: v.array(v.number()), // [24, 2] for 24 hours and 2 hours before
     bookingDate: v.number(), // Timestamp of booking
@@ -27,11 +28,8 @@ export const scheduleReminders = mutation({
       return { success: false, error: "User not found" };
     }
 
-    // Get the booking
-    const booking = await ctx.db.get(args.bookingId);
-    if (!booking) {
-      return { success: false, error: "Booking not found" };
-    }
+    // Note: bookingId is a string referencing sbookings or bookings table
+    // We trust the caller provides a valid ID
 
     // Create reminder entries
     const reminderIds = await Promise.all(
@@ -45,6 +43,7 @@ export const scheduleReminders = mutation({
 
         const reminderId = await ctx.db.insert("bookingReminders", {
           bookingId: args.bookingId,
+          bookingType: args.bookingType,
           userId: user._id,
           reminderType: hours >= 24 ? "day_before" : "hours_before",
           reminderHours: hours,
@@ -89,15 +88,14 @@ export const getPendingReminders = query({
       )
       .take(limit);
 
-    // Fetch booking and user details for each reminder
+    // Fetch user details for each reminder
+    // Note: bookingId is a string - we skip enriching booking since it could be sbookings or bookings
     const remindersWithDetails = await Promise.all(
       reminders.map(async (reminder) => {
-        const booking = await ctx.db.get(reminder.bookingId);
         const user = await ctx.db.get(reminder.userId);
 
         return {
           ...reminder,
-          booking,
           user,
         };
       })
@@ -112,7 +110,7 @@ export const getPendingReminders = query({
  */
 export const getRemindersByBooking = query({
   args: {
-    bookingId: v.id("bookings"),
+    bookingId: v.string(),
   },
   handler: async (ctx, args) => {
     const reminders = await ctx.db
@@ -171,7 +169,7 @@ export const markReminderSent = mutation({
  */
 export const cancelReminders = mutation({
   args: {
-    bookingId: v.id("bookings"),
+    bookingId: v.string(),
   },
   handler: async (ctx, args) => {
     // Get all pending reminders for this booking

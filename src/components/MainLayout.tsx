@@ -78,21 +78,26 @@ const retryLazyLoad = (importFn: () => Promise<any>, retries = 3, delay = 100) =
 const Sidebar = retryLazyLoad(() => import('./Sidebar'));
 const Navbar = retryLazyLoad(() => import('./Navbar'));
 const PublicProfileModal = retryLazyLoad(() => import('./PublicProfileModal'));
-const Dashboard = retryLazyLoad(() => import('./Dashboard'));
+const TalentBookingModal = retryLazyLoad(() => import('./TalentBookingModal'));
+
+// ACTIVE MODULES: Bookings, Settings (in AppRoutes), Profile, Social Feed
 const SocialFeed = retryLazyLoad(() => import('./SocialFeed'));
-const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
 const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
 const BookingSystem = retryLazyLoad(() => import('./BookingSystem'));
-const Marketplace = retryLazyLoad(() => import('./Marketplace'));
-const TechServices = retryLazyLoad(() => import('./TechServices'));
-const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
-const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
-const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
-const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
-const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
-const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
-const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
-const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
+
+// DISABLED MODULES - Scope reduced to only Bookings, Settings, Profile, and Social
+// const Dashboard = retryLazyLoad(() => import('./Dashboard'));
+// const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
+// const Marketplace = retryLazyLoad(() => import('./Marketplace'));
+// const TechServices = retryLazyLoad(() => import('./TechServices'));
+// const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
+// const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
+// const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
+// const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
+// const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
+// const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
+// const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
+// const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
 
 // =====================================================
 // MAIN COMPONENT
@@ -113,17 +118,27 @@ export default function MainLayout({
 
   // Helper to determine active tab from URL
   const getTabFromPath = (path: string): string => {
-    if (path === '/dashboard' || path === '/') return 'dashboard';
-    if (path.startsWith('/feed') || path === '/social') return 'feed';
-    if (path.startsWith('/messages') || path.startsWith('/chat')) return 'messages';
+    // ACTIVE MODULES: feed, bookings, profile
+    if (path.startsWith('/feed') || path === '/social' || path === '/') return 'feed';
+    if (path.startsWith('/bookings')) return 'bookings';
     if (path.startsWith('/profile')) return 'profile';
-    return 'dashboard';
+    // DISABLED MODULES - Redirect to feed
+    if (path.startsWith('/messages') || path.startsWith('/chat')) return 'feed';
+    if (path === '/home') return 'dashboard';
+    if (path.startsWith('/dashboard')) return 'dashboard';
+    if (path.startsWith('/studio-manager')) return 'studio-manager';
+    if (path.startsWith('/marketplace') || path.startsWith('/tech')) return 'feed';
+    if (path.startsWith('/payments') || path.startsWith('/billing')) return 'feed';
+    if (path.startsWith('/business-center') || path.startsWith('/edu')) return 'feed';
+    if (path.startsWith('/labels') || path.startsWith('/studio-ops')) return 'feed';
+    return 'feed';
   };
 
   const [activeTab, setActiveTab] = useState<string>(() => getTabFromPath(location.pathname));
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
   const [viewingProfile, setViewingProfile] = useState<any>(null);
   const [pendingChatTarget, setPendingChatTarget] = useState<any>(null);
+  const [talentBooking, setTalentBooking] = useState<{ talentClerkId: string; profile: any } | null>(null);
 
   // Sync tab state with URL
   useEffect(() => {
@@ -160,21 +175,7 @@ export default function MainLayout({
     const tokenBalance = userData?.tokenBalance || 0;
 
     switch (activeTab) {
-      case 'dashboard':
-        return (
-          <ErrorBoundary name="Dashboard">
-            <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-              <Dashboard
-                user={user}
-                userData={userData}
-                setActiveTab={setActiveTab}
-                bookingCount={bookingCount}
-                subProfiles={subProfiles}
-                tokenBalance={tokenBalance}
-              />
-            </Suspense>
-          </ErrorBoundary>
-        );
+      // ACTIVE MODULES: Bookings, Social Feed, Profile
       case 'feed':
       case 'social':
         return (
@@ -182,36 +183,15 @@ export default function MainLayout({
             <SocialFeed user={user} userData={userData} subProfiles={subProfiles} openPublicProfile={(uid: string, name: string) => setViewingProfile({ uid, name })} />
           </Suspense>
         );
-      case 'messages':
-      case 'chat':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <ChatInterface user={user} userData={userData} subProfiles={subProfiles} pendingChatTarget={pendingChatTarget} clearPendingChatTarget={() => setPendingChatTarget(null)} />
-          </Suspense>
-        );
       case 'bookings':
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <BookingSystem user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
-      case 'marketplace':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <Marketplace user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
-      case 'tech':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <TechServices user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
-      case 'payments':
-      case 'billing':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <PaymentsManager user={user} userData={userData} subProfiles={subProfiles} />
+            <BookingSystem
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+              openPublicProfile={(uid: string, name: string) => setViewingProfile({ uid, name })}
+            />
           </Suspense>
         );
       case 'profile':
@@ -220,47 +200,50 @@ export default function MainLayout({
             <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
           </Suspense>
         );
+      case 'dashboard':
+        const DashboardComponent = retryLazyLoad(() => import('./Dashboard'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <DashboardComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+              setActiveTab={setActiveTab}
+              bookingCount={0}
+              tokenBalance={0}
+            />
+          </Suspense>
+        );
+      case 'studio-manager':
+        const StudioManagerComponent = retryLazyLoad(() => import('./StudioManager'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <StudioManagerComponent
+              user={user}
+              userData={userData}
+            />
+          </Suspense>
+        );
+      // DISABLED MODULES - Redirect to active modules
+      case 'messages':
+      case 'messages':
+      case 'chat':
+      case 'marketplace':
+      case 'tech':
+      case 'payments':
+      case 'billing':
       case 'business-center':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <BusinessCenter user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
       case 'legal':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <LegalDocs user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
       case 'labels':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <LabelDashboard user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
       case 'edu-student':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <EduStudentDashboard user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
       case 'edu-intern':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <EduInternDashboard user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
       case 'edu-staff':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <EduStaffDashboard user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
-        );
       case 'edu-admin':
         return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <EduAdminDashboard user={user} userData={userData} subProfiles={subProfiles} />
-          </Suspense>
+          <div className="p-8 text-center text-gray-500">
+            <p className="text-lg mb-2">Module Disabled</p>
+            <p className="text-sm">This module has been temporarily disabled. Please use Bookings, Social Feed, or Profile.</p>
+          </div>
         );
       default:
         // Only show this if they navigate to a URL that truly doesn't exist
@@ -301,7 +284,7 @@ export default function MainLayout({
         </div>
 
         {/* Main Content */}
-        <div className="flex-1 flex flex-col pt-16 h-full lg:pl-64">
+        <div className="flex-1 flex flex-col pt-16 h-full xl:pl-64">
           <main className="flex-1 overflow-y-auto pb-16 lg:pb-0 px-4 pt-4">
             {renderContent()}
           </main>
@@ -321,7 +304,24 @@ export default function MainLayout({
               setActiveTab('messages');
               setViewingProfile(null);
             }}
+            onBook={(talentClerkId: string, profile: any) => {
+              setTalentBooking({ talentClerkId, profile });
+              setViewingProfile(null);
+            }}
           />
+        )}
+
+        {/* Talent Booking Modal */}
+        {talentBooking && user?.id && (
+          <Suspense fallback={null}>
+            <TalentBookingModal
+              talentClerkId={talentBooking.talentClerkId}
+              talentProfile={talentBooking.profile}
+              clientClerkId={user.id}
+              onClose={() => setTalentBooking(null)}
+              onSuccess={() => setTalentBooking(null)}
+            />
+          </Suspense>
         )}
       </div>
     </SchoolProvider>

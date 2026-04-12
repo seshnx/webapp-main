@@ -35,7 +35,7 @@ interface TokenPackage {
 }
 
 interface TierPlan {
-  id: string;
+  id?: string;
   name: string;
   price: number;
   feeMultiplier: number;
@@ -58,7 +58,8 @@ export default function PaymentsManager({ user, userData }: PaymentsManagerProps
   });
   const [processing, setProcessing] = useState<boolean>(false);
 
-  const { tierData, tokenPackages, loading: loadingConfig } = useDynamicConfig();
+  const { config, loading: loadingConfig } = useDynamicConfig();
+  const { tierData, tokenPackages } = config;
 
   const currentTierId = userData?.currentTier || SUBSCRIPTION_PLAN_KEYS.FREE;
 
@@ -126,6 +127,8 @@ export default function PaymentsManager({ user, userData }: PaymentsManagerProps
         body: JSON.stringify({
           priceId: priceId,
           mode: mode,
+          userId: user?.id || user?.uid,
+          packId: mode === 'payment' ? priceId : undefined, // Using priceId as packId for now
           successUrl: window.location.href,
           cancelUrl: window.location.href,
         }),

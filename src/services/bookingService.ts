@@ -164,20 +164,30 @@ export async function cancelBooking(
 /**
  * Hook for bookings by client
  */
-export function useBookingsByClient(clientId: string | undefined, status?: string) {
+export function useBookingsByClient(clerkId: string | undefined, status?: string) {
   return useQuery(
-    api.bookings.getBookingsByClient,
-    clientId ? { clientId, status, limit: 50 } : "skip"
+    api.sbookings.getBookingsByClient,
+    clerkId ? { clientClerkId: clerkId, status, limit: 50 } : "skip"
+  );
+}
+
+/**
+ * Hook for incoming talent bookings (where user is the booked talent)
+ */
+export function useTalentBookings(talentClerkId: string | undefined, status?: string) {
+  return useQuery(
+    api.bookings.getTalentBookings,
+    talentClerkId ? { talentClerkId, status, limit: 50 } : "skip"
   );
 }
 
 /**
  * Hook for upcoming bookings
  */
-export function useUpcomingBookings(clientId: string | undefined, limit = 10) {
+export function useUpcomingBookings(clerkId: string | undefined, limit = 10) {
   return useQuery(
-    api.bookings.getUpcomingBookings,
-    clientId ? { clientId, limit } : "skip"
+    api.sbookings.getUpcomingBookings,
+    clerkId ? { clerkId, limit } : "skip"
   );
 }
 
@@ -186,7 +196,7 @@ export function useUpcomingBookings(clientId: string | undefined, limit = 10) {
  */
 export function useBookingsByDate(studioId: string | undefined, date: string | undefined) {
   return useQuery(
-    api.bookings.getBookingsByDate,
+    api.sbookings.getBookingsByDate,
     (studioId && date) ? { studioId: studioId as Id<"studios">, date } : "skip"
   );
 }
@@ -200,7 +210,7 @@ export function useBookingsByDateRange(
   endDate: string | undefined
 ) {
   return useQuery(
-    api.bookings.getBookingsByDateRange,
+    api.sbookings.getBookingsByDateRange,
     (studioId && startDate && endDate)
       ? { studioId: studioId as Id<"studios">, startDate, endDate }
       : "skip"
@@ -212,8 +222,8 @@ export function useBookingsByDateRange(
  */
 export function useBooking(bookingId: string | undefined) {
   return useQuery(
-    api.bookings.getBookingById,
-    bookingId ? { bookingId: bookingId as Id<"bookings"> } : "skip"
+    api.sbookings.getBookingById,
+    bookingId ? { bookingId } : "skip"
   );
 }
 
@@ -228,7 +238,7 @@ export function useAvailableRooms(
   minCapacity?: number
 ) {
   return useQuery(
-    api.bookings.getAvailableRooms,
+    api.sbookings.getAvailableRooms,
     (studioId && date && startTime && endTime)
       ? {
           studioId: studioId as Id<"studios">,
@@ -249,10 +259,10 @@ export function useAvailableRooms(
  * Hook for booking mutations
  */
 export function useBookingMutations() {
-  const create = useMutation(api.bookings.createBooking);
-  const update = useMutation(api.bookings.updateBooking);
-  const updateStatus = useMutation(api.bookings.updateBookingStatus);
-  const cancel = useMutation(api.bookings.cancelBooking);
+  const create = useMutation(api.sbookings.createBooking);
+  const update = useMutation(api.sbookings.updateBooking);
+  const updateStatus = useMutation(api.sbookings.updateBookingStatus);
+  const cancel = useMutation(api.sbookings.cancelBooking);
 
   return {
     create,
@@ -263,11 +273,24 @@ export function useBookingMutations() {
 }
 
 /**
+ * Hook for Talent/Direct booking mutations
+ */
+export function useTalentBookingMutations() {
+  const acceptBooking = useMutation(api.bookings.acceptBooking);
+  const rejectBooking = useMutation(api.bookings.rejectBooking);
+
+  return {
+    acceptBooking,
+    rejectBooking,
+  };
+}
+
+/**
  * Hook for booking payment mutations
  */
 export function useBookingPaymentMutations() {
-  const createPayment = useMutation(api.bookings.createBookingPayment);
-  const updatePayment = useMutation(api.bookings.updateBookingPayment);
+  const createPayment = useMutation(api.sbookings.createBookingPayment);
+  const updatePayment = useMutation(api.sbookings.updateBookingPayment);
 
   return {
     createPayment,
@@ -284,7 +307,7 @@ export function useBookingPaymentMutations() {
  */
 export function useStudiosByOwner(ownerId: string | undefined) {
   return useQuery(
-    api.bookings.getStudiosByOwner,
+    api.sbookings.getStudiosByOwner,
     ownerId ? { ownerId } : "skip"
   );
 }
@@ -294,7 +317,7 @@ export function useStudiosByOwner(ownerId: string | undefined) {
  */
 export function useStudio(studioId: string | undefined) {
   return useQuery(
-    api.bookings.getStudioById,
+    api.sbookings.getStudioById,
     studioId ? { studioId: studioId as Id<"studios"> } : "skip"
   );
 }
@@ -311,7 +334,7 @@ export function useStudioSearch(filters: {
   amenities?: string[];
   limit?: number;
 }) {
-  return useQuery(api.bookings.searchStudios, filters);
+  return useQuery(api.sbookings.searchStudios, filters);
 }
 
 /**
@@ -319,7 +342,7 @@ export function useStudioSearch(filters: {
  */
 export function useRoomsByStudio(studioId: string | undefined) {
   return useQuery(
-    api.bookings.getRoomsByStudio,
+    api.sbookings.getRoomsByStudio,
     studioId ? { studioId: studioId as Id<"studios"> } : "skip"
   );
 }
@@ -329,7 +352,7 @@ export function useRoomsByStudio(studioId: string | undefined) {
  */
 export function useRoom(roomId: string | undefined) {
   return useQuery(
-    api.bookings.getRoomById,
+    api.sbookings.getRoomById,
     roomId ? { roomId: roomId as Id<"rooms"> } : "skip"
   );
 }
@@ -342,9 +365,9 @@ export function useRoom(roomId: string | undefined) {
  * Hook for studio mutations
  */
 export function useStudioMutations() {
-  const create = useMutation(api.bookings.createStudio);
-  const update = useMutation(api.bookings.updateStudio);
-  const remove = useMutation(api.bookings.deleteStudio);
+  const create = useMutation(api.sbookings.createStudio);
+  const update = useMutation(api.sbookings.updateStudio);
+  const remove = useMutation(api.sbookings.deleteStudio);
 
   return {
     create,
@@ -357,9 +380,9 @@ export function useStudioMutations() {
  * Hook for room mutations
  */
 export function useRoomMutations() {
-  const create = useMutation(api.bookings.createRoom);
-  const update = useMutation(api.bookings.updateRoom);
-  const remove = useMutation(api.bookings.deleteRoom);
+  const create = useMutation(api.sbookings.createRoom);
+  const update = useMutation(api.sbookings.updateRoom);
+  const remove = useMutation(api.sbookings.deleteRoom);
 
   return {
     create,

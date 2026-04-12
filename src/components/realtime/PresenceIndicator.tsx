@@ -2,19 +2,118 @@
  * Real-Time Components
  *
  * React components for Convex real-time features:
- * - Presence indicators
+ * - Presence indicators (SVG-based with proper status visuals)
  * - Typing indicators
- * - Profile switcher
- * - Real-time stats
+ * - Online users list
+ * - Unread counts badge
+ * - Session participants
+ * - Dashboard stats card
+ * - User presence card
  */
 
-import React from 'react';
-import { Circle, User, Users, Clock, MapPin } from 'lucide-react';
-import { usePresence, useBatchPresence } from '../../hooks/useRealtime';
-import { useActiveSession } from '../../hooks/useRealtime';
-import { useUnreadCounts } from '../../hooks/useRealtime';
-import { switchActiveProfile } from '../../config/mongoProfiles';
+import React, { useState } from 'react';
+import {
+  Circle, User, Users, Clock, MapPin,
+  Calendar, DollarSign, MessageSquare, Bell,
+} from 'lucide-react';
+import {
+  useBatchPresence,
+  useUnreadCounts,
+  useDashboardStats,
+  useActiveSession,
+  useTypingIndicator,
+  useUsersInLocation,
+} from '../../hooks/useRealtime';
 import type { SubProfile } from '../../types/dataDistribution';
+
+// ============================================================
+// SVG STATUS DOT COMPONENT
+// ============================================================
+
+interface StatusDotProps {
+  status: 'online' | 'offline' | 'away' | 'busy' | 'in_session';
+  size?: 'sm' | 'md' | 'lg';
+}
+
+/**
+ * SVG-based status indicator matching user spec:
+ * - Online (green): filled green dot with glow
+ * - Away (yellow): filled yellow dot with subtle pulse
+ * - Offline (gray): 2px stroke, no fill circle
+ * - Busy (red): red circle with diagonal slash (Do Not Disturb)
+ * - In Session (purple): filled purple dot with glow
+ */
+function StatusDot({ status, size = 'md' }: StatusDotProps) {
+  const dimensions = {
+    sm: { w: 8, h: 8 },
+    md: { w: 12, h: 12 },
+    lg: { w: 16, h: 16 },
+  };
+  const { w, h } = dimensions[size];
+  const cx = w / 2;
+  const cy = h / 2;
+
+  if (status === 'online') {
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="flex-shrink-0">
+        <circle cx={cx} cy={cy} r={cx - 1} fill="#22C55E" />
+        <circle cx={cx} cy={cy} r={cx - 2} fill="none" stroke="#22C55E" strokeWidth="0.5" opacity="0.3" />
+      </svg>
+    );
+  }
+
+  if (status === 'away') {
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="flex-shrink-0">
+        <circle cx={cx} cy={cy} r={cx - 1} fill="#EAB308" />
+        <circle cx={cx} cy={cy} r={cx - 2.5} fill="none" stroke="#EAB308" strokeWidth="0.75" opacity="0.4" className="animate-pulse" />
+      </svg>
+    );
+  }
+
+  if (status === 'offline') {
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="flex-shrink-0">
+        <circle cx={cx} cy={cy} r={cx - 2} fill="none" stroke="#9CA3AF" strokeWidth="2" />
+      </svg>
+    );
+  }
+
+  if (status === 'busy') {
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="flex-shrink-0">
+        {/* Outer circle */}
+        <circle cx={cx} cy={cy} r={cx - 2} stroke="#EF4444" strokeWidth="1.5" fill="none" />
+        {/* Diagonal slash line */}
+        <line
+          x1={cx - (cx - 2) * 0.707}
+          y1={cy - (cy - 2) * 0.707}
+          x2={cx + (cx - 2) * 0.707}
+          y2={cy + (cy - 2) * 0.707}
+          stroke="#EF4444"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
+
+  if (status === 'in_session') {
+    return (
+      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="flex-shrink-0">
+        <circle cx={cx} cy={cy} r={cx - 1} fill="#8B5CF6" />
+        <circle cx={cx} cy={cy} r={cx - 2} fill="none" stroke="#8B5CF6" strokeWidth="0.5" opacity="0.3" />
+      </svg>
+    );
+  }
+
+  // Fallback to offline
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="flex-shrink-0">
+      <circle cx={cx} cy={cy} r={cx - 2} fill="none" stroke="#9CA3AF" strokeWidth="2" />
+    </svg>
+  );
+}
 
 // ============================================================
 // PRESENCE INDICATOR
@@ -28,7 +127,7 @@ interface PresenceIndicatorProps {
 }
 
 /**
- * Shows online/offline status with colored dot
+ * Shows online/offline status with SVG dot
  */
 export function PresenceIndicator({
   userId,
@@ -41,20 +140,6 @@ export function PresenceIndicator({
 
   const status = userPresence?.status || 'offline';
   const lastSeen = userPresence?.lastSeen;
-
-  const sizeClasses = {
-    sm: 'w-2 h-2',
-    md: 'w-3 h-3',
-    lg: 'w-4 h-4',
-  };
-
-  const statusColors = {
-    online: 'bg-green-500',
-    offline: 'bg-gray-400',
-    away: 'bg-yellow-500',
-    busy: 'bg-red-500',
-    in_session: 'bg-purple-500',
-  };
 
   const formatLastSeen = (timestamp: number) => {
     const diff = Date.now() - timestamp;
@@ -70,7 +155,7 @@ export function PresenceIndicator({
 
   return (
     <div className="flex items-center gap-2">
-      <div className={`rounded-full ${sizeClasses[size]} ${statusColors[status]}]} />
+      <StatusDot status={status} size={size} />
       {showStatus && (
         <span className="text-xs text-gray-600 capitalize">
           {status.replace('_', ' ')}
@@ -119,8 +204,8 @@ export function TypingIndicator({ conversationId, excludeUserId }: TypingIndicat
       </div>
       <span>
         {visibleTypers.length === 1
-          ? `${visibleTypers[0].userName} is typing...`
-          : `${visibleTypers.map(u => u.userName).join(', ')} are typing...`}
+          ? visibleTypers[0].userName + ' is typing...'
+          : visibleTypers.map(u => u.userName).join(', ') + ' are typing...'}
       </span>
     </div>
   );
@@ -150,10 +235,8 @@ export function ProfileSwitcher({
 
   const handleSwitch = async (profileId: string) => {
     if (switching || profileId === activeProfile) return;
-
     setSwitching(true);
     try {
-      await switchActiveProfile(userId, profileId);
       onSwitch?.(profileId);
     } catch (error) {
       console.error('Failed to switch profile:', error);
@@ -185,11 +268,13 @@ export function ProfileSwitcher({
             key={profile.id}
             onClick={() => handleSwitch(profile.id)}
             disabled={switching}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+            className={[
+              'px-3 py-1.5 rounded-lg text-sm font-medium transition',
               profile.id === activeProfile
                 ? 'bg-brand-blue text-white shadow-lg'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            } ${switching ? 'opacity-50 cursor-not-allowed' : ''}`}
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+              switching ? 'opacity-50 cursor-not-allowed' : ''
+            ].filter(Boolean).join(' ')}
           >
             <span className="mr-1">{getProfileIcon(profile.type)}</span>
             {profile.name}
@@ -256,7 +341,7 @@ export function OnlineUsersList({ locationType, locationId, maxUsers = 10 }: Onl
                 </p>
               )}
             </div>
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
+            <StatusDot status="online" size="sm" />
           </div>
         ))}
       </div>
@@ -297,7 +382,7 @@ export function UnreadCountsBadge({ userId, position = 'top-right' }: UnreadCoun
   };
 
   return (
-    <div className={`absolute ${positionClasses[position]} flex items-center justify-center w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full`}>
+    <div className={['absolute', positionClasses[position], 'flex items-center justify-center w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full'].join(' ')}>
       {totalCount > 9 ? '9+' : totalCount}
     </div>
   );
@@ -346,7 +431,7 @@ export function SessionParticipants({ sessionId }: SessionParticipantsProps) {
               <p className="text-sm font-medium">{participant.displayName}</p>
               <p className="text-xs text-brand-blue">Host</p>
             </div>
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
+            <StatusDot status="online" size="sm" />
           </div>
         ))}
 
@@ -360,7 +445,7 @@ export function SessionParticipants({ sessionId }: SessionParticipantsProps) {
               <p className="text-sm font-medium">{participant.displayName}</p>
               <p className="text-xs text-gray-500">Guest</p>
             </div>
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
+            <StatusDot status="online" size="sm" />
           </div>
         ))}
 
@@ -374,7 +459,7 @@ export function SessionParticipants({ sessionId }: SessionParticipantsProps) {
               <p className="text-sm font-medium">{participant.displayName}</p>
               <p className="text-xs text-gray-500">Observer</p>
             </div>
-            <div className="w-2 h-2 bg-green-500 rounded-full" />
+            <StatusDot status="online" size="sm" />
           </div>
         ))}
       </div>
@@ -463,7 +548,7 @@ export function DashboardStatsCard({ userId }: DashboardStatsCardProps) {
         </div>
         <div className="flex justify-between text-sm mt-1">
           <span className="text-gray-600">Revenue</span>
-          <span className="font-semibold text-green-600">${stats.weekRevenue}</span>
+          <span className="font-semibold text-green-600">{stats.weekRevenue}</span>
         </div>
       </div>
     </div>
@@ -502,14 +587,6 @@ export function UserPresenceCard({ userId, displayName, photoUrl }: UserPresence
     return `${days}d ago`;
   };
 
-  const statusColors = {
-    online: 'bg-green-500',
-    offline: 'bg-gray-400',
-    away: 'bg-yellow-500',
-    busy: 'bg-red-500',
-    in_session: 'bg-purple-500',
-  };
-
   return (
     <div className="flex items-center gap-3 p-3 bg-white rounded-lg shadow-sm hover:shadow-md transition">
       <div className="relative">
@@ -520,7 +597,9 @@ export function UserPresenceCard({ userId, displayName, photoUrl }: UserPresence
             {displayName.charAt(0).toUpperCase()}
           </div>
         )}
-        <div className={`absolute bottom-0 right-0 w-3 h-3 ${statusColors[status]} border-2 border-white rounded-full`} />
+        <div className="absolute bottom-0 right-0">
+          <StatusDot status={status} size="sm" />
+        </div>
       </div>
 
       <div className="flex-1">

@@ -17,7 +17,18 @@ export const getUserByClerkId = query({
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
       .first();
 
-    return user;
+    if (!user) return null;
+
+    // Fetch and append subprofiles
+    const subProfilesList = await ctx.db
+      .query("subProfiles")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    return {
+      ...user,
+      subProfilesList,
+    };
   },
 });
 
@@ -95,22 +106,96 @@ export const searchUsers = query({
   handler: async (ctx, args) => {
     const limit = args.limit || 20;
 
-    // Get all users (in production, you'd want a proper full-text search)
+    // Get all users
     const allUsers = await ctx.db
       .query("users")
-      .take(limit * 2); // Get extra to filter
+      .take(limit * 3); // Fetch extra to filter
 
-    // Filter by search text
+    // Filter by search text (covers name, username, bio, accountTypes)
     const searchTerm = args.searchText.toLowerCase();
-    const filtered = allUsers.filter((user) =>
-      (user.username || "").toLowerCase().includes(searchTerm) ||
-      (user.displayName || "").toLowerCase().includes(searchTerm) ||
-      (user.bio || "").toLowerCase().includes(searchTerm)
+    const filtered = searchTerm
+      ? allUsers.filter((user) =>
+          (user.username || "").toLowerCase().includes(searchTerm) ||
+          (user.displayName || "").toLowerCase().includes(searchTerm) ||
+          (user.firstName || "").toLowerCase().includes(searchTerm) ||
+          (user.lastName || "").toLowerCase().includes(searchTerm) ||
+          (user.bio || "").toLowerCase().includes(searchTerm) ||
+          (user.accountTypes || []).some((t: string) =>
+            t.toLowerCase().includes(searchTerm)
+          )
+        )
+      : allUsers;
+
+    const limited = filtered.slice(0, limit);
+
+    // Enrich each user with their subprofiles for talent info
+    const enriched = await Promise.all(
+      limited.map(async (user) => {
+        const subProfiles = await ctx.db
+          .query("subProfiles")
+          .withIndex("by_user", (q) => q.eq("userId", user._id))
+          .collect();
+
+        // Build a subProfilesMap keyed by role
+        const subProfilesMap: Record<string, any> = {};
+        for (const sp of subProfiles) {
+          subProfilesMap[sp.role] = sp;
+        }
+
+        // Build a flat talentInfo from the most relevant subprofile
+        // Priority: Talent > Producer > Engineer > first accountType
+        const talentRoles = ["Talent", "Producer", "Engineer", "Composer"];
+        let primarySubProfile: any = null;
+        for (const role of talentRoles) {
+          if (subProfilesMap[role]) {
+            primarySubProfile = subProfilesMap[role];
+            break;
+          }
+        }
+        if (!primarySubProfile && subProfiles.length > 0) {
+          primarySubProfile = subProfiles[0];
+        }
+
+        const talentInfo = primarySubProfile
+          ? {
+              rate: (primarySubProfile as any).hourlyRate ?? (primarySubProfile as any).rate,
+              yearsExperience: (primarySubProfile as any).yearsExperience ?? (primarySubProfile as any).yearsExp,
+              genres: (primarySubProfile as any).genres || [],
+              skills: (primarySubProfile as any).skills || [],
+              vocalRange: (primarySubProfile as any).vocalRange,
+              vocalStyles: (primarySubProfile as any).vocalStyles || [],
+              djStyles: (primarySubProfile as any).djStyles || [],
+              productionStyles: (primarySubProfile as any).productionStyles || [],
+              engineeringSpecialty: (primarySubProfile as any).engineeringSpecialty,
+              city: (primarySubProfile as any).city || (user as any).city,
+              state: (primarySubProfile as any).state || (user as any).state,
+              location: (primarySubProfile as any).location,
+              bio: (primarySubProfile as any).bio || user.bio,
+              portfolio: (primarySubProfile as any).portfolio,
+            }
+          : {
+              rate: (user as any).hourlyRate,
+              genres: (user as any).genres || [],
+              skills: (user as any).skills || [],
+              city: (user as any).city,
+              state: (user as any).state,
+            };
+
+        const u = user as any;
+        return {
+          ...user,
+          profilePhoto: u.imageUrl || u.avatarUrl || u.profilePhoto,
+          subProfiles: subProfilesMap,
+          subProfilesList: subProfiles,
+          talentInfo,
+        };
+      })
     );
 
-    return filtered.slice(0, limit);
+    return enriched;
   },
 });
+
 
 /**
  * Get users by account type
@@ -205,6 +290,59 @@ export const searchUsersByProfile = query({
   },
 });
 
+/**
+ * Get user's public display name based on their active role
+ * Resolves display name using SubProfile preferences
+ */
+export const getPublicDisplayName = query({
+  args: {
+    clerkId: v.string(),
+    role: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) return null;
+
+    // Determine target role
+    const targetRole = args.role || user.activeRole || user.accountTypes?.[0];
+    if (!targetRole) {
+      // Fallback to main profile display name
+      return user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+    }
+
+    // Find subprofile for the target role
+    const subProfile = await ctx.db
+      .query("subProfiles")
+      .withIndex("by_user_role", (q) =>
+        q.eq("userId", user._id).eq("role", targetRole)
+      )
+      .first();
+
+    if (!subProfile) {
+      // Fallback to main profile display name
+      return user.displayName || `${user.firstName} ${user.lastName}`.trim() || user.username;
+    }
+
+    // Resolve display name based on subprofile preference
+    switch (subProfile.displayNamePreference) {
+      case "legal":
+        return `${user.firstName} ${user.lastName}`.trim();
+      case "username":
+        return user.username || "";
+      case "custom":
+        return subProfile.customDisplayName ||
+               subProfile.displayName ||
+               `${user.firstName} ${user.lastName}`.trim();
+      default:
+        return subProfile.displayName || user.displayName;
+    }
+  },
+});
+
 // =====================================================
 // USER MUTATIONS
 // =====================================================
@@ -236,18 +374,25 @@ export const syncUserFromClerk = mutation({
 
     if (existing) {
       // Update existing user
-      await ctx.db.patch(existing._id, {
+      const updateData: any = {
         email: args.email,
-        username: args.username,
         emailVerified: args.emailVerified ?? existing.emailVerified,
         firstName: args.firstName,
         lastName: args.lastName,
-        displayName: displayName || existing.displayName,
+        // Prioritize existing displayName over constructed one to preserve user's choice
+        displayName: existing.displayName || displayName,
         avatarUrl: args.imageUrl || existing.avatarUrl,
         // Initialize profileName if not set
         profileName: existing.profileName || displayName,
         lastActiveAt: Date.now(),
-      });
+      };
+
+      // Only set username if it's not already set (set-once from Clerk)
+      if (!existing.username && args.username) {
+        updateData.username = args.username;
+      }
+
+      await ctx.db.patch(existing._id, updateData);
       return existing._id;
     } else {
       // Create new user
@@ -393,13 +538,12 @@ export const updateProfile = mutation({
     // Technician-specific fields
     technicianSkills: v.optional(v.string()),
 
-    // Settings
-    settings: v.optional(v.object({
-      privacy: v.string(),
-      notificationsEnabled: v.boolean(),
-      showEmail: v.boolean(),
-      showLocation: v.boolean(),
-    })),
+    // Settings - accept any object to support complex settings structure
+    settings: v.optional(v.any()),
+
+    // NEW: Account type and role fields
+    accountTypes: v.optional(v.array(v.string())),
+    activeProfileRole: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db
@@ -530,6 +674,10 @@ export const updateProfile = mutation({
 
     // Settings
     if (args.settings !== undefined) updateData.settings = args.settings;
+
+    // NEW: Account type and role fields
+    if (args.accountTypes !== undefined) updateData.accountTypes = args.accountTypes;
+    if (args.activeProfileRole !== undefined) updateData.activeRole = args.activeProfileRole;
 
     // Update user
     await ctx.db.patch(user._id, updateData);
@@ -674,9 +822,12 @@ export const getSubProfiles = query({
  */
 export const createSubProfile = mutation({
   args: {
-    userId: v.id("users"),
+    clerkId: v.string(), // Changed from userId to clerkId for easier frontend use
     role: v.string(),
-    displayName: v.string(),
+    // NEW: Display name preferences
+    displayNamePreference: v.optional(v.string()), // "legal" | "username" | "custom"
+    customDisplayName: v.optional(v.string()),
+    displayName: v.optional(v.string()), // Now optional - will be computed
     photoUrl: v.optional(v.string()),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -740,10 +891,43 @@ export const createSubProfile = mutation({
     acceptingDemos: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Get user from clerkId
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    // Compute display name based on preference
+    let computedDisplayName = args.displayName || "";
+    const preference = args.displayNamePreference || "legal";
+
+    switch (preference) {
+      case "legal":
+        computedDisplayName = `${user.firstName} ${user.lastName}`.trim();
+        break;
+      case "username":
+        computedDisplayName = user.username || "";
+        break;
+      case "custom":
+        computedDisplayName = args.customDisplayName ||
+                           args.displayName ||
+                           `${user.firstName} ${user.lastName}`.trim();
+        break;
+      default:
+        computedDisplayName = args.displayName || `${user.firstName} ${user.lastName}`.trim();
+    }
+
     const subProfile = await ctx.db.insert("subProfiles", {
-      userId: args.userId,
+      userId: user._id,
       role: args.role,
-      displayName: args.displayName,
+      // NEW: Store display preferences
+      displayNamePreference: preference,
+      customDisplayName: args.customDisplayName,
+      displayName: computedDisplayName,
       photoUrl: args.photoUrl,
       bio: args.bio,
       location: args.location,
@@ -821,6 +1005,9 @@ export const createSubProfile = mutation({
 export const updateSubProfile = mutation({
   args: {
     subProfileId: v.id("subProfiles"),
+    // NEW: Display name preferences
+    displayNamePreference: v.optional(v.string()), // "legal" | "username" | "custom"
+    customDisplayName: v.optional(v.string()),
     displayName: v.optional(v.string()),
     photoUrl: v.optional(v.string()),
     bio: v.optional(v.string()),
@@ -886,12 +1073,70 @@ export const updateSubProfile = mutation({
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    // Get the subprofile to check if display preferences are changing
+    const existingProfile = await ctx.db.get(args.subProfileId);
+    if (!existingProfile) {
+      throw new Error("SubProfile not found");
+    }
+
+    // Get the user to compute display name
+    const user = await ctx.db.get(existingProfile.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
     // Build update object with only provided fields
     const updateData: any = {
       updatedAt: Date.now(),
     };
 
-    if (args.displayName !== undefined) updateData.displayName = args.displayName;
+    // NEW: Handle display preferences
+    const newPreference = args.displayNamePreference !== undefined
+      ? args.displayNamePreference
+      : existingProfile.displayNamePreference;
+
+    const newCustomName = args.customDisplayName !== undefined
+      ? args.customDisplayName
+      : existingProfile.customDisplayName;
+
+    // Store display preferences
+    if (args.displayNamePreference !== undefined) {
+      updateData.displayNamePreference = args.displayNamePreference;
+    }
+    if (args.customDisplayName !== undefined) {
+      updateData.customDisplayName = args.customDisplayName;
+    }
+
+    // Recompute display name if preferences changed or displayName explicitly set
+    const shouldRecomputeDisplayName =
+      args.displayNamePreference !== undefined ||
+      args.customDisplayName !== undefined ||
+      args.displayName !== undefined;
+
+    if (shouldRecomputeDisplayName) {
+      // Use explicit displayName if provided, otherwise compute based on preference
+      if (args.displayName !== undefined) {
+        updateData.displayName = args.displayName;
+      } else {
+        // Compute based on preference
+        switch (newPreference) {
+          case "legal":
+            updateData.displayName = `${user.firstName} ${user.lastName}`.trim();
+            break;
+          case "username":
+            updateData.displayName = user.username || "";
+            break;
+          case "custom":
+            updateData.displayName = newCustomName ||
+                                   existingProfile.displayName ||
+                                   `${user.firstName} ${user.lastName}`.trim();
+            break;
+          default:
+            updateData.displayName = existingProfile.displayName;
+        }
+      }
+    }
+
     if (args.photoUrl !== undefined) updateData.photoUrl = args.photoUrl;
     if (args.bio !== undefined) updateData.bio = args.bio;
     if (args.location !== undefined) updateData.location = args.location;
@@ -1045,15 +1290,30 @@ export const isFollowing = query({
  */
 export const followUser = mutation({
   args: {
-    followerId: v.id("users"),
-    followingId: v.id("users"),
+    followerClerkId: v.string(),
+    followingClerkId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get both users by clerkId
+    const follower = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
+      .first();
+
+    const following = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
+      .first();
+
+    if (!follower || !following) {
+      throw new Error("User not found");
+    }
+
     // Check if already following
     const existing = await ctx.db
       .query("follows")
       .withIndex("by_pair", (q) =>
-        q.eq("followerId", args.followerId).eq("followingId", args.followingId)
+        q.eq("followerId", follower._id).eq("followingId", following._id)
       )
       .first();
 
@@ -1063,21 +1323,13 @@ export const followUser = mutation({
 
     // Create follow relationship
     await ctx.db.insert("follows", {
-      followerId: args.followerId,
-      followingId: args.followingId,
+      followerId: follower._id,
+      followingId: following._id,
       createdAt: Date.now(),
     });
 
-    // Get users to update stats
-    const follower = await ctx.db.get(args.followerId);
-    const following = await ctx.db.get(args.followingId);
-
-    if (!follower || !following) {
-      throw new Error("User not found");
-    }
-
     // Update follower counts
-    await ctx.db.patch(args.followerId, {
+    await ctx.db.patch(follower._id, {
       stats: {
         followersCount: follower.stats?.followersCount || 0,
         followingCount: (follower.stats?.followingCount || 0) + 1,
@@ -1086,7 +1338,7 @@ export const followUser = mutation({
       },
     });
 
-    await ctx.db.patch(args.followingId, {
+    await ctx.db.patch(following._id, {
       stats: {
         followersCount: (following.stats?.followersCount || 0) + 1,
         followingCount: following.stats?.followingCount || 0,
@@ -1104,14 +1356,29 @@ export const followUser = mutation({
  */
 export const unfollowUser = mutation({
   args: {
-    followerId: v.id("users"),
-    followingId: v.id("users"),
+    followerClerkId: v.string(),
+    followingClerkId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get both users by clerkId
+    const follower = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
+      .first();
+
+    const following = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
+      .first();
+
+    if (!follower || !following) {
+      throw new Error("User not found");
+    }
+
     const follow = await ctx.db
       .query("follows")
       .withIndex("by_pair", (q) =>
-        q.eq("followerId", args.followerId).eq("followingId", args.followingId)
+        q.eq("followerId", follower._id).eq("followingId", following._id)
       )
       .first();
 
@@ -1121,16 +1388,8 @@ export const unfollowUser = mutation({
 
     await ctx.db.delete(follow._id);
 
-    // Get users to update stats
-    const follower = await ctx.db.get(args.followerId);
-    const following = await ctx.db.get(args.followingId);
-
-    if (!follower || !following) {
-      throw new Error("User not found");
-    }
-
     // Update follower counts
-    await ctx.db.patch(args.followerId, {
+    await ctx.db.patch(follower._id, {
       stats: {
         followersCount: follower.stats?.followersCount || 0,
         followingCount: Math.max(0, (follower.stats?.followingCount || 1) - 1),
@@ -1139,7 +1398,7 @@ export const unfollowUser = mutation({
       },
     });
 
-    await ctx.db.patch(args.followingId, {
+    await ctx.db.patch(following._id, {
       stats: {
         followersCount: Math.max(0, (following.stats?.followersCount || 1) - 1),
         followingCount: following.stats?.followingCount || 0,
@@ -1302,7 +1561,7 @@ export const getFullUserData = query({
         .withIndex("by_user", (q) => q.eq("userId", user._id))
         .collect(),
       ctx.db
-        .query("bookings")
+        .query("sbookings")
         .withIndex("by_client", (q) => q.eq("clientId", user._id))
         .collect(),
     ]);
@@ -1315,6 +1574,7 @@ export const getFullUserData = query({
 
     return {
       ...user,
+      activeProfileRole: user.activeRole,
       subProfiles: subProfilesMap,
       bookingCount: bookings.length,
       tokenBalance: 0, // Placeholder until Wallet logic is explicitly migrated
@@ -1829,5 +2089,33 @@ export const getSimilarUsers = query({
       .map(item => item.user);
 
     return scoredUsers;
+  },
+});
+
+/**
+ * Update user subscription tier
+ * Called by Stripe webhook upon checkout session or subscription completion
+ */
+export const updateUserTier = mutation({
+  args: {
+    clerkId: v.string(),
+    tier: v.string(), // e.g., 'BASIC', 'PRO', 'STUDIO'
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    await ctx.db.patch(user._id, {
+      activeRole: args.tier,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
   },
 });

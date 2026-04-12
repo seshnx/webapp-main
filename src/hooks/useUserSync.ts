@@ -22,11 +22,15 @@ export const useUserSync = () => {
     // Run sync silently in the background once per session
     if (isLoaded && isSignedIn && userId && user && !syncStarted.current) {
       syncStarted.current = true;
-      
+
+      // Generate username from email if not provided by Clerk
+      const email = user.primaryEmailAddress?.emailAddress || "";
+      const generatedUsername = user.username || email.split('@')[0] || undefined;
+
       syncUser({
         clerkId: userId,
-        email: user.primaryEmailAddress?.emailAddress || "",
-        username: user.username || undefined,
+        email: email,
+        username: generatedUsername,
         emailVerified: user.primaryEmailAddress?.verification.status === "verified",
         firstName: user.firstName || undefined,
         lastName: user.lastName || undefined,

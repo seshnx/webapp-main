@@ -8,7 +8,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { priceId, mode = 'payment', successUrl, cancelUrl } = req.body;
+    const { userId, packId, priceId, mode = 'payment', successUrl, cancelUrl } = req.body;
 
     if (!priceId || !successUrl || !cancelUrl) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -22,6 +22,11 @@ export default async function handler(req, res) {
           quantity: 1,
         },
       ],
+      metadata: {
+        userId,
+        packId: packId || '',
+        mode,
+      },
       success_url: successUrl,
       cancel_url: cancelUrl,
     });

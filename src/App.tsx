@@ -6,12 +6,14 @@ import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
 import { useUserSync } from './hooks/useUserSync';
+import { useStudioSubdomain } from './hooks/useStudioSubdomain';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { queryClient } from './config/queryClient';
 
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
 const AppRoutes = lazy(() => import('./routes/AppRoutes'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
+const SubdomainRouter = lazy(() => import('./components/SubdomainRouter'));
 
 export default function App(): JSX.Element {
   const navigate = useNavigate();
@@ -46,6 +48,25 @@ export default function App(): JSX.Element {
     await clerk?.signOut();
     navigate('/login', { replace: true });
   }, [clerk, navigate]);
+
+  // ── Subdomain bypass ────────────────────────────────────
+  // Studio subdomains render their own UI without requiring auth.
+  const { isSubdomain, slug } = useStudioSubdomain();
+  if (isSubdomain && slug) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <LanguageProvider>
+          <Suspense fallback={
+            <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
+              <Loader2 className="animate-spin text-brand-blue" size={48} />
+            </div>
+          }>
+            <SubdomainRouter slug={slug} />
+          </Suspense>
+        </LanguageProvider>
+      </QueryClientProvider>
+    );
+  }
 
   // =========================================================
   // CRITICAL LOADING LOGIC:

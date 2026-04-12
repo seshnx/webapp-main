@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { User, MessageSquare, Calendar, MessageCircle, Home } from 'lucide-react';
 
 /**
@@ -8,6 +9,7 @@ interface NavItem {
   id: string;
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   label: string;
+  path: string;
 }
 
 /**
@@ -26,10 +28,11 @@ interface MobileBottomNavProps {
  */
 export default function MobileBottomNav({ activeTab, setActiveTab }: MobileBottomNavProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+      setIsMobile(window.innerWidth < window.screen.width * 0.65);
     };
 
     checkMobile();
@@ -40,12 +43,19 @@ export default function MobileBottomNav({ activeTab, setActiveTab }: MobileBotto
   if (!isMobile) return null;
 
   const navItems: NavItem[] = [
-    { id: 'dashboard', icon: Home, label: 'Home' },
-    { id: 'feed', icon: MessageSquare, label: 'Feed' },
-    { id: 'bookings', icon: Calendar, label: 'Bookings' },
-    { id: 'messages', icon: MessageCircle, label: 'Messages' },
-    { id: 'profile', icon: User, label: 'Profile' },
+    // ACTIVE MODULES: Dashboard, Feed, Bookings, Profile
+    { id: 'dashboard', icon: Home, label: 'Home', path: '/dashboard' },
+    { id: 'feed', icon: MessageSquare, label: 'Feed', path: '/feed' },
+    { id: 'bookings', icon: Calendar, label: 'Bookings', path: '/bookings' },
+    { id: 'profile', icon: User, label: 'Profile', path: '/profile' },
+    // DISABLED MODULES
+    // { id: 'messages', icon: MessageCircle, label: 'Messages', path: '/messages' },
   ];
+
+  const handleNavigation = (item: NavItem) => {
+    setActiveTab(item.id);
+    navigate(item.path);
+  };
 
   return (
     <nav
@@ -61,7 +71,7 @@ export default function MobileBottomNav({ activeTab, setActiveTab }: MobileBotto
           return (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
+              onClick={() => handleNavigation(item)}
               className={`flex flex-col items-center justify-center gap-1 flex-1 h-full transition-colors ${
                 isActive
                   ? 'text-brand-blue dark:text-blue-400'

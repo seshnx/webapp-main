@@ -6,14 +6,14 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
-import { useVercelImageUpload } from '../hooks/useVercelUpload';
+import { useImageUpload } from '../hooks/useUpload';
 import toast from 'react-hot-toast';
 import SettingsTab from './SettingsTab';
 import { PROFILE_SCHEMAS, GENRE_DATA, INSTRUMENT_DATA } from '../config/constants';
 import { MultiSelect, NestedSelect } from './shared/Inputs';
 import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
 import SoftwareAutocomplete from './shared/SoftwareAutocomplete';
-import { useUpdateProfile } from '@/hooks/useConvex';
+import { useUpdateProfile, useUpdateSubProfile, useCreateSubProfile } from '@/hooks/useConvex';
 import PageLayout from './shared/PageLayout';
 
 // --- Interfaces ---
@@ -31,6 +31,7 @@ interface UserData {
   bannerURL?: string;
   useLegalNameOnly?: boolean;
   useUserNameOnly?: boolean;
+  useDisplayNameOnly?: boolean;
   effectiveDisplayName?: string;
   accountTypes?: string[];
   talentSubRole?: string;
@@ -65,6 +66,8 @@ interface DynamicSubProfileFormProps {
   initialData: any;
   schema: any[];
   onSave: () => Promise<void>;
+  updateSubProfile: any;
+  createSubProfile: any;
 }
 
 interface ProfileManagerProps {
@@ -88,9 +91,9 @@ const mainProfileSchema = z.object({
     lastName: z.string().min(2, "Last name too short"),
     displayName: z.string().optional(),
     bio: z.string().max(500, "Bio exceeds 500 characters").optional(),
-    zip: z.string().regex(/^\d{5}$/, "Invalid ZIP code").optional().or(z.literal('')),
+    zip: z.string().optional(),
     hourlyRate: z.number().min(0, "Rate cannot be negative").optional(),
-    website: z.string().url("Invalid URL").optional().or(z.literal('')),
+    website: z.string().optional(),
 });
 
 const getInitials = (first?: string, last?: string, display?: string): string => {
@@ -113,6 +116,8 @@ export default function ProfileManager({
 
     // Convex mutations
     const updateProfile = useUpdateProfile();
+    const updateSubProfile = useUpdateSubProfile();
+    const createSubProfile = useCreateSubProfile();
 
     // Get active tab from URL path
     const getTabFromPath = (path: string): TabInfo => {
@@ -132,7 +137,7 @@ export default function ProfileManager({
     const [activeSubTab, setActiveSubTab] = useState<string>(() => getTabFromPath(location.pathname).mainTab);
     const [selectedRole, setSelectedRole] = useState<string>('Main');
     const [saving, setSaving] = useState<boolean>(false);
-    const { uploadImage, uploading } = useVercelImageUpload();
+    const { uploadImage, uploading } = useImageUpload();
     const [bannerUploading, setBannerUploading] = useState<boolean>(false); // New state for banner
 
     // Sync URL with active tab
@@ -151,27 +156,6 @@ export default function ProfileManager({
         }
     }, [location.pathname]);
 
-    // Toggle States
-    const [useLegalNameOnly, setUseLegalNameOnly] = useState<boolean>(userData?.useLegalNameOnly || false);
-    const [useUserNameOnly, setUseUserNameOnly] = useState<boolean>(userData?.useUserNameOnly || false);
-
-    useEffect(() => {
-        setUseLegalNameOnly(userData?.useLegalNameOnly || false);
-        setUseUserNameOnly(userData?.useUserNameOnly || false);
-    }, [userData]);
-
-    const toggleLegalOnly = (): void => {
-        const newVal = !useLegalNameOnly;
-        setUseLegalNameOnly(newVal);
-        if (newVal) setUseUserNameOnly(false);
-    };
-
-    const toggleUserOnly = (): void => {
-        const newVal = !useUserNameOnly;
-        setUseUserNameOnly(newVal);
-        if (newVal) setUseLegalNameOnly(false);
-    };
-
     const {
         register,
         handleSubmit,
@@ -184,165 +168,62 @@ export default function ProfileManager({
             lastName: userData?.lastName || '',
             displayName: userData?.displayName || '',
             bio: userData?.bio || '',
-            zip: userData?.zip || '',
+            zip: userData?.zipCode || '',
             hourlyRate: userData?.hourlyRate || 0,
             website: userData?.website || '',
         }
     });
 
-    // Load MongoDB profile data on mount
+    // Reset form when userData changes (e.g., after Convex updates)
     useEffect(() => {
-        const loadMongoProfile = async () => {
-            const userId = user?.id || user?.uid;
-            if (!userId) return;
+        if (userData) {
+            reset({
+                firstName: userData.firstName || '',
+                lastName: userData.lastName || '',
+                displayName: userData.displayName || '',
+                bio: userData.bio || '',
+                zip: userData.zipCode || '',
+                hourlyRate: userData.hourlyRate || 0,
+                website: userData.website || '',
+            });
+        }
+    }, [userData, reset]);
 
-            try {
-                const response = await fetch(`/api/user/profile?user_id=${encodeURIComponent(userId)}`);
-                if (response.ok) {
-                    const mongoData = await response.json();
+    // Remove MongoDB loading - all data now from Convex userData
 
-                    // Update form with MongoDB profile data
-                    if (mongoData.profile) {
-                        reset({
-                            firstName: userData?.firstName || '',
-                            lastName: userData?.lastName || '',
-                            displayName: mongoData.profile.display_name || userData?.displayName || '',
-                            bio: mongoData.profile.bio || userData?.bio || '',
-                            zip: userData?.zip || '', // Keep zip from userData (from Neon)
-                            hourlyRate: userData?.hourlyRate || 0,
-                            website: mongoData.profile.website || userData?.website || '',
-                        });
-                    }
-
-                    // Store subprofiles for later use
-                    if (mongoData.subprofiles) {
-                        setMongoSubprofiles(mongoData.subprofiles);
-                    }
-                }
-            } catch (error) {
-                console.error('Failed to load MongoDB profile:', error);
-                // Continue with userData from Neon as fallback
-            }
-        };
-
-        loadMongoProfile();
-    }, [user?.id, user?.uid]);
-
-    const [mongoSubprofiles, setMongoSubprofiles] = useState<any>({});
 
     const onMainSubmit = async (data: ProfileFormValues): Promise<void> => {
         setSaving(true);
         const toastId = toast.loading('Saving main profile...');
         try {
-            let effectiveName = `${data.firstName} ${data.lastName}`;
-            if (useLegalNameOnly) effectiveName = `${data.firstName} ${data.lastName}`;
-            else if (useUserNameOnly && data.displayName) effectiveName = data.displayName;
-            else if (data.displayName) effectiveName = `${data.firstName} "${data.displayName}" ${data.lastName}`;
-
-            const searchTerms = [
-                data.firstName.toLowerCase(),
-                data.lastName.toLowerCase(),
-                (data.displayName || '').toLowerCase(),
-                effectiveName.toLowerCase()
-            ].filter(Boolean);
-
             const userId = user?.id || user?.uid;
 
-            // SEPARATE DATA INTO LEGAL (Neon) AND PROFILE (MongoDB)
-
-            // 1. Legal information only - saved to Neon
-            const legalUpdates: any = {
-                first_name: data.firstName,
-                last_name: data.lastName,
-            };
-
-            // 2. Profile information - saved to MongoDB
-            const mongoProfile: any = {};
-
-            // Only update display_name if it has a value (don't overwrite with null/empty)
-            if (data.displayName && data.displayName.trim()) {
-                mongoProfile.display_name = data.displayName.trim();
-            }
-
-            // Only update bio if it has a value
-            if (data.bio && data.bio.trim()) {
-                mongoProfile.bio = data.bio.trim();
-            }
-
-            // Only update website if it has a value
-            if (data.website && data.website.trim()) {
-                mongoProfile.website = data.website.trim();
-            }
-
-            // Only update location if it has a value
-            if (data.location && data.location.trim()) {
-                mongoProfile.location = data.location.trim();
-            }
-
-            // Add photo URL and banner URL if they exist
-            if (userData?.photoURL) {
-                mongoProfile.photo_url = userData.photoURL;
-            }
-            if (userData?.banner_url) {
-                mongoProfile.banner_url = userData.banner_url;
-            }
-
-            // 3. Prepare subprofiles for MongoDB
-            const subprofiles = [];
-
-            // Technician subprofile
-            if (userData?.accountTypes?.includes('Technician')) {
-                subprofiles.push({
-                    role: 'Technician',
-                    specialties: data.specialties || [],
-                    hourly_rate: data.hourlyRate || null,
-                    availability_status: data.availabilityStatus || 'Available',
-                    service_radius: data.serviceRadius || null,
-                    location: data.location ? {
-                        city: data.location.split(',')[0]?.trim() || '',
-                        state: data.location.split(',')[1]?.trim() || '',
-                        zip: data.zip || ''
-                    } : null
-                });
-            }
-
-            // Talent subprofile
-            if (userData?.accountTypes?.includes('Talent')) {
-                subprofiles.push({
-                    role: 'Talent',
-                    genres: data.genres || [],
-                    hourly_rate: data.hourlyRate || null,
-                    bio: data.bio || '',
-                    website: data.website || ''
-                });
-            }
-
-            // Update legal info using Convex
+            // Save everything to Convex
             await updateProfile({
                 clerkId: userId,
-                ...legalUpdates
+                firstName: data.firstName,
+                lastName: data.lastName,
+                displayName: data.displayName || '',
+                bio: data.bio || '',
+                zipCode: data.zip || '',
+                hourlyRate: data.hourlyRate || 0,
+                website: data.website || '',
+                avatarUrl: userData?.photoURL,
+                bannerUrl: userData?.bannerURL,
             });
 
-            // Update profile and subprofiles in MongoDB
-            // TODO: Migrate this MongoDB API call to Convex
-            // For now, this handles additional profile fields not yet in Convex schema
-            if (Object.keys(mongoProfile).length > 0 || subprofiles.length > 0) {
-                const mongoResponse = await fetch('/api/user/profile', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        user_id: userId,
-                        profile: Object.keys(mongoProfile).length > 0 ? mongoProfile : undefined,
-                        subprofiles: subprofiles.length > 0 ? subprofiles : undefined
-                    })
-                });
+            // Reset form with saved data to ensure displayName persists
+            reset({
+                firstName: data.firstName,
+                lastName: data.lastName,
+                displayName: data.displayName || '',
+                bio: data.bio || '',
+                zip: data.zip || '',
+                hourlyRate: data.hourlyRate || 0,
+                website: data.website || '',
+            });
 
-                if (!mongoResponse.ok) {
-                    console.warn('MongoDB profile update failed, but Neon update succeeded');
-                }
-            }
-
-            toast.success('Profile Updated & Synced!', { id: toastId });
+            toast.success('Profile Updated!', { id: toastId });
         } catch (error) {
             console.error("Update failed", error);
             const errorMessage = (error as Error)?.message || "Failed to update profile.";
@@ -360,19 +241,11 @@ export default function ProfileManager({
         try {
             const url = await uploadImage(file, 'profile-photos');
 
-            // Update profile photo URL in MongoDB
-            const mongoResponse = await fetch('/api/user/profile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    profile: { photo_url: url }
-                })
+            // Update profile photo URL in Convex
+            await updateProfile({
+                clerkId: userId,
+                avatarUrl: url,
             });
-
-            if (!mongoResponse.ok) {
-                throw new Error('Failed to update profile photo in MongoDB');
-            }
 
             toast.success('Photo updated!', { id: toastId });
         } catch (err) {
@@ -393,19 +266,11 @@ export default function ProfileManager({
             // Upload to Vercel Blob
             const url = await uploadImage(file, 'profile-banners');
 
-            // Update banner URL in MongoDB
-            const mongoResponse = await fetch('/api/user/profile', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    profile: { banner_url: url }
-                })
+            // Update banner URL in Convex
+            await updateProfile({
+                clerkId: userId,
+                bannerUrl: url,
             });
-
-            if (!mongoResponse.ok) {
-                throw new Error('Failed to update banner in MongoDB');
-            }
 
             toast.success('Cover banner updated!', { id: toastId });
         } catch (err) {
@@ -420,19 +285,11 @@ export default function ProfileManager({
     const handleSettingsUpdate = async (newSettings: any): Promise<void> => {
         const userId = user?.id || user?.uid;
         try {
-            // Update settings using MongoDB
-            const response = await fetch('/api/user/settings', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: userId,
-                    settings: newSettings
-                })
+            // Update settings using Convex
+            await updateProfile({
+                clerkId: userId,
+                settings: newSettings,
             });
-
-            if (!response.ok) {
-                throw new Error('Failed to save settings');
-            }
 
             toast.success("Settings saved.");
         } catch (error) {
@@ -526,14 +383,25 @@ export default function ProfileManager({
                                             <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">First Name (Legal)</label><input {...register("firstName")} className={inputClass(errors.firstName)} /></div>
                                             <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Last Name (Legal)</label><input {...register("lastName")} className={inputClass(errors.lastName)} /></div>
                                         </div>
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">User Name (Display Name)</label><input {...register("displayName")} className={inputClass(errors.displayName)} placeholder="e.g. SeshMaster" /></div>
 
-                                        {/* Name Toggle Logic */}
-                                        <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600 space-y-3">
-                                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Display Name Preferences</label>
-                                            <div className="flex items-center justify-between"><span className="text-sm dark:text-gray-200">Use Legal Name Only</span><button type="button" onClick={toggleLegalOnly} className="text-brand-blue">{useLegalNameOnly ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button></div>
-                                            <div className="flex items-center justify-between"><span className="text-sm dark:text-gray-200">Use User Name Only</span><button type="button" onClick={toggleUserOnly} className="text-brand-blue">{useUserNameOnly ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button></div>
-                                            <div className="text-xs text-gray-500 italic mt-2 border-t dark:border-gray-700 pt-2">Preview: <strong className="text-brand-blue">{useLegalNameOnly ? `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || 'Not Set' : useUserNameOnly ? (userData?.displayName || 'Not Set') : `${userData?.firstName || ''} "${userData?.displayName || 'User'}" ${userData?.lastName || ''}`.trim() || 'Not Set'}</strong></div>
+                                        {/* Username (from Clerk, never editable) */}
+                                        {userData?.username && (
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Username</label>
+                                                <input
+                                                    value={userData.username}
+                                                    disabled
+                                                    className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:text-gray-400 bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 cursor-not-allowed font-mono text-sm"
+                                                />
+                                            </div>
+                                        )}
+
+                                        <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Display Name (Editable)</label><input {...register("displayName")} className={inputClass(errors.displayName)} placeholder="e.g. SeshMaster" /></div>
+
+                                        {/* Info Banner: Display preferences moved to SubProfiles */}
+                                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                                            <p className="text-xs font-bold text-blue-900 dark:text-blue-200 mb-1">ℹ️ Note:</p>
+                                            <p className="text-xs text-blue-800 dark:text-blue-300">Display name preferences are now configured per role (Talent, Studio, Producer, etc.) in each SubProfile tab.</p>
                                         </div>
 
                                         <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Bio / About</label><textarea {...register("bio")} rows="4" className={inputClass(errors.bio)} placeholder="Tell us about your musical journey..." /></div>
@@ -544,7 +412,7 @@ export default function ProfileManager({
                                         <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Website</label><input {...register("website")} className={inputClass(errors.website)} placeholder="https://..." /></div>
 
                                         <div className="pt-4 border-t dark:border-gray-700 flex justify-end">
-                                            <button type="button" onClick={handleSubmit(onMainSubmit)} disabled={saving} className={clsx("px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg", saving ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed" : "bg-brand-blue text-white hover:bg-blue-600 hover:scale-105")}>{saving ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20}/> Save Changes</>}</button>
+                                            <button type="submit" disabled={saving} className={clsx("px-8 py-3 rounded-xl font-bold flex items-center gap-2 transition-all shadow-lg", saving ? "bg-gray-300 dark:bg-gray-700 text-gray-500 cursor-not-allowed" : "bg-brand-blue text-white hover:bg-blue-600 hover:scale-105")}>{saving ? <Loader2 className="animate-spin" size={20}/> : <><Save size={20}/> Save Changes</>}</button>
                                         </div>
                                     </form>
                                 </div>
@@ -557,6 +425,8 @@ export default function ProfileManager({
                                 initialData={subProfiles[selectedRole] || {}}
                                 schema={PROFILE_SCHEMAS[selectedRole] || []}
                                 onSave={onSubProfileUpdate || (() => Promise.resolve())}
+                                updateSubProfile={updateSubProfile}
+                                createSubProfile={createSubProfile}
                             />
                         )}
                     </div>
@@ -570,54 +440,89 @@ export default function ProfileManager({
 }
 
 // ... (DynamicSubProfileForm remains unchanged from previous version) ...
-function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSave }: DynamicSubProfileFormProps) {
+function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSave, updateSubProfile, createSubProfile }: DynamicSubProfileFormProps) {
     const [formData, setFormData] = useState<any>(initialData);
     const [isSaving, setIsSaving] = useState<boolean>(false);
-    const [followMainProfile, setFollowMainProfile] = useState<boolean>(initialData.followMainProfile ?? true);
-    const [useLegalNameOnly, setUseLegalNameOnly] = useState<boolean>(initialData.useLegalNameOnly ?? false);
-    const [useUserNameOnly, setUseUserNameOnly] = useState<boolean>(initialData.useUserNameOnly ?? false);
-    const [syncStudioOps, setSyncStudioOps] = useState<boolean>(initialData.syncStudioOps ?? false);
+
+    // NEW: Display name preference states
+    const [displayNamePreference, setDisplayNamePreference] = useState<string>(
+        initialData.displayNamePreference || "legal"
+    );
+    const [customDisplayName, setCustomDisplayName] = useState<string>(
+        initialData.customDisplayName || ""
+    );
 
     useEffect(() => {
         setFormData(initialData || {});
-        setFollowMainProfile(initialData.followMainProfile ?? true);
-        setUseLegalNameOnly(initialData.useLegalNameOnly ?? false);
-        setUseUserNameOnly(initialData.useUserNameOnly ?? false);
-        setSyncStudioOps(initialData.syncStudioOps ?? false);
+        setDisplayNamePreference(initialData.displayNamePreference || "legal");
+        setCustomDisplayName(initialData.customDisplayName || "");
     }, [initialData]);
 
     const handleChange = (key: string, value: any): void => setFormData(prev => ({ ...prev, [key]: value }));
-    const toggleLegalOnly = (): void => { setUseLegalNameOnly(!useLegalNameOnly); if(!useLegalNameOnly) setUseUserNameOnly(false); };
-    const toggleUserOnly = (): void => { setUseUserNameOnly(!useUserNameOnly); if(!useUserNameOnly) setUseLegalNameOnly(false); };
+
+    // NEW: Compute preview name based on preference
+    const getPreviewName = (): string => {
+        switch (displayNamePreference) {
+            case "legal":
+                return `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || "Not Set";
+            case "username":
+                return userData?.username || "Not Set";
+            case "custom":
+                return customDisplayName || "Not Set";
+            default:
+                return "Not Set";
+        }
+    };
 
     const handleSave = async (e: React.FormEvent): Promise<void> => {
         e.preventDefault();
         setIsSaving(true);
         const toastId = toast.loading(`Saving ${role} profile...`);
         try {
-            let effectiveName = '';
-            if (followMainProfile) effectiveName = userData?.effectiveDisplayName || (userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : '');
-            else {
-                if (useLegalNameOnly) effectiveName = userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : '';
-                else if (useUserNameOnly) effectiveName = userData?.displayName || (userData ? `${userData.firstName || ''} ${userData.lastName || ''}`.trim() : '');
-                else effectiveName = formData.profileName || `${userData.firstName} ${userData.lastName}`;
+            // Compute display name based on preference
+            let computedDisplayName = "";
+            switch (displayNamePreference) {
+                case "legal":
+                    computedDisplayName = `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim();
+                    break;
+                case "username":
+                    computedDisplayName = userData?.username || "";
+                    break;
+                case "custom":
+                    computedDisplayName = customDisplayName ||
+                                        formData.profileName ||
+                                        `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim();
+                    break;
+                default:
+                    computedDisplayName = formData.profileName ||
+                                        `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim();
             }
 
             const userId = user?.id || user?.uid;
 
             // Save sub-profile data using Convex
-            const dataToSave = { ...formData, followMainProfile, useLegalNameOnly, useUserNameOnly, syncStudioOps, displayName: effectiveName };
+            const dataToSave = {
+                ...formData,
+                displayNamePreference,
+                customDisplayName,
+                displayName: computedDisplayName
+            };
 
-            // Update sub-profile using Convex
-            await updateProfile({
-                clerkId: userId,
-                subprofiles: {
-                    [role]: dataToSave
-                }
-            });
-
-            // Note: display_name and effective_display_name are now handled by MongoDB
-            // Subprofiles are updated through the MongoDB API in the main profile save function
+            // Check if sub-profile already exists (has _id)
+            if (initialData._id) {
+                // Update existing sub-profile
+                await updateSubProfile({
+                    subProfileId: initialData._id,
+                    ...dataToSave
+                });
+            } else {
+                // Create new sub-profile
+                await createSubProfile({
+                    clerkId: userId,
+                    role,
+                    ...dataToSave
+                });
+            }
 
             // Refresh sub-profiles in parent component
             if (onSave) {
@@ -633,7 +538,88 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
         finally { setIsSaving(false); }
     };
 
-    if (schema.length === 0) return <div className="p-10 text-center text-gray-500">No configuration available for this role.</div>;
+    // Special case: Studio profiles are read-only and managed in Studio Manager
+    if (role === 'Studio') {
+        const hasStudioData = userData?.studioName || formData.profileName;
+
+        return (
+            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm space-y-6">
+                <div className="flex items-center justify-between border-b dark:border-gray-700 pb-2">
+                    <h2 className="text-xl font-bold dark:text-white">Studio Profile</h2>
+                    <button
+                        type="button"
+                        onClick={() => window.location.href = '/studio-manager'}
+                        className="px-4 py-2 bg-brand-blue text-white rounded-xl font-bold text-sm hover:bg-blue-600 transition shadow-lg flex items-center gap-2"
+                    >
+                        <Settings size={14} />
+                        Manage in Studio Manager
+                    </button>
+                </div>
+
+                {!hasStudioData ? (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-6 rounded-xl border border-blue-200 dark:border-blue-800 text-center">
+                        <div className="text-4xl mb-4">🏢</div>
+                        <h3 className="text-lg font-bold text-blue-900 dark:text-blue-100 mb-2">No Studio Information Set</h3>
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+                            Your studio profile hasn't been configured yet. Set up your studio information to appear in searches and accept bookings.
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => window.location.href = '/studio-manager'}
+                            className="px-6 py-3 bg-brand-blue text-white rounded-xl font-bold text-sm hover:bg-blue-600 transition shadow-lg"
+                        >
+                            Set Up Studio Profile
+                        </button>
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600">
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Studio Name</label>
+                            <div className="text-lg font-bold dark:text-white">
+                                {userData?.studioName || formData.profileName}
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600">
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Description</label>
+                            <div className="text-sm dark:text-gray-300">
+                                {formData.bio || 'No description set'}
+                            </div>
+                        </div>
+
+                        <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600">
+                            <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Address</label>
+                            <div className="text-sm dark:text-gray-300">
+                                {formData.address || 'No address set'}
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600">
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Hourly Rate</label>
+                                <div className="text-sm dark:text-gray-300">
+                                    {formData.hourlyRate ? `$${formData.hourlyRate}/hr` : 'Not set'}
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600">
+                                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Day Rate</label>
+                                <div className="text-sm dark:text-gray-300">
+                                    {formData.dayRate ? `$${formData.dayRate}/day` : 'Not set'}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl border border-blue-200 dark:border-blue-800">
+                            <p className="text-xs text-blue-800 dark:text-blue-300">
+                                <strong>💡 Tip:</strong> To update your studio information, equipment, amenities, and photos, visit the <strong>Studio Manager</strong>.
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    }
 
     const currentSubRole = formData.talentSubRole || '';
     const filteredSchema = schema.filter((f: any) => {
@@ -648,26 +634,36 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
         <form onSubmit={handleSave} className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm space-y-6">
             <h2 className="text-xl font-bold dark:text-white border-b dark:border-gray-700 pb-2">{role} Identity & Details</h2>
 
+            {/* NEW: Display Name Preferences Section */}
             <div className="bg-gray-50 dark:bg-[#23262f] p-4 rounded-xl border dark:border-gray-600 space-y-3">
-                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Identity Settings</label>
-                <div className="flex items-center justify-between">
-                    <div><div className="text-sm font-bold dark:text-white">Follow Main Profile Name</div><div className="text-xs text-gray-500">Use &quot;{userData.effectiveDisplayName || `${userData.firstName} ${userData.lastName}`}&quot;</div></div>
-                    <button type="button" onClick={() => setFollowMainProfile(!followMainProfile)} className="text-brand-blue">{followMainProfile ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button>
-                </div>
-                {!followMainProfile && (
-                    <div className="space-y-3 animate-in slide-in-from-top-1 pt-3 border-t dark:border-gray-700">
-                         <div className="flex items-center justify-between"><span className="text-sm dark:text-gray-200">Use Legal Name Only</span><button type="button" onClick={toggleLegalOnly} className="text-brand-blue">{useLegalNameOnly ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button></div>
-                        <div className="flex items-center justify-between"><span className="text-sm dark:text-gray-200">Use Main User Name Only</span><button type="button" onClick={toggleUserOnly} className="text-brand-blue">{useUserNameOnly ? <ToggleRight size={28} /> : <ToggleLeft size={28} className="text-gray-400"/>}</button></div>
-                        {!useLegalNameOnly && !useUserNameOnly && (
-                            <div className="mt-2">
-                                <label className="text-xs font-bold text-brand-blue uppercase mb-1 block">{role} Name</label>
-                                <input type="text" className="w-full p-3 border rounded-lg dark:bg-[#1f2128] dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-brand-blue outline-none font-bold" placeholder={`e.g. ${role === 'Studio' ? 'Sound City' : 'The Weeknd'}`} value={formData.profileName || ''} onChange={e => handleChange('profileName', e.target.value)} />
-                                {role === 'Studio' && (<div className="flex items-center gap-2 mt-2"><input type="checkbox" checked={syncStudioOps} onChange={(e) => setSyncStudioOps(e.target.checked)} className="rounded text-brand-blue focus:ring-brand-blue"/><span className="text-xs text-gray-500 dark:text-gray-400">Force &quot;Studio Ops&quot; to use this name</span></div>)}
-                            </div>
-                        )}
-                         <div className="text-xs text-gray-500 italic mt-2 border-t dark:border-gray-700 pt-2">Preview: <strong className="text-brand-blue">{useLegalNameOnly ? `${userData.firstName} ${userData.lastName}` : useUserNameOnly ? (userData.displayName || 'Not Set') : (formData.profileName || 'Not Set')}</strong></div>
+                <label className="text-xs font-bold text-gray-500 uppercase block mb-1">Display Name Settings</label>
+
+                <select
+                    value={displayNamePreference}
+                    onChange={(e) => setDisplayNamePreference(e.target.value)}
+                    className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-brand-blue outline-none"
+                >
+                    <option value="legal">Use Legal Name ({`${userData?.firstName || ''} ${userData?.lastName || ''}`.trim()})</option>
+                    <option value="username">Use Username ({userData?.username || 'Not Set'})</option>
+                    <option value="custom">Custom Name</option>
+                </select>
+
+                {displayNamePreference === "custom" && (
+                    <div className="mt-2">
+                        <label className="text-xs font-bold text-brand-blue uppercase mb-1 block">Custom Display Name</label>
+                        <input
+                            type="text"
+                            value={customDisplayName}
+                            onChange={(e) => setCustomDisplayName(e.target.value)}
+                            placeholder={`e.g. ${role === 'Label' ? 'Sony Music' : role === 'Studio' ? 'Sound City' : 'The Weeknd'}`}
+                            className="w-full p-3 border rounded-lg dark:bg-[#1f2128] dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-brand-blue outline-none font-bold"
+                        />
                     </div>
                 )}
+
+                <div className="text-xs text-gray-500 italic mt-2 border-t dark:border-gray-700 pt-2">
+                    Preview: <strong className="text-brand-blue">{getPreviewName()}</strong>
+                </div>
             </div>
 
             {filteredSchema.map((field: any) => {

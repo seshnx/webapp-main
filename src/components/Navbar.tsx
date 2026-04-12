@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, MouseEvent, FormEvent } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical } from 'lucide-react';
@@ -11,6 +11,7 @@ import { useNotifications } from '../hooks/useNotifications';
 import { getDisplayRole } from '../config/constants';
 import { useLanguage } from '../contexts/LanguageContext';
 import { BreadcrumbNav } from './ui/breadcrumb';
+import { toast } from 'react-hot-toast';
 
 // Import TypeScript types
 import type { AccountType, UserData } from '../types';
@@ -122,6 +123,7 @@ export default function Navbar({
     showBreadcrumbs = false,
 }: NavbarProps): React.ReactElement {
   const location = useLocation();
+  const navigate = useNavigate();
   const [showNotifs, setShowNotifs] = useState<boolean>(false);
   const [showRoleMenu, setShowRoleMenu] = useState<boolean>(false);
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
@@ -135,6 +137,8 @@ export default function Navbar({
   const navContentRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
 
+  const updateRoleMutation = useMutation(api.users.updateAccountTypes);
+
   // Use the new notifications system
   const {
     notifications,
@@ -147,8 +151,8 @@ export default function Navbar({
   } = useNotifications(user?.id || user?.uid);
 
   // Convex mutations for booking actions
-  const confirmBooking = useMutation(api.bookings.confirmBooking);
-  const cancelBooking = useMutation(api.bookings.cancelBooking);
+  const confirmBooking = useMutation(api.sbookings.confirmBooking);
+  const cancelBooking = useMutation(api.sbookings.cancelBooking);
   const markAsReadMutation = useMutation(api.notifications.markAsRead);
 
   // Type guards
@@ -276,9 +280,28 @@ export default function Navbar({
       }
   };
 
-  const handleRoleSelect = (role: AccountTypeExtended): void => {
-      if (onRoleSwitch) onRoleSwitch(role as AccountType);
-      setShowRoleMenu(false);
+  const handleRoleSelect = async (role: AccountTypeExtended, e?: React.MouseEvent) => {
+      if (e) {
+          e.preventDefault();
+          e.stopPropagation();
+      }
+      try {
+          // Direct DB mutation bypass for the active role
+          if (user?.id || user?.uid) {
+              const accountTypes = userData?.accountTypes || [role];
+              await updateRoleMutation({ 
+                  clerkId: user.id || user.uid as string, 
+                  accountTypes: accountTypes as string[], 
+                  activeRole: role as string
+              });
+          }
+          // Fallback to prop logic if strictly needed
+          if (onRoleSwitch) onRoleSwitch(role as AccountType);
+          setShowRoleMenu(false);
+      } catch (error: any) {
+          toast.error("Failed to switch context: " + error.message);
+          console.error("Role switch error:", error);
+      }
   };
 
   // Global search submit: navigate to feed for now
@@ -382,14 +405,14 @@ export default function Navbar({
         <div className="flex items-center gap-3 min-w-[180px] pl-4">
           <button
               onClick={onMenuClick}
-              className="p-2 -ml-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden"
+              className="p-2 -ml-2 rounded-lg text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 xl:hidden"
               aria-label="Open navigation menu"
               aria-expanded="false"
           >
               <Menu size={24} aria-hidden="true" />
           </button>
 
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('dashboard'); navigate('/dashboard'); }}>
               <img
                 src={darkMode ? LogoWhite : LogoDark}
                 alt="SeshNx Logo"
@@ -525,7 +548,12 @@ export default function Navbar({
           {roles.length > 1 && !overflowItems.includes('roleSwitcher') && (
               <div className="relative hidden sm:flex items-center gap-3" ref={roleRef}>
                   <button
-                      onClick={() => setShowRoleMenu(!showRoleMenu)}
+                      type="button"
+                      onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setShowRoleMenu(!showRoleMenu);
+                      }}
                       className="group flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold transition border border-gray-200 dark:border-gray-700"
                   >
                       <RefreshCw size={12} className={`text-brand-blue shrink-0 transition-transform ${isSwitching ? 'rotate-180 duration-500' : ''}`}/>
@@ -548,8 +576,9 @@ export default function Navbar({
                                   const name = getDisplayName(role);
                                   return (
                                       <button
+                                          type="button"
                                           key={role}
-                                          onClick={() => handleRoleSelect(role)}
+                                          onClick={(e) => handleRoleSelect(role, e)}
                                           className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-between ${activeRole === role ? 'bg-blue-50 dark:bg-blue-900/20 text-brand-blue' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
                                       >
                                           <div className="flex flex-col">
@@ -615,7 +644,7 @@ export default function Navbar({
               name={currentDisplayName}
               size="sm"
               className="border-2 border-transparent hover:border-brand-blue transition"
-              onClick={() => setActiveTab('profile')}
+              onClick={() => { setActiveTab('profile'); navigate('/profile'); }}
           />
         </div>
       </nav>

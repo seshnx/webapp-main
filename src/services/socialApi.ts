@@ -55,10 +55,10 @@ export function useSearchPosts(searchQuery: string, limit = 20) {
 /**
  * Get posts by author
  */
-export function usePostsByAuthor(authorId: string | undefined, limit = 20, skip = 0) {
+export function usePostsByAuthor(clerkId: string | undefined, limit = 20, skip = 0) {
   return useQuery(
     api.social.getPostsByAuthor,
-    authorId ? { authorId: authorId as Id<"users">, limit, skip } : "skip"
+    clerkId ? { clerkId, limit, skip } : "skip"
   );
 }
 
@@ -90,12 +90,14 @@ export function usePostMutations() {
   const create = useMutation(api.social.createPost);
   const remove = useMutation(api.social.deletePost);
   const repost = useMutation(api.social.repostPost);
+  const update = useMutation(api.social.updatePost);
 
   return useMemo(() => ({
     create,
     remove,
     repost,
-  }), [create, remove, repost]);
+    update,
+  }), [create, remove, repost, update]);
 }
 
 // =====================================================
@@ -147,8 +149,14 @@ export function useCommentMutations() {
  * Get reactions for a post or comment
  */
 export function useReactions(targetId: string | undefined, targetType: 'post' | 'comment') {
-  // This would need a query in Convex - for now using placeholder
-  return useMemo(() => ({ reactions: [], loading: false }), []);
+  const reactions = useQuery(
+    api.social.getReactions,
+    targetId ? { targetId, targetType } : "skip"
+  );
+  return useMemo(() => ({
+    reactions: reactions ?? [],
+    loading: reactions === undefined,
+  }), [reactions]);
 }
 
 /**
@@ -159,8 +167,15 @@ export function useUserReaction(
   targetId: string | undefined,
   targetType: 'post' | 'comment'
 ) {
-  // This would need a query in Convex - for now using placeholder
-  return useMemo(() => ({ reacted: false, emoji: null, loading: false }), []);
+  const reaction = useQuery(
+    api.social.hasReacted,
+    (userId && targetId) ? { clerkId: userId, targetId, targetType } : "skip"
+  );
+  return useMemo(() => ({
+    reacted: !!reaction,
+    emoji: null,
+    loading: reaction === undefined,
+  }), [reaction]);
 }
 
 // =====================================================
@@ -185,30 +200,30 @@ export function useReactionMutations() {
 /**
  * Get followers for a user
  */
-export function useFollowers(userId: string | undefined) {
+export function useFollowers(clerkId: string | undefined) {
   return useQuery(
     api.social.getFollowers,
-    userId ? { userId: userId as Id<"users"> } : "skip"
+    clerkId ? { clerkId } : "skip"
   );
 }
 
 /**
  * Get users the specified user is following
  */
-export function useFollowing(userId: string | undefined) {
+export function useFollowing(clerkId: string | undefined) {
   return useQuery(
     api.social.getFollowing,
-    userId ? { userId: userId as Id<"users"> } : "skip"
+    clerkId ? { clerkId } : "skip"
   );
 }
 
 /**
- * Bulk get user profiles by Convex IDs
+ * Bulk get user profiles by Clerk IDs
  */
-export function useUsersByIds(userIds: string[] | undefined) {
+export function useUsersByIds(clerkIds: string[] | undefined) {
   return useQuery(
     api.social.getUsersByIds,
-    userIds ? { userIds: userIds as Id<"users">[] } : "skip"
+    clerkIds ? { clerkIds } : "skip"
   );
 }
 
@@ -243,13 +258,13 @@ export function usePostsByHashtag(hashtag: string | undefined) {
  * Check if user is following another user
  */
 export function useIsFollowing(
-  followerId: string | undefined,
-  followingId: string | undefined
+  followerClerkId: string | undefined,
+  followingClerkId: string | undefined
 ) {
   return useQuery(
     api.social.isFollowing,
-    (followerId && followingId)
-      ? { followerId: followerId as Id<"users">, followingId: followingId as Id<"users"> }
+    (followerClerkId && followingClerkId)
+      ? { followerClerkId, followingClerkId }
       : "skip"
   );
 }
@@ -278,21 +293,21 @@ export function useFollowMutations() {
 /**
  * Get saved posts for a user
  */
-export function useSavedPosts(userId: string | undefined, limit = 20) {
+export function useSavedPosts(clerkId: string | undefined, limit = 20) {
   return useQuery(
     api.social.getSavedPosts,
-    userId ? { userId: userId as Id<"users">, limit } : "skip"
+    clerkId ? { clerkId, limit } : "skip"
   );
 }
 
 /**
  * Check if post is saved by user
  */
-export function useIsPostSaved(userId: string | undefined, postId: string | undefined) {
+export function useIsPostSaved(clerkId: string | undefined, postId: string | undefined) {
   return useQuery(
-    api.social.isPostSaved,
-    (userId && postId)
-      ? { userId: userId as Id<"users">, postId: postId as Id<"posts"> }
+    api.social.isSaved,
+    (clerkId && postId)
+      ? { clerkId, postId }
       : "skip"
   );
 }
@@ -321,10 +336,10 @@ export function useSavedPostsMutations() {
 /**
  * Get blocked users
  */
-export function useBlockedUsers(userId: string | undefined) {
+export function useBlockedUsers(clerkId: string | undefined) {
   return useQuery(
     api.social.getBlockedUsers,
-    userId ? { userId: userId as Id<"users"> } : "skip"
+    clerkId ? { clerkId } : "skip"
   );
 }
 

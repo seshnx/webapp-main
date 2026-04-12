@@ -1,14 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check, Repeat2 } from 'lucide-react';
-import { updatePost, deletePost, checkIsSaved, savePost, unsavePost, updatePostSaveCount, toggleReaction, getReactions } from '../../services/socialApi';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import CommentSection from './CommentSection';
 import RepostModal from './RepostModal';
 import { motion, AnimatePresence } from 'framer-motion';
-import { createNotification } from '../../hooks/useNotifications';
 import FollowButton, { FollowButtonCompact } from './FollowButton';
 import toast from 'react-hot-toast';
 import UserAvatar from '../shared/UserAvatar';
+// getOptimizedImageUrl removed — Cloudflare Image Resizing not enabled
 
 const REACTION_SET = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
@@ -77,6 +79,35 @@ const renderText = (text: string | undefined) => {
     });
 };
 
+const getFileNameFromUrl = (url: string, providedName?: string): string => {
+    if (providedName) {
+        const genericNames = ['audio track', 'track', 'attachment 1', 'attachment 2', 'attachment 3', 'attachment'];
+        const isGeneric = genericNames.includes(providedName.toLowerCase().trim());
+        
+        if (!isGeneric) {
+            return providedName;
+        }
+    }
+
+    try {
+        const decoded = decodeURIComponent(url.split('?')[0]);
+        let fileName = decoded.split('/').pop() || 'Audio Track';
+
+        // Remove file extension
+        fileName = fileName.replace(/\.[^/.]+$/, "");
+
+        // Remove upload prefixes like "1774661823432_yuqgpj_"
+        fileName = fileName.replace(/^\d+_[a-zA-Z0-9]+_/, '');
+        
+        // Clean up formatting
+        fileName = fileName.replace(/[-_]/g, ' ');
+
+        return fileName || 'Audio Track';
+    } catch {
+        return providedName || 'Audio Track';
+    }
+};
+
 const cardVariants = {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
@@ -113,47 +144,43 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
     const userId = currentUser?.id || currentUser?.uid;
     const isOwnPost = post.userId === userId;
 
-    // Reactions from MongoDB
-    const [reactionsData, setReactionsData] = useState<Record<string, string[]> | null>(null);
-    const [myReaction, setMyReaction] = useState<string | null>(
-        userId && post.reactions?.[userId]
-            ? post.reactions[userId]
-            : null
+    // DEBUG: Log attachment data for first 3 posts
+    const debugAttachments = () => {
+        if (!post.attachments?.length) {
+            console.log(`[PostCard DEBUG] post=${post.id} NO attachments | imageUrl=${post.imageUrl} | audioUrl=${post.audioUrl}`);
+        } else {
+            console.log(`[PostCard DEBUG] post=${post.id} attachments:`, post.attachments.map(a => ({
+                type: a.type,
+                url: a.url,
+            })));
+        }
+    };
+    React.useEffect(() => { debugAttachments(); }, [post.id]);
+
+    // Convex mutations
+    const toggleReactionMutation = useMutation(api.social.toggleReaction);
+    const savePostMutation = useMutation(api.social.savePost);
+    const unsavePostMutation = useMutation(api.social.unsavePost);
+    const deletePostMutation = useMutation(api.social.deletePost);
+
+    // Real-time reactions from Convex
+    const convexReactions = useQuery(api.social.getReactions,
+        post.id ? { targetId: post.id, targetType: 'post' as const } : "skip"
+    );
+    // hasReacted returns { emoji, reacted } or null — resolves Clerk ID internally
+    const myReactionData = useQuery(api.social.hasReacted,
+        (userId && post.id) ? { clerkId: userId, targetId: post.id, targetType: 'post' as const } : "skip"
+    );
+    const isSavedQuery = useQuery(api.social.isSaved,
+        (userId && post.id) ? { clerkId: userId, postId: post.id as Id<"posts"> } : "skip"
     );
 
-    // Fetch reactions on mount
-    useEffect(() => {
-        const loadReactions = async () => {
-            try {
-                const data = await getReactions(post.id, 'post');
-                // Convert array format to Record<emoji, userIds[]>
-                const reactionsMap: Record<string, string[]> = {};
-                data.forEach(reaction => {
-                    if (!reactionsMap[reaction.emoji]) {
-                        reactionsMap[reaction.emoji] = [];
-                    }
-                    reactionsMap[reaction.emoji].push(reaction.user_id);
-                });
-                setReactionsData(reactionsMap);
-
-                // Set my reaction
-                if (userId) {
-                    const myReactionData = data.find(r => r.user_id === userId);
-                    setMyReaction(myReactionData?.emoji || null);
-                }
-            } catch (error) {
-                console.error('Failed to load reactions:', error);
-            }
-        };
-        loadReactions();
-    }, [post.id, userId]);
-
-    // Calculate reaction counts from MongoDB data
-    const reactionCounts: ReactionCounts = reactionsData
-        ? Object.keys(reactionsData).reduce((acc: ReactionCounts, emoji) => {
-            acc[emoji] = reactionsData[emoji].length;
+    // Derive reaction counts from Convex
+    const reactionCounts: ReactionCounts = convexReactions
+        ? convexReactions.reduce((acc: ReactionCounts, r: any) => {
+            acc[r.emoji] = (acc[r.emoji] || 0) + 1;
             return acc;
-          }, {} as ReactionCounts)
+        }, {} as ReactionCounts)
         : (post.reactions
             ? Object.values(post.reactions).reduce((acc: ReactionCounts, emoji: string) => {
                 acc[emoji] = (acc[emoji] || 0) + 1;
@@ -161,23 +188,17 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
               }, {} as ReactionCounts)
             : {});
 
+    // Get emoji from hasReacted result (no need for separate ID comparison)
+    const myReaction = myReactionData?.emoji || null;
+
     const totalReactions = Object.values(reactionCounts).reduce((a: number, b: number) => a + b, 0);
 
-    // Check if post is saved on mount
+    // Sync isSaved from Convex query
     useEffect(() => {
-        if (!userId) return;
-
-        const checkSaved = async () => {
-            try {
-                const saved = await checkIsSaved(userId, post.id);
-                setIsSaved(saved);
-            } catch (e) {
-                console.error('Error checking saved status:', e);
-                setIsSaved(false); // Default to false on error
-            }
-        };
-        checkSaved();
-    }, [userId, post.id]);
+        if (isSavedQuery !== undefined) {
+            setIsSaved(isSavedQuery as boolean);
+        }
+    }, [isSavedQuery]);
 
     // Close menus on outside click
     useEffect(() => {
@@ -201,55 +222,12 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
         if (!userId) return;
 
         try {
-            // Check if this is removing the current reaction or adding a new one
-            if (myReaction === emoji) {
-                // Remove reaction
-                await toggleReaction(post.id, 'post', emoji, userId);
-                
-                // Update local state
-                setMyReaction(null);
-                // Refresh reactions
-                const data = await getReactions(post.id, 'post');
-                const reactionsMap: Record<string, string[]> = {};
-                data.forEach(reaction => {
-                    if (!reactionsMap[reaction.emoji]) {
-                        reactionsMap[reaction.emoji] = [];
-                    }
-                    reactionsMap[reaction.emoji].push(reaction.user_id);
-                });
-                setReactionsData(reactionsMap);
-            } else {
-                // Add/change reaction
-                const wasReacted = !!myReaction;
-                await toggleReaction(post.id, 'post', emoji, userId);
-                
-                // Update local state
-                setMyReaction(emoji);
-                // Refresh reactions
-                const data = await getReactions(post.id, 'post');
-                const reactionsMap: Record<string, string[]> = {};
-                data.forEach(reaction => {
-                    if (!reactionsMap[reaction.emoji]) {
-                        reactionsMap[reaction.emoji] = [];
-                    }
-                    reactionsMap[reaction.emoji].push(reaction.user_id);
-                });
-                setReactionsData(reactionsMap);
-
-                // Send notification (only for new reactions, not changes)
-                if (!wasReacted && !isOwnPost) {
-                    createNotification({
-                        targetUserId: post.userId,
-                        type: 'like',
-                        fromUserId: userId,
-                        fromUserName: currentUserData?.effectiveDisplayName || currentUserData?.firstName || 'Someone',
-                        fromUserPhoto: currentUserData?.photoURL,
-                        postId: post.id,
-                        postPreview: post.text?.substring(0, 50),
-                        message: `liked your post`
-                    });
-                }
-            }
+            await toggleReactionMutation({
+                targetId: post.id,
+                targetType: 'post' as const,
+                emoji,
+                userId,
+            });
         } catch (e) {
             console.error("Reaction failed", e);
             toast.error("Couldn't add reaction");
@@ -262,33 +240,11 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
 
         try {
             if (isSaved) {
-                // Unsave
-                await unsavePost(userId, post.id);
-                await updatePostSaveCount(post.id, -1);
-
-                setIsSaved(false);
+                await unsavePostMutation({ userId, postId: post.id as Id<"posts"> });
                 toast.success('Removed from saved');
             } else {
-                // Save
-                await savePost(userId, post.id);
-                await updatePostSaveCount(post.id, 1);
-
-                setIsSaved(true);
+                await savePostMutation({ userId, postId: post.id as Id<"posts"> });
                 toast.success('Post saved!');
-
-                // Optionally notify author (some platforms do this)
-                // Uncomment if desired:
-                // if (!isOwnPost) {
-                //     createNotification({
-                //         targetUserId: post.userId,
-                //         type: 'save',
-                //         fromUserId: userId,
-                //         fromUserName: currentUserData?.effectiveDisplayName || 'Someone',
-                //         fromUserPhoto: currentUserData?.photoURL,
-                //         postId: post.id,
-                //         message: 'saved your post'
-                //     });
-                // }
             }
         } catch (e) {
             console.error("Save failed", e);
@@ -329,11 +285,12 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
         if (!window.confirm('Are you sure you want to delete this post?')) return;
 
         try {
-            // Pass author_id for ownership verification (post.userId maps to author_id)
-            await deletePost(post.id, post.userId);
+            await deletePostMutation({
+                postId: post.id as Id<"posts">,
+                authorId: userId!,
+            });
 
             toast.success('Post deleted');
-            // Notify parent to remove post from UI
             if (onDelete) onDelete(post.id);
         } catch (e) {
             console.error('Delete failed:', e);
@@ -474,7 +431,19 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                     <div className={`grid gap-2 mb-3 ${post.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                         {post.attachments.map((att, i) => (
                             <div key={i} className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
-                                {att.type === 'image' && <img src={att.url} className="w-full h-auto object-contain rounded-lg" alt="content" style={{ maxHeight: '600px' }} />}
+                                {att.type === 'image' && (
+                                    <img
+                                        src={att.url}
+                                        className="w-full h-auto object-contain rounded-lg"
+                                        alt="content"
+                                        style={{ maxHeight: '600px' }}
+                                        loading="lazy"
+                                        onError={(e) => {
+                                            console.error(`[PostCard IMG ERROR] Failed to load: ${(e.target as HTMLImageElement).src}`);
+                                            (e.target as HTMLImageElement).style.border = '3px solid red';
+                                        }}
+                                    />
+                                )}
                                 {att.type === 'video' && (
                                     <video
                                         src={att.url}
@@ -489,7 +458,7 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                 )}
                                 {att.type === 'audio' && (
                                     <div className="w-full">
-                                        <StarFieldVisualizer audioUrl={att.url} fileName={att.name || 'Audio Track'} />
+                                        <StarFieldVisualizer audioUrl={att.url} fileName={getFileNameFromUrl(att.url, att.name)} />
                                     </div>
                                 )}
                             </div>
@@ -500,12 +469,12 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                 {/* Fallbacks for legacy posts */}
                 {post.audioUrl && !post.attachments && (
                     <div className="rounded-lg overflow-hidden bg-transparent mb-3">
-                        <StarFieldVisualizer audioUrl={post.audioUrl} fileName={post.audioName || 'Track'} />
+                        <StarFieldVisualizer audioUrl={post.audioUrl} fileName={getFileNameFromUrl(post.audioUrl, post.audioName)} />
                     </div>
                 )}
                 {post.imageUrl && !post.attachments && (
                     <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 mb-3">
-                        <img src={post.imageUrl} className="w-full h-auto object-contain rounded-lg" alt="legacy content" style={{ maxHeight: '600px' }} />
+                        <img src={post.imageUrl} className="w-full h-auto object-contain rounded-lg" alt="legacy content" style={{ maxHeight: '600px' }} loading="lazy" />
                     </div>
                 )}
             </div>

@@ -794,7 +794,7 @@ export default function SettingsTab({
             await updateProfileMutation({
                 clerkId: userId,
                 accountTypes: roles,
-                activeRole: newActiveRole,
+                activeProfileRole: newActiveRole,
             });
 
             // Update parent component's userData with new roles

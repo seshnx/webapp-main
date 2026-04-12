@@ -239,17 +239,27 @@ export const getPost = query({
  */
 export const getPostsByAuthor = query({
   args: {
-    authorId: v.id("users"),
+    clerkId: v.string(),
     limit: v.optional(v.number()),
     skip: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Get user by clerkId first
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      return [];
+    }
+
     const limit = args.limit || 20;
     const skip = args.skip || 0;
 
     const posts = await ctx.db
       .query("posts")
-      .withIndex("by_author", (q) => q.eq("authorId", args.authorId))
+      .withIndex("by_author", (q) => q.eq("authorId", user._id))
       .order("desc")
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(skip + limit);
@@ -294,6 +304,11 @@ export const createPost = mutation({
     authorId: v.string(), // Accept Clerk ID string
     content: v.optional(v.string()),
     mediaUrls: v.optional(v.array(v.string())),
+    mediaAttachments: v.optional(v.array(v.object({
+      url: v.string(),
+      type: v.string(),
+      name: v.optional(v.string()),
+    }))),
     mediaType: v.optional(v.string()),
     category: v.optional(v.string()),
     visibility: v.optional(v.string()),
@@ -316,6 +331,10 @@ export const createPost = mutation({
     const mentions =
       args.content?.match(/@[a-zA-Z0-9]+/g)?.map((mention) => mention.slice(1)) || [];
 
+    // Derive mediaUrls from mediaAttachments if not provided directly
+    const mediaUrls = args.mediaUrls || args.mediaAttachments?.map((a) => a.url);
+    const mediaType = args.mediaType || args.mediaAttachments?.[0]?.type;
+
     const postId = await ctx.db.insert("posts", {
       authorId: author._id, // Use the native Convex ID
       authorName: author.displayName || author.username || "Unknown",
@@ -324,8 +343,9 @@ export const createPost = mutation({
       // Use talentSubRole for Talent users, otherwise use activeRole
       role: author.talentSubRole || author.activeRole || "Talent",
       content: args.content,
-      mediaUrls: args.mediaUrls,
-      mediaType: args.mediaType,
+      mediaUrls,
+      mediaAttachments: args.mediaAttachments,
+      mediaType,
       hashtags,
       mentions,
       category: args.category,
@@ -345,6 +365,33 @@ export const createPost = mutation({
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
+
+    // Send mention notifications (limit to 10)
+    if (mentions.length > 0) {
+      const limitedMentions = mentions.slice(0, 10);
+      for (const mention of limitedMentions) {
+        const mentionedUser = await ctx.db
+          .query("users")
+          .withIndex("by_username", (q) => q.eq("username", mention))
+          .first();
+
+        if (mentionedUser && mentionedUser._id !== author._id) {
+          await ctx.db.insert("notifications", {
+            userId: mentionedUser._id,
+            type: "mention",
+            title: "You were mentioned",
+            message: `${author.displayName || author.username || "Someone"} mentioned you in a post`,
+            actorId: author._id,
+            actorName: author.displayName || author.username,
+            actorPhoto: author.avatarUrl,
+            targetId: postId.toString(),
+            targetType: "post",
+            read: false,
+            createdAt: Date.now(),
+          });
+        }
+      }
+    }
 
     return postId;
   },
@@ -419,6 +466,53 @@ export const repostPost = mutation({
   },
 });
 
+/**
+ * Update a post
+ */
+export const updatePost = mutation({
+  args: {
+    postId: v.id("posts"),
+    authorId: v.string(),
+    content: v.optional(v.string()),
+    mediaUrls: v.optional(v.array(v.string())),
+    mediaType: v.optional(v.string()),
+    category: v.optional(v.string()),
+    visibility: v.optional(v.string()),
+    equipment: v.optional(v.array(v.string())),
+    software: v.optional(v.array(v.string())),
+    customFields: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const author = await getNativeUser(ctx, args.authorId);
+    if (!author) throw new Error("Author not found");
+
+    const post = await ctx.db.get(args.postId);
+    if (!post || post.deletedAt) throw new Error("Post not found");
+    if (post.authorId !== author._id) throw new Error("Unauthorized");
+
+    const updates: Record<string, any> = { updatedAt: Date.now() };
+
+    if (args.content !== undefined) {
+      updates.content = args.content;
+      updates.hashtags =
+        args.content?.match(/#[a-zA-Z0-9]+/g)?.map((t) => t.slice(1).toLowerCase()) || [];
+      updates.mentions =
+        args.content?.match(/@[a-zA-Z0-9]+/g)?.map((m) => m.slice(1)) || [];
+    }
+
+    if (args.mediaUrls !== undefined) updates.mediaUrls = args.mediaUrls;
+    if (args.mediaType !== undefined) updates.mediaType = args.mediaType;
+    if (args.category !== undefined) updates.category = args.category;
+    if (args.visibility !== undefined) updates.visibility = args.visibility;
+    if (args.equipment !== undefined) updates.equipment = args.equipment;
+    if (args.software !== undefined) updates.software = args.software;
+    if (args.customFields !== undefined) updates.customFields = args.customFields;
+
+    await ctx.db.patch(args.postId, updates);
+    return args.postId;
+  },
+});
+
 // =====================================================
 // COMMENT QUERIES
 // =====================================================
@@ -442,7 +536,24 @@ export const getComments = query({
       .order("asc")
       .take(skip + limit);
 
-    return comments.slice(skip, skip + limit);
+    // Enrich with author info
+    const enriched = await Promise.all(
+      comments.slice(skip, skip + limit).map(async (comment) => {
+        const author = await ctx.db.get(comment.authorId);
+        return {
+          commentId: comment._id,
+          postId: comment.postId,
+          userId: author?.clerkId || comment.authorId.toString(),
+          content: comment.content,
+          displayName: author?.displayName || author?.username || "User",
+          authorPhoto: author?.avatarUrl || null,
+          parentId: comment.parentId,
+          createdAt: comment.createdAt,
+        };
+      })
+    );
+
+    return enriched;
   },
 });
 
@@ -490,6 +601,8 @@ export const createComment = mutation({
     const commentId = await ctx.db.insert("comments", {
       postId: args.postId,
       authorId: author._id,
+      authorName: author.displayName || author.username || "User",
+      authorPhoto: author.avatarUrl || null,
       content: args.content,
       parentId: args.parentId,
       reactionCount: 0,
@@ -505,6 +618,24 @@ export const createComment = mutation({
           commentsCount: (post.engagement?.commentsCount || 0) + 1,
         },
       });
+
+      // Create comment notification for post author (skip self-notifications)
+      const postAuthor = await ctx.db.get(post.authorId);
+      if (postAuthor && postAuthor._id !== author._id) {
+        await ctx.db.insert("notifications", {
+          userId: postAuthor._id,
+          type: args.parentId ? "reply" : "comment",
+          title: args.parentId ? "New Reply" : "New Comment",
+          message: `${author.displayName || author.username || "Someone"} ${args.parentId ? "replied to your comment" : "commented on your post"}`,
+          actorId: author._id,
+          actorName: author.displayName || author.username,
+          actorPhoto: author.avatarUrl,
+          targetId: post._id.toString(),
+          targetType: "post",
+          read: false,
+          createdAt: Date.now(),
+        });
+      }
     }
 
     return commentId;
@@ -517,15 +648,25 @@ export const createComment = mutation({
 export const deleteComment = mutation({
   args: {
     commentId: v.id("comments"),
-    authorId: v.id("users"),
+    clerkId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get user by clerkId first
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      throw new Error("User not found");
+    }
+
     const comment = await ctx.db.get(args.commentId);
     if (!comment) {
       throw new Error("Comment not found");
     }
 
-    if (comment.authorId !== args.authorId) {
+    if (comment.authorId !== user._id) {
       throw new Error("Unauthorized to delete this comment");
     }
 
@@ -567,15 +708,25 @@ export const hasReacted = query({
   args: {
     targetId: v.string(),
     targetType: v.union(v.literal("post"), v.literal("comment")),
-    userId: v.id("users"),
+    clerkId: v.string(),
     emoji: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Get user by clerkId first
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      return false;
+    }
+
     let q = ctx.db
       .query("reactions")
       .withIndex("by_user_target", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", user._id)
           .eq("targetId", args.targetId)
           .eq("targetType", args.targetType)
       );
@@ -585,7 +736,8 @@ export const hasReacted = query({
     }
 
     const reaction = await q.first();
-    return !!reaction;
+    if (!reaction) return null;
+    return { emoji: (reaction as any).emoji, reacted: true };
   },
 });
 
@@ -636,6 +788,25 @@ export const toggleReaction = mutation({
          const post = await ctx.db.get(args.targetId as any);
          if (post && "engagement" in post) await ctx.db.patch(post._id, { engagement: { ...post.engagement, likesCount: (post.engagement?.likesCount || 0) + 1 }});
       }
+      // Create like notification for post/comment author (skip self-likes)
+      if (args.targetType === "post") {
+        const targetPost = await ctx.db.get(args.targetId as any);
+        if (targetPost && "authorId" in targetPost && targetPost.authorId !== user._id) {
+          await ctx.db.insert("notifications", {
+            userId: targetPost.authorId,
+            type: "like",
+            title: "New Like",
+            message: `${user.displayName || user.username || "Someone"} liked your post`,
+            actorId: user._id,
+            actorName: user.displayName || user.username,
+            actorPhoto: user.avatarUrl,
+            targetId: args.targetId,
+            targetType: "post",
+            read: false,
+            createdAt: Date.now(),
+          });
+        }
+      }
       return { added: true };
     }
   },
@@ -650,14 +821,29 @@ export const toggleReaction = mutation({
  */
 export const isFollowing = query({
   args: {
-    followerId: v.id("users"),
-    followingId: v.id("users"),
+    followerClerkId: v.string(),
+    followingClerkId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get both users by clerkId
+    const follower = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
+      .first();
+
+    const following = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
+      .first();
+
+    if (!follower || !following) {
+      return false;
+    }
+
     const follow = await ctx.db
       .query("follows")
-      .withIndex("by_follower", (q) => q.eq("followerId", args.followerId))
-      .filter((q) => q.eq(q.field("followingId"), args.followingId))
+      .withIndex("by_follower", (q) => q.eq("followerId", follower._id))
+      .filter((q) => q.eq(q.field("followingId"), following._id))
       .first();
 
     return !!follow;
@@ -669,24 +855,34 @@ export const isFollowing = query({
  */
 export const getFollowers = query({
   args: {
-    userId: v.id("users"),
+    clerkId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get user by clerkId first
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      return [];
+    }
+
     const follows = await ctx.db
       .query("follows")
-      .withIndex("by_following", (q) => q.eq("followingId", args.userId))
+      .withIndex("by_following", (q) => q.eq("followingId", user._id))
       .collect();
 
     const results = [];
     for (const f of follows) {
-      const user = await ctx.db.get(f.followerId);
-      if (user) {
+      const followerUser = await ctx.db.get(f.followerId);
+      if (followerUser) {
         results.push({
-          _id: user._id,
-          clerkId: user.clerkId,
-          displayName: user.displayName || user.username || "User",
-          photoURL: user.avatarUrl,
-          role: user.talentSubRole || user.activeRole,
+          _id: followerUser._id,
+          clerkId: followerUser.clerkId,
+          displayName: followerUser.displayName || followerUser.username || "User",
+          photoURL: followerUser.avatarUrl,
+          role: followerUser.talentSubRole || followerUser.activeRole,
           timestamp: f.createdAt,
         });
       }
@@ -700,24 +896,34 @@ export const getFollowers = query({
  */
 export const getFollowing = query({
   args: {
-    userId: v.id("users"),
+    clerkId: v.string(),
   },
   handler: async (ctx, args) => {
+    // Get user by clerkId first
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      return [];
+    }
+
     const follows = await ctx.db
       .query("follows")
-      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+      .withIndex("by_follower", (q) => q.eq("followerId", user._id))
       .collect();
 
     const results = [];
     for (const f of follows) {
-      const user = await ctx.db.get(f.followingId);
-      if (user) {
+      const followedUser = await ctx.db.get(f.followingId);
+      if (followedUser) {
         results.push({
-          _id: user._id,
-          clerkId: user.clerkId,
-          displayName: user.displayName || user.username || "User",
-          photoURL: user.avatarUrl,
-          role: user.talentSubRole || user.activeRole,
+          _id: followedUser._id,
+          clerkId: followedUser.clerkId,
+          displayName: followedUser.displayName || followedUser.username || "User",
+          photoURL: followedUser.avatarUrl,
+          role: followedUser.talentSubRole || followedUser.activeRole,
           timestamp: f.createdAt,
         });
       }
@@ -735,18 +941,33 @@ export const getFollowing = query({
  */
 export const toggleFollow = mutation({
   args: {
-    followerId: v.id("users"),
-    followingId: v.id("users"),
+    followerClerkId: v.string(),
+    followingClerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    if (args.followerId === args.followingId) {
+    // Get both users by clerkId
+    const follower = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
+      .first();
+
+    const following = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
+      .first();
+
+    if (!follower || !following) {
+      throw new Error("User not found");
+    }
+
+    if (follower._id === following._id) {
       throw new Error("Cannot follow yourself");
     }
 
     const existing = await ctx.db
       .query("follows")
-      .withIndex("by_follower", (q) => q.eq("followerId", args.followerId))
-      .filter((q) => q.eq(q.field("followingId"), args.followingId))
+      .withIndex("by_follower", (q) => q.eq("followerId", follower._id))
+      .filter((q) => q.eq(q.field("followingId"), following._id))
       .first();
 
     if (existing) {
@@ -756,12 +977,242 @@ export const toggleFollow = mutation({
     } else {
       // Follow
       await ctx.db.insert("follows", {
-        followerId: args.followerId,
-        followingId: args.followingId,
+        followerId: follower._id,
+        followingId: following._id,
         createdAt: Date.now(),
       });
       return { following: true };
     }
+  },
+});
+
+/**
+ * Follow a user
+ */
+export const followUser = mutation({
+  args: {
+    followerClerkId: v.string(),
+    followingClerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const follower = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
+      .first();
+
+    const following = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
+      .first();
+
+    if (!follower || !following) {
+      throw new Error("User not found");
+    }
+
+    if (follower._id === following._id) {
+      throw new Error("Cannot follow yourself");
+    }
+
+    const existing = await ctx.db
+      .query("follows")
+      .withIndex("by_pair", (q) => q.eq("followerId", follower._id).eq("followingId", following._id))
+      .first();
+
+    if (existing) {
+      return { following: true };
+    }
+
+    await ctx.db.insert("follows", {
+      followerId: follower._id,
+      followingId: following._id,
+      createdAt: Date.now(),
+    });
+
+    // Create follow notification
+    await ctx.db.insert("notifications", {
+      userId: following._id,
+      type: "follow",
+      title: "New Follower",
+      message: `${follower.displayName || follower.username || "Someone"} started following you`,
+      actorId: follower._id,
+      actorName: follower.displayName || follower.username,
+      actorPhoto: follower.avatarUrl,
+      read: false,
+      createdAt: Date.now(),
+    });
+
+    return { following: true };
+  },
+});
+
+/**
+ * Unfollow a user
+ */
+export const unfollowUser = mutation({
+  args: {
+    followerClerkId: v.string(),
+    followingClerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const follower = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
+      .first();
+
+    const following = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
+      .first();
+
+    if (!follower || !following) {
+      throw new Error("User not found");
+    }
+
+    const existing = await ctx.db
+      .query("follows")
+      .withIndex("by_pair", (q) => q.eq("followerId", follower._id).eq("followingId", following._id))
+      .first();
+
+    if (existing) {
+      await ctx.db.delete(existing._id);
+    }
+
+    return { following: false };
+  },
+});
+
+// =====================================================
+// BLOCK SYSTEM
+// =====================================================
+
+/**
+ * Block a user
+ */
+export const blockUser = mutation({
+  args: {
+    blockerClerkId: v.string(),
+    blockedClerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const blocker = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.blockerClerkId))
+      .first();
+
+    const blocked = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.blockedClerkId))
+      .first();
+
+    if (!blocker || !blocked) {
+      throw new Error("User not found");
+    }
+
+    if (blocker._id === blocked._id) {
+      throw new Error("Cannot block yourself");
+    }
+
+    const existingBlock = await ctx.db
+      .query("userBlocks")
+      .withIndex("by_pair", (q) => q.eq("blockerId", blocker._id).eq("blockedId", blocked._id))
+      .first();
+
+    if (existingBlock) {
+      return { blocked: true };
+    }
+
+    await ctx.db.insert("userBlocks", {
+      blockerId: blocker._id,
+      blockedId: blocked._id,
+      createdAt: Date.now(),
+    });
+
+    // Remove follow relationships in both directions
+    const followForward = await ctx.db
+      .query("follows")
+      .withIndex("by_pair", (q) => q.eq("followerId", blocker._id).eq("followingId", blocked._id))
+      .first();
+    if (followForward) await ctx.db.delete(followForward._id);
+
+    const followBackward = await ctx.db
+      .query("follows")
+      .withIndex("by_pair", (q) => q.eq("followerId", blocked._id).eq("followingId", blocker._id))
+      .first();
+    if (followBackward) await ctx.db.delete(followBackward._id);
+
+    return { blocked: true };
+  },
+});
+
+/**
+ * Unblock a user
+ */
+export const unblockUser = mutation({
+  args: {
+    blockerClerkId: v.string(),
+    blockedClerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const blocker = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.blockerClerkId))
+      .first();
+
+    const blocked = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.blockedClerkId))
+      .first();
+
+    if (!blocker || !blocked) {
+      throw new Error("User not found");
+    }
+
+    const existingBlock = await ctx.db
+      .query("userBlocks")
+      .withIndex("by_pair", (q) => q.eq("blockerId", blocker._id).eq("blockedId", blocked._id))
+      .first();
+
+    if (existingBlock) {
+      await ctx.db.delete(existingBlock._id);
+    }
+
+    return { blocked: false };
+  },
+});
+
+/**
+ * Get blocked users for a user
+ */
+export const getBlockedUsers = query({
+  args: {
+    clerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) return [];
+
+    const blocks = await ctx.db
+      .query("userBlocks")
+      .withIndex("by_blocker", (q) => q.eq("blockerId", user._id))
+      .collect();
+
+    const results = [];
+    for (const block of blocks) {
+      const blockedUser = await ctx.db.get(block.blockedId);
+      if (blockedUser) {
+        results.push({
+          clerkId: blockedUser.clerkId,
+          displayName: blockedUser.displayName || blockedUser.username || "User",
+          photoURL: blockedUser.avatarUrl,
+          blockedAt: block.createdAt,
+        });
+      }
+    }
+    return results;
   },
 });
 
@@ -774,17 +1225,27 @@ export const toggleFollow = mutation({
  */
 export const getSavedPosts = query({
   args: {
-    userId: v.id("users"),
+    clerkId: v.string(),
     limit: v.optional(v.number()),
     skip: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // Get user by clerkId first
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      return [];
+    }
+
     const limit = args.limit || 20;
     const skip = args.skip || 0;
 
     const saved = await ctx.db
       .query("savedPosts")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
       .order("desc")
       .take(skip + limit);
 
@@ -811,16 +1272,26 @@ export const getSavedPosts = query({
  */
 export const isSaved = query({
   args: {
-    userId: v.optional(v.id("users")),
+    clerkId: v.optional(v.string()),
     postId: v.id("posts"),
   },
   handler: async (ctx, args) => {
-    if (!args.userId) return false;
+    if (!args.clerkId) return false;
+
+    // Get user by clerkId first
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId!))
+      .first();
+
+    if (!user) {
+      return false;
+    }
 
     const saved = await ctx.db
       .query("savedPosts")
       .withIndex("by_user_post", (q) =>
-        q.eq("userId", args.userId!).eq("postId", args.postId)
+        q.eq("userId", user._id).eq("postId", args.postId)
       )
       .first();
 
@@ -998,12 +1469,16 @@ export const getPostsByHashtag = query({
 
 export const getUsersByIds = query({
   args: {
-    userIds: v.array(v.id("users")),
+    clerkIds: v.array(v.string()),
   },
   handler: async (ctx, args) => {
     const results = [];
-    for (const id of args.userIds) {
-      const user = await ctx.db.get(id);
+    for (const clerkId of args.clerkIds) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
+        .first();
+
       if (user) {
         results.push({
           _id: user._id,
@@ -1015,5 +1490,139 @@ export const getUsersByIds = query({
       }
     }
     return results;
+  },
+});
+
+// =====================================================
+// DISCOVERY QUERIES
+// =====================================================
+
+/**
+ * Discover artists (Talent users)
+ */
+export const discoverArtists = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+
+    const allUsers = await ctx.db.query("users").take(200);
+
+    const artists = allUsers.filter(u =>
+      u.activeRole === "Talent" ||
+      u.talentSubRole === "Singer" ||
+      u.talentSubRole === "Rapper" ||
+      u.talentSubRole === "DJ" ||
+      u.talentSubRole === "Vocalist" ||
+      u.talentSubRole === "Musician"
+    );
+
+    return artists.slice(0, limit).map(u => ({
+      clerkId: u.clerkId,
+      displayName: u.displayName || u.username || "Artist",
+      photoURL: u.avatarUrl,
+      role: u.talentSubRole || u.activeRole || "Talent",
+      location: u.location,
+      followersCount: u.stats?.followersCount || 0,
+    }));
+  },
+});
+
+/**
+ * Discover producers
+ */
+export const discoverProducers = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+
+    const allUsers = await ctx.db.query("users").take(200);
+
+    const producers = allUsers.filter(u =>
+      u.activeRole === "Producer" ||
+      (u.accountTypes && u.accountTypes.includes("Producer"))
+    );
+
+    return producers.slice(0, limit).map(u => ({
+      clerkId: u.clerkId,
+      displayName: u.displayName || u.username || "Producer",
+      photoURL: u.avatarUrl,
+      role: u.activeRole || "Producer",
+      location: u.location,
+      followersCount: u.stats?.followersCount || 0,
+    }));
+  },
+});
+
+/**
+ * Discover studios
+ */
+export const discoverStudios = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+
+    const allUsers = await ctx.db.query("users").take(200);
+
+    const studios = allUsers.filter(u =>
+      u.activeRole === "Studio" ||
+      (u.accountTypes && u.accountTypes.includes("Studio"))
+    );
+
+    return studios.slice(0, limit).map(u => ({
+      clerkId: u.clerkId,
+      displayName: u.displayName || u.username || "Studio",
+      photoURL: u.avatarUrl,
+      role: u.activeRole || "Studio",
+      location: u.location,
+      followersCount: u.stats?.followersCount || 0,
+    }));
+  },
+});
+
+/**
+ * Discover sounds (audio posts)
+ */
+export const discoverSounds = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+
+    const allPosts = await ctx.db
+      .query("posts")
+      .withIndex("by_created")
+      .order("desc")
+      .take(200);
+
+    const sounds = allPosts.filter(p =>
+      !p.deletedAt &&
+      p.visibility === "public" &&
+      p.mediaType === "audio"
+    );
+
+    return sounds.slice(0, limit);
+  },
+});
+
+/**
+ * Discover schools
+ */
+export const discoverSchools = query({
+  args: { limit: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+
+    const schools = await ctx.db
+      .query("schools")
+      .withIndex("by_active", (q) => q.eq("isActive", true))
+      .take(limit);
+
+    return schools.map(s => ({
+      id: s._id,
+      name: s.name,
+      code: s.code,
+      description: s.description,
+      logoUrl: s.logoUrl,
+      location: s.location,
+    }));
   },
 });

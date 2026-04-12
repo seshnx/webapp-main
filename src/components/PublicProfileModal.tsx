@@ -2,16 +2,16 @@ import React, { useState, useEffect } from 'react';
 import {
     X, MapPin, MessageCircle, Shield, User,
     Briefcase, Music, Award, AlertTriangle, CheckCircle,
-    DollarSign, Camera, Loader2
+    DollarSign, Camera, Loader2, CalendarCheck
 } from 'lucide-react';
 import StarRating from './shared/StarRating';
-import { useVercelImageUpload } from '../hooks/useVercelUpload';
+import { useImageUpload } from '../hooks/useUpload';
 import { useFollowSystem, useUserSocialStats } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import FollowersListModal, { FollowStats } from './social/FollowersListModal';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { STORAGE_FOLDERS } from '../config/vercel-blob';
+import { STORAGE_FOLDERS } from '../config/storage';
 import type { UserData } from '../types';
 
 /**
@@ -40,6 +40,7 @@ interface ProfileData {
     genres?: string[];
     instruments?: string[];
     equipmentList?: string[];
+    subProfilesList?: any[];
 
     // Normalized fields
     firstName?: string;
@@ -72,6 +73,8 @@ export interface PublicProfileModalProps {
     onClose: () => void;
     /** Callback when message button is clicked */
     onMessage: (userId: string, userName: string) => void;
+    /** Callback when book now is clicked */
+    onBook?: (userId: string, profile: any) => void;
 }
 
 /**
@@ -97,7 +100,8 @@ export default function PublicProfileModal({
     currentUser,
     currentUserData,
     onClose,
-    onMessage
+    onMessage,
+    onBook
 }: PublicProfileModalProps) {
     const [profile, setProfile] = useState<ProfileData | null>(null);
     const [loading, setLoading] = useState<boolean>(true);
@@ -110,7 +114,7 @@ export default function PublicProfileModal({
     const currentUserId = currentUser?.id || currentUser?.uid;
     const isOwner = currentUserId === userId;
 
-    const { uploadImage } = useVercelImageUpload();
+    const { uploadImage } = useImageUpload();
 
     // Convex query and mutation
     const convexProfile = useQuery(
@@ -158,7 +162,7 @@ export default function PublicProfileModal({
 
         setBannerUploading(true);
         try {
-            // Upload to Vercel Blob (using PROFILE_PHOTOS folder for banners too)
+            // Upload to R2 (using PROFILE_PHOTOS folder for banners)
             const uploadResult = await uploadImage(file, STORAGE_FOLDERS.PROFILE_PHOTOS);
             if (uploadResult?.url) {
                 // Update Profile using Neon
@@ -269,7 +273,7 @@ export default function PublicProfileModal({
 
                                     {/* CTA Actions */}
                                     {currentUser && !isOwner && (
-                                        <div className="flex gap-2 mb-2">
+                                        <div className="flex gap-2 mb-2 flex-wrap">
                                             <FollowButton
                                                 isFollowing={isFollowing(userId)}
                                                 onToggle={() => toggleFollow(userId)}
@@ -281,6 +285,14 @@ export default function PublicProfileModal({
                                             >
                                                 <MessageCircle size={18} /> Message
                                             </button>
+                                            {onBook && (
+                                                <button
+                                                    onClick={() => onBook(userId, profile)}
+                                                    className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold text-sm transition-all duration-200 flex items-center gap-2 shadow-lg shadow-indigo-500/30"
+                                                >
+                                                    <CalendarCheck size={18} /> Book Now
+                                                </button>
+                                            )}
                                         </div>
                                     )}
 
@@ -297,11 +309,28 @@ export default function PublicProfileModal({
                                         {profile.isVerified && <Shield size={22} className="text-blue-500 fill-blue-500 text-white" />}
                                     </h1>
                                     <div className="flex flex-wrap gap-2 text-sm text-gray-500 dark:text-gray-400 font-medium mb-4">
-                                        {(profile.accountTypes || ['Creative']).map((role, i) => (
-                                            <span key={i} className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full text-xs font-bold">
-                                                {role}
+                                        {Array.from(new Set([
+                                            ...((profile as any).subProfilesList?.map((sp: any) => sp.role) || []),
+                                            ...(profile.accountTypes || [])
+                                        ]))
+                                        .filter(role => role && role !== 'Creative' && role !== 'Fan' && role !== 'Studio' && role !== 'Label')
+                                        .map((role: any, i: number) => {
+                                            const isComplete = (profile as any).subProfilesList?.some((sp: any) => sp.role === role);
+                                            return (
+                                                <span key={i} className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border ${
+                                                    isComplete 
+                                                        ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' 
+                                                        : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
+                                                }`}>
+                                                    {role}
+                                                </span>
+                                            );
+                                        })}
+                                        {((profile as any).subProfilesList?.length === 0 && (!profile.accountTypes || profile.accountTypes.length === 0)) && (
+                                            <span className="flex items-center gap-1 bg-gray-100 dark:bg-gray-800 px-3 py-1 rounded-full text-xs font-bold">
+                                                Creative
                                             </span>
-                                        ))}
+                                        )}
                                     </div>
 
                                     {/* Follower/Following Stats */}

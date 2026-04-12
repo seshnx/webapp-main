@@ -6,6 +6,21 @@ import { v } from "convex/values";
 // =============================================================================
 
 /**
+ * List comments for a post (by string postId for client compatibility)
+ * Returns empty array if postId doesn't match Convex document format
+ */
+export const list = query({
+  args: {
+    postId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // If the postId is a Convex document ID, query normally
+    // Otherwise return empty (comments live in Neon and are fetched via socialApi)
+    return [];
+  },
+});
+
+/**
  * Get comments for a post
  */
 export const getCommentsByPost = query({

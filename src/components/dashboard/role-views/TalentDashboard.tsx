@@ -22,7 +22,7 @@ interface TalentDashboardProps extends DashboardProps {
 export function TalentDashboard({ userData, className = '' }: TalentDashboardProps) {
   // Fetch data from Convex
   const upcomingBookings = useQuery(api.bookings.getUpcomingBookings,
-    userData ? { userId: userData._id, limit: 10 } : "skip"
+    userData?.clerkId ? { clerkId: userData.clerkId, limit: 10 } : "skip"
   );
   const followers = useQuery(api.users.getFollowers,
     userData ? { userId: userData._id } : "skip"

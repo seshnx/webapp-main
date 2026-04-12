@@ -413,34 +413,63 @@ export default function TalentSearchFilterPanel({
                 </div>
             )}
 
-            {/* Rate Range */}
+            {/* Rate Range - Simplified with presets */}
             <div>
                 <label className="text-xs font-bold text-gray-500 uppercase mb-2 block">
                     Hourly Rate: ${filters.minRate} - ${filters.maxRate}
                 </label>
-                <div className="flex gap-2 items-center">
-                    <input
-                        type="range"
-                        min="0"
-                        max="500"
-                        step="10"
-                        value={filters.minRate}
-                        onChange={e => setFilters({...filters, minRate: Math.min(parseInt(e.target.value), filters.maxRate - 10)})}
-                        className="flex-1 accent-brand-blue"
-                    />
-                    <input
-                        type="range"
-                        min="0"
-                        max="500"
-                        step="10"
-                        value={filters.maxRate}
-                        onChange={e => setFilters({...filters, maxRate: Math.max(parseInt(e.target.value), filters.minRate + 10)})}
-                        className="flex-1 accent-brand-blue"
-                    />
+
+                {/* Preset rate ranges */}
+                <div className="grid grid-cols-3 gap-2 mb-3">
+                    {[
+                        { min: 0, max: 50, label: '$0-50' },
+                        { min: 50, max: 100, label: '$50-100' },
+                        { min: 100, max: 200, label: '$100-200' },
+                        { min: 200, max: 500, label: '$200-500' },
+                        { min: 0, max: 100, label: 'Under $100' },
+                        { min: 100, max: 500, label: '$100+' }
+                    ].map((range) => (
+                        <button
+                            key={range.label}
+                            onClick={() => setFilters({ ...filters, minRate: range.min, maxRate: range.max })}
+                            className={`px-3 py-2 text-xs font-medium rounded-lg border transition
+                                ${filters.minRate === range.min && filters.maxRate === range.max
+                                    ? 'bg-brand-blue text-white border-brand-blue'
+                                    : 'bg-white dark:bg-[#1f2128] text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:border-brand-blue dark:hover:border-brand-blue'}`}
+                        >
+                            {range.label}
+                        </button>
+                    ))}
                 </div>
-                <div className="flex justify-between text-xs text-gray-400 mt-1">
-                    <span>$0</span>
-                    <span>$500+</span>
+
+                {/* Simple dual slider as fallback */}
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-16">Min:</span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="500"
+                            step="25"
+                            value={filters.minRate}
+                            onChange={e => setFilters({...filters, minRate: Math.min(parseInt(e.target.value), filters.maxRate - 25)})}
+                            className="flex-1 accent-brand-blue"
+                        />
+                        <span className="text-xs font-mono w-12 text-right">${filters.minRate}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-400 w-16">Max:</span>
+                        <input
+                            type="range"
+                            min="0"
+                            max="500"
+                            step="25"
+                            value={filters.maxRate}
+                            onChange={e => setFilters({...filters, maxRate: Math.max(parseInt(e.target.value), filters.minRate + 25)})}
+                            className="flex-1 accent-brand-blue"
+                        />
+                        <span className="text-xs font-mono w-12 text-right">${filters.maxRate}</span>
+                    </div>
                 </div>
             </div>
 

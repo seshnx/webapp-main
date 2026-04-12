@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Briefcase as BriefcaseIcon, Zap } from 'lucide-react';
+import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Zap } from 'lucide-react';
 import { useClerk } from '@clerk/react';
 import { useSchool } from '../contexts/SchoolContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -60,7 +60,7 @@ export function Sidebar({
   // Track mobile viewport
   useEffect(() => {
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 1024);
+      setIsMobile(window.innerWidth < window.screen.width * 0.65);
     };
 
     checkMobile();
@@ -75,7 +75,7 @@ export function Sidebar({
   // Determine EDU route and label
   let eduRoute: string | null = null;
   let eduLabel = 'EDU Panel';
-  if (isStudent || isIntern || isStaff || userData?.accountTypes?.includes('student')) {
+  if (isStudent || isIntern|| isStaff || userData?.accountTypes?.includes('Student')) {
     if (isIntern) {
       eduRoute = 'edu-intern';
       eduLabel = 'Internship';
@@ -95,41 +95,57 @@ export function Sidebar({
 
   // Organized navigation groups
   const navGroups: NavigationGroup[] = useMemo(() => [
+    // ACTIVE MODULES ONLY: Social Feed, Bookings, Profile
     {
-      label: 'Primary',
+      label: 'Active',
       icon: Home,
       items: [
         { id: 'dashboard', icon: Home, label: t('dashboard') },
         { id: 'feed', icon: MessageSquare, label: t('socialNx') },
-        { id: 'messages', icon: MessageCircle, label: t('messages') },
-      ]
-    },
-    {
-      label: 'Work',
-      icon: BriefcaseIcon,
-      items: [
         { id: 'bookings', icon: Calendar, label: t('bookings') },
-        { id: 'marketplace', icon: ShoppingBag, label: t('marketplace') },
-        { id: 'tech', icon: Wrench, label: t('techServices') },
+        { id: 'profile', icon: Settings, label: t('profile') },
       ]
     },
     {
-      label: 'Business',
+      label: 'Studio',
       icon: Briefcase,
       items: [
-        ...(hasBusinessFeatures ? [{ id: 'business-center', icon: Briefcase, label: t('businessCenter') }] : []),
-        { id: 'profile', icon: Settings, label: t('profile') },
-        { id: 'payments', icon: CreditCard, label: t('billing') },
+        ...(hasBusinessFeatures ? [{ id: 'studio-manager', icon: Briefcase, label: 'Studio Manager' }] : []),
       ]
-    },
-    ...(eduRoute ? [{
-      label: 'Education',
-      icon: GraduationCap,
-      items: [
-        { id: eduRoute, icon: GraduationCap, label: eduLabel, highlight: true }
-      ]
-    }] : [])
-  ], [hasBusinessFeatures, eduRoute, eduLabel, t]);
+    }
+    // DISABLED MODULES
+    // {
+    //   label: 'Primary',
+    //   icon: Home,
+    //   items: [
+    //     { id: 'dashboard', icon: Home, label: t('dashboard') },
+    //     { id: 'messages', icon: MessageCircle, label: t('messages') },
+    //   ]
+    // },
+    // {
+    //   label: 'Work',
+    //   icon: BriefcaseIcon,
+    //   items: [
+    //     { id: 'marketplace', icon: ShoppingBag, label: t('marketplace') },
+    //     { id: 'tech', icon: Wrench, label: t('techServices') },
+    //   ]
+    // },
+    // {
+    //   label: 'Business',
+    //   icon: Briefcase,
+    //   items: [
+    //     ...(hasBusinessFeatures ? [{ id: 'business-center', icon: Briefcase, label: t('businessCenter') }] : []),
+    //     { id: 'payments', icon: CreditCard, label: t('billing') },
+    //   ]
+    // },
+    // ...(eduRoute ? [{
+    //   label: 'Education',
+    //   icon: GraduationCap,
+    //   items: [
+    //     { id: eduRoute, icon: GraduationCap, label: eduLabel, highlight: true }
+    //   ]
+    // }] : [])
+  ], [t]);
 
   const onLogout = handleLogout || (async () => {
     try {
@@ -153,8 +169,29 @@ export function Sidebar({
   });
 
   const handleNavigation = (id: string) => {
+    // Map navigation IDs to actual URL paths
+    const pathMap: Record<string, string> = {
+      'dashboard': '/dashboard',
+      'feed': '/feed',
+      'bookings': '/bookings',
+      'profile': '/profile',
+      'studio-manager': '/studio-manager',
+      'settings': '/settings',
+      'legal': '/legal',
+      'debug-report': '/debug-report',
+    };
+
+    // Get the path for this navigation item
+    const path = pathMap[id] || `/${id}`;
+
+    // Update the active tab
     setActiveTab?.(id);
-    const currentMobile = window.innerWidth < 1024;
+
+    // Navigate to the URL
+    navigate(path);
+
+    // Close sidebar on mobile
+    const currentMobile = window.innerWidth < window.screen.width * 0.65;
     if (setSidebarOpen && (currentMobile || sidebarOpen)) {
       setSidebarOpen(false);
     }
@@ -163,7 +200,7 @@ export function Sidebar({
   return (
     <>
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-30">
+      <aside className="hidden xl:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-[60]">
         <SidebarContent 
           navGroups={navGroups}
           activeTab={activeTab}
@@ -184,7 +221,7 @@ export function Sidebar({
 
       {/* Mobile Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-all duration-300 ease-out flex flex-col h-full lg:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+        className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-all duration-300 ease-out flex flex-col h-full xl:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
         role="dialog"
         aria-modal="true"
         aria-label="Navigation menu"
@@ -279,7 +316,7 @@ const SidebarContent = ({
       </div>
     </div>
 
-    <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-white dark:bg-[#1f2128]">
+    <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-white dark:bg-[#1f2128] pb-20 space-y-3">
       <button onClick={onLogout} className="flex items-center gap-2 text-red-500 text-sm font-medium hover:opacity-80 px-2 w-full py-2 rounded hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
         <LogOut size={16} /> {t('logout')}
       </button>

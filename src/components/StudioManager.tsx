@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Home, LayoutGrid, Image, Clock, FileText, Calendar,
-  Package, Settings, ChevronRight, Briefcase, Users, TrendingUp, LucideIcon
+  Package, Settings, ChevronRight, Briefcase, Users, TrendingUp, LucideIcon, Loader2
 } from 'lucide-react';
-// Import database functions
-// TODO: Replace with Convex query
-// import { useQuery } from 'convex/react';
-// import { api } from '../../convex/_generated/api';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useStudioByOwner, useBookingsByStudio } from '../hooks/useConvex';
 // Import sub-components
 import StudioOverview from './studio/StudioOverview';
 import StudioRooms from './studio/StudioRooms';
@@ -19,6 +18,7 @@ import StudioSettings from './studio/StudioSettings';
 import StudioClients from './studio/StudioClients';
 import StudioStaff from './studio/StudioStaff';
 import StudioAnalytics from './studio/StudioAnalytics';
+import StudioSetupWizard from './studio/StudioSetupWizard';
 import type { UserData } from '../types';
 
 // =====================================================
@@ -99,15 +99,23 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
   });
   const [localUserData, setLocalUserData] = useState(userData);
 
+  // Get user by clerk ID to get the Convex user ID
+  const userRecord = useQuery(
+    api.users.getUserByClerkId,
+    userData?.clerkId || user?.id ? { clerkId: userData?.clerkId || user?.id } : "skip"
+  );
+
+  // Fetch studio data — only query when we have a valid Convex user ID
+  const studio = useStudioByOwner(userRecord?._id);
+
   // Fetch booking stats
   useEffect(() => {
-    const fetchStats = async (): Promise<void> => {
-      if (!user?.id && !user?.uid) return;
-      const userId = userData?.id || user?.id || user?.uid;
+    const calculateStats = (): void => {
+      if (!studio) return;
 
       try {
-        // TODO: Replace with Convex query
-        // const bookings = await convexQuery(api.bookings.getBookingsByStudio, { studioId: userId });
+        // For now, set empty stats until bookings are properly integrated
+        // TODO: Replace with actual booking query when studio._id is available
         const bookings: Booking[] = [];
 
         const pending = bookings.filter(b => b.status === 'Pending' || b.status === 'pending').length;
@@ -132,21 +140,48 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
           totalRevenue: revenue
         });
       } catch (error) {
-        console.error('Error fetching stats:', error);
+        console.error('Error calculating stats:', error);
       }
     };
 
-    fetchStats();
+    calculateStats();
 
     // Refresh stats every 30 seconds
-    const interval = setInterval(fetchStats, 30000);
+    const interval = setInterval(calculateStats, 30000);
     return () => clearInterval(interval);
-  }, [userData?.id, user?.id, user?.uid]);
+  }, [studio]);
 
   // Handle updates from child components
   const handleUpdate = (updates: Partial<UserData>): void => {
     setLocalUserData(prev => prev ? { ...prev, ...updates } : updates as UserData);
   };
+
+  // Merge studio data with userData
+  const mergedUserData = localUserData && studio
+    ? {
+        ...localUserData,
+        studio: {
+          ...studio,
+          name: studio.name,
+          location: studio.location,
+          city: studio.city,
+          state: studio.state,
+          zip: studio.zip,
+          coordinates: studio.coordinates,
+          email: studio.email,
+          phoneCell: studio.phoneCell,
+          phoneLand: studio.phoneLand,
+          website: studio.website,
+          hours: studio.hours,
+          amenities: studio.amenities,
+          hideAddress: studio.hideAddress,
+          kioskModeEnabled: studio.kioskModeEnabled,
+          kioskEduMode: studio.kioskEduMode,
+          kioskAuthorizedNetworks: studio.kioskAuthorizedNetworks,
+          kioskNetworkName: studio.kioskNetworkName,
+        }
+      }
+    : localUserData;
 
   // Handle navigation from overview
   const handleNavigate = (tabId: TabId): void => {
@@ -156,7 +191,7 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
   const renderContent = (): JSX.Element => {
     const commonProps = {
       user,
-      userData: localUserData,
+      userData: mergedUserData,
       onUpdate: handleUpdate
     };
 
@@ -189,6 +224,45 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
   };
 
   const activeTabInfo = TABS.find(t => t.id === activeTab);
+
+  // Loading guard: wait for both userRecord and studio query to resolve
+  // before rendering anything. Prevents the full StudioManager UI from
+  // flashing before the setup wizard appears.
+  if (userRecord === undefined || studio === undefined) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20 flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="animate-spin text-brand-blue" size={32} />
+      </div>
+    );
+  }
+
+  // Show setup wizard when no studio exists (null = query completed with no results)
+  if (studio === null && userRecord?._id) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20">
+        <StudioSetupWizard
+          clerkId={userData?.clerkId || user?.id}
+          onComplete={() => {/* Convex real-time query will auto-update studio */}}
+        />
+      </div>
+    );
+  }
+
+  // Show retry wizard when studio exists but has no Clerk org linked
+  // (org creation failed on first attempt — user can retry linking)
+  if (studio && !studio.clerkOrgId && studio.slug && userRecord?._id) {
+    return (
+      <div className="max-w-7xl mx-auto pb-20">
+        <StudioSetupWizard
+          clerkId={userData?.clerkId || user?.id}
+          existingStudioId={studio._id}
+          existingStudioName={studio.name}
+          existingSlug={studio.slug}
+          onComplete={() => {/* Convex real-time query will auto-update studio */}}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto pb-20">

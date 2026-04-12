@@ -3,101 +3,32 @@
  *
  * Aggregates activity data from Convex (social, bookings, EDU, notifications)
  * to create a unified activity feed for the dashboard.
+ *
+ * NOTE: These functions should be called from within React components
+ * that have access to ConvexProvider context.
  */
 
 import type { ActivityItem, ActivityFilter } from '../types/dashboard';
 import { MessageCircle, Calendar, TrendingUp, Bell, AlertTriangle, Sparkles } from 'lucide-react';
-
-// Import Convex functions
-import { fetchQuery } from 'convex/nextjs';
+import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import type { Id } from '../../convex/_generated/dataModel';
 
 // =====================================================
-// ICON MAPPING
-// =====================================================
-
-const ACTIVITY_ICONS: Record<ActivityItem['type'], React.ElementType> = {
-  post: MessageCircle,
-  booking: Calendar,
-  notification: Bell,
-  payment: TrendingUp,
-  alert: AlertTriangle,
-  announcement: Sparkles
-};
-
-// =====================================================
-// DATA AGGREGATION FUNCTIONS
+// REACT HOOKS FOR ACTIVITY DATA
 // =====================================================
 
 /**
- * Fetch activity feed from all sources
+ * Hook to fetch post activity for the current user
  */
-export async function fetchActivityFeed(
-  userId: string,
-  filter?: ActivityFilter
-): Promise<ActivityItem[]> {
-  const activities: ActivityItem[] = [];
+export function usePostActivity(userId: string | undefined, limit = 10) {
+  const posts = useQuery(
+    api.social.getPostsByAuthor,
+    userId ? { clerkId: userId, limit } : "skip"
+  );
 
-  try {
-    // Fetch data from multiple sources in parallel using Convex
-    const [posts, bookings, eduAnnouncements] = await Promise.all([
-      fetchPostActivity(userId, filter?.limit),
-      fetchBookingActivity(userId, filter?.limit),
-      fetchEDUAnnouncementActivity(userId, filter?.limit)
-      // TODO: Add notification activity when implemented
-      // fetchNotificationActivity(userId, filter?.limit),
-      // TODO: Add payment activity when implemented
-      // fetchPaymentActivity(userId, filter?.limit)
-    ]);
-
-    activities.push(...posts, ...bookings, ...eduAnnouncements);
-
-    // Sort by timestamp (newest first)
-    activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
-
-    // Apply filters
-    let filtered = activities;
-
-    if (filter?.types && filter.types.length > 0) {
-      filtered = filtered.filter(item => filter.types!.includes(item.type));
-    }
-
-    if (filter?.priorities && filter.priorities.length > 0) {
-      filtered = filtered.filter(item => filter.priorities!.includes(item.priority));
-    }
-
-    if (filter?.startDate) {
-      filtered = filtered.filter(item => item.timestamp >= filter.startDate!);
-    }
-
-    if (filter?.endDate) {
-      filtered = filtered.filter(item => item.timestamp <= filter.endDate!);
-    }
-
-    // Apply limit and offset
-    const limit = filter?.limit || 20;
-    const offset = filter?.offset || 0;
-
-    return filtered.slice(offset, offset + limit);
-  } catch (error) {
-    console.error('Error fetching activity feed:', error);
-    return [];
-  }
-}
-
-/**
- * Fetch recent posts as activity items
- */
-async function fetchPostActivity(userId: string, limit = 10): Promise<ActivityItem[]> {
-  try {
-    // Fetch posts from Convex
-    const posts = await fetchQuery(api.social.getPostsByAuthor, {
-      authorId: userId,
-      limit
-    });
-
-    return (posts || []).map(post => ({
+  return {
+    data: (posts || []).map(post => ({
       id: `post-${post._id}`,
       type: 'post' as const,
       timestamp: new Date(post.createdAt),
@@ -119,28 +50,31 @@ async function fetchPostActivity(userId: string, limit = 10): Promise<ActivityIt
       icon: ACTIVITY_ICONS.post,
       priority: 'medium' as const,
       read: false
-    }));
-  } catch (error) {
-    console.error('Error fetching post activity:', error);
-    return [];
-  }
+    })),
+    isLoading: posts === undefined,
+    error: posts === null
+  };
 }
 
 /**
- * Fetch recent bookings as activity items
+ * Hook to fetch booking activity for the current user
  */
-async function fetchBookingActivity(userId: string, limit = 5): Promise<ActivityItem[]> {
-  try {
-    // Fetch upcoming bookings from Convex
-    const bookings = await fetchQuery(api.bookings.getUpcomingBookings, {
-      clientId: userId,
-      limit
-    });
+export function useBookingActivity(userId: string | undefined, limit = 5) {
+  const bookings = useQuery(
+    api.sbookings.getUpcomingBookings,
+    userId ? { clerkId: userId, limit } : "skip"
+  );
 
-    return (bookings || []).map(booking => ({
+  return {
+    data: (bookings || []).map(booking => ({
       id: `booking-${booking._id}`,
       type: 'booking' as const,
       timestamp: new Date(booking.startTime),
+      actor: {
+        id: booking.clientId,
+        displayName: booking.clientName || 'Client',
+        photoURL: booking.clientPhoto
+      },
       content: {
         title: 'Booking confirmed',
         description: `${booking.roomName} - ${new Date(booking.startTime).toLocaleDateString()}`,
@@ -153,36 +87,43 @@ async function fetchBookingActivity(userId: string, limit = 5): Promise<Activity
       icon: ACTIVITY_ICONS.booking,
       priority: 'high' as const,
       read: false
-    }));
-  } catch (error) {
-    console.error('Error fetching booking activity:', error);
-    return [];
-  }
+    })),
+    isLoading: bookings === undefined,
+    error: bookings === null
+  };
 }
 
 /**
- * Fetch EDU announcements as activity items
+ * Hook to fetch EDU announcement activity
  */
-async function fetchEDUAnnouncementActivity(userId: string, limit = 5): Promise<ActivityItem[]> {
-  try {
-    // Get user's school ID and type from their profile
-    const user = await fetchQuery(api.users.getUserByClerkId, { clerkId: userId });
+export function useEDUAnnouncementActivity(userId: string | undefined, limit = 5) {
+  // First get the user to check if they have a school
+  const user = useQuery(
+    api.users.getUserByClerkId,
+    userId ? { clerkId: userId } : "skip"
+  );
 
-    if (!user?.schoolId) {
-      return [];
-    }
+  const userType = user?.accountTypes?.includes('Student') ? 'student' : 'staff';
 
-    // Determine user type
-    const userType = user?.accountTypes?.includes('Student') ? 'student' : 'staff';
+  // Only fetch announcements if user has a schoolId
+  const shouldFetchAnnouncements = user?.schoolId && userId;
 
-    // Fetch unread announcements
-    const announcements = await fetchQuery(api.eduAnnouncements.getUnreadEduAnnouncements, {
+  const announcements = useQuery(
+    api.eduAnnouncements.getUnreadEduAnnouncements,
+    shouldFetchAnnouncements ? {
       userId,
-      schoolId: user.schoolId,
+      schoolId: user.schoolId as Id<"schools">,
       userType
-    });
+    } : "skip"
+  );
 
-    return (announcements || []).slice(0, limit).map(announcement => ({
+  // Determine loading state - only loading if we're actually fetching and haven't gotten results yet
+  const isLoading = shouldFetchAnnouncements
+    ? (user === undefined || announcements === undefined)
+    : false; // Not loading if we don't have a schoolId
+
+  return {
+    data: (announcements || []).slice(0, limit).map(announcement => ({
       id: `announcement-${announcement._id}`,
       type: 'announcement' as const,
       timestamp: new Date(announcement.createdAt),
@@ -202,15 +143,92 @@ async function fetchEDUAnnouncementActivity(userId: string, limit = 5): Promise<
       },
       actionUrl: `/edu/announcements/${announcement._id}`,
       icon: ACTIVITY_ICONS.announcement,
-      priority: (announcement.priority === 'urgent' ? 'high' : announcement.priority === 'low' ? 'low' : 'medium') as ActivityItem['priority'],
+      priority: announcement.priority === 'urgent' ? 'high' as const : 'medium' as const,
       read: false
-    }));
-  } catch (error) {
-    console.error('Error fetching EDU announcement activity:', error);
-    return [];
-  }
+    })),
+    isLoading,
+    error: user === null || announcements === null
+  };
 }
 
+// =====================================================
+// ICON MAPPING
+// =====================================================
+
+const ACTIVITY_ICONS: Record<ActivityItem['type'], React.ElementType> = {
+  post: MessageCircle,
+  booking: Calendar,
+  notification: Bell,
+  payment: TrendingUp,
+  alert: AlertTriangle,
+  announcement: Sparkles
+};
+
+// =====================================================
+// DATA AGGREGATION FUNCTIONS
+// =====================================================
+
+/**
+ * Main React hook to fetch activity feed from all sources
+ * This should be used within React components that have access to ConvexProvider
+ */
+export function useActivityFeed(userId: string | undefined, filter?: ActivityFilter) {
+  // Use the individual hooks to fetch data from different sources
+  const posts = usePostActivity(userId, filter?.limit);
+  const bookings = useBookingActivity(userId, filter?.limit);
+  const eduAnnouncements = useEDUAnnouncementActivity(userId, filter?.limit);
+
+  // Combine all activities
+  const activities = [
+    ...(posts.data || []),
+    ...(bookings.data || []),
+    ...(eduAnnouncements.data || [])
+  ];
+
+  // Sort by timestamp (newest first)
+  activities.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+
+  // Apply filters
+  let filtered = activities;
+
+  if (filter?.types && filter.types.length > 0) {
+    filtered = filtered.filter(item => filter.types!.includes(item.type));
+  }
+
+  if (filter?.priorities && filter.priorities.length > 0) {
+    filtered = filtered.filter(item => filter.priorities!.includes(item.priority));
+  }
+
+  if (filter?.startDate) {
+    filtered = filtered.filter(item => item.timestamp >= filter.startDate!);
+  }
+
+  if (filter?.endDate) {
+    filtered = filtered.filter(item => item.timestamp <= filter.endDate!);
+  }
+
+  // Apply limit and offset
+  const limit = filter?.limit || 20;
+  const offset = filter?.offset || 0;
+
+  return {
+    data: filtered.slice(offset, offset + limit),
+    isLoading: posts.isLoading || bookings.isLoading || eduAnnouncements.isLoading,
+    error: posts.error || bookings.error || eduAnnouncements.error
+  };
+}
+
+/**
+ * Legacy function for backwards compatibility
+ * @deprecated Use useActivityFeed hook instead
+ */
+export async function fetchActivityFeed(
+  userId: string,
+  filter?: ActivityFilter
+): Promise<ActivityItem[]> {
+  console.warn('fetchActivityFeed should only be called from React components. Use useActivityFeed hook instead.');
+  return [];
+}
 /**
  * Fetch recent payments as activity items
  * TODO: Implement when payment system is ready

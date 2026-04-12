@@ -132,7 +132,7 @@ export function useUserSubProfiles(
 export function useBookingRequests(ownerId: string | null | undefined): number {
   // Get bookings by studio owner from Convex (real-time!)
   const bookings = useQuery(
-    api.bookings.getBookingsByStudio,
+    api.sbookings.getBookingsByStudio,
     ownerId ? { ownerId, status: "Pending" } : "skip"
   );
 

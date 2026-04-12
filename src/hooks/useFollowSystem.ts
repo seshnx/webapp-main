@@ -69,13 +69,13 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
   // Get followers from Convex (real-time!)
   const followers = useQuery(
     api.social.getFollowers,
-    currentUserId ? { userId: currentUserId } : "skip"
+    currentUserId ? { clerkId: currentUserId } : "skip"
   );
 
   // Get following from Convex (real-time!)
   const following = useQuery(
     api.social.getFollowing,
-    currentUserId ? { userId: currentUserId } : "skip"
+    currentUserId ? { clerkId: currentUserId } : "skip"
   );
 
   // Mutations
@@ -87,11 +87,11 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
     if (!followers) return [];
 
     return followers.map(f => ({
-      odId: f.followerId,
-      userId: f.followerId,
-      displayName: f.followerName || 'Unknown',
-      photoURL: f.followerPhoto || null,
-      role: f.followerRole,
+      odId: f.clerkId,
+      userId: f.clerkId,
+      displayName: f.displayName || 'Unknown',
+      photoURL: f.photoURL || null,
+      role: f.role,
     }));
   }, [followers]);
 
@@ -99,11 +99,11 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
     if (!following) return [];
 
     return following.map(f => ({
-      odId: f.followingId,
-      userId: f.followingId,
-      displayName: f.followingName || 'Unknown',
-      photoURL: f.followingPhoto || null,
-      role: f.followingRole,
+      odId: f.clerkId,
+      userId: f.clerkId,
+      displayName: f.displayName || 'Unknown',
+      photoURL: f.photoURL || null,
+      role: f.role,
     }));
   }, [following]);
 
@@ -128,8 +128,8 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
 
     try {
       await followMutation({
-        followerId: currentUserId,
-        followingId: targetUserId,
+        followerClerkId: currentUserId,
+        followingClerkId: targetUserId,
       });
       return { success: true };
     } catch (error) {
@@ -146,8 +146,8 @@ export function useFollowSystem(currentUserId: string | null | undefined) {
 
     try {
       await unfollowMutation({
-        followerId: currentUserId,
-        followingId: targetUserId,
+        followerClerkId: currentUserId,
+        followingClerkId: targetUserId,
       });
       return { success: true };
     } catch (error) {
@@ -260,7 +260,7 @@ export function useIsFollowing(
   const isFollowingData = useQuery(
     api.social.isFollowing,
     (followerId && followingId)
-      ? { followerId: followerId as any, followingId: followingId as any }
+      ? { followerClerkId: followerId, followingClerkId: followingId }
       : "skip"
   );
 
@@ -281,8 +281,8 @@ export function useFollowMutations() {
   const followAction = useCallback(async (followerId: string, followingId: string) => {
     try {
       await follow({
-        followerId,
-        followingId,
+        followerClerkId: followerId,
+        followingClerkId: followingId,
       });
       return { success: true };
     } catch (error) {
@@ -294,8 +294,8 @@ export function useFollowMutations() {
   const unfollowAction = useCallback(async (followerId: string, followingId: string) => {
     try {
       await unfollow({
-        followerId,
-        followingId,
+        followerClerkId: followerId,
+        followingClerkId: followingId,
       });
       return { success: true };
     } catch (error) {

@@ -8,15 +8,18 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, AlertTriangle, Users, Wrench, Clock, TrendingUp } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import type { DashboardProps, RoleMetric, QuickAction, StudioDashboardData } from '../../../types/dashboard';
 import { StatsCard } from '../widgets/StatsCard';
 import { RoleMetrics } from '../sections/RoleMetrics';
 import { QuickActions } from '../sections/QuickActions';
 import {
+  useStudioByOwner,
   useBookingsByStudio,
-  useUpcomingBookings,
   useRoomsByStudio
 } from '../../../hooks/useConvex';
+import { useUpcomingBookings } from '../../../services/bookingService';
 
 interface StudioDashboardProps extends DashboardProps {
   subProfiles?: Record<string, any>;
@@ -24,13 +27,22 @@ interface StudioDashboardProps extends DashboardProps {
 }
 
 export function StudioDashboard({ userData, subProfiles, className = '' }: StudioDashboardProps) {
-  // Get studio ID from subProfiles
-  const studioId = subProfiles?.Studio?.studioId;
+  // Get user by clerk ID to get the Convex user ID
+  const userRecord = useQuery(
+    api.users.getUserByClerkId,
+    userData?.clerkId ? { clerkId: userData.clerkId } : "skip"
+  );
+
+  // Fetch studio data
+  const studio = useStudioByOwner(userRecord?._id || (userData?.id as any));
+
+  // Get studio ID from studio data
+  const studioId = studio?._id;
 
   // Fetch real data from Convex
-  const { data: allBookings } = useBookingsByStudio(studioId);
-  const { data: upcomingBookings } = useUpcomingBookings(userData?.userId || '', 10);
-  const { data: rooms } = useRoomsByStudio(studioId);
+  const allBookings = useBookingsByStudio(studioId);
+  const upcomingBookings = useUpcomingBookings(userData?.clerkId || '', 10);
+  const rooms = useRoomsByStudio(studioId);
 
   // Calculate real dashboard data
   const data: StudioDashboardData = useMemo(() => {
