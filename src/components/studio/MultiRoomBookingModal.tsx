@@ -71,7 +71,7 @@ export default function MultiRoomBookingModal({ booking, rooms, onClose, onSucce
     const [loading, setLoading] = useState<boolean>(false);
 
     // Convex mutation for creating bookings
-    const createBooking = useMutation(api.bookings.createBooking);
+    const createBooking = useMutation(api.sbookings.createBooking);
 
     useEffect(() => {
         // Initialize with booking's time if available
