@@ -85,19 +85,19 @@ const SocialFeed = retryLazyLoad(() => import('./SocialFeed'));
 const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
 const BookingSystem = retryLazyLoad(() => import('./BookingSystem'));
 
-// DISABLED MODULES - Scope reduced to only Bookings, Settings, Profile, and Social
-// const Dashboard = retryLazyLoad(() => import('./Dashboard'));
-// const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
-// const Marketplace = retryLazyLoad(() => import('./Marketplace'));
-// const TechServices = retryLazyLoad(() => import('./TechServices'));
-// const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
-// const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
-// const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
-// const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
-// const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
-// const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
-// const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
-// const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
+// ENABLED MODULES - All modules now active
+const Dashboard = retryLazyLoad(() => import('./Dashboard'));
+const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
+const Marketplace = retryLazyLoad(() => import('./Marketplace'));
+const TechServices = retryLazyLoad(() => import('./TechServices'));
+const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
+const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
+const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
+const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
+const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
+const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
+const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
+const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
 
 // =====================================================
 // MAIN COMPONENT
@@ -118,19 +118,24 @@ export default function MainLayout({
 
   // Helper to determine active tab from URL
   const getTabFromPath = (path: string): string => {
-    // ACTIVE MODULES: feed, bookings, profile
+    // ALL MODULES NOW ACTIVE
     if (path.startsWith('/feed') || path === '/social' || path === '/') return 'feed';
     if (path.startsWith('/bookings')) return 'bookings';
     if (path.startsWith('/profile')) return 'profile';
-    // DISABLED MODULES - Redirect to feed
-    if (path.startsWith('/messages') || path.startsWith('/chat')) return 'feed';
+    if (path.startsWith('/messages') || path.startsWith('/chat')) return 'messages';
     if (path === '/home') return 'dashboard';
     if (path.startsWith('/dashboard')) return 'dashboard';
     if (path.startsWith('/studio-manager')) return 'studio-manager';
-    if (path.startsWith('/marketplace') || path.startsWith('/tech')) return 'feed';
-    if (path.startsWith('/payments') || path.startsWith('/billing')) return 'feed';
-    if (path.startsWith('/business-center') || path.startsWith('/edu')) return 'feed';
-    if (path.startsWith('/labels') || path.startsWith('/studio-ops')) return 'feed';
+    if (path.startsWith('/marketplace')) return 'marketplace';
+    if (path.startsWith('/tech')) return 'tech';
+    if (path.startsWith('/payments') || path.startsWith('/billing')) return 'payments';
+    if (path.startsWith('/business-center')) return 'business-center';
+    if (path.startsWith('/legal')) return 'legal';
+    if (path.startsWith('/labels') || path.startsWith('/studio-ops')) return 'labels';
+    if (path.startsWith('/edu-student')) return 'edu-student';
+    if (path.startsWith('/edu-intern')) return 'edu-intern';
+    if (path.startsWith('/edu-staff')) return 'edu-staff';
+    if (path.startsWith('/edu-admin')) return 'edu-admin';
     return 'feed';
   };
 
@@ -175,7 +180,7 @@ export default function MainLayout({
     const tokenBalance = userData?.tokenBalance || 0;
 
     switch (activeTab) {
-      // ACTIVE MODULES: Bookings, Social Feed, Profile
+      // SOCIAL & PROFILE MODULES
       case 'feed':
       case 'social':
         return (
@@ -183,6 +188,14 @@ export default function MainLayout({
             <SocialFeed user={user} userData={userData} subProfiles={subProfiles} openPublicProfile={(uid: string, name: string) => setViewingProfile({ uid, name })} />
           </Suspense>
         );
+      case 'profile':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
+          </Suspense>
+        );
+
+      // BUSINESS & BOOKING MODULES
       case 'bookings':
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
@@ -194,12 +207,6 @@ export default function MainLayout({
             />
           </Suspense>
         );
-      case 'profile':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
-          </Suspense>
-        );
       case 'dashboard':
         const DashboardComponent = retryLazyLoad(() => import('./Dashboard'));
         return (
@@ -209,8 +216,8 @@ export default function MainLayout({
               userData={userData}
               subProfiles={subProfiles}
               setActiveTab={setActiveTab}
-              bookingCount={0}
-              tokenBalance={0}
+              bookingCount={bookingCount}
+              tokenBalance={tokenBalance}
             />
           </Suspense>
         );
@@ -224,30 +231,142 @@ export default function MainLayout({
             />
           </Suspense>
         );
-      // DISABLED MODULES - Redirect to active modules
-      case 'messages':
+
+      // MESSAGING & COMMUNICATION
       case 'messages':
       case 'chat':
+        const ChatInterfaceComponent = retryLazyLoad(() => import('./ChatInterface'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <ChatInterfaceComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+
+      // MARKETPLACE & SERVICES
       case 'marketplace':
+        const MarketplaceComponent = retryLazyLoad(() => import('./Marketplace'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <MarketplaceComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
       case 'tech':
+        const TechServicesComponent = retryLazyLoad(() => import('./TechServices'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <TechServicesComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+
+      // PAYMENTS & BILLING
       case 'payments':
       case 'billing':
-      case 'business-center':
-      case 'legal':
-      case 'labels':
-      case 'edu-student':
-      case 'edu-intern':
-      case 'edu-staff':
-      case 'edu-admin':
+        const PaymentsManagerComponent = retryLazyLoad(() => import('./PaymentsManager'));
         return (
-          <div className="p-8 text-center text-gray-500">
-            <p className="text-lg mb-2">Module Disabled</p>
-            <p className="text-sm">This module has been temporarily disabled. Please use Bookings, Social Feed, or Profile.</p>
-          </div>
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <PaymentsManagerComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
         );
+
+      // BUSINESS & LEGAL
+      case 'business-center':
+        const BusinessCenterComponent = retryLazyLoad(() => import('./BusinessCenter'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <BusinessCenterComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+      case 'legal':
+        const LegalDocsComponent = retryLazyLoad(() => import('./LegalDocs'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <LegalDocsComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+      case 'labels':
+        const LabelDashboardComponent = retryLazyLoad(() => import('./labels/LabelDashboard'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <LabelDashboardComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+
+      // EDUCATION MODULES
+      case 'edu-student':
+        const EduStudentComponent = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <EduStudentComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+      case 'edu-intern':
+        const EduInternComponent = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <EduInternComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+      case 'edu-staff':
+        const EduStaffComponent = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <EduStaffComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+      case 'edu-admin':
+        const EduAdminComponent = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <EduAdminComponent
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+            />
+          </Suspense>
+        );
+
       default:
-        // Only show this if they navigate to a URL that truly doesn't exist
-        return <div className="p-8 text-center text-gray-500">Module coming soon or not found.</div>;
+        return <div className="p-8 text-center text-gray-500">Module not found or coming soon.</div>;
     }
   };
 
