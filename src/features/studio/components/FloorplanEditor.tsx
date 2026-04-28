@@ -16,7 +16,7 @@ import toast from 'react-hot-toast';
 const SNAP_GRID = 10; // Snap movement to 10px grid
 
 import type { Layout, Room, Structure, Wall, Door, Window, Furniture, TextLabel, Measurement, CustomShape, LayerState, Layers, RoomTemplate, Point, ContextMenuPosition, ClipboardData, PanState, FloorplanEditorProps } from '@/types/floorplan';
-import { useFloorplanState } from '@/hooks/useFloorplanState';
+import { useFloorplanState } from '../hooks/useFloorplanState';
 
 /**
  * FloorplanEditor component for editing studio room layout via interactive SVG.

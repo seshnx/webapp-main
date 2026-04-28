@@ -10,7 +10,7 @@ import {
     FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save, Trash2, LucideIcon
 } from 'lucide-react';
 import { useMutation, useQuery } from 'convex/react';
-import { api } from '@/@convex/api';
+import { api } from '@convex/api';
 import { ACCOUNT_TYPES } from '@/config/constants';
 import { useUserSettings, applySettingsToDom } from '@/hooks/useUserSettings';
 import { useLanguage } from '@/contexts/LanguageContext';

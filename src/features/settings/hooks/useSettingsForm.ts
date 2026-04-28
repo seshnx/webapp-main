@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { useZodForm } from '@/hooks/useZodForm';
 import { useState, useCallback, useEffect } from 'react';
 import { useMutation } from 'convex/react';
-import { api } from '@/@convex/api';
+import { api } from '@convex/api';
 import { ExtendedSettings, AccountType, SubProfiles } from '@/types';
 import { toast } from 'react-hot-toast';
 

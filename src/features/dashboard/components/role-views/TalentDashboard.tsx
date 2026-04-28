@@ -13,7 +13,7 @@ import type { DashboardProps, RoleMetric, QuickAction, TalentDashboardData } fro
 import { StatsCard } from '../widgets/StatsCard';
 import { RoleMetrics } from '../sections/RoleMetrics';
 import { QuickActions } from '../sections/QuickActions';
-import { api } from '@/@convex/api';
+import { api } from '@convex/api';
 
 interface TalentDashboardProps extends DashboardProps {
   className?: string;

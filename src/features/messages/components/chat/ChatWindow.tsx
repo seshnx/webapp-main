@@ -4,7 +4,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from '@convex/api';
 import { isConvexAvailable } from '@/config/convex';
 import ChatInput from './ChatInput';
-import SeshNxEmbedModal from '../SeshNxEmbedModal';
+import SeshNxEmbedModal from '@/components/SeshNxEmbedModal';
 import MessageBubble from './message/MessageBubble';
 import ForwardMessageModal from './message/ForwardMessageModal';
 import PresenceIndicator, { StatusBadge } from './PresenceIndicator';

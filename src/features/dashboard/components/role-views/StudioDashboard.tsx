@@ -9,7 +9,7 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Calendar, AlertTriangle, Users, Wrench, Clock, TrendingUp } from 'lucide-react';
 import { useQuery } from 'convex/react';
-import { api } from '@/@convex/api';
+import { api } from '@convex/api';
 import type { DashboardProps, RoleMetric, QuickAction, StudioDashboardData } from '@/types/dashboard';
 import { StatsCard } from '../widgets/StatsCard';
 import { RoleMetrics } from '../sections/RoleMetrics';

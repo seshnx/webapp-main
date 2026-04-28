@@ -36,10 +36,10 @@ function getVisualizerPlugin() {
 // https://vitejs.dev/config/
 export default defineConfig({
   resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@convex": path.resolve(__dirname, "./convex/_generated")
-    },
+    alias: [
+      { find: '@convex', replacement: path.resolve(__dirname, './convex/_generated') },
+      { find: '@/', replacement: path.resolve(__dirname, './src') + '/' }
+    ],
   },
   build: {
     chunkSizeWarningLimit: 1000, // Increased for large dependencies
