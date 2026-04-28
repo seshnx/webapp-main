@@ -2,7 +2,7 @@
  * Social Components Debug Utility
  */
 
-import { isMongoDbAvailable } from '../config/mongodb.js';
+
 
 const DEBUG_SOCIAL = import.meta.env.DEBUG_SOCIAL === 'true' || 
                       typeof window !== 'undefined' && localStorage.getItem('DEBUG_SOCIAL') === 'true';
@@ -94,7 +94,7 @@ export function getDebugStats() {
     performanceMetrics: performanceMetrics.filter(m => m.duration),
     errorLog,
     apiCalls,
-    mongoAvailable: isMongoDbAvailable(),
+    mongoAvailable: false,
     summary: {
       totalErrors: errorLog.length,
       totalApiCalls: apiCalls.length,

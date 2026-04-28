@@ -181,5 +181,5 @@ export const logger = new Logger(
 );
 
 // Export log level enum for convenience
-export { LogLevel };
+
 export default logger;

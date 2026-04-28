@@ -1,4 +1,4 @@
-import type { AccountType } from '@/config/constants';
+import type { AccountType } from '@/types/index.js';
 
 export type AppContext = 'studio' | 'edu';
 
