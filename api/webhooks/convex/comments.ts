@@ -2,9 +2,7 @@
  * Convex Comment Sync Webhook
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { event, data } = body;
@@ -14,15 +12,15 @@ export async function POST(request: NextRequest) {
     // TODO: Implement actual Convex sync when types are generated
     console.log('[Convex Webhook] Comment data:', data);
 
-    return NextResponse.json({ success: true, event });
+    return Response.json({ success: true, event });
   } catch (error) {
     console.error('[Convex Webhook] Error:', error);
-    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
+    return Response.json({ error: 'Internal error' }, { status: 500 });
   }
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
+  return new Response(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',

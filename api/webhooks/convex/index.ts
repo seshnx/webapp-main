@@ -3,17 +3,15 @@
  * Routes all webhook events to appropriate handlers
  */
 
-import { NextRequest, NextResponse } from 'next/server';
-
-export async function GET(request: NextRequest) {
-  return NextResponse.json({
+export async function GET(request: Request) {
+  return Response.json({
     status: 'ok',
     service: 'convex-webhook',
     timestamp: new Date().toISOString(),
   });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
     const body = await request.json();
     const { event, type, data } = body;
@@ -44,7 +42,7 @@ export async function POST(request: NextRequest) {
     // TODO: Route to specific handlers and sync to Convex
     // For now, just acknowledge receipt
 
-    return NextResponse.json({
+    return Response.json({
       success: true,
       event: eventType,
       timestamp: new Date().toISOString(),
@@ -52,7 +50,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('[Convex Webhook] Error:', error);
-    return NextResponse.json(
+    return Response.json(
       { error: 'Internal error' },
       { status: 500 }
     );
@@ -60,7 +58,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function OPTIONS() {
-  return new NextResponse(null, {
+  return new Response(null, {
     status: 200,
     headers: {
       'Access-Control-Allow-Origin': '*',

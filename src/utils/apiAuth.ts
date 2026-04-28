@@ -14,7 +14,7 @@
  */
 
 import { createClerkClient } from '@clerk/backend';
-import type { AccountType } from '../types';
+import type { AccountType } from '../types/index.js';
 
 // Initialize Clerk client
 const clerkClient = createClerkClient({
