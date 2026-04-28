@@ -94,19 +94,22 @@ const retryLazyLoad = <T extends ComponentType<any>>(
 // LAZY LOADED COMPONENTS
 // =====================================================
 
-// Lazy load components to avoid circular dependencies with retry mechanism
+import {
+  Dashboard,
+  StudioManager,
+  ProfileManager,
+  SettingsTab,
+  ClientPortal,
+  PublicLegalPage,
+  StudioKiosk,
+  StudioPublicProfile,
+  StudioNotFound,
+  PlansPage,
+  StudioPricingPage
+} from './lazyComponents';
+
+// Local lazy components not yet in central registry
 const DebugReport = retryLazyLoad(() => import('../components/DebugReport'));
-const ProfileManager = retryLazyLoad(() => import('@/features/profiles/components/ProfileManager'));
-const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
-const Dashboard = retryLazyLoad(() => import('@/features/dashboard/components/Dashboard'));
-const StudioManager = retryLazyLoad(() => import('@/features/studio/components/StudioManager'));
-const ClientPortal = retryLazyLoad(() => import('../components/studio/portal/ClientPortal'));
-const PublicLegalPage = retryLazyLoad(() => import('../components/PublicLegalPage'));
-const StudioKiosk = retryLazyLoad(() => import('../components/studio/kiosk/StudioKiosk'));
-const StudioPublicProfile = retryLazyLoad(() => import('../components/studio/StudioPublicProfile'));
-const StudioNotFound = retryLazyLoad(() => import('../components/studio/StudioNotFound'));
-const PlansPage = retryLazyLoad(() => import('../components/PlansPage'));
-const StudioPricingPage = retryLazyLoad(() => import('../components/studio/StudioPricingPage'));
 
 // =====================================================
 // COMPONENTS

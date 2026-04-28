@@ -77,31 +77,41 @@ const retryLazyLoad = (importFn: () => Promise<any>, retries = 3, delay = 100) =
   });
 };
 
+import {
+  Dashboard,
+  StudioManager,
+  ProfileManager,
+  SettingsTab,
+  ClientPortal,
+  PublicLegalPage,
+  StudioKiosk,
+  StudioPublicProfile,
+  StudioNotFound,
+  PlansPage,
+  StudioPricingPage,
+  SocialFeed,
+  BookingSystem,
+  ChatInterface,
+  Marketplace,
+  TechServices,
+  PaymentsManager,
+  LegalDocs,
+  LabelDashboard,
+  EduStudentDashboard,
+  EduInternDashboard,
+  EduStaffDashboard,
+  EduAdminDashboard,
+  EduSetupWizard
+} from '@/routes/lazyComponents';
+
+// Layout & Core components
 const Sidebar = retryLazyLoad(() => import('./Sidebar'));
-const EduSidebar = retryLazyLoad(() => import('./EduSidebar'));
-const StudioManager = retryLazyLoad(() => import('@/features/studio/components/StudioManager'));
+const EDUSidebar = retryLazyLoad(() => import('@/features/edu/components/EDUSidebar'));
 const Navbar = retryLazyLoad(() => import('./Navbar'));
-const PublicProfileModal = retryLazyLoad(() => import('./PublicProfileModal'));
-const TalentBookingModal = retryLazyLoad(() => import('./TalentBookingModal'));
+const PublicProfileModal = retryLazyLoad(() => import('@/features/profiles/components/PublicProfileModal'));
+const TalentBookingModal = retryLazyLoad(() => import('@/features/booking/components/TalentBookingModal'));
 
-// ACTIVE MODULES: Bookings, Settings (in AppRoutes), Profile, Social Feed
-const SocialFeed = retryLazyLoad(() => import('@/features/social/components/SocialFeed'));
-const ProfileManager = retryLazyLoad(() => import('@/features/profiles/components/ProfileManager'));
-const BookingSystem = retryLazyLoad(() => import('@/features/booking/components/BookingSystem'));
-
-// ENABLED MODULES - All modules now active
-const Dashboard = retryLazyLoad(() => import('@/features/dashboard/components/Dashboard'));
-const ChatInterface = retryLazyLoad(() => import('@/features/messages/components/ChatInterface'));
-const Marketplace = retryLazyLoad(() => import('@/features/marketplace/components/Marketplace'));
-const TechServices = retryLazyLoad(() => import('@/features/marketplace/components/TechServices'));
-const PaymentsManager = retryLazyLoad(() => import('@/features/business/components/PaymentsManager'));
-const BusinessCenter = retryLazyLoad(() => import('@/features/business/components/BusinessCenter'));
-const LegalDocs = retryLazyLoad(() => import('@/features/business/components/LegalDocs'));
-const LabelDashboard = retryLazyLoad(() => import('@/features/business/components/labels/LabelDashboard'));
-const EduStudentDashboard = retryLazyLoad(() => import('@/features/edu/components/EDU/EduStudentDashboard'));
-const EduInternDashboard = retryLazyLoad(() => import('@/features/edu/components/EDU/EduInternDashboard'));
-const EduStaffDashboard = retryLazyLoad(() => import('@/features/edu/components/EDU/EduStaffDashboard'));
-const EduAdminDashboard = retryLazyLoad(() => import('@/features/edu/components/EDU/EduAdminDashboard'));
+// EDU Module components
 const EduOverview = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduOverview'));
 const EduCourses = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduCourses'));
 const EduCourseBuilder = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduCourseBuilder'));
@@ -383,7 +393,7 @@ export default function MainLayout({
         {/* Sidebar */}
         <div className="fixed left-0 top-16 bottom-0 z-40">
           {detectContextFromPath(location.pathname) === 'edu' ? (
-            <EduSidebar
+            <EDUSidebar
               userData={userData}
               activeTab={activeTab}
               setActiveTab={setActiveTab}

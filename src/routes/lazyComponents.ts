@@ -33,6 +33,13 @@ export const LegalDocs = lazy(() => retryLazyLoad(() => import('@/features/busin
 export const PublicLegalPage = lazy(() => retryLazyLoad(() => import('@/features/business/components/PublicLegalPage')));
 export const PlansPage = lazy(() => retryLazyLoad(() => import('@/features/business/components/PlansPage')));
 
+// Studio Public & Shared Components
+export const StudioPublicProfile = lazy(() => retryLazyLoad(() => import('@/features/studio/components/StudioPublicProfile')));
+export const StudioKiosk = lazy(() => retryLazyLoad(() => import('@/features/studio/components/kiosk/StudioKiosk')));
+export const ClientPortal = lazy(() => retryLazyLoad(() => import('@/features/studio/components/portal/ClientPortal')));
+export const StudioNotFound = lazy(() => retryLazyLoad(() => import('@/features/studio/components/StudioNotFound')));
+export const StudioPricingPage = lazy(() => retryLazyLoad(() => import('@/features/studio/components/StudioPricingPage')));
+
 // EDU Components
 export const EduStudentDashboard = lazy(() => retryLazyLoad(() => import('@/features/edu/components/EDU/EduStudentDashboard')));
 export const EduInternDashboard = lazy(() => retryLazyLoad(() => import('@/features/edu/components/EDU/EduInternDashboard')));

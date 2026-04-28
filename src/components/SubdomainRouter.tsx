@@ -1,5 +1,5 @@
 import React from 'react';
-import StudioPublicProfile from './studio/StudioPublicProfile';
+import StudioPublicProfile from '@/features/studio/components/StudioPublicProfile';
 
 interface SubdomainRouterProps {
   slug: string;
