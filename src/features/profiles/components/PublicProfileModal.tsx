@@ -7,8 +7,8 @@ import {
 import StarRating from '@/components/shared/StarRating';
 import { useImageUpload } from '@/hooks/useUpload';
 import { useFollowSystem, useUserSocialStats } from '@/hooks/useFollowSystem';
-import FollowButton from './social/FollowButton';
-import FollowersListModal, { FollowStats } from './social/FollowersListModal';
+import FollowButton from '@/features/social/components/FollowButton';
+import FollowersListModal, { FollowStats } from '@/features/social/components/FollowersListModal';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/api';
 import { STORAGE_FOLDERS } from '@/config/storage';
