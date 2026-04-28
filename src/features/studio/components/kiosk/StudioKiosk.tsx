@@ -8,7 +8,7 @@ import KioskHeader from './KioskHeader';
 import KioskFooter from './KioskFooter';
 import { Loader2, MonitorPlay } from 'lucide-react';
 import type { StudioData, Room } from '@/types/kiosk';
-import { DEMO_DATA } from '@/config/kioskDemoData';
+import { DEMO_DATA } from '../../config/kioskDemoData';
 
 // =====================================================
 // PROPS
