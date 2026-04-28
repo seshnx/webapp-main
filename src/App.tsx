@@ -6,11 +6,11 @@ import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
 import { useUserSync } from './hooks/useUserSync';
-import { useStudioSubdomain } from './hooks/useStudioSubdomain';
+import { useStudioSubdomain } from './features/studio/hooks/useStudioSubdomain';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { queryClient } from './config/queryClient';
 
-const AuthWizard = lazy(() => import('./components/AuthWizard'));
+const AuthWizard = lazy(() => import('./features/auth/components/AuthWizard'));
 const AppRoutes = lazy(() => import('./routes/AppRoutes'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
 const SubdomainRouter = lazy(() => import('./components/SubdomainRouter'));
@@ -43,6 +43,17 @@ export default function App(): JSX.Element {
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
+
+  // Sync theme with userData settings
+  useEffect(() => {
+    if (userData?.settings?.theme) {
+      const isDark = userData.settings.theme === 'dark';
+      if (isDark !== darkMode) {
+        setDarkMode(isDark);
+        localStorage.setItem('theme', isDark ? 'dark' : 'light');
+      }
+    }
+  }, [userData?.settings?.theme]);
 
   const handleLogout = useCallback(async () => {
     await clerk?.signOut();

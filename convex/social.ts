@@ -1,20 +1,11 @@
 // social.ts
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { getNativeUser } from "./utils/users";
 
 // =====================================================
 // HELPER FUNCTIONS
 // =====================================================
-
-// Safely look up a native Convex User ID from a Clerk String ID
-const getNativeUser = async (ctx: any, clerkId: string | undefined) => {
-  if (!clerkId) return null;
-  return await ctx.db
-    .query("users")
-    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
-    .first();
-};
-
 
 /**
  * Get user by Clerk ID
@@ -102,10 +93,7 @@ export const getHomeFeed = query({
 
     try {
       // 2. Look up the native Convex User ID using the provided Clerk ID
-      const user = await ctx.db
-        .query("users")
-        .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId as string))
-        .first();
+      const user = await getNativeUser(ctx, args.userId);
 
       // If user isn't found in Convex yet, return empty array to prevent crash
       if (!user) return [];
@@ -245,10 +233,7 @@ export const getPostsByAuthor = query({
   },
   handler: async (ctx, args) => {
     // Get user by clerkId first
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
+    const user = await getNativeUser(ctx, args.clerkId);
 
     if (!user) {
       return [];
@@ -879,10 +864,10 @@ export const getFollowers = query({
       if (followerUser) {
         results.push({
           _id: followerUser._id,
-          clerkId: followerUser.clerkId,
-          displayName: followerUser.displayName || followerUser.username || "User",
-          photoURL: followerUser.avatarUrl,
-          role: followerUser.talentSubRole || followerUser.activeRole,
+          clerkId: (followerUser as any).clerkId,
+          displayName: (followerUser as any).displayName || (followerUser as any).username || "User",
+          photoURL: (followerUser as any).avatarUrl,
+          role: (followerUser as any).talentSubRole || (followerUser as any).activeRole,
           timestamp: f.createdAt,
         });
       }

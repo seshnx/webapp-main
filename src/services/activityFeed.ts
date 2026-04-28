@@ -11,8 +11,8 @@
 import type { ActivityItem, ActivityFilter } from '../types/dashboard';
 import { MessageCircle, Calendar, TrendingUp, Bell, AlertTriangle, Sparkles } from 'lucide-react';
 import { useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
-import type { Id } from '../../convex/_generated/dataModel';
+import { api } from '@convex/api';
+import type { Id } from '@convex/dataModel';
 
 // =====================================================
 // REACT HOOKS FOR ACTIVITY DATA

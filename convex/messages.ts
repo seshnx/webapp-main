@@ -6,12 +6,22 @@ export const getMessages = query({
   args: { chatId: v.string(), limit: v.optional(v.number()) },
   handler: async (ctx, args) => {
     const limit = args.limit || 100;
-    return await ctx.db
+    const messages = await ctx.db
       .query("messages")
       .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
       .order("desc")
-      .take(limit)
-      .then((messages) => messages.reverse()); // Reverse to get chronological order
+      .take(limit);
+
+    // Map through messages and resolve senderId to Clerk ID for frontend use
+    return await Promise.all(
+      messages.reverse().map(async (msg) => {
+        const sender = await ctx.db.get(msg.senderId);
+        return {
+          ...msg,
+          senderId: sender?.clerkId || msg.senderId.toString(),
+        };
+      })
+    );
   },
 });
 

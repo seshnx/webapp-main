@@ -52,10 +52,10 @@ const EduAuthContext = createContext<EduAuthContextValue | undefined>(undefined)
  *   );
  * }
  */
-export function useEduAuth(): EduAuthContextValue {
+export function useEduAuth(): EduAuthContextValue | null {
   const context = useContext(EduAuthContext);
   if (!context) {
-    throw new Error('useEduAuth must be used within an EduAuthProvider');
+    return null; // Safely return null instead of throwing error
   }
   return context;
 }

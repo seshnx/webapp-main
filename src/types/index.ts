@@ -3,7 +3,7 @@
 // =====================================================
 
 // Leverage existing Convex types
-import type { Doc, Id } from '../../convex/_generated/dataModel';
+import type { Doc, Id } from '@convex/dataModel';
 
 // =====================================================
 // USER & ACCOUNT TYPES
@@ -467,4 +467,4 @@ export type ConvexId<T extends keyof Doc<"tableName">> = Id<T>;
 // RE-export Convex types for convenience
 // =====================================================
 
-export type { Doc, Id } from '../../convex/_generated/dataModel';
+export type { Doc, Id } from '@convex/dataModel';

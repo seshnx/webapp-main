@@ -38,7 +38,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "convex/_generated": path.resolve(__dirname, "./convex/_generated")
+      "@convex": path.resolve(__dirname, "./convex/_generated")
     },
   },
   build: {
@@ -141,7 +141,7 @@ export default defineConfig({
     })(),
     VitePWA({
       registerType: 'autoUpdate',
-      // TEMP: force-remove old cached bundles (including any prior Firebase chunks).
+      // TEMP: force-remove old cached bundles from previous backend migrations.
       // Once the migration is fully rolled out everywhere, we can re-enable PWA caching.
       selfDestroying: true,
       includeAssets: ['favicon.png', 'apple-touch-icon.png', 'mask-icon.svg', 'pwa-192x192.png', 'pwa-512x512.png'],

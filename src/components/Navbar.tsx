@@ -1,21 +1,23 @@
 import React, { useState, useRef, useEffect, MouseEvent, FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from '@convex/api';
 import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical } from 'lucide-react';
-import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
-import LogoDark from '../assets/SeshNx-PNG cCropped.png';
+import LogoWhite from '@/assets/SeshNx-PNG cCropped white text.png';
+import LogoDark from '@/assets/SeshNx-PNG cCropped.png';
 import UserAvatar, { UserAvatarProps } from './shared/UserAvatar';
-import NotificationsPanel, { NotificationBadge } from './social/NotificationsPanel';
-import { useNotifications } from '../hooks/useNotifications';
-import { getDisplayRole } from '../config/constants';
-import { useLanguage } from '../contexts/LanguageContext';
+import NotificationsPanel, { NotificationBadge } from '@/features/social/components/NotificationsPanel';
+import { useNotifications } from '@/hooks/useNotifications';
+import { getDisplayRole } from '@/config/constants';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { BreadcrumbNav } from './ui/breadcrumb';
 import { toast } from 'react-hot-toast';
+import { detectContextFromPath, getRolesForContext } from '@/utils/contextDetection';
+
 
 // Import TypeScript types
-import type { AccountType, UserData } from '../types';
-import type { UINotification } from '../hooks/useNotifications';
+import type { AccountType, UserData } from '@/types';
+import type { UINotification } from '@/hooks/useNotifications';
 
 // Include "User" and "Fan" in the extended AccountType
 type ExtendedAccountType = AccountType | 'User' | 'Fan';
@@ -177,11 +179,13 @@ export default function Navbar({
     return role;
   };
 
+  const allRoles: AccountType[] = userData?.accountTypes || [];
   const displayRole = getDisplayRoleLocal(activeRole);
-  const roles: AccountType[] = userData?.accountTypes || [];
+  const currentContext = detectContextFromPath(location.pathname);
+  const roles = getRolesForContext(allRoles, currentContext);
 
   const eduRoles: AccountType[] = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin'];
-  const hasEduAccess = roles.some(r => eduRoles.includes(r));
+  const hasEduAccess = allRoles.some(r => eduRoles.includes(r));
   const isEduTab = activeTab.startsWith('edu');
 
   const getDisplayName = (role: AccountTypeExtended): string => {
@@ -201,14 +205,55 @@ export default function Navbar({
 
   const currentDisplayName = getDisplayName(activeRole);
 
-  const handleEduClick = (): void => {
-      if (activeRole === 'Student') {
-          setActiveTab('edu-student');
-      } else if (activeRole === 'Intern') {
-          setActiveTab('edu-intern');
-      } else {
-          setActiveTab('edu-overview');
+  /**
+   * Switches context and automatically selects the last used role for that context
+   */
+  const handleContextSwitch = async (targetContext: 'studio' | 'edu') => {
+    const currentContext = detectContextFromPath(location.pathname);
+    if (targetContext === currentContext) return;
+
+    // 1. Save current role for current context
+    const contextRoles = getRolesForContext(allRoles, currentContext);
+    if (contextRoles.includes(activeRole as AccountType)) {
+      localStorage.setItem(`last_role_${targetContext === 'edu' ? 'studio' : 'edu'}`, activeRole);
+    }
+
+    // 2. Determine target role
+    const targetRoles = getRolesForContext(allRoles, targetContext);
+    if (targetRoles.length === 0) return;
+
+    const savedTargetRole = localStorage.getItem(`last_role_${targetContext}`);
+    const nextRole = (savedTargetRole && targetRoles.includes(savedTargetRole as AccountType))
+      ? (savedTargetRole as AccountType)
+      : targetRoles[0];
+
+    // 3. Switch role in DB/State
+    await handleRoleSelect(nextRole);
+
+    // 4. Navigate to correct route
+    if (targetContext === 'edu') {
+      let targetRoute = '/edu-overview';
+      if (nextRole === 'Student') {
+          targetRoute = '/edu-student';
+      } else if (nextRole === 'Intern') {
+          targetRoute = '/edu-intern';
+      } else if (nextRole === 'EDUStaff' || nextRole === 'EDUAdmin') {
+          targetRoute = '/edu-staff';
       }
+      setActiveTab(targetRoute.slice(1));
+      navigate(targetRoute);
+    } else {
+      setActiveTab('dashboard');
+      navigate('/dashboard');
+    }
+  };
+
+  const handleEduClick = (): void => {
+      handleContextSwitch('edu');
+  };
+
+  const handleStudioClick = (): void => {
+      handleContextSwitch('studio');
   };
 
   useEffect(() => {
@@ -475,7 +520,7 @@ export default function Navbar({
                         <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border dark:border-gray-700">
                           <button
                             onClick={() => {
-                              setActiveTab('dashboard');
+                              handleStudioClick();
                               setShowOverflowMenu(false);
                             }}
                             className={`flex-1 px-2 py-1.5 rounded-md text-xs font-bold flex items-center justify-center gap-2 transition-all ${!isEduTab ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-blue dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'}`}
@@ -531,7 +576,7 @@ export default function Navbar({
           {hasEduAccess && !overflowItems.includes('eduToggle') && (
               <div className="hidden md:flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1 border dark:border-gray-700">
                   <button
-                      onClick={() => setActiveTab('dashboard')}
+                      onClick={handleStudioClick}
                       className={`px-3 py-1.5 rounded-md text-xs font-bold flex items-center gap-2 transition-all ${!isEduTab ? 'bg-white dark:bg-gray-600 shadow-sm text-brand-blue dark:text-white' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'}`}
                   >
                       <Layout size={14}/> Studio

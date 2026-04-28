@@ -1,5 +1,6 @@
-import { v } from "convex/values";
 import { query, mutation } from "./_generated/server";
+import { v } from "convex/values";
+import { api } from "./_generated/api";
 
 // =====================================================
 // SOCIAL SEARCH & DISCOVERY
@@ -323,7 +324,7 @@ export const getSuggestedUsers = query({
           return {
             user: suggestedUser,
             score,
-            reason: this.getSuggestionReason(user, suggestedUser, recentPosts.length),
+            reason: getSuggestionReason(user, suggestedUser, recentPosts.length),
           };
         })
     );

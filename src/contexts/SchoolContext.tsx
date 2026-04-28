@@ -1,7 +1,8 @@
-// src/contexts/SchoolContext.tsx
-import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
-import type { UserData } from '../types';
-import * as eduService from '../services/eduService';
+import React, { createContext, useContext, useMemo, useCallback } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@convex/api';
+import type { Id } from '@convex/dataModel';
+import type { UserData } from '@/types';
 
 /**
  * School data interface
@@ -155,112 +156,75 @@ export function useSchool(): SchoolContextValue {
  * }
  */
 export function SchoolProvider({ children, user, userData }: SchoolProviderProps): React.ReactElement {
-  const [schoolData, setSchoolData] = useState<SchoolData | null>(null);
-  const [studentProfile, setStudentProfile] = useState<StudentProfile | null>(null);
-  const [staffProfile, setStaffProfile] = useState<StaffProfile | null>(null);
-  const [myPermissions, setMyPermissions] = useState<string[]>([]);
-  const [internshipStudio, setInternshipStudio] = useState<any>(null);
-  const [loading, setLoading] = useState<boolean>(false);
-
-  const schoolId: string | null | undefined = userData?.schoolId || null;
+  const schoolId = userData?.schoolId;
   const userId = user?.id || userData?.id;
 
-  /**
-   * Load school and profile data
-   */
-  const loadSchoolData = async () => {
-    if (!schoolId || !userId) {
-      setSchoolData(null);
-      setStudentProfile(null);
-      setStaffProfile(null);
-      setMyPermissions([]);
-      setInternshipStudio(null);
-      return;
-    }
+  // Use Convex hooks for real-time data
+  const schoolDataRaw = useQuery(api.edu.getSchoolById, schoolId ? { schoolId: schoolId as Id<"schools"> } : "skip");
+  const studentProfileRaw = useQuery(api.edu.getStudentByUserId, userId ? { userId } : "skip");
+  const staffProfileRaw = useQuery(api.edu.getStaffByUserId, userId ? { userId } : "skip");
 
-    setLoading(true);
+  // Mutations
+  const checkInMutation = useMutation(api.edu.checkInStudent);
+  const checkOutMutation = useMutation(api.edu.checkOutStudent);
 
-    try {
-      // Load school data
-      const school = await eduService.fetchSchool(schoolId);
-      setSchoolData(school);
+  // Parse permissions from staff profile
+  const myPermissions = useMemo(() => {
+    if (!staffProfileRaw?.permissions) return [];
+    const perms = staffProfileRaw.permissions as Record<string, boolean>;
+    return Object.keys(perms).filter(key => perms[key] === true);
+  }, [staffProfileRaw]);
 
-      // Try to load student profile
-      const student = await eduService.fetchStudentByUserAndSchool(userId, schoolId);
-      if (student) {
-        setStudentProfile(student);
-        setInternshipStudio(student.internship_studio_id || null);
-      } else {
-        setStudentProfile(null);
-        setInternshipStudio(null);
-      }
-
-      // Try to load staff profile
-      const staff = await eduService.fetchStaffByUserAndSchool(userId, schoolId);
-      if (staff) {
-        setStaffProfile(staff);
-        // Extract permissions from staff record
-        const permissions = staff.permissions || {};
-        const permissionList = Object.keys(permissions).filter(key => permissions[key] === true);
-        setMyPermissions(permissionList);
-      } else {
-        setStaffProfile(null);
-        setMyPermissions([]);
-      }
-    } catch (error) {
-      console.error('Failed to load school data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Load school data when schoolId or userId changes
-  useEffect(() => {
-    loadSchoolData();
-  }, [schoolId, userId]);
+  // Loading state
+  const loading = schoolDataRaw === undefined || 
+                  (!!schoolId && schoolDataRaw === null);
 
   const checkIn = useCallback(async (): Promise<CheckInOutResult> => {
     if (!userId || !schoolId) {
       return { success: false, error: 'User or school not found' };
     }
-
-    return await eduService.checkInStudent(userId, schoolId);
-  }, [userId, schoolId]);
+    try {
+      await checkInMutation({ userId: userId as Id<"users">, schoolId: schoolId as Id<"schools"> });
+      return { success: true, timestamp: new Date() };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }, [userId, schoolId, checkInMutation]);
 
   const checkOut = useCallback(async (): Promise<CheckInOutResult> => {
     if (!userId || !schoolId) {
       return { success: false, error: 'User or school not found' };
     }
-
-    return await eduService.checkOutStudent(userId, schoolId);
-  }, [userId, schoolId]);
-
-  const refreshAction = useCallback(() => loadSchoolData(), [schoolId, userId]);
+    try {
+      await checkOutMutation({ userId: userId as Id<"users">, schoolId: schoolId as Id<"schools"> });
+      return { success: true, timestamp: new Date() };
+    } catch (error: any) {
+      return { success: false, error: error.message };
+    }
+  }, [userId, schoolId, checkOutMutation]);
 
   const value = useMemo((): SchoolContextValue => ({
     schoolId: schoolId || null,
-    schoolData,
-    studentProfile,
-    staffProfile,
+    schoolData: schoolDataRaw || null,
+    studentProfile: studentProfileRaw || null,
+    staffProfile: staffProfileRaw || null,
     myPermissions,
-    internshipStudio,
-    isStudent: !!studentProfile,
-    isStaff: !!staffProfile,
+    internshipStudio: studentProfileRaw?.internship_studio_id || null,
+    isStudent: !!studentProfileRaw,
+    isStaff: !!staffProfileRaw,
     checkIn,
     checkOut,
     loading,
-    refresh: refreshAction
+    refresh: async () => {} // Convex handles refresh automatically
   }), [
     schoolId,
-    schoolData,
-    studentProfile,
-    staffProfile,
+    schoolDataRaw,
+    studentProfileRaw,
+    staffProfileRaw,
     myPermissions,
-    internshipStudio,
     checkIn,
     checkOut,
-    loading,
-    refreshAction
+    loading
   ]);
 
   return (

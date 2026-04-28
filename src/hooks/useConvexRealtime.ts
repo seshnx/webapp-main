@@ -8,7 +8,7 @@
  * those Convex modules are implemented. For now, use polling hooks in useMarketplace.ts
  * or Neon queries in neonQueries.ts
  *
- * NOTE: The Convex React bindings (convex/_generated/react) haven't been generated yet.
+ * NOTE: The Convex React bindings (@convex/react) haven't been generated yet.
  * To generate them, run: npx convex dev
  *
  * For now, all hooks in this file are placeholders commented out.

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { api } from "./_generated/api";
 
 // =====================================================
 // HELPER FUNCTIONS
@@ -125,7 +126,7 @@ export const incrementViewCount = mutation({
     await ctx.db.patch(args.postId, {
       engagement: {
         ...post.engagement,
-        viewsCount: (post.engagement?.viewsCount || 0) + 1,
+        viewsCount: ((post.engagement as any)?.viewsCount || 0) + 1,
       },
     });
 
@@ -150,7 +151,7 @@ export const sharePost = mutation({
     await ctx.db.patch(args.postId, {
       engagement: {
         ...post.engagement,
-        sharesCount: (post.engagement?.sharesCount || 0) + 1,
+        sharesCount: ((post.engagement as any)?.sharesCount || 0) + 1,
       },
     });
 
@@ -376,13 +377,14 @@ export const getReports = query({
   handler: async (ctx, args) => {
     const limit = args.limit || 50;
 
-    let q = ctx.db.query("contentReports");
-
-    if (args.status) {
-      q = q.withIndex("by_status", (q) => q.eq("status", args.status));
-    }
-
-    const reports = await q.order("desc").take(limit);
+    const reports = await (args.status
+      ? ctx.db
+          .query("contentReports")
+          .withIndex("by_status", (q) => q.eq("status", args.status!))
+      : ctx.db.query("contentReports")
+    )
+      .order("desc")
+      .take(limit);
 
     // Enrich with reporter and target info
     const enriched = await Promise.all(
@@ -755,12 +757,12 @@ export const getPostAnalytics = query({
       postId: post._id,
       createdAt: post.createdAt,
       engagement: {
-        views: post.engagement?.viewsCount || 0,
+        views: (post.engagement as any)?.viewsCount || 0,
         likes: post.engagement?.likesCount || 0,
         comments: comments.length,
         reposts: reposts.length,
         saves: saves.length,
-        shares: post.engagement?.sharesCount || 0,
+        shares: (post.engagement as any)?.sharesCount || 0,
       },
       reactionBreakdown,
       topComments: comments

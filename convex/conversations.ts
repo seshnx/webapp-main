@@ -20,11 +20,34 @@ export const getConversations = query({
   args: { userId: v.string() }, // Clerk ID
   handler: async (ctx, args) => {
     const convexUserId = await getUserIdFromClerkId(ctx, args.userId);
-    return await ctx.db
+    const conversations = await ctx.db
       .query("conversations")
       .withIndex("by_user", (q) => q.eq("userId", convexUserId))
       .order("desc")
       .collect();
+
+    // Map through conversations and resolve IDs to Clerk IDs for frontend use
+    return await Promise.all(
+      conversations.map(async (conv) => {
+        let lastSenderClerkId = undefined;
+        if (conv.lastSenderId) {
+          const sender = await ctx.db.get(conv.lastSenderId);
+          lastSenderClerkId = sender?.clerkId;
+        }
+
+        let otherUserClerkId = undefined;
+        if (conv.otherUserId) {
+          const otherUser = await ctx.db.get(conv.otherUserId);
+          otherUserClerkId = otherUser?.clerkId;
+        }
+
+        return {
+          ...conv,
+          lastSenderId: lastSenderClerkId,
+          otherUserId: otherUserClerkId,
+        };
+      })
+    );
   },
 });
 
@@ -126,12 +149,18 @@ export const getChatMembers = query({
       .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
       .collect();
 
-    return members.map(m => ({
-      id: m._id,
-      userId: m.userId,
-      role: m.role,
-      joinedAt: m.joinedAt,
-    }));
+    // Map through members and resolve userId to Clerk ID
+    return await Promise.all(
+      members.map(async (m) => {
+        const user = await ctx.db.get(m.userId);
+        return {
+          id: m._id,
+          userId: user?.clerkId || m.userId.toString(),
+          role: m.role,
+          joinedAt: m.joinedAt,
+        };
+      })
+    );
   },
 });
 
@@ -165,7 +194,7 @@ export const addChatMember = mutation({
   },
 });
 
-// Create a group chat (Convex-native; replaces Firebase RTDB group creation).
+// Create a group chat (Convex-native group creation).
 export const createGroupChat = mutation({
   args: {
     creatorId: v.string(), // Clerk ID

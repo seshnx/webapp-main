@@ -26,7 +26,8 @@
     /* Path Aliases (matching vite.config.js) */
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@convex/*": ["./convex/_generated/*"]
     }
   },
   "include": ["src"],

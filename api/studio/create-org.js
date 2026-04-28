@@ -63,14 +63,18 @@ export default async function handler(req, res) {
       });
     }
 
-    // Create Clerk Organization
+    // Create Clerk Organization with tag
+    // Org names are tagged with {[STUDIO]} to identify org type on the frontend
+    const orgNameWithTag = `${studioName} {[STUDIO]}`;
+
     const org = await clerkClient.organizations.createOrganization({
-      name: studioName,
+      name: orgNameWithTag,
       slug: slug,
       createdBy: ownerClerkId,
       privateMetadata: {
         studioId: studioId,
         type: 'studio',
+        tagged: true,  // Flag to indicate this org uses the new tagging system
       },
     });
 

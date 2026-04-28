@@ -55,7 +55,15 @@
       "Bash(package \")",
       "mcp__plugin_playwright_playwright__browser_snapshot",
       "mcp__plugin_playwright_playwright__browser_fill_form",
-      "mcp__plugin_playwright_playwright__browser_click"
+      "mcp__plugin_playwright_playwright__browser_click",
+      "Bash(mv:*)",
+      "Bash(mv convex/enhancedPresence.ts.disabled convex/enhancedPresence.ts)",
+      "Bash(mv convex/socialEnhanced.ts.disabled convex/socialEnhanced.ts)",
+      "Bash(mv convex/socialNotifications.ts.disabled convex/socialNotifications.ts)",
+      "Bash(mv convex/socialSearch.ts.disabled convex/socialSearch.ts)",
+      "Bash(mv convex/http.ts.disabled convex/http.ts)",
+      "Bash(mv convex/migrate.ts.disabled convex/migrate.ts)",
+      "Bash(mv convex/migrateExtended.ts.disabled convex/migrateExtended.ts)"
     ]
   }
 }

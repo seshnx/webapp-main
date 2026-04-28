@@ -5,10 +5,11 @@
  * No more Neon/PostgreSQL - everything in one place.
  */
 
-import { api } from '../../convex/_generated/api';
+import { api } from '@convex/api';
 import { useQuery, useMutation } from 'convex/react';
-import type { Id } from '../../convex/_generated/dataModel';
+import type { Id } from '@convex/dataModel';
 import * as Sentry from '@sentry/react';
+import { convex } from '@/config/convex';
 
 // =====================================================
 // SCHOOL QUERIES
@@ -446,14 +447,60 @@ export async function fetchStaffByUserAndSchool(userId: string, schoolId: string
   return null;
 }
 
+// =====================================================
+// ASYNC FETCH FUNCTIONS (Non-hooks for utils)
+// =====================================================
+
+export async function fetchSchool(schoolId: string) {
+  return await convex.query(api.edu.getSchoolById, { schoolId: schoolId as Id<"schools"> });
+}
+
+export async function fetchStudentByUserAndSchool(userId: string, schoolId: string) {
+  return await convex.query(api.edu.getStudentByUserAndSchool, { 
+    userId: userId as Id<"users">, 
+    schoolId: schoolId as Id<"schools"> 
+  });
+}
+
+export async function fetchStaffByUserAndSchool(userId: string, schoolId: string) {
+  return await convex.query(api.edu.getStaffByUserAndSchool, { 
+    userId: userId as Id<"users">, 
+    schoolId: schoolId as Id<"schools"> 
+  });
+}
+
+export async function fetchSchoolsByRole(userId: string, role: string) {
+  // This might need a specialized Convex query, but for now we can check user's roles
+  // In the real implementation, this should call api.edu.getSchoolsByRole
+  console.log(`Fetching schools for user ${userId} with role ${role}`);
+  // Temporary: just return the user's primary school if they have that role
+  return []; 
+}
+
+export async function checkRoleAtSchool(userId: string, schoolId: string, role: string) {
+  // Check if user has specific role at school
+  if (role === 'Student') {
+    const student = await fetchStudentByUserAndSchool(userId, schoolId);
+    return !!student;
+  }
+  if (role === 'EDUStaff' || role === 'EDUAdmin' || role === 'Intern') {
+    const staff = await fetchStaffByUserAndSchool(userId, schoolId);
+    if (!staff) return false;
+    if (role === 'EDUAdmin') return staff.roleName === 'EDUAdmin';
+    if (role === 'Intern') return staff.roleName === 'Intern';
+    return true; // EDUStaff
+  }
+  return false;
+}
+
 export async function checkInStudent(userId: string, schoolId: string) {
-  console.warn('checkInStudent: Use Convex mutations directly');
-  return { success: false, error: 'Not implemented' };
+  // Note: For mutations, we usually want to use hooks, but if needed:
+  // await convex.mutation(api.edu.checkInStudent, { userId, schoolId });
+  return { success: false, error: 'Use useMutation hook instead' };
 }
 
 export async function checkOutStudent(userId: string, schoolId: string) {
-  console.warn('checkOutStudent: Use Convex mutations directly');
-  return { success: false, error: 'Not implemented' };
+  return { success: false, error: 'Use useMutation hook instead' };
 }
 
 export default {
@@ -481,30 +528,10 @@ export default {
   useEnrollmentMutations,
   useInternshipMutations,
 
-  // Legacy functions (deprecated)
+  // Async functions (for utils)
   fetchSchool,
-  fetchSchools,
-  createNewSchool,
-  updateSchoolData,
-  fetchStudent,
-  fetchStudentsBySchool,
-  createNewStudent,
-  updateStudentData,
-  fetchStaff,
-  fetchStaffBySchool,
-  createNewStaff,
-  updateStaffData,
-  fetchCourses,
-  fetchCourse,
-  createNewCourse,
-  updateCourseData,
-  fetchEnrollments,
-  enrollStudentInCourse,
-  fetchInternships,
-  createInternship,
-  updateInternshipData,
   fetchStudentByUserAndSchool,
   fetchStaffByUserAndSchool,
-  checkInStudent,
-  checkOutStudent,
+  fetchSchoolsByRole,
+  checkRoleAtSchool,
 };

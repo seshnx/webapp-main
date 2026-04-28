@@ -54,7 +54,8 @@
     "svix": "^1.86.0",
     "tailwind-merge": "^2.2.1",
     "wavesurfer.js": "^7.7.0",
-    "zod": "^3.22.4"
+    "zod": "^3.22.4",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

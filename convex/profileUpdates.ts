@@ -9,8 +9,7 @@ export const getProfileUpdates = query({
       .query("profileUpdates")
       .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .order("desc")
-      .take(50)
-      .collect();
+      .take(50);
   },
 });
 

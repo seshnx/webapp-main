@@ -2,9 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Zap } from 'lucide-react';
 import { useClerk } from '@clerk/react';
-import { useSchool } from '../contexts/SchoolContext';
-import { useLanguage } from '../contexts/LanguageContext';
-import { AccountType, UserData } from '../types';
+import { useSchool } from '@/contexts/SchoolContext';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { AccountType, UserData } from '@/types';
+import { detectContextFromPath } from '@/utils/contextDetection';
+
 
 // Navigation item interface
 export interface NavigationItem {
@@ -53,6 +55,9 @@ export function Sidebar({
   const location = useLocation();
   const [isMobile, setIsMobile] = useState(false);
 
+  const currentContext = detectContextFromPath(location.pathname);
+  const isEduContext = currentContext === 'edu';
+
   // Safely extract values with fallbacks
   const isStudent = schoolContext?.isStudent ?? (userData?.accountTypes?.includes('Student') || false);
   const isStaff = schoolContext?.isStaff ?? (userData?.accountTypes?.includes('EDUStaff') || userData?.accountTypes?.includes('EDUAdmin') || false);
@@ -75,7 +80,7 @@ export function Sidebar({
   // Determine EDU route and label
   let eduRoute: string | null = null;
   let eduLabel = 'EDU Panel';
-  if (isStudent || isIntern|| isStaff || userData?.accountTypes?.includes('Student')) {
+  if (isStudent || isIntern || isStaff || userData?.accountTypes?.includes('Student')) {
     if (isIntern) {
       eduRoute = 'edu-intern';
       eduLabel = 'Internship';
@@ -94,58 +99,58 @@ export function Sidebar({
   );
 
   // Organized navigation groups
-  const navGroups: NavigationGroup[] = useMemo(() => [
-    // ACTIVE MODULES ONLY: Social Feed, Bookings, Profile
-    {
-      label: 'Active',
-      icon: Home,
-      items: [
-        { id: 'dashboard', icon: Home, label: t('dashboard') },
-        { id: 'feed', icon: MessageSquare, label: t('socialNx') },
-        { id: 'bookings', icon: Calendar, label: t('bookings') },
-        { id: 'profile', icon: Settings, label: t('profile') },
-      ]
-    },
-    {
-      label: 'Studio',
-      icon: Briefcase,
-      items: [
-        ...(hasBusinessFeatures ? [{ id: 'studio-manager', icon: Briefcase, label: 'Studio Manager' }] : []),
-      ]
+  const navGroups: NavigationGroup[] = useMemo(() => {
+    const groups: NavigationGroup[] = [];
+
+    // Only show Studio groups if NOT in EDU context
+    if (!isEduContext) {
+      groups.push({
+        label: 'Primary',
+        icon: Home,
+        items: [
+          { id: 'dashboard', icon: Home, label: t('dashboard') },
+          { id: 'feed', icon: MessageSquare, label: t('socialNx') },
+          { id: 'messages', icon: MessageCircle, label: t('messages') },
+          { id: 'bookings', icon: Calendar, label: t('bookings') },
+          { id: 'profile', icon: Settings, label: t('profile') },
+        ]
+      });
+
+      groups.push({
+        label: 'Work',
+        icon: Briefcase,
+        items: [
+          { id: 'marketplace', icon: ShoppingBag, label: t('marketplace') },
+          { id: 'tech', icon: Wrench, label: t('techServices') },
+        ]
+      });
+
+      groups.push({
+        label: 'Business',
+        icon: Briefcase,
+        items: [
+          ...(hasBusinessFeatures ? [
+              { id: 'studio-manager', icon: Briefcase, label: 'Studio Manager' },
+              { id: 'business-center', icon: Briefcase, label: t('businessCenter') }
+          ] : []),
+          { id: 'payments', icon: CreditCard, label: t('billing') },
+        ]
+      });
     }
-    // DISABLED MODULES
-    // {
-    //   label: 'Primary',
-    //   icon: Home,
-    //   items: [
-    //     { id: 'dashboard', icon: Home, label: t('dashboard') },
-    //     { id: 'messages', icon: MessageCircle, label: t('messages') },
-    //   ]
-    // },
-    // {
-    //   label: 'Work',
-    //   icon: BriefcaseIcon,
-    //   items: [
-    //     { id: 'marketplace', icon: ShoppingBag, label: t('marketplace') },
-    //     { id: 'tech', icon: Wrench, label: t('techServices') },
-    //   ]
-    // },
-    // {
-    //   label: 'Business',
-    //   icon: Briefcase,
-    //   items: [
-    //     ...(hasBusinessFeatures ? [{ id: 'business-center', icon: Briefcase, label: t('businessCenter') }] : []),
-    //     { id: 'payments', icon: CreditCard, label: t('billing') },
-    //   ]
-    // },
-    // ...(eduRoute ? [{
-    //   label: 'Education',
-    //   icon: GraduationCap,
-    //   items: [
-    //     { id: eduRoute, icon: GraduationCap, label: eduLabel, highlight: true }
-    //   ]
-    // }] : [])
-  ], [t]);
+
+    // Always allow Education group if the route exists (which now only happens in EDU context or if permitted)
+    if (eduRoute) {
+      groups.push({
+        label: 'Education',
+        icon: GraduationCap,
+        items: [
+          { id: eduRoute, icon: GraduationCap, label: eduLabel, highlight: true }
+        ]
+      });
+    }
+
+    return groups;
+  }, [t, isEduContext, eduRoute, hasBusinessFeatures]);
 
   const onLogout = handleLogout || (async () => {
     try {

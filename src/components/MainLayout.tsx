@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
-import { SchoolProvider } from '../contexts/SchoolContext';
+import { api } from "@convex/api";
+import { SchoolProvider } from '@/contexts/SchoolContext';
 import { Loader2 } from 'lucide-react';
-import ErrorBoundary from './shared/ErrorBoundary';
+import { detectContextFromPath } from '@/utils/contextDetection';
+import ErrorBoundary from '@/components/shared/ErrorBoundary';
 import MobileBottomNav from './MobileBottomNav';
 
 // =====================================================
@@ -38,6 +39,7 @@ interface MainLayoutProps {
   darkMode: boolean;
   toggleTheme: () => void;
   handleLogout: () => void;
+  children?: React.ReactNode;
 }
 
 // =====================================================
@@ -76,28 +78,45 @@ const retryLazyLoad = (importFn: () => Promise<any>, retries = 3, delay = 100) =
 };
 
 const Sidebar = retryLazyLoad(() => import('./Sidebar'));
+const EduSidebar = retryLazyLoad(() => import('./EduSidebar'));
+const StudioManager = retryLazyLoad(() => import('@/features/studio/components/StudioManager'));
 const Navbar = retryLazyLoad(() => import('./Navbar'));
 const PublicProfileModal = retryLazyLoad(() => import('./PublicProfileModal'));
 const TalentBookingModal = retryLazyLoad(() => import('./TalentBookingModal'));
 
 // ACTIVE MODULES: Bookings, Settings (in AppRoutes), Profile, Social Feed
-const SocialFeed = retryLazyLoad(() => import('./SocialFeed'));
-const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
-const BookingSystem = retryLazyLoad(() => import('./BookingSystem'));
+const SocialFeed = retryLazyLoad(() => import('@/features/social/components/SocialFeed'));
+const ProfileManager = retryLazyLoad(() => import('@/features/profiles/components/ProfileManager'));
+const BookingSystem = retryLazyLoad(() => import('@/features/booking/components/BookingSystem'));
 
 // ENABLED MODULES - All modules now active
-const Dashboard = retryLazyLoad(() => import('./Dashboard'));
-const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
-const Marketplace = retryLazyLoad(() => import('./Marketplace'));
-const TechServices = retryLazyLoad(() => import('./TechServices'));
-const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
-const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
-const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
-const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
-const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
-const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
-const EduStaffDashboard = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
-const EduAdminDashboard = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
+const Dashboard = retryLazyLoad(() => import('@/features/dashboard/components/Dashboard'));
+const ChatInterface = retryLazyLoad(() => import('@/features/messages/components/ChatInterface'));
+const Marketplace = retryLazyLoad(() => import('@/features/marketplace/components/Marketplace'));
+const TechServices = retryLazyLoad(() => import('@/features/marketplace/components/TechServices'));
+const PaymentsManager = retryLazyLoad(() => import('@/features/business/components/PaymentsManager'));
+const BusinessCenter = retryLazyLoad(() => import('@/features/business/components/BusinessCenter'));
+const LegalDocs = retryLazyLoad(() => import('@/features/business/components/LegalDocs'));
+const LabelDashboard = retryLazyLoad(() => import('@/features/business/components/labels/LabelDashboard'));
+const EduStudentDashboard = retryLazyLoad(() => import('@/features/edu/components/EDU/EduStudentDashboard'));
+const EduInternDashboard = retryLazyLoad(() => import('@/features/edu/components/EDU/EduInternDashboard'));
+const EduStaffDashboard = retryLazyLoad(() => import('@/features/edu/components/EDU/EduStaffDashboard'));
+const EduAdminDashboard = retryLazyLoad(() => import('@/features/edu/components/EDU/EduAdminDashboard'));
+const EduOverview = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduOverview'));
+const EduCourses = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduCourses'));
+const EduCourseBuilder = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduCourseBuilder'));
+const EduRoster = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduRoster'));
+const EduCohorts = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduCohorts'));
+const EduAnnouncements = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduAnnouncements'));
+const EduLearningPaths = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduLearningPaths'));
+const EduResources = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduResources'));
+const EduStaff = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduStaff'));
+const EduRoles = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduRoles'));
+const EduPartners = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduPartners'));
+const EduAudit = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduAudit'));
+const EduHours = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduHours'));
+const EduEvaluations = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduEvaluations'));
+const EduSettings = retryLazyLoad(() => import('@/features/edu/components/EDU/modules/EduSettings'));
 
 // =====================================================
 // MAIN COMPONENT
@@ -108,7 +127,8 @@ export default function MainLayout({
   loading,
   darkMode,
   toggleTheme,
-  handleLogout
+  handleLogout,
+  children
 }: MainLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -132,10 +152,10 @@ export default function MainLayout({
     if (path.startsWith('/business-center')) return 'business-center';
     if (path.startsWith('/legal')) return 'legal';
     if (path.startsWith('/labels') || path.startsWith('/studio-ops')) return 'labels';
-    if (path.startsWith('/edu-student')) return 'edu-student';
-    if (path.startsWith('/edu-intern')) return 'edu-intern';
-    if (path.startsWith('/edu-staff')) return 'edu-staff';
-    if (path.startsWith('/edu-admin')) return 'edu-admin';
+    if (path.startsWith('/edu-')) {
+      return path.split('/')[1];
+    }
+    if (path.startsWith('/edu')) return 'edu-overview';
     return 'feed';
   };
 
@@ -208,10 +228,9 @@ export default function MainLayout({
           </Suspense>
         );
       case 'dashboard':
-        const DashboardComponent = retryLazyLoad(() => import('./Dashboard'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <DashboardComponent
+            <Dashboard
               user={user}
               userData={userData}
               subProfiles={subProfiles}
@@ -222,10 +241,9 @@ export default function MainLayout({
           </Suspense>
         );
       case 'studio-manager':
-        const StudioManagerComponent = retryLazyLoad(() => import('./StudioManager'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <StudioManagerComponent
+            <StudioManager
               user={user}
               userData={userData}
             />
@@ -235,10 +253,9 @@ export default function MainLayout({
       // MESSAGING & COMMUNICATION
       case 'messages':
       case 'chat':
-        const ChatInterfaceComponent = retryLazyLoad(() => import('./ChatInterface'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <ChatInterfaceComponent
+            <ChatInterface
               user={user}
               userData={userData}
               subProfiles={subProfiles}
@@ -248,10 +265,9 @@ export default function MainLayout({
 
       // MARKETPLACE & SERVICES
       case 'marketplace':
-        const MarketplaceComponent = retryLazyLoad(() => import('./Marketplace'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <MarketplaceComponent
+            <Marketplace
               user={user}
               userData={userData}
               subProfiles={subProfiles}
@@ -259,13 +275,13 @@ export default function MainLayout({
           </Suspense>
         );
       case 'tech':
-        const TechServicesComponent = retryLazyLoad(() => import('./TechServices'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <TechServicesComponent
+            <TechServices
               user={user}
               userData={userData}
               subProfiles={subProfiles}
+              openPublicProfile={(uid: string) => setViewingProfile({ uid, name: 'Technician' })}
             />
           </Suspense>
         );
@@ -273,10 +289,9 @@ export default function MainLayout({
       // PAYMENTS & BILLING
       case 'payments':
       case 'billing':
-        const PaymentsManagerComponent = retryLazyLoad(() => import('./PaymentsManager'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <PaymentsManagerComponent
+            <PaymentsManager
               user={user}
               userData={userData}
               subProfiles={subProfiles}
@@ -286,21 +301,18 @@ export default function MainLayout({
 
       // BUSINESS & LEGAL
       case 'business-center':
-        const BusinessCenterComponent = retryLazyLoad(() => import('./BusinessCenter'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <BusinessCenterComponent
+            <BusinessCenter
               user={user}
               userData={userData}
-              subProfiles={subProfiles}
             />
           </Suspense>
         );
       case 'legal':
-        const LegalDocsComponent = retryLazyLoad(() => import('./LegalDocs'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <LegalDocsComponent
+            <LegalDocs
               user={user}
               userData={userData}
               subProfiles={subProfiles}
@@ -308,10 +320,9 @@ export default function MainLayout({
           </Suspense>
         );
       case 'labels':
-        const LabelDashboardComponent = retryLazyLoad(() => import('./labels/LabelDashboard'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <LabelDashboardComponent
+            <LabelDashboard
               user={user}
               userData={userData}
               subProfiles={subProfiles}
@@ -321,52 +332,31 @@ export default function MainLayout({
 
       // EDUCATION MODULES
       case 'edu-student':
-        const EduStudentComponent = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <EduStudentComponent
-              user={user}
-              userData={userData}
-              subProfiles={subProfiles}
-            />
+            <EduStudentDashboard user={user} userData={userData} />
           </Suspense>
         );
       case 'edu-intern':
-        const EduInternComponent = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <EduInternComponent
-              user={user}
-              userData={userData}
-              subProfiles={subProfiles}
-            />
+            <EduInternDashboard user={user} userData={userData} />
           </Suspense>
         );
-      case 'edu-staff':
-        const EduStaffComponent = retryLazyLoad(() => import('./EDU/EduStaffDashboard'));
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <EduStaffComponent
-              user={user}
-              userData={userData}
-              subProfiles={subProfiles}
-            />
-          </Suspense>
-        );
-      case 'edu-admin':
-        const EduAdminComponent = retryLazyLoad(() => import('./EDU/EduAdminDashboard'));
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <EduAdminComponent
-              user={user}
-              userData={userData}
-              subProfiles={subProfiles}
-            />
-          </Suspense>
-        );
-
       default:
-        return <div className="p-8 text-center text-gray-500">Module not found or coming soon.</div>;
+        // Handle all other edu- routes using the Staff Dashboard as a container
+        if (activeTab.startsWith('edu-')) {
+          return (
+            <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+              <EduStaffDashboard
+                user={user}
+                userData={userData}
+                currentView={activeTab}
+              />
+            </Suspense>
+          );
+        }
+        return null;
     }
   };
 
@@ -392,20 +382,34 @@ export default function MainLayout({
 
         {/* Sidebar */}
         <div className="fixed left-0 top-16 bottom-0 z-40">
-          <Sidebar
-            userData={userData}
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            handleLogout={handleLogout}
-          />
+          {detectContextFromPath(location.pathname) === 'edu' ? (
+            <EduSidebar
+              userData={userData}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              sidebarOpen={sidebarOpen}
+              setSidebarOpen={setSidebarOpen}
+              handleLogout={handleLogout}
+            />
+          ) : (
+            <Sidebar
+              userData={userData}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              sidebarOpen={sidebarOpen}
+              setSidebarOpen={setSidebarOpen}
+              handleLogout={handleLogout}
+            />
+          )}
         </div>
 
         {/* Main Content */}
         <div className="flex-1 flex flex-col pt-16 h-full xl:pl-64">
           <main className="flex-1 overflow-y-auto pb-16 lg:pb-0 px-4 pt-4">
-            {renderContent()}
+            <ErrorBoundary>
+              {renderContent()}
+              {children}
+            </ErrorBoundary>
           </main>
         </div>
 

@@ -10,7 +10,7 @@ import { useFollowSystem, useUserSocialStats } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import FollowersListModal, { FollowStats } from './social/FollowersListModal';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from '@convex/api';
 import { STORAGE_FOLDERS } from '../config/storage';
 import type { UserData } from '../types';
 

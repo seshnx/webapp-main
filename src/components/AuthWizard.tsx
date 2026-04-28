@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import { ACCOUNT_TYPES, TALENT_SUBROLES } from '../config/constants';
 import { fetchZipLocation } from '../utils/geocode';
 import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from '@convex/api';
 import AuthWizardBackground from './AuthWizardBackground';
 import type { AccountType } from '../types';
 

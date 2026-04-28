@@ -152,9 +152,8 @@ export const getOnlineUsersEnhanced = query({
   handler: async (ctx, args) => {
     let query = ctx.db
       .query("enhancedPresence")
-      .withIndex("by_status", (q) =>
-        q.eq("status", "online").order("desc")
-      );
+      .withIndex("by_status", (q) => q.eq("status", "online"))
+      .order("desc");
 
     if (args.limit) {
       query = query.take(args.limit);
@@ -578,27 +577,35 @@ export const getPushTokens = query({
  */
 async function updateUnreadCounts(
   ctx: any,
-  userId: string
+  clerkId: string
 ): Promise<void> {
   const now = Date.now();
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+    .first();
+  
+  if (!user) return;
+  const userId = user._id;
 
-  // Get current unread counts
+
+  // Get current unread counts (using clerkId for this table as per schema)
   const existing = await ctx.db
     .query("unreadCounts")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .withIndex("by_user", (q: any) => q.eq("userId", clerkId))
     .first();
 
   // Count unread messages
   const unreadMessages = await ctx.db
     .query("conversations")
-    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .withIndex("by_user", (q: any) => q.eq("userId", userId))
     .collect()
     .then((convos) => convos.reduce((sum, c) => sum + (c.unreadCount || 0), 0));
 
   // Count unread notifications
   const unreadNotifications = await ctx.db
     .query("notifications")
-    .withIndex("by_user_read", (q) =>
+    .withIndex("by_user_read", (q: any) =>
       q.eq("userId", userId).eq("read", false)
     )
     .count()
@@ -607,7 +614,7 @@ async function updateUnreadCounts(
   // Count pending booking requests
   const pendingBookings = await ctx.db
     .query("bookings")
-    .withIndex("by_target_status", (q) =>
+    .withIndex("by_target_status", (q: any) =>
       q.eq("targetId", userId).eq("status", "Pending")
     )
     .count()
@@ -623,7 +630,7 @@ async function updateUnreadCounts(
     });
   } else {
     await ctx.db.insert("unreadCounts", {
-      userId,
+      userId: clerkId,
       messages: unreadMessages,
       notifications: unreadNotifications,
       bookingRequests: pendingBookings,
@@ -800,11 +807,10 @@ export const getActivityFeed = query({
       .withIndex("by_target", (q) => q.eq("targetUserId", args.userId))
       .order("desc");
 
-    if (args.limit) {
-      query = query.take(args.limit);
-    }
+    const activities = args.limit
+      ? await query.take(args.limit)
+      : await query.collect();
 
-    const activities = await query.collect();
     return activities;
   },
 });
@@ -819,12 +825,11 @@ export const getRecentActivity = query({
   handler: async (ctx, args) => {
     let query = ctx.db
       .query("activityFeed")
-      .withIndex("by_created", (q) => q.order("desc"));
+      .withIndex("by_created")
+      .order("desc");
 
-    if (args.limit) {
-      query = query.take(args.limit);
-    }
-
-    return await query.collect();
+    return args.limit
+      ? await query.take(args.limit)
+      : await query.collect();
   },
 });

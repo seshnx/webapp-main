@@ -1,5 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getNativeUserId } from "./utils/users";
+
 
 /**
  * Convex Follows Module
@@ -108,10 +110,17 @@ export const syncFollow = mutation({
     createdAt: v.number(),
   },
   handler: async (ctx, args) => {
+    const followerNativeId = await getNativeUserId(ctx, args.followerId);
+    const followingNativeId = await getNativeUserId(ctx, args.followingId);
+
+    if (!followerNativeId || !followingNativeId) {
+      return null;
+    }
+
     const existing = await ctx.db
       .query("follows")
       .withIndex("by_pair", (q) =>
-        q.eq("followerId", args.followerId).eq("followingId", args.followingId)
+        q.eq("followerId", followerNativeId).eq("followingId", followingNativeId)
       )
       .first();
 
@@ -119,8 +128,8 @@ export const syncFollow = mutation({
       return existing._id;
     } else {
       const followId = await ctx.db.insert("follows", {
-        followerId: args.followerId,
-        followingId: args.followingId,
+        followerId: followerNativeId,
+        followingId: followingNativeId,
         createdAt: args.createdAt,
       });
       return followId;
@@ -137,10 +146,17 @@ export const removeFollow = mutation({
     followingId: v.string(),
   },
   handler: async (ctx, args) => {
+    const followerNativeId = await getNativeUserId(ctx, args.followerId);
+    const followingNativeId = await getNativeUserId(ctx, args.followingId);
+
+    if (!followerNativeId || !followingNativeId) {
+      return { success: false, message: "User not found" };
+    }
+
     const existing = await ctx.db
       .query("follows")
       .withIndex("by_pair", (q) =>
-        q.eq("followerId", args.followerId).eq("followingId", args.followingId)
+        q.eq("followerId", followerNativeId).eq("followingId", followingNativeId)
       )
       .first();
 
@@ -171,12 +187,20 @@ export const bulkSyncFollows = mutation({
     let skipped = 0;
 
     for (const follow of args.follows) {
+      const followerNativeId = await getNativeUserId(ctx, follow.followerId);
+      const followingNativeId = await getNativeUserId(ctx, follow.followingId);
+
+      if (!followerNativeId || !followingNativeId) {
+        skipped++;
+        continue;
+      }
+
       const existing = await ctx.db
         .query("follows")
         .withIndex("by_pair", (q) =>
           q
-            .eq("followerId", follow.followerId)
-            .eq("followingId", follow.followingId)
+            .eq("followerId", followerNativeId)
+            .eq("followingId", followingNativeId)
         )
         .first();
 
@@ -184,8 +208,8 @@ export const bulkSyncFollows = mutation({
         skipped++;
       } else {
         await ctx.db.insert("follows", {
-          followerId: follow.followerId,
-          followingId: follow.followingId,
+          followerId: followerNativeId,
+          followingId: followingNativeId,
           createdAt: follow.createdAt,
         });
         inserted++;

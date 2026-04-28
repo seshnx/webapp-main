@@ -8,7 +8,7 @@ import {
     Wallet, Users, Eye, Activity, BarChart3, Crown, Flame, Target
 } from 'lucide-react';
 import { useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@convex/api";
 import { isConvexAvailable } from '../config/convex';
 import { useNotifications } from '../hooks/useNotifications';
 import { getMarketplaceItems, getTrendPercentage, hasHistoricalData, recordUserMetrics } from '../config/neonQueries';

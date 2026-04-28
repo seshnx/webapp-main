@@ -5,10 +5,10 @@
  * Direct Convex mutations and queries - no API endpoints needed.
  */
 
-import { api } from '../../convex/_generated/api';
+import { api } from '@convex/api';
 import { useQuery, useMutation } from 'convex/react';
 import { useMemo } from 'react';
-import type { Id } from '../../convex/_generated/dataModel';
+import type { Id } from '@convex/dataModel';
 
 // =====================================================
 // POST QUERIES

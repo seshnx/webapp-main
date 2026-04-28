@@ -1,6 +1,6 @@
 import { useMemo, useCallback } from 'react';
 import { useQuery, useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { api } from "@convex/api";
 import { isConvexAvailable } from '../config/convex';
 
 /**

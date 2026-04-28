@@ -17,7 +17,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { useMutation, useQuery } from 'convex/react';
-import { api } from '../../convex/_generated/api';
+import { api } from '@convex/api';
 
 // ============================================================
 // PRESENCE TIMING CONSTANTS

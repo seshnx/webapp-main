@@ -148,6 +148,7 @@ export default defineSchema({
     studentId: v.optional(v.string()),
     staffId: v.optional(v.string()),
     internId: v.optional(v.string()),
+    internshipCities: v.optional(v.array(v.string())),
 
     // Timestamps
     createdAt: v.number(),
@@ -299,6 +300,8 @@ export default defineSchema({
       commentsCount: v.number(),
       repostsCount: v.number(),
       savesCount: v.number(),
+      viewsCount: v.optional(v.number()),
+      sharesCount: v.optional(v.number()),
     }),
 
     // Repost support
@@ -313,6 +316,11 @@ export default defineSchema({
     // Soft delete
     deletedAt: v.optional(v.number()),
 
+    // UI/UX
+    pinned: v.optional(v.boolean()),
+    postId: v.optional(v.string()), // External ID from MongoDB
+    userId: v.optional(v.string()), // Clerk ID (alias for compatibility)
+
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -322,7 +330,9 @@ export default defineSchema({
     .index("by_repost_of", ["repostOf"])
     .index("by_parent", ["parentId"])
     .index("by_category", ["category", "createdAt"])
-    .index("by_visibility", ["visibility", "createdAt"]),
+    .index("by_visibility", ["visibility", "createdAt"])
+    .index("by_post_id", ["postId"])
+    .index("by_user_id", ["userId"]),
 
   // Comments table
   comments: defineTable({
@@ -463,6 +473,19 @@ export default defineSchema({
     editedAt: v.optional(v.number()),
     deleted: v.optional(v.boolean()),
     deletedForAll: v.optional(v.boolean()),
+    pinned: v.optional(v.boolean()),
+    pinnedAt: v.optional(v.number()),
+    deliveryStatus: v.optional(
+      v.object({
+        delivered: v.boolean(),
+        deliveredAt: v.optional(v.number()),
+        read: v.boolean(),
+        readAt: v.optional(v.number()),
+      })
+    ),
+    messageType: v.optional(v.string()), // 'text', 'image', 'video', 'file', 'system'
+    starredBy: v.optional(v.array(v.id("users"))),
+    reactions: v.optional(v.any()),
     replyTo: v.optional(
       v.object({
         messageId: v.string(),
@@ -470,7 +493,12 @@ export default defineSchema({
         sender: v.string(),
       })
     ),
-    reactions: v.optional(v.any()),
+    forwardedFrom: v.optional(
+      v.object({
+        originalMessageId: v.id("messages"),
+        originalSenderName: v.string(),
+      })
+    ),
   })
     .index("by_chat", ["chatId", "timestamp"])
     .index("by_sender", ["senderId"]),
@@ -487,6 +515,8 @@ export default defineSchema({
     chatPhoto: v.optional(v.string()),
     chatType: v.union(v.literal("direct"), v.literal("group")),
     otherUserId: v.optional(v.id("users")),
+    archived: v.optional(v.boolean()),
+    archivedAt: v.optional(v.number()),
   })
     .index("by_user", ["userId", "lastMessageTime"])
     .index("by_chat", ["chatId"]),
@@ -1007,11 +1037,18 @@ export default defineSchema({
     // Timestamps
     createdAt: v.number(),
     updatedAt: v.number(),
+    id: v.optional(v.string()), // External ID from MongoDB
+    targetId: v.optional(v.string()), // Generic target ID (external)
+    senderId: v.optional(v.string()),
+    senderName: v.optional(v.string()),
+    senderPhoto: v.optional(v.string()),
   })
     .index("by_talent", ["talentId", "createdAt"])
     .index("by_client", ["clientId", "createdAt"])
     .index("by_talent_status", ["talentId", "status"])
-    .index("by_status", ["status", "createdAt"]),
+    .index("by_status", ["status", "createdAt"])
+    .index("by_external_id", ["id"])
+    .index("by_target_status", ["targetId", "status"]),
 
   // Booking templates
   bookingTemplates: defineTable({
@@ -1072,94 +1109,7 @@ export default defineSchema({
     .index("by_scheduled", ["scheduledFor", "sent"])
     .index("by_pending", ["sent", "scheduledFor"]),
 
-  // =====================================================
-  // EDUCATION (EDU)
-  // =====================================================
 
-  // Schools table
-  schools: defineTable({
-    // Basic info
-    name: v.string(),
-    code: v.string(), // Unique school code
-    description: v.optional(v.string()),
-    logoUrl: v.optional(v.string()),
-    location: v.optional(v.string()),
-
-    // Administration
-    adminId: v.id("users"),
-    staffIds: v.optional(v.array(v.id("users"))),
-
-    // Settings
-    isActive: v.boolean(),
-    settings: v.optional(v.any()),
-
-    // Timestamps
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_code", ["code"])
-    .index("by_admin", ["adminId"])
-    .index("by_active", ["isActive"]),
-
-  // Students table
-  students: defineTable({
-    userId: v.id("users"),
-    schoolId: v.id("schools"),
-    studentId: v.string(), // School-specific ID
-    major: v.optional(v.string()),
-    year: v.optional(v.number()), // 1, 2, 3, 4
-    gpa: v.optional(v.number()),
-    isActive: v.boolean(),
-    enrolledAt: v.number(),
-    expectedGraduation: v.optional(v.number()),
-  })
-    .index("by_user", ["userId"])
-    .index("by_school", ["schoolId"])
-    .index("by_student_id", ["schoolId", "studentId"]),
-
-  // Staff table
-  staff: defineTable({
-    userId: v.id("users"),
-    schoolId: v.id("schools"),
-    staffId: v.string(),
-    role: v.string(), // EDUAdmin, EDUStaff, Professor
-    department: v.optional(v.string()),
-    title: v.optional(v.string()), // Professor, Instructor, etc.
-    isActive: v.boolean(),
-    hiredAt: v.number(),
-  })
-    .index("by_user", ["userId"])
-    .index("by_school", ["schoolId"])
-    .index("by_staff_id", ["schoolId", "staffId"]),
-
-  // Classes table
-  classes: defineTable({
-    schoolId: v.id("schools"),
-    name: v.string(),
-    code: v.string(),
-    description: v.optional(v.string()),
-    instructorId: v.id("users"),
-    schedule: v.optional(v.string()), // "Mon, Wed 10:00-11:30"
-    room: v.optional(v.string()),
-    credits: v.optional(v.number()),
-    isActive: v.boolean(),
-    createdAt: v.number(),
-  })
-    .index("by_school", ["schoolId"])
-    .index("by_instructor", ["instructorId"])
-    .index("by_code", ["schoolId", "code"]),
-
-  // Enrollments table (students in classes)
-  enrollments: defineTable({
-    classId: v.id("classes"),
-    studentId: v.id("users"),
-    enrolledAt: v.number(),
-    grade: v.optional(v.string()), // A, B, C, etc.
-    status: v.string(), // Active, Dropped, Completed
-  })
-    .index("by_class", ["classId"])
-    .index("by_student", ["studentId"])
-    .index("by_class_student", ["classId", "studentId"]),
 
   // School partners table
   partners: defineTable({
@@ -1389,6 +1339,183 @@ export default defineSchema({
     .index("by_user", ["userId", "createdAt"])
     .index("by_wallet", ["walletId", "createdAt"])
     .index("by_stripe", ["stripeId"]),
+
+  // =====================================================
+  // EDUCATION & INSTITUTIONS
+  // =====================================================
+
+  // Schools table
+  schools: defineTable({
+    name: v.string(),
+    code: v.string(),
+    description: v.optional(v.string()),
+    location: v.optional(v.string()),
+    address: v.optional(v.string()),
+    logoUrl: v.optional(v.string()),
+    adminId: v.id("users"),
+    ownerId: v.optional(v.id("users")), // Alias for adminId
+    staffIds: v.optional(v.array(v.id("users"))),
+    clerkOrgId: v.optional(v.string()),
+    slug: v.optional(v.string()),
+    isActive: v.boolean(),
+    settings: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("by_admin", ["adminId"])
+    .index("by_owner", ["ownerId"])
+    .index("by_active", ["isActive"])
+    .index("by_clerk_org_id", ["clerkOrgId"])
+    .index("by_slug", ["slug"]),
+
+  // Students table
+  students: defineTable({
+    userId: v.id("users"),
+    schoolId: v.id("schools"),
+    studentId: v.string(), // Institutional ID
+    major: v.optional(v.string()),
+    year: v.optional(v.number()),
+    gpa: v.optional(v.number()),
+    expectedGraduation: v.optional(v.number()),
+    isActive: v.boolean(),
+    enrolledAt: v.number(),
+  })
+    .index("by_school", ["schoolId"])
+    .index("by_user", ["userId"])
+    .index("by_student_id", ["studentId"]),
+
+  // Staff table
+  staff: defineTable({
+    userId: v.id("users"),
+    schoolId: v.id("schools"),
+    staffId: v.string(), // Institutional ID
+    role: v.string(), // Professor, Admin, Assistant
+    department: v.optional(v.string()),
+    title: v.optional(v.string()),
+    isActive: v.boolean(),
+    hiredAt: v.number(),
+  })
+    .index("by_school", ["schoolId"])
+    .index("by_user", ["userId"])
+    .index("by_role", ["role"]),
+
+  // Classes/Courses table
+  classes: defineTable({
+    schoolId: v.id("schools"),
+    name: v.string(),
+    code: v.string(), // e.g. CS101
+    description: v.optional(v.string()),
+    instructorId: v.id("users"),
+    schedule: v.optional(v.string()),
+    room: v.optional(v.string()),
+    credits: v.optional(v.number()),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_school", ["schoolId"])
+    .index("by_instructor", ["instructorId"]),
+
+  // Enrollments (Student to Class mapping)
+  enrollments: defineTable({
+    classId: v.id("classes"),
+    studentId: v.id("users"),
+    status: v.string(), // Enrolled, Waitlisted, Completed, Dropped
+    enrolledAt: v.number(),
+  })
+    .index("by_class", ["classId"])
+    .index("by_student", ["studentId"])
+    .index("by_class_student", ["classId", "studentId"]),
+
+  // Lessons table (content within a class/course)
+  lessons: defineTable({
+    classId: v.id("classes"),
+    title: v.string(),
+    description: v.optional(v.string()),
+    type: v.string(), // Video, Text, Quiz, File
+    content: v.optional(v.string()),
+    duration: v.optional(v.number()), // minutes
+    order: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_class", ["classId", "order"]),
+
+  // Cohorts table
+  cohorts: defineTable({
+    schoolId: v.id("schools"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    startDate: v.number(),
+    endDate: v.optional(v.number()),
+    isActive: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index("by_school", ["schoolId"]),
+
+  // School roles and permissions
+  schoolRoles: defineTable({
+    schoolId: v.id("schools"),
+    name: v.string(),
+    color: v.optional(v.string()),
+    permissions: v.array(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_school", ["schoolId"]),
+
+  // School staff (authorized personnel)
+  staff: defineTable({
+    schoolId: v.id("schools"),
+    userId: v.id("users"),
+    email: v.string(),
+    name: v.string(),
+    roleId: v.id("schoolRoles"),
+    roleName: v.string(),
+    addedAt: v.number(),
+  })
+    .index("by_school", ["schoolId"])
+    .index("by_user", ["userId"]),
+
+  // Internship logs for students
+  internshipLogs: defineTable({
+    studentId: v.id("users"),
+    schoolId: v.id("schools"),
+    checkIn: v.number(),
+    checkOut: v.optional(v.number()),
+    type: v.string(), // 'Studio', 'Remote', 'Workshop'
+    location: v.optional(v.string()),
+    description: v.optional(v.string()),
+    status: v.string(), // 'pending_approval', 'approved', 'rejected', 'active'
+    duration: v.optional(v.number()), // minutes
+    studentName: v.optional(v.string()), // Denormalized for easier display
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_student", ["studentId", "checkIn"])
+    .index("by_school", ["schoolId", "checkIn"])
+    .index("by_status", ["status", "checkIn"]),
+
+  // =====================================================
+  // TECH SHOPS & SERVICES
+  // =====================================================
+
+  // Tech Shops table
+  techShops: defineTable({
+    name: v.string(),
+    ownerId: v.id("users"),
+    slug: v.string(),
+    description: v.string(),
+    services: v.array(v.string()),
+    clerkOrgId: v.string(),
+    isActive: v.boolean(),
+    deletedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_owner", ["ownerId"])
+    .index("by_slug", ["slug"])
+    .index("by_clerk_org_id", ["clerkOrgId"]),
 
   // =====================================================
   // LABELS & DISTRIBUTION
@@ -1761,6 +1888,27 @@ export default defineSchema({
     .index("by_entity", ["entityType", "entityId", "timestamp"])
     .index("by_action", ["action", "timestamp"]),
 
+  // Profile updates tracking
+  profileUpdates: defineTable({
+    userId: v.string(),
+    field: v.string(),
+    value: v.any(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_field", ["userId", "field"]),
+
+  // Push tokens for notifications
+  pushTokens: defineTable({
+    userId: v.string(), // Clerk ID
+    token: v.string(),
+    platform: v.string(), // 'ios', 'android', 'web'
+    isActive: v.boolean(),
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId", "isActive"])
+    .index("by_token", ["token"]),
+
   // =====================================================
   // ENHANCED PRESENCE & REAL-TIME FEATURES
   // =====================================================
@@ -1852,6 +2000,8 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     createdAt: v.number(),
   })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_type", ["actionType", "createdAt"])
     .index("by_target", ["targetUserId", "createdAt"])
     .index("by_created", ["createdAt"]),
 

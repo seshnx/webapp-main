@@ -5,13 +5,8 @@ import { mutation, query } from "./_generated/server";
 // MESSENGER SYSTEM - COMPREHENSIVE IMPLEMENTATION
 // =====================================================
 
-// Helper function to get native user from Clerk ID
-const getNativeUser = async (ctx: any, clerkId: string) => {
-  return await ctx.db
-    .query("users")
-    .withIndex("by_clerk_id", (q) => q.eq("clerkId", clerkId))
-    .first();
-};
+import { getNativeUser } from "./utils/users";
+
 
 // =====================================================
 // DIRECT MESSAGING
@@ -60,10 +55,11 @@ export const startDirectMessage = mutation({
     await ctx.db.insert("conversations", {
       userId: initiator._id,
       chatId,
-      lastMessage: null,
+      lastMessage: undefined,
       lastMessageTime: now,
       unreadCount: 0,
-      lastSenderId: null,
+      lastSenderId: undefined,
+
       chatName: recipient.displayName || recipient.username,
       chatPhoto: recipient.avatarUrl,
       chatType: "direct",
@@ -74,10 +70,11 @@ export const startDirectMessage = mutation({
     await ctx.db.insert("conversations", {
       userId: recipient._id,
       chatId,
-      lastMessage: null,
+      lastMessage: undefined,
       lastMessageTime: now,
       unreadCount: 0,
-      lastSenderId: null,
+      lastSenderId: undefined,
+
       chatName: initiator.displayName || initiator.username,
       chatPhoto: initiator.avatarUrl,
       chatType: "direct",
@@ -157,37 +154,31 @@ export const sendMessageWithUpdate = mutation({
       mentionedUserIds: args.mentionedUserIds || [],
       deliveryStatus: {
         delivered: false,
-        deliveredAt: null,
+        deliveredAt: undefined,
         read: false,
-        readAt: null,
+        readAt: undefined,
+
       },
     });
 
     // Update conversations for all participants
-    const participants = await ctx.db
-      .query("chatMembers")
+    // We query the conversations table to find all users who have this chat active
+    const activeConversations = await ctx.db
+      .query("conversations")
       .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
       .collect();
 
     const lastMessageText = args.content || (args.media ? "📎 Media" : "Message");
 
-    for (const participant of participants) {
-      const conversation = await ctx.db
-        .query("conversations")
-        .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
-        .filter((q) => q.eq(q.field("userId"), participant.userId))
-        .first();
-
-      if (conversation) {
-        await ctx.db.patch(conversation._id, {
-          lastMessage: lastMessageText,
-          lastMessageTime: Date.now(),
-          lastSenderId: sender._id,
-          unreadCount: participant.userId !== sender._id
-            ? conversation.unreadCount + 1
-            : conversation.unreadCount,
-        });
-      }
+    for (const conversation of activeConversations) {
+      await ctx.db.patch(conversation._id, {
+        lastMessage: lastMessageText,
+        lastMessageTime: Date.now(),
+        lastSenderId: sender._id,
+        unreadCount: conversation.userId !== sender._id
+          ? (conversation.unreadCount || 0) + 1
+          : (conversation.unreadCount || 0),
+      });
     }
 
     return messageId;
@@ -227,7 +218,7 @@ export const forwardMessage = mutation({
       edited: false,
       deleted: false,
       deletedForAll: false,
-      replyTo: null,
+      replyTo: undefined,
       reactions: {},
       messageType: originalMessage.messageType || "text",
       forwardedFrom: {
@@ -237,9 +228,10 @@ export const forwardMessage = mutation({
       },
       deliveryStatus: {
         delivered: false,
-        deliveredAt: null,
+        deliveredAt: undefined,
         read: false,
-        readAt: null,
+        readAt: undefined,
+
       },
     });
 
@@ -302,7 +294,7 @@ export const pinMessage = mutation({
 
     await ctx.db.patch(args.messageId, {
       pinned: args.pinned,
-      pinnedAt: args.pinned ? Date.now() : null,
+      pinnedAt: args.pinned ? Date.now() : undefined,
     });
 
     return { success: true, pinned: args.pinned };
@@ -504,7 +496,7 @@ export const leaveGroupChat = mutation({
       chatId: args.chatId,
       senderId: user._id,
       senderName: "System",
-      senderPhoto: null,
+      senderPhoto: undefined,
       content: `${user.displayName || user.username} left the group`,
       timestamp: Date.now(),
       messageType: "system",
@@ -595,12 +587,12 @@ export const searchAllMessages = query({
         const conversation = conversations.find((c) => c.chatId === chatId);
         results.push({
           message,
-          conversation: {
+          conversation: conversation ? {
             chatId: conversation.chatId,
             chatName: conversation.chatName,
             chatPhoto: conversation.chatPhoto,
             chatType: conversation.chatType,
-          },
+          } : undefined,
         });
 
         if (results.length >= limit) break;
@@ -641,7 +633,7 @@ export const archiveConversation = mutation({
     if (conversation) {
       await ctx.db.patch(conversation._id, {
         archived: args.archived,
-        archivedAt: args.archived ? Date.now() : null,
+        archivedAt: args.archived ? Date.now() : undefined,
       });
     }
 
@@ -781,9 +773,9 @@ export const markAsDelivered = mutation({
 
     const deliveryStatus = message.deliveryStatus || {
       delivered: false,
-      deliveredAt: null,
+      deliveredAt: undefined,
       read: false,
-      readAt: null,
+      readAt: undefined,
     };
 
     await ctx.db.patch(args.messageId, {
@@ -819,9 +811,9 @@ export const markMessageAsRead = mutation({
 
     const deliveryStatus = message.deliveryStatus || {
       delivered: false,
-      deliveredAt: null,
+      deliveredAt: undefined,
       read: false,
-      readAt: null,
+      readAt: undefined,
     };
 
     await ctx.db.patch(args.messageId, {
@@ -849,9 +841,9 @@ export const markMessageAsRead = mutation({
       .filter((q) => q.eq(q.field("userId"), user._id))
       .first();
 
-    if (conversation && conversation.unreadCount > 0) {
+    if (conversation && (conversation.unreadCount || 0) > 0) {
       await ctx.db.patch(conversation._id, {
-        unreadCount: conversation.unreadCount - 1,
+        unreadCount: 0,
       });
     }
 
@@ -926,19 +918,19 @@ export const setOnlineStatus = mutation({
 
     const existing = await ctx.db
       .query("presence")
-      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .withIndex("by_user", (q) => q.eq("userId", args.clerkId))
       .first();
 
     if (existing) {
       await ctx.db.patch(existing._id, {
         online: args.online,
-        lastSeen: args.online ? null : Date.now(),
+        lastSeen: args.online ? 0 : Date.now(),
       });
     } else {
       await ctx.db.insert("presence", {
-        userId: user._id,
+        userId: args.clerkId,
         online: args.online,
-        lastSeen: args.online ? null : Date.now(),
+        lastSeen: args.online ? 0 : Date.now(),
       });
     }
 
@@ -957,18 +949,15 @@ export const getOnlineStatus = query({
     const status: Record<string, any> = {};
 
     for (const clerkId of args.userIds) {
-      const user = await getNativeUser(ctx, clerkId);
-      if (user) {
-        const presence = await ctx.db
-          .query("presence")
-          .withIndex("by_user", (q) => q.eq("userId", user._id))
-          .first();
+      const presence = await ctx.db
+        .query("presence")
+        .withIndex("by_user", (q) => q.eq("userId", clerkId))
+        .first();
 
-        status[clerkId] = {
-          online: presence?.online || false,
-          lastSeen: presence?.lastSeen,
-        };
-      }
+      status[clerkId] = {
+        online: presence?.online || false,
+        lastSeen: presence?.lastSeen,
+      };
     }
 
     return status;
@@ -992,20 +981,25 @@ export const getOnlineUsers = query({
 
     const users = await Promise.all(
       onlinePresences.map(async (presence) => {
-        const user = await ctx.db.get(presence.userId);
-        return user
-          ? {
-              _id: user._id,
-              clerkId: user.clerkId,
-              displayName: user.displayName || user.username,
-              avatarUrl: user.avatarUrl,
-              online: true,
-            }
-          : null;
+        // userId in presence table is clerkId
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_clerk_id", (q) => q.eq("clerkId", presence.userId))
+          .first();
+        
+        if (!user) return null;
+
+        return {
+          _id: user._id,
+          clerkId: user.clerkId,
+          displayName: user.displayName || user.username,
+          avatarUrl: user.avatarUrl,
+          online: true,
+        };
       })
     );
 
-    return users.filter((u) => u !== null);
+    return users.filter((u): u is NonNullable<typeof u> => u !== null);
   },
 });
 

@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
 
 // =============================================================================
 // USER SETTINGS
@@ -10,8 +11,7 @@ export const getUserSettings = query({
   handler: async (ctx, args) => {
     const settings = await ctx.db
       .query("userSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     return settings;
@@ -49,8 +49,7 @@ export const updateUserSettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("userSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (existing) {
@@ -60,7 +59,6 @@ export const updateUserSettings = mutation({
       });
     } else {
       await ctx.db.insert("userSettings", {
-        userId: args.userId,
         ...args,
         updatedAt: Date.now(),
       });
@@ -84,8 +82,7 @@ export const updateDisplaySettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("userSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = { ...args } as any;
@@ -118,8 +115,7 @@ export const updateAccessibilitySettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("userSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = { ...args } as any;
@@ -150,8 +146,7 @@ export const getNotificationSettings = query({
   handler: async (ctx, args) => {
     const settings = await ctx.db
       .query("notificationSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     return settings;
@@ -188,8 +183,7 @@ export const updateNotificationSettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("notificationSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (existing) {
@@ -199,7 +193,6 @@ export const updateNotificationSettings = mutation({
       });
     } else {
       await ctx.db.insert("notificationSettings", {
-        userId: args.userId,
         ...args,
         updatedAt: Date.now(),
       });
@@ -222,8 +215,7 @@ export const updateSocialNotificationSettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("notificationSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = { ...args } as any;
@@ -255,8 +247,7 @@ export const updateMessengerNotificationSettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("notificationSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = { ...args } as any;
@@ -289,8 +280,7 @@ export const updateBookingNotificationSettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("notificationSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = { ...args } as any;
@@ -323,8 +313,7 @@ export const updateEDUNotificationSettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("notificationSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = { ...args } as any;
@@ -351,8 +340,7 @@ export const enableAllNotifications = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("notificationSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const allEnabled = {
@@ -403,8 +391,7 @@ export const disableAllNotifications = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("notificationSettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const allDisabled = {
@@ -459,8 +446,7 @@ export const getPrivacySettings = query({
   handler: async (ctx, args) => {
     const settings = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     return settings;
@@ -491,8 +477,7 @@ export const updatePrivacySettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (existing) {
@@ -502,7 +487,6 @@ export const updatePrivacySettings = mutation({
       });
     } else {
       await ctx.db.insert("privacySettings", {
-        userId: args.userId,
         ...args,
         updatedAt: Date.now(),
       });
@@ -528,8 +512,7 @@ export const updateVisibilitySettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = { ...args } as any;
@@ -559,8 +542,7 @@ export const blockUser = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const currentBlocked = existing?.blockedUsers || [];
@@ -605,8 +587,7 @@ export const unblockUser = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (!existing || !existing.blockedUsers) {
@@ -625,9 +606,7 @@ export const unblockUser = mutation({
     // Also remove from userBlocks table
     const blockRelation = await ctx.db
       .query("userBlocks")
-      .withIndex("by_pair", ["blockerId", "blockedId"])
-      .eq("blockerId", args.userId)
-      .eq("blockedId", args.blockedUserId)
+      .withIndex("by_pair", (q) => q.eq("blockerId", args.userId).eq("blockedId", args.blockedUserId))
       .first();
 
     if (blockRelation) {
@@ -646,8 +625,7 @@ export const muteUser = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const currentMuted = existing?.mutedUsers || [];
@@ -685,8 +663,7 @@ export const unmuteUser = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (!existing || !existing.mutedUsers) {
@@ -714,8 +691,7 @@ export const addRestrictedWord = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const currentWords = existing?.restrictedWords || [];
@@ -753,8 +729,7 @@ export const removeRestrictedWord = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("privacySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (!existing || !existing.restrictedWords) {
@@ -783,8 +758,7 @@ export const getSecuritySettings = query({
   handler: async (ctx, args) => {
     const settings = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     return settings;
@@ -812,8 +786,7 @@ export const updateSecuritySettings = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (existing) {
@@ -823,7 +796,6 @@ export const updateSecuritySettings = mutation({
       });
     } else {
       await ctx.db.insert("securitySettings", {
-        userId: args.userId,
         ...args,
         updatedAt: Date.now(),
       });
@@ -844,8 +816,7 @@ export const recordLoginAttempt = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (args.success) {
@@ -914,8 +885,7 @@ export const lockAccount = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates: any = {
@@ -954,8 +924,7 @@ export const unlockAccount = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (!existing) {
@@ -978,8 +947,7 @@ export const isAccountLocked = query({
   handler: async (ctx, args) => {
     const settings = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (!settings?.accountLocked) {
@@ -990,12 +958,6 @@ export const isAccountLocked = query({
     if (settings.accountLockedUntil) {
       const now = Date.now();
       if (now > settings.accountLockedUntil) {
-        // Auto-unlock
-        await ctx.db.patch(settings._id, {
-          accountLocked: false,
-          accountLockedUntil: undefined,
-          updatedAt: now,
-        });
         return { locked: false };
       }
     }
@@ -1015,8 +977,7 @@ export const setRecoveryEmail = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = {
@@ -1049,8 +1010,7 @@ export const verifyRecoveryEmail = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (!existing || !existing.recoveryEmail) {
@@ -1076,8 +1036,7 @@ export const setRecoveryPhone = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = {
@@ -1110,8 +1069,7 @@ export const verifyRecoveryPhone = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     if (!existing || !existing.recoveryPhone) {
@@ -1141,8 +1099,7 @@ export const changePassword = mutation({
 
     const existing = await ctx.db
       .query("securitySettings")
-      .withIndex("by_user")
-      .eq("userId", args.userId)
+      .withIndex("by_user", (q) => q.eq("userId", args.userId))
       .first();
 
     const updates = {
@@ -1175,8 +1132,7 @@ export const getAppSetting = query({
   handler: async (ctx, args) => {
     const setting = await ctx.db
       .query("appSettings")
-      .withIndex("by_key")
-      .eq("key", args.key)
+      .withIndex("by_key", (q) => q.eq("key", args.key))
       .first();
 
     return setting?.value;
@@ -1188,8 +1144,7 @@ export const getAppSettingsByCategory = query({
   handler: async (ctx, args) => {
     const settings = await ctx.db
       .query("appSettings")
-      .withIndex("by_category")
-      .eq("category", args.category)
+      .withIndex("by_category", (q) => q.eq("category", args.category))
       .collect();
 
     // Filter to only public settings if needed
@@ -1221,8 +1176,7 @@ export const setAppSetting = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("appSettings")
-      .withIndex("by_key")
-      .eq("key", args.key)
+      .withIndex("by_key", (q) => q.eq("key", args.key))
       .first();
 
     if (existing) {
@@ -1255,8 +1209,7 @@ export const deleteAppSetting = mutation({
   handler: async (ctx, args) => {
     const existing = await ctx.db
       .query("appSettings")
-      .withIndex("by_key")
-      .eq("key", args.key)
+      .withIndex("by_key", (q) => q.eq("key", args.key))
       .first();
 
     if (!existing) {
@@ -1278,10 +1231,10 @@ export const getAllUserSettings = query({
   handler: async (ctx, args) => {
     const [userSettings, notificationSettings, privacySettings, securitySettings] =
       await Promise.all([
-        ctx.db.query("userSettings").withIndex("by_user").eq("userId", args.userId).first(),
-        ctx.db.query("notificationSettings").withIndex("by_user").eq("userId", args.userId).first(),
-        ctx.db.query("privacySettings").withIndex("by_user").eq("userId", args.userId).first(),
-        ctx.db.query("securitySettings").withIndex("by_user").eq("userId", args.userId).first(),
+        ctx.db.query("userSettings").withIndex("by_user", (q) => q.eq("userId", args.userId)).first(),
+        ctx.db.query("notificationSettings").withIndex("by_user", (q) => q.eq("userId", args.userId)).first(),
+        ctx.db.query("privacySettings").withIndex("by_user", (q) => q.eq("userId", args.userId)).first(),
+        ctx.db.query("securitySettings").withIndex("by_user", (q) => q.eq("userId", args.userId)).first(),
       ]);
 
     return {
@@ -1304,8 +1257,7 @@ export const resetUserSettings = mutation({
     if (resetType === "all" || resetType === "display") {
       const userSettings = await ctx.db
         .query("userSettings")
-        .withIndex("by_user")
-        .eq("userId", userId)
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .first();
 
       if (userSettings) {
@@ -1316,8 +1268,7 @@ export const resetUserSettings = mutation({
     if (resetType === "all" || resetType === "notifications") {
       const notificationSettings = await ctx.db
         .query("notificationSettings")
-        .withIndex("by_user")
-        .eq("userId", userId)
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .first();
 
       if (notificationSettings) {
@@ -1328,8 +1279,7 @@ export const resetUserSettings = mutation({
     if (resetType === "all" || resetType === "privacy") {
       const privacySettings = await ctx.db
         .query("privacySettings")
-        .withIndex("by_user")
-        .eq("userId", userId)
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .first();
 
       if (privacySettings) {
@@ -1340,8 +1290,7 @@ export const resetUserSettings = mutation({
     if (resetType === "all" || resetType === "security") {
       const securitySettings = await ctx.db
         .query("securitySettings")
-        .withIndex("by_user")
-        .eq("userId", userId)
+        .withIndex("by_user", (q) => q.eq("userId", userId))
         .first();
 
       if (securitySettings) {
@@ -1356,7 +1305,7 @@ export const resetUserSettings = mutation({
 export const exportUserSettings = query({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {
-    const settings = await ctx.runQuery(api.settings.getAllUserSettings, {
+    const settings = await getAllUserSettings.handler(ctx, {
       userId: args.userId,
     });
 

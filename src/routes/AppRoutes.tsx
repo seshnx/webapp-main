@@ -3,8 +3,8 @@ import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-
 import { useAuth } from '@clerk/react';
 import { Loader2 } from 'lucide-react';
 import { useMutation } from 'convex/react';
-import { api } from '../../convex/_generated/api';
-import type { UserData, AccountType } from '../types';
+import { api } from '@convex/api';
+import type { UserData, AccountType } from '@/types';
 
 // =====================================================
 // TYPES
@@ -96,10 +96,10 @@ const retryLazyLoad = <T extends ComponentType<any>>(
 
 // Lazy load components to avoid circular dependencies with retry mechanism
 const DebugReport = retryLazyLoad(() => import('../components/DebugReport'));
-const ProfileManager = retryLazyLoad(() => import('../components/ProfileManager'));
+const ProfileManager = retryLazyLoad(() => import('@/features/profiles/components/ProfileManager'));
 const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
-const Dashboard = retryLazyLoad(() => import('../components/Dashboard'));
-const StudioManager = retryLazyLoad(() => import('../components/StudioManager'));
+const Dashboard = retryLazyLoad(() => import('@/features/dashboard/components/Dashboard'));
+const StudioManager = retryLazyLoad(() => import('@/features/studio/components/StudioManager'));
 const ClientPortal = retryLazyLoad(() => import('../components/studio/portal/ClientPortal'));
 const PublicLegalPage = retryLazyLoad(() => import('../components/PublicLegalPage'));
 const StudioKiosk = retryLazyLoad(() => import('../components/studio/kiosk/StudioKiosk'));
@@ -232,15 +232,18 @@ export default function AppRoutes({
         }
       />
 
-      {/* DISABLED MODULES - Commented out to reduce scope */}
-      {/* <Route path="/dashboard" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      {/* CORE MODULE ROUTES - Handled by MainLayout */}
       <Route path="/messages" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/chat" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/marketplace" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/marketplace/:tab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/tech" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/tech/:tab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/payments" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/billing" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/business-center" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/business-center/:tab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/business-center/tech/:subtab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} /> */}
+      <Route path="/business-center/tech/:subtab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       {/* Public Legal Page - Accessible without authentication */}
       <Route
         path="/legal"
@@ -261,15 +264,15 @@ export default function AppRoutes({
         }
       />
 
-      {/* DISABLED MODULES - EDU, Labels, Studio Ops */}
-      {/* <Route path="/edu-student" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/edu-intern" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/edu-overview" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/edu-admin" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      {/* LABEL & STUDIO OPS ROUTES */}
       <Route path="/studio-ops" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/labels" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/labels/dashboard" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/labels/contracts" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} /> */}
+      <Route path="/labels/contracts" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels/roster" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels/releases" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels/royalties" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels/campaigns" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
 
       {/* Debug Report Route - Test login destination */}
       <Route
@@ -358,19 +361,27 @@ export default function AppRoutes({
       {/* Redirect disabled routes to active modules */}
       <Route path="/home" element={<Navigate to="/feed" replace />} />
       <Route path="/social" element={<Navigate to="/feed" replace />} />
-      <Route path="/chat" element={<Navigate to="/feed" replace />} />
-      <Route path="/messages" element={<Navigate to="/feed" replace />} />
-      <Route path="/marketplace" element={<Navigate to="/bookings" replace />} />
-      <Route path="/tech" element={<Navigate to="/bookings" replace />} />
-      <Route path="/billing" element={<Navigate to="/bookings" replace />} />
-      <Route path="/payments" element={<Navigate to="/bookings" replace />} />
-      <Route path="/business-center" element={<Navigate to="/bookings" replace />} />
-      <Route path="/edu-student" element={<Navigate to="/feed" replace />} />
-      <Route path="/edu-intern" element={<Navigate to="/feed" replace />} />
-      <Route path="/edu-overview" element={<Navigate to="/feed" replace />} />
-      <Route path="/edu-admin" element={<Navigate to="/feed" replace />} />
-      <Route path="/studio-ops" element={<Navigate to="/studio-manager" replace />} />
-      <Route path="/labels" element={<Navigate to="/bookings" replace />} />
+      {/* EDU ROUTES - Handled by MainLayout */}
+      <Route path="/edu-student" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-intern" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-overview" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-admin" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-courses" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-roster" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-cohorts" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-announcements" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-learning-paths" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-resources" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-staff" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-roles" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-partners" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-audit" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-hours" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-evaluations" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-settings" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/edu-course-builder" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/studio-ops" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
 
       {/* Public Studio Profile - NO ProtectedRoute wrapper */}
       <Route path="/s/:slug" element={

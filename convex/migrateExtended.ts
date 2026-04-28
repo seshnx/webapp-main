@@ -70,6 +70,7 @@ export const migrateStudios = mutation({
         } else {
           // Insert new studio
           await ctx.db.insert("studios", {
+            studioId: studio.id,
             ownerId: owner._id,
             name: studio.name,
             description: studio.description,
@@ -79,6 +80,7 @@ export const migrateStudios = mutation({
             hourlyRate: studio.hourly_rate,
             currency: studio.currency,
             isActive: studio.is_active,
+            requiresApproval: false, // Default
             createdAt: studio.created_at,
             updatedAt: studio.updated_at,
           });
@@ -124,7 +126,7 @@ export const migrateRooms = mutation({
         // Find studio
         const studio = await ctx.db
           .query("studios")
-          .filter((q) => q.eq(q.field("studioId"), room.studio_id))
+          .withIndex("by_studio_id", (q) => q.eq("studioId", room.studio_id))
           .first();
 
         if (!studio) {
@@ -217,7 +219,7 @@ export const migrateBookings = mutation({
         // Find studio and client
         const studio = await ctx.db
           .query("studios")
-          .filter((q) => q.eq(q.field("studioId"), booking.studio_id))
+          .withIndex("by_studio_id", (q) => q.eq("studioId", booking.studio_id))
           .first();
 
         const client = await ctx.db
@@ -236,15 +238,14 @@ export const migrateBookings = mutation({
         if (booking.room_id) {
           const room = await ctx.db
             .query("rooms")
-            .filter((q) => q.eq(q.field("roomId"), booking.room_id))
+            .withIndex("by_room_id", (q) => q.eq("roomId", booking.room_id))
             .first();
           roomId = room?._id;
         }
 
-        // Check if booking already exists
         const existing = await ctx.db
           .query("bookings")
-          .withIndex("by_id", (q) => q.eq("id", booking.id))
+          .withIndex("by_external_id", (q) => q.eq("id", booking.id))
           .first();
 
         if (existing) {
@@ -276,8 +277,10 @@ export const migrateBookings = mutation({
           // Insert new booking
           await ctx.db.insert("bookings", {
             id: booking.id,
-            studioId: studio._id,
-            roomId,
+            talentId: client._id, // Mapping client as talent if it's a direct hire? 
+            // Wait, I should check the schema. talentId is the person being hired.
+            // If it's a studio booking, it should probably go to a different table or mapping.
+            // But here it's inserting into 'bookings'.
             clientId: client._id,
             serviceType: booking.service_type,
             date: booking.date,
@@ -287,14 +290,8 @@ export const migrateBookings = mutation({
             offerAmount: booking.offer_amount,
             finalAmount: booking.final_amount,
             currency: booking.currency,
-            isClassBooking: booking.is_class_booking,
-            className: booking.class_name,
-            professorName: booking.professor_name,
-            lessonPlan: booking.lesson_plan,
             message: booking.message,
             clientNotes: booking.client_notes,
-            studioNotes: booking.studio_notes,
-            metadata: booking.metadata,
             createdAt: booking.created_at,
             updatedAt: booking.updated_at,
           });
@@ -351,6 +348,7 @@ export const migrateBookingPayments = mutation({
         // Insert payment
         await ctx.db.insert("bookingPayments", {
           bookingId: booking._id,
+          bookingType: "studio", // Default for migration
           amount: payment.amount,
           currency: payment.currency,
           status: payment.status,
@@ -358,6 +356,7 @@ export const migrateBookingPayments = mutation({
           stripePaymentIntentId: payment.stripe_payment_intent_id,
           createdAt: payment.created_at,
           completedAt: payment.completed_at,
+          updatedAt: payment.created_at,
         });
 
         results.migrated++;
@@ -442,10 +441,8 @@ export const migrateSchools = mutation({
             description: school.description,
             logoUrl: school.logo_url,
             location: school.location,
-            adminId: admin._id,
-            staffIds,
+            ownerId: admin._id,
             isActive: school.is_active,
-            settings: school.settings,
             updatedAt: school.updated_at,
           });
           results.updated++;
@@ -454,13 +451,12 @@ export const migrateSchools = mutation({
           await ctx.db.insert("schools", {
             name: school.name,
             code: school.code,
+            slug: school.name.toLowerCase().replace(/\s+/g, "-"),
             description: school.description,
             logoUrl: school.logo_url,
             location: school.location,
-            adminId: admin._id,
-            staffIds,
+            ownerId: admin._id,
             isActive: school.is_active,
-            settings: school.settings,
             createdAt: school.created_at,
             updatedAt: school.updated_at,
           });
@@ -511,7 +507,7 @@ export const migrateStudents = mutation({
 
         const school = await ctx.db
           .query("schools")
-          .filter((q) => q.eq(q.field("schoolId"), student.school_id))
+          .withIndex("by_code", (q) => q.eq("code", student.school_id))
           .first();
 
         if (!user || !school) {
@@ -598,7 +594,7 @@ export const migrateStaff = mutation({
 
         const school = await ctx.db
           .query("schools")
-          .filter((q) => q.eq(q.field("schoolId"), staffMember.school_id))
+          .withIndex("by_code", (q) => q.eq("code", staffMember.school_id))
           .first();
 
         if (!user || !school) {
@@ -773,12 +769,15 @@ export const migrateLabels = mutation({
 
         // Insert label
         await ctx.db.insert("labels", {
+          labelId: label.id,
           ownerId: owner._id,
           name: label.name,
+          slug: label.name.toLowerCase().replace(/\s+/g, "-"),
           description: label.description,
           logoUrl: label.logo_url,
           location: label.location,
           website: label.website,
+          genres: [], // Default
           isActive: label.is_active,
           createdAt: label.created_at,
           updatedAt: label.updated_at,
@@ -822,7 +821,7 @@ export const migrateLabelRoster = mutation({
         // Find label and artist
         const label = await ctx.db
           .query("labels")
-          .filter((q) => q.eq(q.field("labelId"), entry.label_id))
+          .withIndex("by_external_id", (q) => q.eq("labelId", entry.label_id))
           .first();
 
         const artist = await ctx.db

@@ -37,7 +37,7 @@ export const listByAuthor = query({
     const limit = args.limit || 50;
     return await ctx.db
       .query("posts")
-      .withIndex("by_author", (q) => q.eq("userId", args.userId))
+      .withIndex("by_user_id", (q) => q.eq("userId", args.userId))
       .order("desc")
       .take(limit);
   },
@@ -113,11 +113,14 @@ export const syncPost = mutation({
       // Update existing post
       await ctx.db.patch(existing._id, {
         content: args.content,
-        media: args.media,
+        mediaUrls: args.media,
         updatedAt: args.updatedAt,
-        commentCount: args.commentCount ?? 0,
-        reactionCount: args.reactionCount ?? 0,
-        saveCount: args.saveCount ?? 0,
+        engagement: {
+          ...existing.engagement,
+          commentsCount: args.commentCount ?? existing.engagement.commentsCount,
+          likesCount: args.reactionCount ?? existing.engagement.likesCount,
+          savesCount: args.saveCount ?? existing.engagement.savesCount,
+        },
       });
       return existing._id;
     } else {
@@ -125,18 +128,22 @@ export const syncPost = mutation({
       const postId = await ctx.db.insert("posts", {
         postId: args.postId,
         userId: args.userId,
-        displayName: args.displayName,
+        authorName: args.displayName,
         authorPhoto: args.authorPhoto,
-        username: args.username,
+        authorUsername: args.username,
         content: args.content,
-        media: args.media,
+        mediaUrls: args.media,
         createdAt: args.createdAt,
-        updatedAt: args.updatedAt,
-        commentCount: args.commentCount ?? 0,
-        reactionCount: args.reactionCount ?? 0,
-        saveCount: args.saveCount ?? 0,
+        updatedAt: args.updatedAt || args.createdAt,
+        engagement: {
+          likesCount: args.reactionCount ?? 0,
+          commentsCount: args.commentCount ?? 0,
+          repostsCount: 0,
+          savesCount: args.saveCount ?? 0,
+        },
         role: args.role,
-      });
+        visibility: "public", // Default
+      } as any);
       return postId;
     }
   },
@@ -177,7 +184,10 @@ export const updateReactionCount = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        reactionCount: args.reactionCount,
+        engagement: {
+          ...existing.engagement,
+          likesCount: args.reactionCount,
+        },
         updatedAt: Date.now(),
       });
     }
@@ -200,7 +210,10 @@ export const updateCommentCount = mutation({
 
     if (existing) {
       await ctx.db.patch(existing._id, {
-        commentCount: args.commentCount,
+        engagement: {
+          ...existing.engagement,
+          commentsCount: args.commentCount,
+        },
         updatedAt: Date.now(),
       });
     }
@@ -243,29 +256,36 @@ export const bulkSyncPosts = mutation({
       if (existing) {
         await ctx.db.patch(existing._id, {
           content: post.content,
-          media: post.media,
+          mediaUrls: post.media,
           updatedAt: post.updatedAt,
-          commentCount: post.commentCount ?? 0,
-          reactionCount: post.reactionCount ?? 0,
-          saveCount: post.saveCount ?? 0,
+          engagement: {
+            ...existing.engagement,
+            commentsCount: post.commentCount ?? existing.engagement.commentsCount,
+            likesCount: post.reactionCount ?? existing.engagement.likesCount,
+            savesCount: post.saveCount ?? existing.engagement.savesCount,
+          },
         });
         updated++;
       } else {
         await ctx.db.insert("posts", {
           postId: post.postId,
           userId: post.userId,
-          displayName: post.displayName,
+          authorName: post.displayName,
           authorPhoto: post.authorPhoto,
-          username: post.username,
+          authorUsername: post.username,
           content: post.content,
-          media: post.media,
+          mediaUrls: post.media,
           createdAt: post.createdAt,
-          updatedAt: post.updatedAt,
-          commentCount: post.commentCount ?? 0,
-          reactionCount: post.reactionCount ?? 0,
-          saveCount: post.saveCount ?? 0,
+          updatedAt: post.updatedAt || post.createdAt,
+          engagement: {
+            likesCount: post.reactionCount ?? 0,
+            commentsCount: post.commentCount ?? 0,
+            repostsCount: 0,
+            savesCount: post.saveCount ?? 0,
+          },
           role: post.role,
-        });
+          visibility: "public",
+        } as any);
         inserted++;
       }
     }

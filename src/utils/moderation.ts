@@ -5,7 +5,7 @@
 //
 // Usage in components:
 // import { useMutation, useQuery } from 'convex/react';
-// import { api } from '../../convex/_generated/api';
+// import { api } from '@convex/api';
 //
 // const submitReportMutation = useMutation(api.moderation.submitReport);
 // const reports = useQuery(api.moderation.getReports, { status: 'pending' });

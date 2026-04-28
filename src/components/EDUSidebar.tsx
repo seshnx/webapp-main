@@ -1,168 +1,310 @@
-import React, { useState, useEffect } from 'react';
-import {
-    Users, Clock, UserPlus, Key, Lock, Megaphone,
-    Briefcase, GraduationCap,
-    Activity, Settings, LogOut, ArrowLeft, LayoutDashboard,
-    BookOpen, Target, LucideIcon
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { 
+  GraduationCap, 
+  BookOpen, 
+  Users, 
+  LayoutDashboard, 
+  FileText, 
+  ClipboardCheck, 
+  Settings, 
+  LogOut, 
+  X,
+  History,
+  Layers,
+  Map,
+  Handshake,
+  ShieldCheck,
+  Briefcase,
+  Clock,
+  UserCheck,
+  Building
 } from 'lucide-react';
-import { useClerk } from '@clerk/react';
+import { useClerk, OrganizationSwitcher } from '@clerk/react';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { UserData } from '@/types';
+import { detectContextFromPath } from '@/utils/contextDetection';
 
-/**
- * Navigation link interface
- */
-interface NavigationLink {
-    id: string;
-    icon: LucideIcon;
-    label: string;
+// Import icons that might be missing from lucide-react if using older version
+// Bell is often used for announcements if Announce is not available
+import { Bell as AnnounceIcon } from 'lucide-react';
+
+// Navigation item interface
+export interface NavigationItem {
+  id: string;
+  icon: React.ComponentType<any>;
+  label: string;
+  highlight?: boolean;
 }
 
-/**
- * Props for EDUSidebar component
- */
-export interface EDUSidebarProps {
-    activeTab: string;
-    setActiveTab: (tab: string) => void;
-    sidebarOpen: boolean;
-    setSidebarOpen: (open: boolean) => void;
-    isGlobalAdmin?: boolean;
+// Navigation group interface
+export interface NavigationGroup {
+  label: string;
+  icon: React.ComponentType<any>;
+  items: NavigationItem[];
 }
 
-/**
- * EDUSidebar - Sidebar navigation for EDU Control Panel
- */
-export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSidebarOpen, isGlobalAdmin }: EDUSidebarProps) {
-    const clerk = useClerk();
-    const [isMobile, setIsMobile] = useState<boolean>(false);
+// Sidebar props interface
+export interface SidebarProps {
+  userData?: UserData | null;
+  activeTab?: string;
+  setActiveTab?: (tab: string) => void;
+  sidebarOpen?: boolean;
+  setSidebarOpen?: (open: boolean) => void;
+  handleLogout?: () => Promise<void>;
+}
 
-    // Track mobile viewport
-    useEffect(() => {
-        const checkMobile = () => {
-            setIsMobile(window.innerWidth < window.screen.width * 0.65);
-        };
+export function EduSidebar({
+  userData,
+  activeTab,
+  setActiveTab,
+  sidebarOpen,
+  setSidebarOpen,
+  handleLogout
+}: SidebarProps) {
+  const clerk = useClerk();
+  const { t } = useLanguage();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isMobile, setIsMobile] = useState(false);
 
-        checkMobile();
-        window.addEventListener('resize', checkMobile);
-        return () => window.removeEventListener('resize', checkMobile);
-    }, []);
+  // Detect role
+  const activeRole = userData?.activeRole || userData?.accountTypes?.[0] || 'Student';
+  const isStudent = activeRole === 'Student';
+  const isIntern = activeRole === 'Intern';
+  const isStaff = activeRole === 'EDUStaff';
+  const isAdmin = activeRole === 'EDUAdmin';
+  const isManagement = isStaff || isAdmin;
 
-    // Define the specific navigation items for the EDU Panel
-    const adminLinks: NavigationLink[] = [
-        { id: 'edu-overview', icon: LayoutDashboard, label: 'Overview' },
-        { id: 'edu-roster', icon: Users, label: 'Student Roster' },
-        { id: 'edu-hours', icon: Clock, label: 'Internship Hours' },
-        { id: 'edu-courses', icon: BookOpen, label: 'Courses' },
-        { id: 'edu-learning-paths', icon: Target, label: 'Learning Paths' },
-        { id: 'edu-instructors', icon: UserPlus, label: 'Staff Management' },
-        { id: 'edu-roles', icon: Key, label: 'Role Permissions' },
-        { id: 'edu-resources', icon: Lock, label: 'Resource Rules' },
-        { id: 'edu-news', icon: Megaphone, label: 'Announcements' },
-        { id: 'edu-partners', icon: Briefcase, label: 'Partnerships' },
-        { id: 'edu-evaluations', icon: GraduationCap, label: 'Grading & Evals' },
-        { id: 'edu-cohorts', icon: Users, label: 'Cohorts' },
-        { id: 'edu-audit', icon: Activity, label: 'Audit Logs' },
-        { id: 'edu-settings', icon: Settings, label: 'School Settings' },
-    ];
-
-    const handleNavigation = (id: string) => {
-        setActiveTab(id);
-        if (setSidebarOpen) setSidebarOpen(false);
+  // Track mobile viewport
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < window.screen.width * 0.65);
     };
 
-    const SidebarContent = () => (
-        <div className="flex flex-col h-full">
-            {/* Header / Back to Studio */}
-            <div className="p-4 border-b dark:border-gray-700">
-                <button
-                    onClick={() => setActiveTab('dashboard')}
-                    className="flex items-center gap-2 text-xs font-bold text-gray-500 hover:text-brand-blue transition mb-4"
-                >
-                    <ArrowLeft size={14}/> Back to Studio
-                </button>
-                <h2 className="text-lg font-extrabold dark:text-white tracking-tight px-1">
-                    EDU Control
-                </h2>
-            </div>
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
-            {/* Navigation Links */}
-            <div className="flex-1 py-4 overflow-y-auto custom-scrollbar px-3 space-y-1">
-                {adminLinks.map(link => {
-                    const IconComponent = link.icon;
-                    return (
-                        <button
-                            key={link.id}
-                            onClick={() => handleNavigation(link.id)}
-                            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
-                            ${activeTab === link.id
-                                ? 'bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300'
-                                : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
-                            `}
-                        >
-                            <IconComponent size={18} />
-                            {link.label}
-                        </button>
-                    );
-                })}
-            </div>
+  // Organized navigation groups for EDU
+  const navGroups: NavigationGroup[] = useMemo(() => {
+    const groups: NavigationGroup[] = [];
 
-            {/* Footer */}
-            <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0 bg-gray-50 dark:bg-[#23262f]">
-                <div className="flex items-center gap-3 px-2">
-                    <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900 flex items-center justify-center text-indigo-700 dark:text-indigo-300 font-bold text-xs">
-                        EA
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold dark:text-white truncate">EDU Admin</p>
-                        <p className="text-[10px] text-gray-500 truncate">School Management</p>
-                    </div>
-                    <button onClick={async () => {
-                        try {
-                            console.log('=== EDU SIDEBAR LOGOUT ===');
+    // Dashboard / Overview
+    groups.push({
+      label: 'Academic',
+      icon: GraduationCap,
+      items: [
+        { 
+          id: isManagement ? 'edu-overview' : (isIntern ? 'edu-intern' : 'edu-student'), 
+          icon: LayoutDashboard, 
+          label: 'Overview' 
+        },
+        { id: 'edu-courses', icon: BookOpen, label: isManagement ? 'Courses' : 'My Courses' },
+        ...(isManagement ? [
+          { id: 'edu-roster', icon: Users, label: 'Student Roster' },
+          { id: 'edu-cohorts', icon: Layers, label: 'Cohorts' }
+        ] : [])
+      ]
+    });
 
-                            // Use Clerk to sign out
-                            if (clerk) {
-                                await clerk.signOut();
-                                console.log('✅ Clerk signOut successful');
-                            }
+    // Content & Resources
+    groups.push({
+      label: 'Learning',
+      icon: FileText,
+      items: [
+        { id: 'edu-announcements', icon: AnnounceIcon, label: 'Announcements' },
+        { id: 'edu-learning-paths', icon: Map, label: 'Learning Paths' },
+        { id: 'edu-resources', icon: FileText, label: 'Resources' },
+        ...(isManagement ? [
+          { id: 'edu-course-builder', icon: ClipboardCheck, label: 'Course Builder' }
+        ] : [])
+      ]
+    });
 
-                            console.log('✅ Logout complete, redirecting to home');
+    // Administrative (Staff/Admin only)
+    if (isManagement) {
+      groups.push({
+        label: 'Administration',
+        icon: ShieldCheck,
+        items: [
+          { id: 'edu-staff', icon: UserCheck, label: 'Staff Management' },
+          { id: 'edu-roles', icon: ShieldCheck, label: 'Role Permissions' },
+          { id: 'edu-partners', icon: Handshake, label: 'Partners' },
+          { id: 'edu-audit', icon: History, label: 'Audit Logs' }
+        ]
+      });
+    }
 
-                            // Navigate to home after logout
-                            window.location.href = '/';
-                        } catch (err) {
-                            console.error("Logout failed:", err);
-                            window.location.href = '/';
-                        }
-                    }} className="text-gray-400 hover:text-red-500">
-                        <LogOut size={16}/>
-                    </button>
-                </div>
-            </div>
-        </div>
-    );
+    // Special Modules (Interns / Staff)
+    if (isIntern || isManagement) {
+      groups.push({
+        label: 'Programs',
+        icon: Briefcase,
+        items: [
+          { id: 'edu-hours', icon: Clock, label: isIntern ? 'My Hours' : 'Hours Tracking' },
+          { id: 'edu-evaluations', icon: ClipboardCheck, label: 'Evaluations' }
+        ]
+      });
+    }
 
-    return (
-        <>
-            {/* DESKTOP SIDEBAR */}
-            <aside className="hidden xl:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-30">
-                <SidebarContent />
-            </aside>
+    // Settings
+    groups.push({
+      label: 'System',
+      icon: Settings,
+      items: [
+        { id: 'edu-settings', icon: Settings, label: 'EDU Settings' }
+      ]
+    });
 
-            {/* MOBILE OVERLAY */}
-            {sidebarOpen && isMobile && (
-                <div
-                    className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-opacity duration-300 opacity-100 pointer-events-auto"
-                    onClick={() => setSidebarOpen(false)}
-                />
-            )}
+    return groups;
+  }, [activeRole, isManagement, isIntern]);
 
-            {/* MOBILE DRAWER */}
-            <aside
-                className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-transform duration-300 cubic-bezier(0.4, 0, 0.2, 1) flex flex-col h-full xl:hidden ${
-                sidebarOpen ? 'translate-x-0' : '-translate-x-full'
-                }`}
-            >
-                <SidebarContent />
-            </aside>
-        </>
-    );
+  const onLogout = handleLogout || (async () => {
+    try {
+      if (clerk) await clerk.signOut();
+      window.location.href = '/';
+    } catch (err) {
+      console.error("Logout failed:", err);
+      window.location.href = '/';
+    }
+  });
+
+  const handleNavigation = (id: string) => {
+    const path = `/${id}`;
+    setActiveTab?.(id);
+    navigate(path);
+
+    if (setSidebarOpen && isMobile) {
+      setSidebarOpen(false);
+    }
+  };
+
+  return (
+    <>
+      {/* Desktop Sidebar */}
+      <aside className="hidden xl:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-[60]">
+        <EduSidebarContent 
+          navGroups={navGroups}
+          activeTab={activeTab}
+          handleNavigation={handleNavigation}
+          onLogout={onLogout}
+        />
+      </aside>
+
+      {/* Mobile Backdrop */}
+      {sidebarOpen && isMobile && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[9999] transition-all duration-300 ease-out opacity-100 pointer-events-auto"
+          onClick={() => setSidebarOpen?.(false)}
+        />
+      )}
+
+      {/* Mobile Sidebar */}
+      <aside
+        className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-all duration-300 ease-out flex flex-col h-full xl:hidden ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        <EduSidebarContent 
+          isMobile={true}
+          setSidebarOpen={setSidebarOpen}
+          navGroups={navGroups}
+          activeTab={activeTab}
+          handleNavigation={handleNavigation}
+          onLogout={onLogout}
+        />
+      </aside>
+    </>
+  );
 }
+
+const EduSidebarContent = ({ 
+  isMobile = false, 
+  setSidebarOpen, 
+  navGroups, 
+  activeTab, 
+  handleNavigation, 
+  onLogout 
+}: any) => (
+  <>
+    <div className="flex-1 py-4 overflow-y-auto scrollbar-hide">
+      <div className="px-6 mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="p-1.5 bg-purple-600 rounded-lg text-white">
+            <GraduationCap size={20} />
+          </div>
+          <span className="font-bold text-lg dark:text-white">SeshNx EDU</span>
+        </div>
+        {isMobile && (
+          <button onClick={() => setSidebarOpen?.(false)} className="p-2 text-gray-500">
+            <X size={20} />
+          </button>
+        )}
+      </div>
+
+      {/* Organization Switcher (School Selection) */}
+      <div className="px-4 mb-6">
+        <div className="p-2 bg-purple-50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-900/30 rounded-xl">
+          <div className="text-[10px] font-bold text-purple-500 mb-2 uppercase tracking-wider flex items-center justify-between px-1">
+            <span>School / Org</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></div>
+          </div>
+          <OrganizationSwitcher 
+            hidePersonal={false}
+            appearance={{
+              elements: {
+                organizationSwitcherTrigger: "w-full justify-between bg-white dark:bg-[#1a1d21] border border-gray-200 dark:border-gray-700 rounded-lg py-2 px-3 text-sm transition-all hover:border-purple-300",
+                organizationPreviewTextContainer: "dark:text-white font-medium",
+                organizationPreviewMainIdentifier: "dark:text-white"
+              }
+            }}
+          />
+        </div>
+      </div>
+
+      <nav className="space-y-6 px-2">
+        {navGroups.map((group: any) => {
+          const GroupIcon = group.icon;
+          return (
+            <div key={group.label} className="space-y-1">
+              <div className="flex items-center gap-2 px-3 py-1.5 mb-1">
+                <GroupIcon size={14} className="text-gray-400 dark:text-gray-500" />
+                <span className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                  {group.label}
+                </span>
+              </div>
+
+              <div className="space-y-1">
+                {group.items.map((link: any) => {
+                  const ItemIcon = link.icon;
+                  return (
+                    <button
+                      key={link.id}
+                      onClick={() => handleNavigation(link.id)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition
+                      ${activeTab === link.id
+                          ? 'bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-400'
+                          : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'}
+                      `}
+                    >
+                      <ItemIcon size={18} />
+                      {link.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </nav>
+    </div>
+
+    <div className="p-4 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1f2128] pb-20">
+      <button onClick={onLogout} className="flex items-center gap-2 text-red-500 text-sm font-medium hover:opacity-80 px-2 w-full py-2 rounded hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors">
+        <LogOut size={16} /> Logout
+      </button>
+    </div>
+  </>
+);
+
+export default EduSidebar;

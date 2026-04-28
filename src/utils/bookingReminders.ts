@@ -4,7 +4,7 @@
 //
 // Usage in components:
 // import { useMutation, useQuery } from 'convex/react';
-// import { api } from '../../convex/_generated/api';
+// import { api } from '@convex/api';
 //
 // const scheduleReminders = useMutation(api.bookingReminders.scheduleReminders);
 // await scheduleReminders({

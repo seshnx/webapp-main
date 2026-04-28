@@ -9,6 +9,17 @@ import { mutation, query } from "./_generated/server";
  */
 
 /**
+ * Helper to resolve Clerk ID to Convex User ID
+ */
+async function getNativeUserId(ctx: any, clerkId: string) {
+  const user = await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkId))
+    .first();
+  return user ? user._id : null;
+}
+
+/**
  * Get all reactions for a target (post or comment) - real-time
  */
 export const list = query({
@@ -68,11 +79,14 @@ export const getUserReaction = query({
     userId: v.string(),
   },
   handler: async (ctx, args) => {
+    const nativeUserId = await getNativeUserId(ctx, args.userId);
+    if (!nativeUserId) return null;
+
     const reaction = await ctx.db
       .query("reactions")
       .withIndex("by_user_target", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", nativeUserId)
           .eq("targetId", args.targetId)
           .eq("targetType", args.targetType)
       )
@@ -114,11 +128,14 @@ export const syncReaction = mutation({
     timestamp: v.number(),
   },
   handler: async (ctx, args) => {
+    const nativeUserId = await getNativeUserId(ctx, args.userId);
+    if (!nativeUserId) throw new Error("User not found");
+
     const existing = await ctx.db
       .query("reactions")
       .withIndex("by_user_target", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", nativeUserId)
           .eq("targetId", args.targetId)
           .eq("targetType", args.targetType)
       )
@@ -136,7 +153,7 @@ export const syncReaction = mutation({
       const reactionId = await ctx.db.insert("reactions", {
         targetId: args.targetId,
         targetType: args.targetType,
-        userId: args.userId,
+        userId: nativeUserId,
         emoji: args.emoji,
         timestamp: args.timestamp,
       });
@@ -155,11 +172,14 @@ export const removeReaction = mutation({
     userId: v.string(),
   },
   handler: async (ctx, args) => {
+    const nativeUserId = await getNativeUserId(ctx, args.userId);
+    if (!nativeUserId) return { success: false, message: "User not found" };
+
     const existing = await ctx.db
       .query("reactions")
       .withIndex("by_user_target", (q) =>
         q
-          .eq("userId", args.userId)
+          .eq("userId", nativeUserId)
           .eq("targetId", args.targetId)
           .eq("targetType", args.targetType)
       )
@@ -195,15 +215,19 @@ export const bulkSyncReactions = mutation({
     let updated = 0;
 
     for (const reaction of args.reactions) {
+      const nativeUserId = await getNativeUserId(ctx, reaction.userId);
+      if (!nativeUserId) continue;
+
       const existing = await ctx.db
         .query("reactions")
         .withIndex("by_user_target", (q) =>
           q
-            .eq("userId", reaction.userId)
+            .eq("userId", nativeUserId)
             .eq("targetId", reaction.targetId)
             .eq("targetType", reaction.targetType)
         )
         .first();
+
 
       if (existing) {
         await ctx.db.patch(existing._id, {
@@ -215,7 +239,7 @@ export const bulkSyncReactions = mutation({
         await ctx.db.insert("reactions", {
           targetId: reaction.targetId,
           targetType: reaction.targetType,
-          userId: reaction.userId,
+          userId: nativeUserId,
           emoji: reaction.emoji,
           timestamp: reaction.timestamp,
         });
