@@ -72,12 +72,13 @@ export default function App(): JSX.Element {
               <Loader2 className="animate-spin text-brand-blue" size={48} />
             </div>
           }>
-            <SubdomainRouter slug={slug} />*/
+            <SubdomainRouter slug={slug} />
           </Suspense>
         </LanguageProvider>
       </QueryClientProvider>
     );
   }
+  */
 
   // =========================================================
   // CRITICAL LOADING LOGIC:
