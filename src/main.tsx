@@ -134,19 +134,29 @@ if (!clerkPubKey) {
 // RENDER
 // =====================================================
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <AppWrapper>
-    <ErrorBoundary name="Root">
-      <ClerkProvider {...clerkConfig}>
-        <ConvexProvider client={convex}>
-          <BrowserRouter>
-            <App />
-          </BrowserRouter>
-        </ConvexProvider>
-      </ClerkProvider>
-    </ErrorBoundary>
-  </AppWrapper>
-);
+try {
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <AppWrapper>
+       {/* Temporarily remove ErrorBoundary to let the browser catch it natively */}
+        <ClerkProvider {...clerkConfig}>
+          <ConvexProvider client={convex}>
+            <BrowserRouter>
+              <App />
+            </BrowserRouter>
+          </ConvexProvider>
+        </ClerkProvider>
+    </AppWrapper>
+  );
+} catch (error) {
+  // Force the error onto the actual webpage so you can read it
+  document.body.innerHTML = `
+    <div style="padding: 20px; color: red; background: white; z-index: 99999; position: relative;">
+      <h1>Fatal App Crash</h1>
+      <pre>${error}</pre>
+    </div>
+  `;
+  console.error("FATAL CRASH:", error);
+}
 
 // =====================================================
 // LOADER REMOVAL
