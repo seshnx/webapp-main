@@ -63,7 +63,7 @@ export default function App(): JSX.Element {
   // ── Subdomain bypass ────────────────────────────────────
   // Studio subdomains render their own UI without requiring auth.
   const { isSubdomain, slug } = useStudioSubdomain();
-  if (isSubdomain && slug) {
+  /*if (isSubdomain && slug) {
     return (
       <QueryClientProvider client={queryClient}>
         <LanguageProvider>
@@ -72,7 +72,7 @@ export default function App(): JSX.Element {
               <Loader2 className="animate-spin text-brand-blue" size={48} />
             </div>
           }>
-            <SubdomainRouter slug={slug} />
+            <SubdomainRouter slug={slug} />*/
           </Suspense>
         </LanguageProvider>
       </QueryClientProvider>
