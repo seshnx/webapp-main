@@ -31,7 +31,7 @@ interface ErrorFallbackProps {
 // Initialize Sentry if DSN is provided
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 
-if (sentryDsn) {
+/*if (sentryDsn) {
   Sentry.init({
     dsn: sentryDsn,
     environment: import.meta.env.MODE || 'development',
@@ -86,7 +86,7 @@ if (sentryDsn) {
     console.log('✓ Sentry initialized for error monitoring');
   }
 }
-
+*/
 // =====================================================
 // DEVELOPMENT ERROR LOGGING
 // =====================================================
