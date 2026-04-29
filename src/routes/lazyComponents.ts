@@ -32,6 +32,7 @@ export const PaymentsManager = lazy(() => retryLazyLoad(() => import('@/features
 export const LegalDocs = lazy(() => retryLazyLoad(() => import('@/features/business/components/LegalDocs')));
 export const PublicLegalPage = lazy(() => retryLazyLoad(() => import('@/features/business/components/PublicLegalPage')));
 export const PlansPage = lazy(() => retryLazyLoad(() => import('@/features/business/components/PlansPage')));
+export const BusinessCenter = lazy(() => retryLazyLoad(() => import('@/features/business/components/BusinessCenter')));
 
 // Studio Public & Shared Components
 export const StudioPublicProfile = lazy(() => retryLazyLoad(() => import('@/features/studio/components/StudioPublicProfile')));
@@ -63,6 +64,7 @@ export const prefetchFeature = (featureName: string) => {
     case 'payments': import('@/features/business/components/PaymentsManager'); break;
     case 'legal': import('@/features/business/components/PublicLegalPage'); break;
     case 'plans': import('@/features/business/components/PlansPage'); break;
+    case 'business-center': import('@/features/business/components/BusinessCenter'); break;
     case 'edu-student': import('@/features/edu/components/EDU/EduStudentDashboard'); break;
     case 'edu-intern': import('@/features/edu/components/EDU/EduInternDashboard'); break;
     case 'edu-overview': import('@/features/edu/components/EDU/EduStaffDashboard'); break;
