@@ -21,13 +21,13 @@ interface TechnicianDashboardProps extends DashboardProps {
 
 export function TechnicianDashboard({ userData, className = '' }: TechnicianDashboardProps) {
   // Fetch data from Convex
-  const serviceRequests = useQuery(api.bookings.getTechnicianServiceRequests,
+  const serviceRequests = useQuery(api.sbookings.getTechnicianServiceRequests,
     userData ? { technicianId: userData._id, status: "pending" } : "skip"
   );
-  const activeJobs = useQuery(api.bookings.getBookingsByTechnician,
+  const activeJobs = useQuery(api.sbookings.getBookingsByTechnician,
     userData ? { technicianId: userData._id, status: "confirmed" } : "skip"
   );
-  const earnings = useQuery(api.bookings.getTechnicianEarnings,
+  const earnings = useQuery(api.sbookings.getTechnicianEarnings,
     userData ? { technicianId: userData._id } : "skip"
   );
 

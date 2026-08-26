@@ -140,13 +140,8 @@ export default defineSchema({
       bookingsCount: v.number(),
     })),
 
-    // Settings
-    settings: v.optional(v.object({
-      privacy: v.string(), // public, followers, private
-      notificationsEnabled: v.boolean(),
-      showEmail: v.boolean(),
-      showLocation: v.boolean(),
-    })),
+    // Settings - accept any object to support complex settings structure
+    settings: v.optional(v.any()),
 
     // EDU-specific fields
     schoolId: v.optional(v.id("schools")),
@@ -172,6 +167,11 @@ export default defineSchema({
   subProfiles: defineTable({
     userId: v.id("users"),
     role: v.string(), // Talent, Studio, Label, etc.
+
+    // NEW: Display name preferences
+    displayNamePreference: v.optional(v.string()), // "legal" | "username" | "custom"
+    customDisplayName: v.optional(v.string()),
+
     displayName: v.string(),
     photoUrl: v.optional(v.string()),
     bio: v.optional(v.string()),
@@ -280,7 +280,12 @@ export default defineSchema({
     // Content
     content: v.optional(v.string()),
     mediaUrls: v.optional(v.array(v.string())),
-    mediaType: v.optional(v.string()), // image, video, audio, gif
+    mediaAttachments: v.optional(v.array(v.object({
+      url: v.string(),
+      type: v.string(), // image, video, audio
+      name: v.optional(v.string()),
+    }))),
+    mediaType: v.optional(v.string()), // image, video, audio, gif (legacy single-type)
 
     // Social metadata
     hashtags: v.optional(v.array(v.string())),
@@ -486,9 +491,9 @@ export default defineSchema({
     .index("by_user", ["userId", "lastMessageTime"])
     .index("by_chat", ["chatId"]),
 
-  // Presence table
+  // Presence table (stores clerkId as string for direct lookup)
   presence: defineTable({
-    userId: v.id("users"),
+    userId: v.string(), // Clerk ID
     online: v.boolean(),
     lastSeen: v.number(),
   }).index("by_user", ["userId"]),
@@ -513,10 +518,10 @@ export default defineSchema({
     .index("by_chat", ["chatId"])
     .index("by_user", ["userId"]),
 
-  // Typing indicators table
+  // Typing indicators table (stores clerkId as string)
   typingIndicators: defineTable({
     chatId: v.string(),
-    userId: v.id("users"),
+    userId: v.string(),
     userName: v.string(),
     isTyping: v.boolean(),
     updatedAt: v.number(),
@@ -544,6 +549,7 @@ export default defineSchema({
 
     // Media
     photos: v.optional(v.array(v.string())),
+    studioPhotos: v.optional(v.array(v.string())), // Studio gallery photos
     logoUrl: v.optional(v.string()),
 
     // Pricing
@@ -552,10 +558,37 @@ export default defineSchema({
     maxHourlyRate: v.optional(v.number()),
     currency: v.optional(v.string()),
 
+    // Contact information
+    email: v.optional(v.string()),
+    phoneCell: v.optional(v.string()),
+    phoneLand: v.optional(v.string()),
+    website: v.optional(v.string()),
+    hours: v.optional(v.string()), // Hours of operation
+
+    // Location details
+    zip: v.optional(v.string()),
+    hideAddress: v.optional(v.boolean()), // Private home studio mode
+
+    // Studio features
+    amenities: v.optional(v.array(v.string())), // Wi-Fi, Kitchen, etc.
+
+    // Kiosk mode settings
+    kioskModeEnabled: v.optional(v.boolean()),
+    kioskEduMode: v.optional(v.boolean()),
+    kioskAuthorizedNetworks: v.optional(v.string()), // CIDR notation
+    kioskNetworkName: v.optional(v.string()), // Display name for network
+
     // Settings
     isActive: v.boolean(),
     requiresApproval: v.boolean(),
     deletedAt: v.optional(v.number()), // Soft delete support
+
+    // Slug and Organization
+    slug: v.optional(v.string()),
+    clerkOrgId: v.optional(v.string()),  // Linked Clerk Organization ID
+
+    // Activity tracking for 90-day scrub
+    lastActivityAt: v.optional(v.number()),  // updated on any org activity
 
     // Timestamps
     createdAt: v.number(),
@@ -563,7 +596,9 @@ export default defineSchema({
   })
     .index("by_owner", ["ownerId"])
     .index("by_location", ["location"])
-    .index("by_city_state", ["city", "state"]),
+    .index("by_city_state", ["city", "state"])
+    .index("by_slug", ["slug"])
+    .index("by_clerk_org_id", ["clerkOrgId"]),
 
   // Rooms table (for multi-room studios)
   rooms: defineTable({
@@ -578,8 +613,300 @@ export default defineSchema({
   })
     .index("by_studio", ["studioId"]),
 
-  // Bookings table - merged from Neon + MongoDB
-  bookings: defineTable({
+  // =====================================================
+  // STUDIO MANAGER TABLES
+  // =====================================================
+
+  // Studio Floor Plans
+  studioFloorplans: defineTable({
+    studioId: v.id("studios"),
+    roomId: v.optional(v.id("rooms")), // Optional room-specific floor plan
+
+    // Floor plan data
+    rooms: v.optional(v.array(v.object({
+      id: v.string(),
+      name: v.string(),
+      description: v.optional(v.string()),
+      rate: v.number(),
+      capacity: v.number(),
+      equipment: v.optional(v.array(v.string())),
+      amenities: v.optional(v.array(v.string())),
+      minBookingHours: v.optional(v.number()),
+      active: v.optional(v.boolean()),
+      color: v.optional(v.string()),
+      panorama360Url: v.optional(v.string()),
+      layout: v.optional(v.object({
+        x: v.number(),
+        y: v.number(),
+        width: v.number(),
+        height: v.number(),
+        color: v.string(),
+      })),
+    }))),
+
+    // Wall definitions
+    walls: v.optional(v.array(v.object({
+      id: v.string(),
+      startX: v.number(),
+      startY: v.number(),
+      endX: v.number(),
+      endY: v.number(),
+      thickness: v.optional(v.number()),
+    }))),
+
+    // Structures (doors, windows, furniture)
+    structures: v.optional(v.array(v.object({
+      id: v.string(),
+      type: v.string(), // 'door', 'window', 'furniture'
+      x: v.number(),
+      y: v.number(),
+      width: v.optional(v.number()),
+      height: v.optional(v.number()),
+      rotation: v.optional(v.number()),
+    }))),
+
+    // Additional elements
+    text: v.optional(v.array(v.object({
+      id: v.string(),
+      text: v.string(),
+      x: v.number(),
+      y: v.number(),
+      fontSize: v.optional(v.number()),
+    }))),
+
+    measurements: v.optional(v.array(v.object({
+      id: v.string(),
+      startX: v.number(),
+      startY: v.number(),
+      endX: v.number(),
+      endY: v.number(),
+      value: v.optional(v.string()),
+    }))),
+
+    shapes: v.optional(v.array(v.object({
+      id: v.string(),
+      type: v.string(), // 'rectangle', 'circle', 'polygon'
+      x: v.number(),
+      y: v.number(),
+      width: v.optional(v.number()),
+      height: v.optional(v.number()),
+      radius: v.optional(v.number()),
+      points: v.optional(v.array(v.object({
+        x: v.number(),
+        y: v.number(),
+      }))),
+      fillColor: v.optional(v.string()),
+      strokeColor: v.optional(v.string()),
+    }))),
+
+    // Layer settings
+    layerVisibility: v.optional(v.record(v.string(), v.boolean())),
+    layerLocks: v.optional(v.record(v.string(), v.boolean())),
+
+    // Version history
+    version: v.number(),
+    previousVersion: v.optional(v.id("studioFloorplans")),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_studio", ["studioId"])
+    .index("by_room", ["roomId"])
+    .index("by_version", ["studioId", "version"]),
+
+  // Studio Equipment Inventory
+  studioEquipment: defineTable({
+    studioId: v.id("studios"),
+    roomId: v.optional(v.id("rooms")), // Optional room assignment
+
+    // Equipment details
+    name: v.string(),
+    category: v.string(), // 'Microphones', 'Instruments', 'Audio', 'Lighting', etc.
+    brand: v.optional(v.string()),
+    model: v.optional(v.string()),
+    serialNumber: v.optional(v.string()),
+
+    // Status
+    status: v.string(), // 'Available', 'Rented', 'Maintenance', 'Retired'
+    condition: v.optional(v.string()), // 'Excellent', 'Good', 'Fair', 'Poor'
+
+    // Financial data
+    purchasePrice: v.optional(v.number()),
+    currentValue: v.optional(v.number()),
+    dailyRentalRate: v.optional(v.number()),
+
+    // Additional info
+    description: v.optional(v.string()),
+    purchaseDate: v.optional(v.string()),
+    warrantyExpiry: v.optional(v.string()),
+    lastMaintenanceDate: v.optional(v.string()),
+    notes: v.optional(v.string()),
+
+    // Images
+    photos: v.optional(v.array(v.string())),
+
+    // Soft delete
+    deletedAt: v.optional(v.number()),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_studio", ["studioId"])
+    .index("by_room", ["roomId"])
+    .index("by_category", ["studioId", "category"])
+    .index("by_status", ["studioId", "status"]),
+
+  // Studio Clients CRM
+  studioClients: defineTable({
+    studioId: v.id("studios"),
+    userId: v.id("users"), // Linked user account
+
+    // Client classification
+    clientType: v.string(), // 'Regular', 'VIP', 'Corporate'
+    tags: v.optional(v.array(v.string())),
+
+    // Business metrics
+    totalBookings: v.number(),
+    totalRevenue: v.number(),
+    lastBookingDate: v.optional(v.string()),
+    firstBookingDate: v.optional(v.string()),
+
+    // Client preferences
+    preferences: v.optional(v.object({
+      preferredRoom: v.optional(v.id("rooms")),
+      preferredServices: v.optional(v.array(v.string())),
+      specialRequests: v.optional(v.array(v.string())),
+      notes: v.optional(v.string()),
+    })),
+
+    // Blacklist support
+    isBlacklisted: v.optional(v.boolean()),
+    blacklistReason: v.optional(v.string()),
+
+    // Additional info
+    rating: v.optional(v.number()), // Client rating (1-5)
+    notes: v.optional(v.string()),
+
+    // Soft delete
+    deletedAt: v.optional(v.number()),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_studio", ["studioId"])
+    .index("by_user", ["userId"])
+    .index("by_type", ["studioId", "clientType"])
+    .index("by_blacklist", ["studioId", "isBlacklisted"]),
+
+  // Studio Staff Management
+  studioStaff: defineTable({
+    studioId: v.id("studios"),
+    userId: v.id("users"), // Linked user account
+
+    // Role and permissions
+    role: v.string(), // 'Manager', 'Technician', 'Assistant', 'Receptionist'
+    permissions: v.optional(v.array(v.string())), // Additional permissions
+
+    // Availability
+    availability: v.optional(v.object({
+      monday: v.optional(v.array(v.string())), // Time slots
+      tuesday: v.optional(v.array(v.string())),
+      wednesday: v.optional(v.array(v.string())),
+      thursday: v.optional(v.array(v.string())),
+      friday: v.optional(v.array(v.string())),
+      saturday: v.optional(v.array(v.string())),
+      sunday: v.optional(v.array(v.string())),
+    })),
+
+    // Compensation
+    hourlyRate: v.optional(v.number()),
+    salary: v.optional(v.number()),
+    commissionRate: v.optional(v.number()), // Percentage
+
+    // Status
+    isActive: v.boolean(),
+    hireDate: v.optional(v.string()),
+    terminationDate: v.optional(v.string()),
+
+    // Additional info
+    notes: v.optional(v.string()),
+    skills: v.optional(v.array(v.string())),
+    certifications: v.optional(v.array(v.string())),
+
+    // Soft delete
+    deletedAt: v.optional(v.number()),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_studio", ["studioId"])
+    .index("by_user", ["userId"])
+    .index("by_role", ["studioId", "role"])
+    .index("by_active", ["studioId", "isActive"]),
+
+  // Studio Analytics
+  studioAnalytics: defineTable({
+    studioId: v.id("studios"),
+
+    // Period
+    period: v.string(), // 'daily', 'weekly', 'monthly', 'yearly'
+    startDate: v.string(), // ISO date string
+    endDate: v.string(), // ISO date string
+
+    // Booking statistics
+    totalBookings: v.number(),
+    confirmedBookings: v.number(),
+    cancelledBookings: v.number(),
+    completedBookings: v.number(),
+
+    // Revenue metrics
+    totalRevenue: v.number(),
+    depositRevenue: v.number(),
+    finalRevenue: v.number(),
+    pendingRevenue: v.number(),
+
+    // Room utilization
+    totalRoomHours: v.number(),
+    averageBookingDuration: v.number(),
+    utilizationRate: v.number(), // Percentage
+
+    // Popular services
+    topServices: v.optional(v.array(v.object({
+      serviceName: v.string(),
+      bookingCount: v.number(),
+      revenue: v.number(),
+    }))),
+
+    // Top clients
+    topClients: v.optional(v.array(v.object({
+      clientName: v.string(),
+      clientId: v.id("users"),
+      bookingCount: v.number(),
+      totalSpent: v.number(),
+    }))),
+
+    // Additional metrics
+    averageRating: v.optional(v.number()),
+    newClientCount: v.number(),
+    returningClientCount: v.number(),
+
+    // Timestamps
+    generatedAt: v.number(),
+  })
+    .index("by_studio", ["studioId"])
+    .index("by_period", ["studioId", "period"])
+    .index("by_date_range", ["studioId", "startDate", "endDate"]),
+
+  // =====================================================
+  // STUDIO BOOKINGS (sbookings)
+  // =====================================================
+
+  // Studio bookings table - for booking recording studios and rooms
+  sbookings: defineTable({
     // Core IDs
     id: v.string(), // Keep old ID for compatibility
     studioId: v.id("studios"),
@@ -642,6 +969,50 @@ export default defineSchema({
     .index("by_studio_date", ["studioId", "date"])
     .index("by_room_date", ["roomId", "date"]),
 
+  // =====================================================
+  // TALENT BOOKINGS (bookings)
+  // =====================================================
+
+  // Direct talent hire bookings - for hiring specific people
+  bookings: defineTable({
+    // Core IDs
+    talentId: v.id("users"),   // The person being hired
+    clientId: v.id("users"),   // The person doing the hiring
+
+    // Session details
+    serviceType: v.optional(v.string()),  // e.g. Recording, Mixing, Performance, Feature
+    date: v.optional(v.string()),         // YYYY-MM-DD
+    time: v.optional(v.string()),         // HH:mm
+    duration: v.optional(v.number()),     // In hours
+    location: v.optional(v.string()),     // Address or "Remote"
+
+    // Pricing
+    offerAmount: v.optional(v.number()),
+    currency: v.optional(v.string()),
+    paymentStatus: v.optional(v.string()), // Pending, Paid, Refunded
+
+    // Status lifecycle
+    status: v.string(), // Pending, Accepted, Declined, Completed, Cancelled
+
+    // Cancellation
+    cancelledBy: v.optional(v.id("users")),
+    cancelledAt: v.optional(v.number()),
+    cancellationReason: v.optional(v.string()),
+
+    // Communication
+    message: v.optional(v.string()),
+    clientNotes: v.optional(v.string()),
+    talentNotes: v.optional(v.string()),
+
+    // Timestamps
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_talent", ["talentId", "createdAt"])
+    .index("by_client", ["clientId", "createdAt"])
+    .index("by_talent_status", ["talentId", "status"])
+    .index("by_status", ["status", "createdAt"]),
+
   // Booking templates
   bookingTemplates: defineTable({
     studioId: v.id("studios"),
@@ -666,9 +1037,10 @@ export default defineSchema({
     .index("by_studio_date", ["studioId", "date"])
     .index("by_room_date", ["roomId", "date"]),
 
-  // Booking payments
+  // Booking payments (universal - used for both studio and talent bookings)
   bookingPayments: defineTable({
-    bookingId: v.id("bookings"),
+    bookingId: v.string(),    // ID of either sbookings or bookings record
+    bookingType: v.union(v.literal("studio"), v.literal("talent")), // Which table the bookingId refers to
     amount: v.number(),
     currency: v.string(),
     status: v.string(), // Pending, Completed, Failed, Refunded
@@ -679,11 +1051,13 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("by_booking", ["bookingId"])
+    .index("by_booking_type", ["bookingType", "bookingId"])
     .index("by_status", ["status", "createdAt"]),
 
-  // Booking reminders
+  // Booking reminders (universal - used for both studio and talent bookings)
   bookingReminders: defineTable({
-    bookingId: v.id("bookings"),
+    bookingId: v.string(),    // ID of either sbookings or bookings record
+    bookingType: v.union(v.literal("studio"), v.literal("talent")), // Which table the bookingId refers to
     userId: v.id("users"), // User to receive the reminder
     reminderType: v.string(), // day_before, hours_before
     reminderHours: v.number(), // Hours before booking to send reminder
@@ -980,6 +1354,41 @@ export default defineSchema({
     .index("by_user", ["userId", "createdAt"])
     .index("by_item", ["itemId"])
     .index("by_user_item", ["userId", "itemId"]),
+
+  // User wallets for tokens and earnings
+  wallets: defineTable({
+    userId: v.string(), // Clerk ID
+    balance: v.number(), // Spendable tokens
+    escrowBalance: v.number(), // Held for active sessions
+    payoutBalance: v.number(), // Cleared for withdrawal
+    stripeAccountId: v.optional(v.string()), // Stripe Connect Account ID
+    onboardingComplete: v.optional(v.boolean()), // Connect status
+    updatedAt: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  // Detailed financial transaction log
+  walletTransactions: defineTable({
+    userId: v.string(),
+    walletId: v.id("wallets"),
+    amount: v.number(),
+    currency: v.string(),
+    type: v.union(
+      v.literal("purchase"),
+      v.literal("booking_payment"),
+      v.literal("payout"),
+      v.literal("refund"),
+      v.literal("fee")
+    ),
+    status: v.string(), // Pending, Completed, Failed, Refunded
+    description: v.optional(v.string()),
+    stripeId: v.optional(v.string()), // PaymentIntent ID or Transfer ID
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_user", ["userId", "createdAt"])
+    .index("by_wallet", ["walletId", "createdAt"])
+    .index("by_stripe", ["stripeId"]),
 
   // =====================================================
   // LABELS & DISTRIBUTION
@@ -1350,5 +1759,123 @@ export default defineSchema({
   })
     .index("by_user", ["userId", "timestamp"])
     .index("by_entity", ["entityType", "entityId", "timestamp"])
-    .index("by_action", ["action", "timestamp"])
+    .index("by_action", ["action", "timestamp"]),
+
+  // =====================================================
+  // ENHANCED PRESENCE & REAL-TIME FEATURES
+  // =====================================================
+
+  // Enhanced presence (richer than basic presence table)
+  enhancedPresence: defineTable({
+    userId: v.string(), // clerkId
+    status: v.union(
+      v.literal("online"),
+      v.literal("offline"),
+      v.literal("away"),
+      v.literal("busy"),
+      v.literal("in_session")
+    ),
+    lastSeen: v.number(),
+    currentLocation: v.optional(v.object({
+      type: v.union(v.literal("studio"), v.literal("room"), v.literal("session")),
+      id: v.string(),
+      name: v.string(),
+    })),
+    deviceInfo: v.optional(v.object({
+      type: v.union(v.literal("desktop"), v.literal("mobile"), v.literal("tablet")),
+      browser: v.optional(v.string()),
+    })),
+    activeProfile: v.optional(v.string()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_status", ["status"]),
+
+  // Active collaboration sessions
+  activeSessions: defineTable({
+    sessionId: v.string(),
+    bookingId: v.string(),
+    status: v.union(v.literal("active"), v.literal("ended")),
+    startedAt: v.number(),
+    endedAt: v.optional(v.number()),
+    hostId: v.string(), // clerkId
+    hostName: v.string(),
+    participantCount: v.number(),
+  })
+    .index("by_session", ["sessionId"])
+    .index("by_host", ["hostId"]),
+
+  // Session participants
+  sessionParticipants: defineTable({
+    sessionId: v.string(),
+    userId: v.string(), // clerkId
+    displayName: v.string(),
+    role: v.union(v.literal("host"), v.literal("guest"), v.literal("observer")),
+    joinedAt: v.number(),
+    leftAt: v.optional(v.number()),
+    isActive: v.boolean(),
+    canEdit: v.boolean(),
+    canInvite: v.boolean(),
+  })
+    .index("by_session", ["sessionId", "isActive"])
+    .index("by_user", ["userId", "isActive"]),
+
+  // Unread counts
+  unreadCounts: defineTable({
+    userId: v.string(),
+    messages: v.number(),
+    notifications: v.number(),
+    bookingRequests: v.number(),
+    sessionInvites: v.number(),
+    lastUpdated: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  // Dashboard stats
+  dashboardStats: defineTable({
+    userId: v.string(),
+    todayBookingCount: v.number(),
+    todayRevenue: v.number(),
+    weekBookingCount: v.number(),
+    weekRevenue: v.number(),
+    unreadMessages: v.number(),
+    activeNotifications: v.number(),
+    lastUpdated: v.number(),
+  })
+    .index("by_user", ["userId"]),
+
+  // Activity feed
+  activityFeed: defineTable({
+    id: v.string(),
+    userId: v.string(),
+    actionType: v.string(),
+    targetUserId: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+  })
+    .index("by_target", ["targetUserId", "createdAt"])
+    .index("by_created", ["createdAt"]),
+
+  // Reserved slugs for high-value studios (immune to scrubbing)
+  reservedSlugs: defineTable({
+    slug: v.string(),           // e.g., "electric-lady", "abbey-road"
+    city: v.optional(v.string()),
+    reason: v.string(),         // e.g., "landmark studio", "major facility"
+    verifiedAt: v.number(),
+  })
+    .index("by_slug", ["slug"]),
+
+  // Slug ownership claims (verification flow)
+  slugClaims: defineTable({
+    slug: v.string(),
+    studioId: v.id("studios"),
+    claimantClerkId: v.string(),
+    status: v.string(),         // "pending" | "verified" | "claimed" | "rejected"
+    verificationMethod: v.string(), // "in_person" | "phone" | "mailer"
+    verificationCode: v.optional(v.string()),
+    verifiedAt: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_studio", ["studioId"])
+    .index("by_status", ["status"]),
 });

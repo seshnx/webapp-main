@@ -1,14 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Settings, Save, Loader2, Home, MapPin, Mail,
-    Wifi, Shield, EyeOff
+    Wifi, Shield, EyeOff, Globe, Eye, CheckCircle, XCircle
 } from 'lucide-react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import toast from 'react-hot-toast';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import AddressAutocomplete from '../shared/AddressAutocomplete';
 import { AMENITIES_DATA } from '../../config/constants';
+import StudioOrgManager from './StudioOrgManager';
 
 /**
  * Zod schema for studio settings validation
@@ -29,6 +32,12 @@ const settingsSchema = z.object({
     hours: z.string().optional(),
     amenities: z.array(z.string()).optional(),
     hideAddress: z.boolean().optional(),
+    // Slug
+    slug: z.string()
+        .min(3, "Slug must be at least 3 characters")
+        .max(50, "Slug must be at most 50 characters")
+        .regex(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/, "Only lowercase letters, numbers, and hyphens")
+        .optional(),
     // Kiosk settings
     kioskModeEnabled: z.boolean().optional(),
     kioskEduMode: z.boolean().optional(),
@@ -68,6 +77,28 @@ export interface StudioSettingsProps {
  */
 export default function StudioSettings({ user, userData, onUpdate }: StudioSettingsProps) {
     const [saving, setSaving] = useState<boolean>(false);
+    const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
+    const [slugRequiresVerification, setSlugRequiresVerification] = useState<boolean>(false);
+    const [checkingSlug, setCheckingSlug] = useState<boolean>(false);
+
+    // Convex mutation for updating studio settings
+    const updateStudio = useMutation(api.studios.updateStudioByOwner);
+
+    // Slug availability check (reactive - re-runs when slugToCheck changes)
+    const [slugToCheck, setSlugToCheck] = useState<string | null>(null);
+    const slugCheckResult = useQuery(
+        api.studios.checkSlugAvailability,
+        slugToCheck ? { slug: slugToCheck } : "skip"
+    );
+
+    // Sync slug check result to state
+    useEffect(() => {
+        if (slugCheckResult !== undefined) {
+            setSlugAvailable(slugCheckResult?.available ?? false);
+            setSlugRequiresVerification(slugCheckResult?.requiresVerification ?? false);
+            setCheckingSlug(false);
+        }
+    }, [slugCheckResult]);
 
     const {
         register,
@@ -79,25 +110,26 @@ export default function StudioSettings({ user, userData, onUpdate }: StudioSetti
     } = useForm<StudioSettingsFormData>({
         resolver: zodResolver(settingsSchema),
         defaultValues: {
-            studioName: userData?.studioName || userData?.profileName || '',
-            address: userData?.address || '',
-            city: userData?.city || '',
-            state: userData?.state || '',
-            zip: userData?.zip || '',
-            lat: userData?.lat,
-            lng: userData?.lng,
-            studioDescription: userData?.studioDescription || '',
-            email: userData?.email || '',
-            phoneCell: userData?.phoneCell || '',
-            phoneLand: userData?.phoneLand || '',
-            website: userData?.website || '',
-            hours: userData?.hours || '',
-            amenities: userData?.amenities || [],
-            hideAddress: userData?.hideAddress || false,
-            kioskModeEnabled: userData?.kiosk_mode_enabled || false,
-            kioskEduMode: userData?.kiosk_edu_mode || false,
-            kioskAuthorizedNetworks: userData?.kiosk_authorized_networks || '',
-            kioskNetworkName: userData?.kiosk_network_name || '',
+            studioName: userData?.studioName || userData?.studio?.name || userData?.profileName || '',
+            address: userData?.address || userData?.studio?.location || '',
+            city: userData?.city || userData?.studio?.city || '',
+            state: userData?.state || userData?.studio?.state || '',
+            zip: userData?.zip || userData?.studio?.zip || '',
+            lat: userData?.lat || userData?.studio?.coordinates?.lat,
+            lng: userData?.lng || userData?.studio?.coordinates?.lng,
+            studioDescription: userData?.studioDescription || userData?.studio?.description || '',
+            email: userData?.email || userData?.studio?.email || '',
+            phoneCell: userData?.phoneCell || userData?.studio?.phoneCell || '',
+            phoneLand: userData?.phoneLand || userData?.studio?.phoneLand || '',
+            website: userData?.website || userData?.studio?.website || '',
+            hours: userData?.hours || userData?.studio?.hours || '',
+            amenities: userData?.amenities || userData?.studio?.amenities || [],
+            hideAddress: userData?.hideAddress ?? userData?.studio?.hideAddress ?? false,
+            kioskModeEnabled: userData?.kiosk_mode_enabled ?? userData?.studio?.kioskModeEnabled ?? false,
+            kioskEduMode: userData?.kiosk_edu_mode ?? userData?.studio?.kioskEduMode ?? false,
+            kioskAuthorizedNetworks: userData?.kiosk_authorized_networks || userData?.studio?.kioskAuthorizedNetworks || '',
+            kioskNetworkName: userData?.kiosk_network_name || userData?.studio?.kioskNetworkName || '',
+            slug: userData?.studio?.slug || '',
         }
     });
 
@@ -116,47 +148,45 @@ export default function StudioSettings({ user, userData, onUpdate }: StudioSetti
     const onSubmit = async (data: StudioSettingsFormData): Promise<void> => {
         setSaving(true);
         const toastId = toast.loading('Saving settings...');
-        const userId = userData?.id || user?.id || user?.uid;
+        const userId = userData?.clerkId || user?.id || user?.uid;
 
         try {
-            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    studioName: data.studioName,
-                    profileName: data.studioName,
-                    address: data.address,
-                    city: data.city,
-                    state: data.state,
-                    zip: data.zip,
-                    lat: data.lat,
-                    lng: data.lng,
-                    studioDescription: data.studioDescription,
-                    email: data.email,
-                    phoneCell: data.phoneCell,
-                    phoneLand: data.phoneLand,
-                    website: data.website,
-                    hours: data.hours,
-                    amenities: data.amenities,
-                    hideAddress: data.hideAddress,
-                    kiosk_mode_enabled: data.kioskModeEnabled,
-                    kiosk_edu_mode: data.kioskEduMode,
-                    kiosk_authorized_networks: data.kioskAuthorizedNetworks,
-                    kiosk_network_name: data.kioskNetworkName,
-                })
+            // Prepare coordinates object
+            const coordinates = data.lat && data.lng
+                ? { lat: data.lat, lng: data.lng }
+                : undefined;
+
+            // Update studio via Convex
+            await updateStudio({
+                clerkId: userId,
+                name: data.studioName,
+                description: data.studioDescription,
+                location: data.address,
+                city: data.city,
+                state: data.state,
+                zip: data.zip,
+                coordinates,
+                email: data.email || undefined,
+                phoneCell: data.phoneCell || undefined,
+                phoneLand: data.phoneLand || undefined,
+                website: data.website || undefined,
+                hours: data.hours || undefined,
+                amenities: data.amenities,
+                hideAddress: data.hideAddress,
+                kioskModeEnabled: data.kioskModeEnabled,
+                kioskEduMode: data.kioskEduMode,
+                kioskAuthorizedNetworks: data.kioskAuthorizedNetworks || undefined,
+                kioskNetworkName: data.kioskNetworkName || undefined,
+                slug: data.slug || undefined,
             });
 
-            const result = await response.json();
+            toast.success('Settings saved successfully!', { id: toastId });
 
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to save');
-            }
-
-            toast.success("Settings saved!", { id: toastId });
+            // Update local state and parent
             if (onUpdate) onUpdate(data);
         } catch (error) {
             console.error("Save failed", error);
-            toast.error("Failed to save settings.", { id: toastId });
+            toast.error("Failed to save settings. Please try again.", { id: toastId });
         } finally {
             setSaving(false);
         }
@@ -287,6 +317,72 @@ export default function StudioSettings({ user, userData, onUpdate }: StudioSetti
                         <span>Address will be hidden until booking approval</span>
                     </div>
                 )}
+            </div>
+
+            {/* Studio URL */}
+            <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700">
+                <h3 className="font-bold dark:text-white mb-4 flex items-center gap-2">
+                    <Globe size={18} className="text-brand-blue" />
+                    Studio URL
+                </h3>
+                <div className="space-y-4">
+                    <div>
+                        <label className="text-xs font-bold text-gray-500 uppercase mb-1 block">
+                            Custom Studio URL
+                        </label>
+                        <div className="flex items-center">
+                            <span className="px-3 py-3 bg-gray-100 dark:bg-gray-700 rounded-l-xl text-gray-500 dark:text-gray-400 text-sm border border-r-0 border-gray-200 dark:border-gray-600 whitespace-nowrap">
+                                seshnx.com/s/
+                            </span>
+                            <input
+                                {...register("slug")}
+                                className="w-full p-3 border rounded-r-xl dark:bg-[#1f2128] dark:border-gray-600 dark:text-white transition-all focus:ring-2 focus:ring-brand-blue outline-none border-l-0"
+                                placeholder="your-studio-name"
+                                disabled={saving}
+                                onChange={(e) => {
+                                    // Force lowercase and strip invalid chars
+                                    const val = e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '');
+                                    e.target.value = val;
+                                    register("slug").onChange(e);
+                                    setSlugAvailable(null);
+                                    setSlugRequiresVerification(false);
+                                }}
+                            />
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            3-50 characters, lowercase letters, numbers, and hyphens only.
+                            This creates your public studio page at seshnx.com/s/your-studio.
+                        </p>
+                        {errors.slug && <p className="text-red-500 text-xs mt-1">{errors.slug.message}</p>}
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const slugVal = watch("slug");
+                            if (!slugVal || slugVal.length < 3) return;
+                            setCheckingSlug(true);
+                            setSlugToCheck(slugVal);
+                        }}
+                        disabled={checkingSlug || !watch("slug")}
+                        className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm"
+                    >
+                        {checkingSlug ? <Loader2 size={16} className="animate-spin" /> : <Eye size={16} />}
+                        Check Availability
+                    </button>
+                    {slugAvailable !== null && (
+                        <div className={`text-sm px-4 py-2 rounded-lg flex items-center gap-2 ${
+                            slugAvailable
+                                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+                                : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+                        }`}>
+                            {slugAvailable ? (
+                                <><CheckCircle size={16} /> URL is available!</>
+                            ) : (
+                                <><XCircle size={16} /> {slugRequiresVerification ? "This URL is reserved. Contact support to claim it." : "This URL is already taken."}</>
+                            )}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Contact */}
@@ -461,6 +557,9 @@ export default function StudioSettings({ user, userData, onUpdate }: StudioSetti
                     </div>
                 </div>
             </div>
+
+            {/* Studio Organization (Clerk Org Management) */}
+            <StudioOrgManager studioId={userData?.studio?._id} />
 
             {/* Save Button (Bottom) */}
             <div className="flex justify-end">

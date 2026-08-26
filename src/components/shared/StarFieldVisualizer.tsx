@@ -266,15 +266,23 @@ export default function StarFieldVisualizer({
 
         try {
             const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
-            contextRef.current = new AudioContextCtor();
-            analyserRef.current = contextRef.current.createAnalyser();
-            analyserRef.current.fftSize = 2048;
-            sourceRef.current = contextRef.current.createMediaElementSource(audioRef.current);
-            sourceRef.current.connect(analyserRef.current);
-            analyserRef.current.connect(contextRef.current.destination);
+            if (!contextRef.current) contextRef.current = new AudioContextCtor();
+            if (!analyserRef.current) {
+                analyserRef.current = contextRef.current.createAnalyser();
+                analyserRef.current.fftSize = 2048;
+            }
+            
+            if (!(audioRef.current as any)._sourceConnected) {
+                sourceRef.current = contextRef.current.createMediaElementSource(audioRef.current);
+                sourceRef.current.connect(analyserRef.current);
+                analyserRef.current.connect(contextRef.current.destination);
+                (audioRef.current as any)._sourceConnected = true;
+            }
+            
             setIsInitialized(true);
         } catch (e) {
             console.warn("Audio Context Error:", e);
+            setIsInitialized(true); // Prevent infinite retries
         }
     };
 
@@ -409,8 +417,23 @@ export default function StarFieldVisualizer({
             <audio
                 ref={audioRef}
                 src={audioUrl}
-                crossOrigin="anonymous"
-                onError={() => setCorsError(true)}
+                {...(corsError ? {} : { crossOrigin: "anonymous" })}
+                onLoadStart={() => {
+                    console.log(`[StarFieldVisualizer DEBUG] onLoadStart - URL: ${audioUrl.substring(0, 50)}... | corsErrorState: ${corsError}`);
+                }}
+                onCanPlay={() => {
+                    console.log(`[StarFieldVisualizer DEBUG] onCanPlay - Audio loaded successfully. | corsErrorState: ${corsError}`);
+                }}
+                onError={(e) => {
+                    const target = e.target as HTMLAudioElement;
+                    console.error(`[StarFieldVisualizer DEBUG] onError Triggered! networkState: ${target.networkState}, error code: ${target.error?.code}, message: ${target.error?.message}`);
+                    if (!corsError) {
+                        console.warn(`[StarFieldVisualizer DEBUG] Audio failed to load with CORS (crossOrigin="anonymous"). Retrying without CORS fallback... URL: ${audioUrl}`);
+                        setCorsError(true);
+                    } else {
+                        console.error(`[StarFieldVisualizer DEBUG] Audio failed to load EVEN WITHOUT CORS fallback! URL: ${audioUrl}`);
+                    }
+                }}
             />
         </div>
     );

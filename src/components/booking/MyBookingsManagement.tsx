@@ -3,7 +3,7 @@ import {
     Calendar, Clock, History, Filter, Loader2,
     Search, LayoutGrid, List, RefreshCw, ChevronRight
 } from 'lucide-react';
-import { useBookingsByClient } from '../../services/bookingService';
+import { useBookingsByClient, useTalentBookings, useTalentBookingMutations } from '../../services/bookingService';
 import UserAvatar from '../shared/UserAvatar';
 import UnifiedCalendar from '../shared/UnifiedCalendar';
 import toast from 'react-hot-toast';
@@ -26,9 +26,19 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
 
+  const [bookingRole, setBookingRole] = useState<'client' | 'talent'>('client');
+
   // Data State - use Convex real-time bookings
-  const userId = userData?.id || user?.id;
-  const { bookings: rawBookings, loading } = useBookingsByClient(userId || null);
+  const userId = userData?.cllerkId || userData?.id || user?.id;
+  const clientBookingsQuery = useBookingsByClient(userId || null);
+  const talentBookingsQuery = useTalentBookings(userId || null);
+  
+  const { acceptBooking, rejectBooking } = useTalentBookingMutations();
+
+  const rawBookings = bookingRole === 'client' ? clientBookingsQuery?.data : talentBookingsQuery?.data;
+  const loading = (bookingRole === 'client' ? clientBookingsQuery?.isLoading : talentBookingsQuery?.isLoading) || 
+                  (bookingRole === 'client' ? clientBookingsQuery?.isPending : talentBookingsQuery?.isPending);
+  
   const [searchTerm, setSearchTerm] = useState('');
 
   // Sub-tab configuration for List View
@@ -44,7 +54,9 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
     return (rawBookings || []).map(booking => ({
       ...booking,
       date: booking.date && booking.date !== 'Flexible' ? new Date(booking.date) : null,
-      clientName: booking.sender_name || booking.target_name || 'User'
+      clientName: bookingRole === 'client' 
+          ? (booking.target_name || booking.talentName || 'Talent/Studio')
+          : (booking.sender_name || booking.clientName || 'Client')
     }));
   }, [rawBookings]);
 
@@ -93,6 +105,24 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
     }
   };
 
+  const handleAccept = async (bookingId: string) => {
+    try {
+      await acceptBooking({ bookingId: bookingId as any, talentClerkId: userId });
+      toast.success('Booking accepted!');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to accept booking');
+    }
+  };
+
+  const handleDecline = async (bookingId: string) => {
+    try {
+      await rejectBooking({ bookingId: bookingId as any, talentClerkId: userId, reason: 'Declined by talent' });
+      toast.success('Booking declined');
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to decline booking');
+    }
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Enhanced Header with View Toggle & Search */}
@@ -137,7 +167,34 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
               className="w-full pl-9 pr-4 py-2 text-sm border rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:text-white focus:ring-2 focus:ring-brand-blue"
             />
           </div>
+          </div>
         </div>
+
+      {/* Role Toggle */}
+      <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-xl w-fit">
+        <button
+          onClick={() => setBookingRole('client')}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all ${
+            bookingRole === 'client' 
+              ? 'bg-white dark:bg-gray-700 text-brand-blue shadow-sm' 
+              : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'
+          }`}
+        >
+          My Sessions
+        </button>
+        <button
+          onClick={() => setBookingRole('talent')}
+          className={`px-4 py-2 text-sm font-semibold rounded-lg transition-all flex items-center gap-2 ${
+            bookingRole === 'talent' 
+              ? 'bg-white dark:bg-gray-700 text-brand-blue shadow-sm' 
+              : 'text-gray-500 hover:text-gray-900 dark:hover:text-gray-100'
+          }`}
+        >
+          Incoming Requests
+          {talentBookingsQuery?.data?.filter((b: any) => b.status === 'Pending').length > 0 && (
+            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+          )}
+        </button>
       </div>
 
       {loading ? (
@@ -208,9 +265,12 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
             <div className="grid grid-cols-1 gap-4">
               {filteredBookings.map(booking => (
                 <BookingCard
-                  key={booking.id}
+                  key={booking.id || booking._id}
                   booking={booking}
                   openPublicProfile={openPublicProfile}
+                  isTalentView={bookingRole === 'talent'}
+                  onAccept={() => handleAccept(booking.id || booking._id)}
+                  onDecline={() => handleDecline(booking.id || booking._id)}
                 />
               ))}
             </div>
@@ -224,12 +284,27 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
 /**
  * Enhanced Booking Card
  */
-function BookingCard({ booking, openPublicProfile }: { booking: any; openPublicProfile: any }) {
+function BookingCard({ 
+  booking, 
+  openPublicProfile,
+  isTalentView,
+  onAccept,
+  onDecline
+}: { 
+  booking: any; 
+  openPublicProfile: any;
+  isTalentView?: boolean;
+  onAccept?: () => void;
+  onDecline?: () => void;
+}) {
   const statusColors: any = {
     'Pending': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
     'Confirmed': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+    'Accepted': 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
     'Completed': 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
     'Cancelled': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    'Rejected': 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+    'Declined': 'bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400',
     'In Progress': 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
   };
 
@@ -275,7 +350,7 @@ function BookingCard({ booking, openPublicProfile }: { booking: any; openPublicP
           </span>
 
           <button 
-            onClick={() => openPublicProfile(booking.sender_id || booking.target_id, booking.clientName)}
+            onClick={() => openPublicProfile(booking.sender_id || booking.target_id || booking.clientId || booking.talentId, booking.clientName)}
             className="p-2 text-gray-400 hover:text-brand-blue hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
           >
             <ChevronRight size={20} />
@@ -285,9 +360,26 @@ function BookingCard({ booking, openPublicProfile }: { booking: any; openPublicP
       
       {booking.message && (
         <div className="mt-4 pt-3 border-t dark:border-gray-700">
-           <p className="text-xs text-gray-500 dark:text-gray-400 italic line-clamp-1">
+           <p className="text-xs text-gray-500 dark:text-gray-400 italic">
             "{booking.message}"
            </p>
+        </div>
+      )}
+
+      {isTalentView && booking.status === 'Pending' && (
+        <div className="mt-4 pt-4 border-t dark:border-gray-700 flex items-center justify-end gap-3">
+          <button
+            onClick={onDecline}
+            className="px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-all border border-transparent hover:border-red-200 dark:hover:border-red-800"
+          >
+            Decline
+          </button>
+          <button
+            onClick={onAccept}
+            className="px-5 py-2 text-sm font-bold text-white bg-green-500 hover:bg-green-600 rounded-lg transition-all shadow-md shadow-green-500/20"
+          >
+            Accept Request
+          </button>
         </div>
       )}
     </div>

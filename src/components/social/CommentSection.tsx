@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, Trash2 } from 'lucide-react';
-import { getComments, createComment, deleteComment, updatePostCommentCount } from '../../services/socialApi';
-import { createNotification } from '../../hooks/useNotifications';
-import { useQuery } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import UserAvatar from '../shared/UserAvatar';
 import type { UserData } from '../../types';
 
@@ -55,10 +54,14 @@ const CommentSection = React.memo(function CommentSection({
 }: CommentSectionProps) {
     // ... (rest of the component)
     // Real-time comments from Convex
-    const convexComments = useQuery(api.comments.list, { postId: post.id });
+    const convexComments = useQuery(api.social.getComments, { postId: post.id as Id<"posts"> });
     const [comments, setComments] = useState<CommentData[]>([]);
     const [text, setText] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
+
+    // Convex mutations
+    const createCommentMutation = useMutation(api.social.createComment);
+    const deleteCommentMutation = useMutation(api.social.deleteComment);
 
     const prevCountRef = useRef<number>(-1);
 
@@ -87,31 +90,6 @@ const CommentSection = React.memo(function CommentSection({
         }
     }, [convexComments, blockedUsers, onCountChange]);
 
-    // Initial load from Neon if Convex is empty (fallback)
-    useEffect(() => {
-        if (!post.id) return;
-
-        // Only fetch from Neon if Convex has no data yet
-        if (!convexComments || convexComments.length === 0) {
-            loadCommentsFromNeon();
-        }
-    }, [post.id]);
-
-    const loadCommentsFromNeon = async () => {
-        try {
-            const data = await getComments(post.id);
-
-            if (data && data.length > 0) {
-                // Client-side block filtering
-                const filtered = data.filter((c) => !blockedUsers?.includes(c.user_id));
-                setComments(filtered as unknown as CommentData[]);
-                onCountChange?.(filtered.length);
-            }
-        } catch (error) {
-            console.error('Comments fetch error:', error);
-        }
-    };
-
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const userId = currentUser?.id || currentUser?.uid;
@@ -138,7 +116,6 @@ const CommentSection = React.memo(function CommentSection({
             null;
 
         try {
-            // Ensure content is not empty (required by schema)
             const commentContent = text.trim();
             if (!commentContent) {
                 alert('Please enter a comment');
@@ -146,34 +123,12 @@ const CommentSection = React.memo(function CommentSection({
                 return;
             }
 
-            // Create comment using Neon with display name and photo
-            await createComment({
-                post_id: post.id,
-                author_id: userId,
+            // Create comment via Convex (notifications handled by backend)
+            await createCommentMutation({
+                postId: post.id as Id<"posts">,
+                authorId: userId,
                 content: commentContent,
-                display_name: displayName,
-                author_photo: authorPhoto,
             });
-
-            // Update post comment count
-            await updatePostCommentCount(post.id, 1);
-
-            // Reload comments to show the new one
-            await loadCommentsFromNeon();
-
-            // Send notification to post author (if not commenting on own post)
-            if (post.userId !== userId) {
-                createNotification({
-                    targetUserId: post.userId,
-                    type: 'comment',
-                    fromUserId: userId,
-                    fromUserName: displayName,
-                    fromUserPhoto: authorPhoto,
-                    postId: post.id,
-                    postPreview: post.text?.substring(0, 50),
-                    message: 'commented on your post'
-                });
-            }
 
             setText('');
             setLoading(false);
@@ -187,10 +142,13 @@ const CommentSection = React.memo(function CommentSection({
 
     const handleDelete = async (commentId: string) => {
         if (!window.confirm("Delete comment?")) return;
+        const userId = currentUser?.id || currentUser?.uid;
+        if (!userId) return;
         try {
-            await deleteComment(commentId);
-            await updatePostCommentCount(post.id, -1);
-            await loadCommentsFromNeon();
+            await deleteCommentMutation({
+                commentId: commentId as Id<"comments">,
+                clerkId: userId,
+            });
         } catch (e) {
             console.error('Delete comment error:', e);
         }
@@ -231,7 +189,7 @@ const CommentSection = React.memo(function CommentSection({
                                 <button className="text-[10px] font-bold text-gray-500 hover:text-brand-blue transition">
                                     Reply
                                 </button>
-                                {comment.userId === currentUser?.uid && (
+                                {comment.user_id === (currentUser?.id || currentUser?.uid) && (
                                     <button
                                         onClick={() => handleDelete(comment.id)}
                                         className="text-[10px] font-bold text-gray-400 hover:text-red-500 transition"

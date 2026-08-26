@@ -37,7 +37,7 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
     // Track mobile viewport
     useEffect(() => {
         const checkMobile = () => {
-            setIsMobile(window.innerWidth < 1024);
+            setIsMobile(window.innerWidth < window.screen.width * 0.65);
         };
 
         checkMobile();
@@ -143,7 +143,7 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
     return (
         <>
             {/* DESKTOP SIDEBAR */}
-            <aside className="hidden lg:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-30">
+            <aside className="hidden xl:flex w-64 bg-white dark:bg-[#1f2128] border-r border-gray-200 dark:border-gray-700 flex-col h-full shrink-0 relative z-30">
                 <SidebarContent />
             </aside>
 
@@ -157,7 +157,7 @@ export default function EDUSidebar({ activeTab, setActiveTab, sidebarOpen, setSi
 
             {/* MOBILE DRAWER */}
             <aside
-                className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-transform duration-300 cubic-bezier(0.4, 0, 0.2, 1) flex flex-col h-full lg:hidden ${
+                className={`fixed inset-y-0 left-0 z-[10000] w-72 bg-white dark:bg-[#1f2128] shadow-2xl transform transition-transform duration-300 cubic-bezier(0.4, 0, 0.2, 1) flex flex-col h-full xl:hidden ${
                 sidebarOpen ? 'translate-x-0' : '-translate-x-full'
                 }`}
             >

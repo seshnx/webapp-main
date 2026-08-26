@@ -95,13 +95,18 @@ const retryLazyLoad = <T extends ComponentType<any>>(
 // =====================================================
 
 // Lazy load components to avoid circular dependencies with retry mechanism
-// Note: Dashboard is handled by MainLayout, not needed here
 const DebugReport = retryLazyLoad(() => import('../components/DebugReport'));
 const ProfileManager = retryLazyLoad(() => import('../components/ProfileManager'));
 const SettingsTab = retryLazyLoad(() => import('../components/SettingsTab'));
+const Dashboard = retryLazyLoad(() => import('../components/Dashboard'));
+const StudioManager = retryLazyLoad(() => import('../components/StudioManager'));
 const ClientPortal = retryLazyLoad(() => import('../components/studio/portal/ClientPortal'));
 const PublicLegalPage = retryLazyLoad(() => import('../components/PublicLegalPage'));
 const StudioKiosk = retryLazyLoad(() => import('../components/studio/kiosk/StudioKiosk'));
+const StudioPublicProfile = retryLazyLoad(() => import('../components/studio/StudioPublicProfile'));
+const StudioNotFound = retryLazyLoad(() => import('../components/studio/StudioNotFound'));
+const PlansPage = retryLazyLoad(() => import('../components/PlansPage'));
+const StudioPricingPage = retryLazyLoad(() => import('../components/studio/StudioPricingPage'));
 
 // =====================================================
 // COMPONENTS
@@ -182,26 +187,60 @@ export default function AppRoutes({
 
   return (
     <Routes>
-      {/* MainLayout handles these routes internally via activeTab with URL sync */}
-      {/* Dashboard and all main modules are handled by MainLayout */}
-      {/* Support nested routes for better URL navigation */}
-      <Route path="/dashboard" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      {/* ACTIVE MODULES: Feed, Bookings, Profile, Settings */}
       <Route path="/feed" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/feed/discover" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/messages" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings/my-bookings" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings/calendar" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings/find-talent" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings/find-bookings" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/bookings/broadcast-list" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/profile" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+
+      {/* Dashboard Route */}
+      <Route
+        path="/dashboard"
+        element={
+          <ProtectedRoute loading={loading}>
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+              <Dashboard
+                user={user}
+                userData={userData}
+                subProfiles={{}}
+                setActiveTab={() => {}}
+                bookingCount={0}
+                tokenBalance={0}
+              />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Studio Manager Route */}
+      <Route
+        path="/studio-manager"
+        element={
+          <ProtectedRoute loading={loading}>
+            <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+              <StudioManager
+                user={user}
+                userData={userData}
+              />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* DISABLED MODULES - Commented out to reduce scope */}
+      {/* <Route path="/dashboard" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/messages" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/marketplace" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/tech" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/payments" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/profile" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/business-center" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/business-center/:tab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/business-center/tech/:subtab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/business-center/tech/:subtab" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} /> */}
       {/* Public Legal Page - Accessible without authentication */}
       <Route
         path="/legal"
@@ -222,14 +261,15 @@ export default function AppRoutes({
         }
       />
 
-      <Route path="/edu-student" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      {/* DISABLED MODULES - EDU, Labels, Studio Ops */}
+      {/* <Route path="/edu-student" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-intern" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-overview" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/edu-admin" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/studio-ops" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/labels" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
       <Route path="/labels/dashboard" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
-      <Route path="/labels/contracts" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/labels/contracts" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} /> */}
 
       {/* Debug Report Route - Test login destination */}
       <Route
@@ -312,17 +352,58 @@ export default function AppRoutes({
         }
       />
 
-      {/* Redirect root to dashboard */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Redirect root to feed (active module) */}
+      <Route path="/" element={<Navigate to="/feed" replace />} />
 
-      {/* Redirect dashboard aliases */}
-      <Route path="/home" element={<Navigate to="/dashboard" replace />} />
+      {/* Redirect disabled routes to active modules */}
+      <Route path="/home" element={<Navigate to="/feed" replace />} />
       <Route path="/social" element={<Navigate to="/feed" replace />} />
-      <Route path="/chat" element={<Navigate to="/messages" replace />} />
-      <Route path="/billing" element={<Navigate to="/payments" replace />} />
+      <Route path="/chat" element={<Navigate to="/feed" replace />} />
+      <Route path="/messages" element={<Navigate to="/feed" replace />} />
+      <Route path="/marketplace" element={<Navigate to="/bookings" replace />} />
+      <Route path="/tech" element={<Navigate to="/bookings" replace />} />
+      <Route path="/billing" element={<Navigate to="/bookings" replace />} />
+      <Route path="/payments" element={<Navigate to="/bookings" replace />} />
+      <Route path="/business-center" element={<Navigate to="/bookings" replace />} />
+      <Route path="/edu-student" element={<Navigate to="/feed" replace />} />
+      <Route path="/edu-intern" element={<Navigate to="/feed" replace />} />
+      <Route path="/edu-overview" element={<Navigate to="/feed" replace />} />
+      <Route path="/edu-admin" element={<Navigate to="/feed" replace />} />
+      <Route path="/studio-ops" element={<Navigate to="/studio-manager" replace />} />
+      <Route path="/labels" element={<Navigate to="/bookings" replace />} />
 
-      {/* Fallback - redirect to dashboard */}
-      <Route path="*" element={<Navigate to="/dashboard" replace />} />
+      {/* Public Studio Profile - NO ProtectedRoute wrapper */}
+      <Route path="/s/:slug" element={
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-gray-400" /></div>}>
+          <StudioPublicProfile />
+        </Suspense>
+      } />
+
+      {/* Studio Not Found - for invalid slugs */}
+      <Route path="/studio-not-found" element={
+        <StudioNotFound />
+      } />
+
+      {/* Plans Page - Role-aware paywall for org subscriptions */}
+      <Route path="/plans" element={
+        <ProtectedRoute loading={loading}>
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+            <PlansPage />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Studio Pricing - Clerk PricingTable for plan upgrades */}
+      <Route path="/studio-pricing" element={
+        <ProtectedRoute loading={loading}>
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
+            <StudioPricingPage />
+          </Suspense>
+        </ProtectedRoute>
+      } />
+
+      {/* Fallback - redirect to feed */}
+      <Route path="*" element={<Navigate to="/feed" replace />} />
     </Routes>
   );
 }

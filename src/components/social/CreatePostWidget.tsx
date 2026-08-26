@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Send, Image as ImageIcon, Music, Video, X, Sliders, Paperclip, Loader2 } from 'lucide-react';
-import { useVercelUpload } from '../../hooks/useVercelUpload';
+import { useUpload } from '../../hooks/useUpload';
 import { POPULAR_PLUGINS_LIST } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -32,7 +32,7 @@ export interface CreatePostWidgetProps {
     subProfiles?: Record<string, any>;
     onPost?: (payload: {
         text: string;
-        attachments: Array<{ url: string; type: string }>;
+        attachments: Array<{ url: string; type: string; name?: string }>;
         seshFx: {
             plugins: string[];
             presetUrl: string | null;
@@ -64,7 +64,7 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
     };
     const displayRole = getDisplayRole(activeRole);
 
-    const { uploadMedia } = useVercelUpload('post-media');
+    const { uploadMedia } = useUpload('post-media');
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video' | 'audio') => {
         if (e.target.files && e.target.files[0]) {
@@ -102,7 +102,7 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
             setUploadProgress({ current: 0, total: totalUploads, percent: 0 });
 
             // Upload all media assets one by one to track progress
-            const uploadedMedia: Array<{ url: string; type: string }> = [];
+            const uploadedMedia: Array<{ url: string; type: string; name?: string }> = [];
             for (const m of media) {
                 // Vercel Blob automatically handles storage organization
                 const result = await uploadMedia(m.file);
@@ -111,7 +111,8 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                 if (result) {
                     uploadedMedia.push({
                         url: result.url, // Vercel Blob returns { url } object
-                        type: m.type // Override with explicit type (audio, video, image)
+                        type: m.type, // Override with explicit type (audio, video, image)
+                        name: m.file.name
                     });
                 }
                 updateProgress();

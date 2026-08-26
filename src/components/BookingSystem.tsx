@@ -5,7 +5,7 @@ import BookingCalendar from './shared/BookingCalendar';
 import SessionDetailsModal from './SessionDetailsModal';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useBookingsByClient, useConfirmBooking, useCancelBooking, useUpdateBooking } from '@/hooks/useConvex';
+import { useStudioBookingsByClient, useConfirmStudioBooking, useCancelStudioBooking, useUpdateStudioBooking } from '@/hooks/useConvex';
 import type { UserData } from '../types';
 
 // Lazy load the missing modules
@@ -15,6 +15,7 @@ const SessionWizard = lazy(() => import('./SessionWizard'));
 const BroadcastRequest = lazy(() => import('./BroadcastRequest'));
 const BroadcastList = lazy(() => import('./BroadcastList'));
 const MyBookingsManagement = lazy(() => import('./booking/MyBookingsManagement'));
+const TalentBookingModal = lazy(() => import('./TalentBookingModal'));
 
 // =====================================================
 // TYPES
@@ -75,11 +76,11 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
   const { t } = useLanguage();
 
   // Convex hooks for bookings
-  const userId = userData?.id || user?.id || user?.uid;
-  const clientBookings = useBookingsByClient(userId || '');
-  const confirmBooking = useConfirmBooking();
-  const cancelBooking = useCancelBooking();
-  const updateBooking = useUpdateBooking();
+  const clerkId = userData?.clerkId || user?.id || user?.uid;
+  const clientBookings = useStudioBookingsByClient(clerkId || '');
+  const confirmBooking = useConfirmStudioBooking();
+  const cancelBooking = useCancelStudioBooking();
+  const updateBooking = useUpdateStudioBooking();
 
   // Get tab from URL path (e.g., /bookings/calendar -> 'calendar')
   const getTabFromPath = (path: string): TabId => {
@@ -99,6 +100,7 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
   const [sessionParams, setSessionParams] = useState<any>(null);
   const [showSessionWizard, setShowSessionWizard] = useState<boolean>(false);
   const [showBroadcastRequest, setShowBroadcastRequest] = useState<boolean>(false);
+  const [talentBooking, setTalentBooking] = useState<{ talentClerkId: string; profile: any } | null>(null);
 
   const isStudioManager = userData?.accountTypes?.includes('Studio');
 
@@ -348,6 +350,11 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
               user={user}
               userData={userData}
               openPublicProfile={openPublicProfile || (() => ({}))}
+              mode="direct"
+              onBook={(profile: any) => {
+                const clerkId = profile.id || profile.clerkId;
+                setTalentBooking({ talentClerkId: clerkId, profile });
+              }}
             />
           </Suspense>
         </div>
@@ -409,6 +416,19 @@ export default function BookingSystem({ user, userData, subProfiles, openPublicP
           }}
           onClose={() => setSelectedBooking(null)}
         />
+      )}
+
+      {/* Talent Booking Modal (from Find Talent) */}
+      {talentBooking && (user?.id || user?.uid) && (
+        <Suspense fallback={null}>
+          <TalentBookingModal
+            talentClerkId={talentBooking.talentClerkId}
+            talentProfile={talentBooking.profile}
+            clientClerkId={user.id || user.uid}
+            onClose={() => setTalentBooking(null)}
+            onSuccess={() => setTalentBooking(null)}
+          />
+        </Suspense>
       )}
 
       {/* Broadcast List Tab */}

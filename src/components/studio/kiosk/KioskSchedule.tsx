@@ -1,5 +1,7 @@
 import React from 'react';
 
+import { PlusCircle, Sparkles, CheckCircle2 } from 'lucide-react';
+
 interface Booking {
   id: string;
   roomId: string;
@@ -19,6 +21,7 @@ interface KioskScheduleProps {
   bookings: Booking[];
   eduMode: boolean;
   currentTime: Date;
+  onQuickBook?: () => void;
 }
 
 /**
@@ -29,6 +32,7 @@ export default function KioskSchedule({
   bookings,
   eduMode,
   currentTime,
+  onQuickBook,
 }: KioskScheduleProps) {
   const getRemainingTime = (endTime: string) => {
     if (!endTime) return 'Time TBD';
@@ -75,21 +79,54 @@ export default function KioskSchedule({
 
   return (
     <div className="h-full flex flex-col bg-white dark:bg-gray-800">
-      <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-          {eduMode ? "Today's Classes" : "Today's Schedule"}
-        </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {currentTime.toLocaleDateString('en-US', {
-            weekday: 'long',
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-          })}
-        </p>
+      <div className="p-4 border-b dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+            {eduMode ? "Today's Classes" : "Today's Schedule"}
+          </h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {currentTime.toLocaleDateString('en-US', {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+            })}
+          </p>
+        </div>
+
+        {onQuickBook && (
+          <button
+            onClick={onQuickBook}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all active:scale-95"
+          >
+            <PlusCircle size={14} />
+            <span>{eduMode ? 'Book Lab' : 'Book Room'}</span>
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        {/* Room Available Prompt when no current session */}
+        {!currentBooking && onQuickBook && (
+          <div className="bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 rounded-xl p-3.5 flex items-center justify-between shadow-sm">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-ping" />
+              <div>
+                <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
+                  Room Available Now
+                </div>
+                <div className="text-xs text-emerald-600 dark:text-emerald-400">
+                  {eduMode ? 'Open for student lab reservation' : 'Available for immediate walk-up booking'}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={onQuickBook}
+              className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors shadow"
+            >
+              Reserve
+            </button>
+          </div>
+        )}
         {bookings.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-500 dark:text-gray-400">

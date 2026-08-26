@@ -216,7 +216,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
         lastName: form.lastName,
         zipCode: form.zip,
         accountTypes: finalRoles,
-        activeRole: activeRole,
+        activeProfileRole: activeRole,
         preferredRole: activeRole,
         profileName: displayName,
       });

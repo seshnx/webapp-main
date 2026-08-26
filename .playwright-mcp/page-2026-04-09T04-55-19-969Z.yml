@@ -1,0 +1,84 @@
+- generic [ref=e4]:
+  - navigation [ref=e6]:
+    - generic [ref=e7]:
+      - button "Open navigation menu" [ref=e8] [cursor=pointer]:
+        - img [ref=e9]
+      - img "SeshNx Logo" [ref=e11] [cursor=pointer]
+    - generic [ref=e14]:
+      - img [ref=e15]
+      - textbox "Search..." [ref=e18]
+      - button "Search" [ref=e19] [cursor=pointer]
+    - generic [ref=e20]:
+      - button "Switch to dark mode" [ref=e21] [cursor=pointer]:
+        - img [ref=e22]
+      - button "Notifications" [ref=e25] [cursor=pointer]:
+        - img [ref=e26]
+      - button "Ricardo Herrera's avatar" [ref=e29] [cursor=pointer]:
+        - generic [ref=e31]: RH
+  - dialog "Navigation menu" [ref=e32]:
+    - generic [ref=e33]:
+      - generic [ref=e34]:
+        - generic [ref=e35]: Menu
+        - button "Close menu" [ref=e36] [cursor=pointer]:
+          - img [ref=e37]
+      - navigation [ref=e40]:
+        - generic [ref=e41]:
+          - generic [ref=e42]:
+            - img [ref=e43]
+            - generic [ref=e46]: Active
+          - generic [ref=e47]:
+            - button "Dashboard" [ref=e48] [cursor=pointer]:
+              - img [ref=e49]
+              - text: Dashboard
+            - button "SocialNx" [ref=e52] [cursor=pointer]:
+              - img [ref=e53]
+              - text: SocialNx
+            - button "Bookings" [ref=e55] [cursor=pointer]:
+              - img [ref=e56]
+              - text: Bookings
+            - button "Profile" [ref=e58] [cursor=pointer]:
+              - img [ref=e59]
+              - text: Profile
+        - generic [ref=e63]:
+          - img [ref=e64]
+          - generic [ref=e67]: Studio
+      - generic [ref=e68]:
+        - generic [ref=e69]:
+          - img [ref=e70]
+          - generic [ref=e73]: Resources
+        - button "Legal Center" [ref=e74] [cursor=pointer]:
+          - img [ref=e75]
+          - text: Legal Center
+    - button "Logout" [ref=e79] [cursor=pointer]:
+      - img [ref=e80]
+      - text: Logout
+  - main [ref=e84]:
+    - generic [ref=e86]:
+      - generic [ref=e87]:
+        - img [ref=e89]
+        - heading "Set Up Your Studio" [level=1] [ref=e92]
+        - paragraph [ref=e93]: Create your studio profile to start managing bookings, rooms, and clients.
+      - generic [ref=e94]:
+        - generic [ref=e95]:
+          - generic [ref=e96]: Studio Name
+          - textbox "e.g. Platinum Sound Studios" [active] [ref=e97]
+        - generic [ref=e98]:
+          - generic [ref=e99]: URL Slug
+          - textbox "your-studio-name" [ref=e101]
+        - button "Create Studio" [disabled] [ref=e102]:
+          - text: Create Studio
+          - img [ref=e103]
+  - navigation "Bottom navigation" [ref=e105]:
+    - generic [ref=e106]:
+      - button "Home" [ref=e107] [cursor=pointer]:
+        - img [ref=e108]
+        - generic [ref=e111]: Home
+      - button "Feed" [ref=e112] [cursor=pointer]:
+        - img [ref=e113]
+        - generic [ref=e115]: Feed
+      - button "Bookings" [ref=e116] [cursor=pointer]:
+        - img [ref=e117]
+        - generic [ref=e119]: Bookings
+      - button "Profile" [ref=e120] [cursor=pointer]:
+        - img [ref=e121]
+        - generic [ref=e124]: Profile

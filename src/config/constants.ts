@@ -240,19 +240,7 @@ export const PROFILE_SCHEMAS: ProfileSchemas = {
     { key: "lookingFor", label: "Interested In", type: "multi_select", data: ["Discovering Music", "Booking Talent", "Learning"] }
   ],
   "Studio": [
-    ...NAME_FIELDS,
-    { key: "profileName", label: "Studio Name", type: "text" },
-    { key: "bio", label: "Description", type: "textarea" },
-    { key: "address", label: "Address", type: "text" },
-    { key: "hours", label: "Hours of Operation", type: "text" },
-    { key: "dimensions", label: "Live Room Dimensions", type: "text" },
-    { key: "parking", label: "Parking Situation", type: "text" },
-    { key: "amenities", label: "Amenities", type: "multi_select", data: AMENITIES_DATA },
-    { key: "availabilityStatus", label: "Current Availability", type: "select", options: ["", "Open - Accepting Bookings", "Limited Availability", "Fully Booked", "Closed for Maintenance"] },
-    { key: "hourlyRate", label: "Hourly Rate ($)", type: "number" },
-    { key: "dayRate", label: "Day Rate ($)", type: "number" },
-    { key: "virtualTourUrl", label: "Virtual Tour Link", type: "text", placeholder: "YouTube or 360° tour URL" },
-    { key: "gearList", label: "Equipment List URL", type: "text" }
+    // Studio profile is read-only - managed in Studio Manager module
   ],
   "Engineer": [
     ...NAME_FIELDS,

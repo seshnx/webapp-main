@@ -74,7 +74,7 @@ const NotificationCard = ({
   onMarkAsRead?: (id: string) => void;
 }) => {
   const [isExiting, setIsExiting] = useState(false);
-  const style = NOTIFICATION_STYLES[notification.type];
+  const style = NOTIFICATION_STYLES[notification.type as keyof typeof NOTIFICATION_STYLES] || NOTIFICATION_STYLES.info;
   const Icon = style.icon;
 
   const handleDismiss = () => {

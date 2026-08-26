@@ -1,81 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import FloorplanViewer from './FloorplanViewer';
 import KioskSchedule from './KioskSchedule';
 import KioskHeader from './KioskHeader';
 import KioskFooter from './KioskFooter';
-import { Loader2 } from 'lucide-react';
-
-interface Room {
-  id: string;
-  name: string;
-  layout: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-    color?: string;
-  };
-}
-
-interface StudioData {
-  studio: {
-    id: string;
-    name: string;
-    location: {
-      city: string;
-      state: string;
-    };
-    description?: string;
-    logo?: string;
-    contact: {
-      email?: string;
-      phone?: string;
-      website?: string;
-    };
-    kiosk: {
-      eduMode: boolean;
-      networkName?: string | null;
-    };
-  };
-  rooms: Room[];
-  floorplan: {
-    walls: Array<{
-      id: string;
-      x1: number;
-      y1: number;
-      x2: number;
-      y2: number;
-      stroke?: string;
-      strokeWidth?: number;
-    }>;
-    structures: Array<{
-      id: string;
-      label?: string;
-      layout: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        color?: string;
-      };
-    }>;
-  };
-  bookings: Array<{
-    id: string;
-    roomId: string;
-    roomName?: string;
-    startTime?: string;
-    endTime?: string;
-    status: string;
-    serviceType?: string;
-    isClassBooking?: boolean;
-    className?: string;
-    professorName?: string;
-    lessonPlan?: string;
-  }>;
-  timestamp: string;
-}
+import KioskQuickBookModal from './KioskQuickBookModal';
+import { Loader2, AlertCircle } from 'lucide-react';
 
 interface StudioKioskProps {
   eduMode?: boolean; // Override for EDU campus mode
@@ -84,13 +16,18 @@ interface StudioKioskProps {
 /**
  * Studio Kiosk - Real-time display system for lobby/room displays
  * Shows live booking status, floor plan with "You Are Here", and schedule
+ * Backed by real-time Convex subscriptions
  */
 export default function StudioKiosk({ eduMode: propEduMode }: StudioKioskProps) {
   const { studioId } = useParams<{ studioId: string }>();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [studioData, setStudioData] = useState<StudioData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isQuickBookOpen, setIsQuickBookOpen] = useState(false);
+
+  // Real-time Convex query for complete Kiosk bundle
+  const kioskData = useQuery(
+    api.studios.getKioskData,
+    studioId ? { studioSlugOrId: studioId } : 'skip'
+  );
 
   // Update time every second
   useEffect(() => {
@@ -98,86 +35,46 @@ export default function StudioKiosk({ eduMode: propEduMode }: StudioKioskProps) 
     return () => clearInterval(timer);
   }, []);
 
-  // Fetch initial studio data
-  const fetchStudioData = async () => {
-    if (!studioId) return;
-
-    try {
-      const response = await fetch(`/api/public/kiosk/${studioId}`);
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          setError('Studio not found');
-        } else if (response.status === 403) {
-          setError('Kiosk mode is not enabled for this studio');
-        } else if (response.status === 429) {
-          setError('Too many requests. Please try again later.');
-        } else {
-          setError('Failed to load kiosk data');
-        }
-        setLoading(false);
-        return;
-      }
-
-      const data = await response.json();
-      setStudioData(data);
-      setLoading(false);
-    } catch (err) {
-      console.error('Error fetching kiosk data:', err);
-      setError('Failed to connect to kiosk service');
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStudioData();
-  }, [studioId]);
-
-  // Auto-refresh every 60 seconds
-  useEffect(() => {
-    const refreshInterval = setInterval(() => {
-      fetchStudioData();
-    }, 60000);
-
-    return () => clearInterval(refreshInterval);
-  }, [studioId]);
-
-  if (loading) {
+  // Loading state
+  if (kioskData === undefined) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
         <div className="text-center">
           <Loader2 className="animate-spin text-brand-blue mx-auto mb-4" size={48} />
-          <p className="text-gray-600 dark:text-gray-400">Loading kiosk...</p>
+          <p className="text-gray-600 dark:text-gray-400 font-medium">Loading kiosk display...</p>
         </div>
       </div>
     );
   }
 
-  if (error || !studioData) {
+  // Error / Not Found state
+  if (!kioskData) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-        <div className="text-center max-w-md p-8 bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-          <div className="text-red-500 text-6xl mb-4">⚠️</div>
+      <div className="h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900 p-4">
+        <div className="text-center max-w-md p-8 bg-white dark:bg-gray-800 rounded-2xl shadow-xl border border-gray-200 dark:border-gray-700">
+          <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full flex items-center justify-center mx-auto mb-4">
+            <AlertCircle size={32} />
+          </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
             Kiosk Unavailable
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            {error || 'Failed to load kiosk data'}
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+            Studio &ldquo;{studioId}&rdquo; was not found or has not enabled Kiosk Display mode in Studio Settings.
           </p>
-          <button
-            onClick={fetchStudioData}
-            className="mt-4 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 transition-colors"
+          <a
+            href="/"
+            className="inline-block px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors shadow-md shadow-blue-500/20"
           >
-            Retry
-          </button>
+            Return to SeshNx
+          </a>
         </div>
       </div>
     );
   }
 
-  // Calculate room statuses from bookings
+  // Calculate real-time room statuses from live Convex bookings
   const roomStatuses: Record<string, 'available' | 'in_use'> =
-    studioData.bookings?.reduce((acc, booking) => {
+    kioskData.bookings?.reduce((acc, booking) => {
       if (!booking.roomId) return acc;
 
       const now = currentTime;
@@ -196,49 +93,76 @@ export default function StudioKiosk({ eduMode: propEduMode }: StudioKioskProps) 
       return acc;
     }, {} as Record<string, 'available' | 'in_use'>) || {};
 
-  const isEduMode = propEduMode || studioData.studio.kiosk.eduMode;
+  const isEduMode = propEduMode ?? kioskData.studio.kiosk.eduMode;
 
   return (
-    <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900">
+    <div className="h-screen flex flex-col bg-gray-100 dark:bg-gray-900 select-none overflow-hidden">
       {/* Header */}
       <KioskHeader
-        studioName={studioData.studio.name}
+        studioName={kioskData.studio.name}
         currentTime={currentTime}
         eduMode={isEduMode}
-        location={studioData.studio.location}
+        location={kioskData.studio.location}
       />
 
       {/* Main Content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Floor Plan Viewer */}
-        <div className="flex-1 p-6">
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg h-full p-4">
-            <h2 className="text-lg font-bold text-gray-900 dark:text-white mb-4">
-              Floor Plan
-            </h2>
-            <FloorplanViewer
-              walls={studioData.floorplan.walls}
-              structures={studioData.floorplan.structures}
-              rooms={studioData.rooms}
-              roomStatuses={roomStatuses}
-            />
+        <div className="flex-1 p-6 flex flex-col min-w-0">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 h-full p-5 flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                  {isEduMode ? 'Audio Facility & Lab Map' : 'Studio Floor Plan'}
+                </h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Green = Available • Red = Class / Session In Progress
+                </p>
+              </div>
+
+              <button
+                onClick={() => setIsQuickBookOpen(true)}
+                className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl text-xs font-semibold shadow-md shadow-blue-500/20 transition-all active:scale-95"
+              >
+                {isEduMode ? '+ Book Lab Space' : '+ Quick Reserve'}
+              </button>
+            </div>
+
+            <div className="flex-1 min-h-0 relative rounded-xl overflow-hidden bg-gray-50 dark:bg-gray-900 border border-gray-100 dark:border-gray-800">
+              <FloorplanViewer
+                walls={kioskData.floorplan.walls}
+                structures={kioskData.floorplan.structures}
+                rooms={kioskData.rooms}
+                roomStatuses={roomStatuses}
+              />
+            </div>
           </div>
         </div>
 
         {/* Schedule Sidebar */}
-        <div className="w-96 bg-white dark:bg-gray-800 border-l dark:border-gray-700 shadow-lg">
+        <div className="w-96 bg-white dark:bg-gray-800 border-l dark:border-gray-700 shadow-xl flex flex-col">
           <KioskSchedule
-            bookings={studioData.bookings}
+            bookings={kioskData.bookings}
             eduMode={isEduMode}
             currentTime={currentTime}
+            onQuickBook={() => setIsQuickBookOpen(true)}
           />
         </div>
       </div>
 
-      {/* Footer - Contact Info */}
+      {/* Footer - Contact Info & Network */}
       <KioskFooter
-        contact={studioData.studio.contact}
-        networkName={studioData.studio.kiosk.networkName}
+        contact={kioskData.studio.contact}
+        networkName={kioskData.studio.kiosk.networkName}
+      />
+
+      {/* Quick Booking Modal for Tablets */}
+      <KioskQuickBookModal
+        isOpen={isQuickBookOpen}
+        onClose={() => setIsQuickBookOpen(false)}
+        studioId={kioskData.studio.id}
+        rooms={kioskData.rooms}
+        eduMode={isEduMode}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 
@@ -28,85 +28,60 @@ export interface UseDiscoverReturn {
 
 /**
  * Hook for discovering content and users
- * TODO: Migrate full discovery functionality to Neon
- * Currently provides basic following functionality
+ * Uses Convex real-time queries for discovery data.
  *
  * @param user - User object
- * @param userData - Additional user data
+ * @param _userData - Additional user data (unused)
  * @returns Discover data and functions
- *
- * @example
- * function DiscoverPage({ user, userData }) {
- *   const {
- *     loading,
- *     sounds,
- *     artists,
- *     following,
- *     refresh
- *   } = useDiscover(user, userData);
- *
- *   return (
- *     <div>
- *       <button onClick={refresh}>Refresh</button>
- *       {loading ? (
- *         <div>Loading...</div>
- *       ) : (
- *         <div>
- *           <h2>Following ({following.length})</h2>
- *           <h2>Artists</h2>
- *           <h2>Sounds</h2>
- *         </div>
- *       )}
- *     </div>
- *   );
- * }
  */
 export function useDiscover(
   user: UserData | null,
-  userData?: any
+  _userData?: any
 ): UseDiscoverReturn {
-  const [loading, setLoading] = useState<boolean>(false);
-  const [sounds, setSounds] = useState<any[]>([]);
-  const [artists, setArtists] = useState<any[]>([]);
-  const [producers, setProducers] = useState<any[]>([]);
-  const [studios, setStudios] = useState<any[]>([]);
-  const [schools, setSchools] = useState<any[]>([]);
+  const userId = user?.id || user?.uid;
 
   // Load following list from Convex
-  const userId = user?.id || user?.uid;
   const followingData = useQuery(
     api.social.getFollowing,
-    userId ? { userId } : "skip"
+    userId ? { clerkId: userId } : "skip"
   );
 
+  // Discovery queries
+  const artistsData = useQuery(api.social.discoverArtists, { limit: 20 });
+  const producersData = useQuery(api.social.discoverProducers, { limit: 20 });
+  const studiosData = useQuery(api.social.discoverStudios, { limit: 20 });
+  const soundsData = useQuery(api.social.discoverSounds, { limit: 20 });
+  const schoolsData = useQuery(api.social.discoverSchools, { limit: 20 });
+
   const following = useMemo(() => {
-    return (followingData || []).map(f => f.followingId);
+    return (followingData || []).map(f => f.clerkId);
   }, [followingData]);
 
-  // TODO: Implement full discovery features with Neon queries
-  // - Load sounds/posts with audio
-  // - Load artists by role
-  // - Load producers and studios
-  // - Load schools
-  // For now, return empty arrays to prevent app crashes
+  const loading =
+    followingData === undefined ||
+    artistsData === undefined ||
+    producersData === undefined ||
+    studiosData === undefined ||
+    soundsData === undefined ||
+    schoolsData === undefined;
 
   const refresh = (): void => {
-    // TODO: Implement refresh
+    // Convex queries auto-refresh in real-time; no-op
   };
 
-  const filterBy = (filters: any): void => {
-    // TODO: Implement filtering
+  const filterBy = (_filters: any): void => {
+    // TODO: Implement client-side filtering
   };
 
   return {
     loading,
-    sounds,
-    artists,
-    producers,
-    studios,
-    schools,
+    sounds: soundsData ?? [],
+    artists: artistsData ?? [],
+    producers: producersData ?? [],
+    studios: studiosData ?? [],
+    schools: schoolsData ?? [],
     following,
     refresh,
-    filterBy
+    filterBy,
   };
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, lazy, Suspense, useMemo, useCallback } from 'react';
 import {
     Search, Filter, List, Map, ChevronDown, ChevronUp, Star, Plus, Check, Calendar,
-    MapPin, Clock, DollarSign, Award, Zap, X, SlidersHorizontal, BadgeCheck,
+    MapPin, Clock, DollarSign, Award, Zap, X, SlidersHorizontal, BadgeCheck, User,
     Music, Mic, Headphones, Radio, Guitar, Piano, Sparkles, TrendingUp, Disc, Loader2, Navigation
 } from 'lucide-react';
 import {
@@ -327,29 +327,30 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
 
                 return true;
             })
-            .map((user: any): TalentProfile => ({
-                id: user.clerkId,
-                firstName: user.firstName,
-                lastName: user.lastName,
-                profileName: user.displayName || user.username,
-                photoURL: user.profilePhoto,
-                bio: user.bio,
-                accountTypes: user.accountTypes || [],
-                rate: user.talentInfo?.rate,
-                yearsExperience: user.talentInfo?.yearsExperience,
-                rating: user.rating,
-                reviewCount: 0, // Not tracked in current schema
-                verified: user.verified,
-                skills: user.talentInfo?.skills || [],
-                genres: user.talentInfo?.genres || [],
-                vocalRange: user.talentInfo?.vocalRange,
-                vocalStyles: user.talentInfo?.vocalStyles || [],
-                djStyles: user.talentInfo?.djStyles || [],
-                productionStyles: user.talentInfo?.productionStyles || [],
-                location: user.talentInfo?.location,
-                city: user.talentInfo?.city,
-                state: user.talentInfo?.state,
-                lastActive: user.updatedAt,
+            .map((convexUser: any): TalentProfile & { subProfilesList?: any[] } => ({
+                id: convexUser.clerkId,
+                firstName: convexUser.firstName,
+                lastName: convexUser.lastName,
+                profileName: convexUser.displayName || convexUser.username,
+                photoURL: convexUser.profilePhoto || convexUser.imageUrl || convexUser.avatarUrl,
+                bio: convexUser.talentInfo?.bio || convexUser.bio,
+                accountTypes: convexUser.accountTypes || [],
+                rate: convexUser.talentInfo?.rate,
+                yearsExperience: convexUser.talentInfo?.yearsExperience,
+                rating: convexUser.rating,
+                reviewCount: 0,
+                verified: convexUser.verified || convexUser.isVerified,
+                skills: convexUser.talentInfo?.skills || [],
+                genres: convexUser.talentInfo?.genres || [],
+                vocalRange: convexUser.talentInfo?.vocalRange,
+                vocalStyles: convexUser.talentInfo?.vocalStyles || [],
+                djStyles: convexUser.talentInfo?.djStyles || [],
+                productionStyles: convexUser.talentInfo?.productionStyles || [],
+                location: convexUser.talentInfo?.location,
+                city: convexUser.talentInfo?.city || convexUser.city,
+                state: convexUser.talentInfo?.state || convexUser.state,
+                lastActive: convexUser.updatedAt,
+                subProfilesList: convexUser.subProfilesList || [],
             }));
 
         // Sort results
@@ -713,12 +714,29 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
                                                         <BadgeCheck size={16} className="text-blue-500 shrink-0" />
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-2 flex-wrap mt-0.5">
-                                                    <span className="text-xs text-gray-500">{res.accountTypes?.[0] || 'Talent'}</span>
-                                                    <span className="text-gray-300 dark:text-gray-600">•</span>
-                                                    <span className="text-xs font-bold text-green-600 dark:text-green-400">
-                                                        ${res.rate || '?'}/hr
-                                                    </span>
+                                                {/* Role / Subprofile badges */}
+                                                <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+                                                    {Array.from(new Set([
+                                                        ...((res as any).subProfilesList?.map((sp: any) => sp.role) || []),
+                                                        ...(res.accountTypes || [])
+                                                    ]))
+                                                    .filter(role => role && role !== 'Creative' && role !== 'Fan' && role !== 'Studio' && role !== 'Label')
+                                                    .slice(0, 3)
+                                                    .map((role: any, i: number) => {
+                                                        const isComplete = (res as any).subProfilesList?.some((sp: any) => sp.role === role);
+                                                        return (
+                                                            <span key={i} className={`text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                                                                isComplete 
+                                                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800' 
+                                                                    : 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
+                                                            }`}>
+                                                                {role}
+                                                            </span>
+                                                        );
+                                                    })}
+                                                    {res.rate && (
+                                                        <span className="text-xs font-bold text-green-600 dark:text-green-400">${res.rate}/hr</span>
+                                                    )}
                                                 </div>
                                             </div>
                                         </div>
@@ -764,25 +782,35 @@ const TalentSearch: React.FC<TalentSearchProps> = ({
                                             </div>
                                         )}
 
-                                        {/* Action Button */}
-                                        {mode === 'planner' && onAddToCart && (
+                                        {/* Action Buttons */}
+                                        <div className="mt-auto flex gap-2">
+                                            {/* Always show View Profile */}
                                             <button
-                                                onClick={() => !isInCart && onAddToCart(res)}
-                                                disabled={isInCart}
-                                                className={`mt-auto w-full py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition ${isInCart ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 cursor-default' : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-white hover:bg-brand-blue hover:text-white'}`}
+                                                onClick={() => openPublicProfile(res.id, res.firstName)}
+                                                className="flex-1 py-2.5 rounded-lg text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 transition flex items-center justify-center gap-1.5"
                                             >
-                                                {isInCart ? <><Check size={14}/> Added to Session</> : <><Plus size={14}/> Add to Session</>}
+                                                <User size={13} /> View Profile
                                             </button>
-                                        )}
 
-                                        {mode === 'direct' && onBook && (
-                                            <button
-                                                onClick={() => onBook(res)}
-                                                className="mt-auto w-full py-2.5 rounded-lg text-xs font-bold bg-brand-blue text-white hover:bg-blue-600 transition flex items-center justify-center gap-2"
-                                            >
-                                                <Calendar size={14}/> Book Now
-                                            </button>
-                                        )}
+                                            {mode === 'planner' && onAddToCart && (
+                                                <button
+                                                    onClick={() => !isInCart && onAddToCart(res)}
+                                                    disabled={isInCart}
+                                                    className={`flex-1 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition ${isInCart ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 cursor-default' : 'bg-brand-blue text-white hover:bg-blue-600'}`}
+                                                >
+                                                    {isInCart ? <><Check size={14}/>Added</> : <><Plus size={14}/>Add to Session</>}
+                                                </button>
+                                            )}
+
+                                            {mode === 'direct' && onBook && (
+                                                <button
+                                                    onClick={() => onBook(res)}
+                                                    className="flex-1 py-2.5 rounded-lg text-xs font-bold bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white transition flex items-center justify-center gap-1.5 shadow-md shadow-indigo-500/20"
+                                                >
+                                                    <Calendar size={13}/> Book Now
+                                                </button>
+                                            )}
+                                        </div>
                                     </motion.div>
                                 );
                             })}

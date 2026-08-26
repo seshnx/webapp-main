@@ -69,12 +69,10 @@ export function useSavedPosts(
   _fetchLimit: number = 50
 ): UseSavedPostsReturn {
   const [localSavedPosts, setLocalSavedPosts] = useState<SavedPostData[]>([]);
-  
-  const convexUserId = userId as Id<"users"> | undefined;
-  
+
   const savedPostsData = useQuery(
     api.social.getSavedPosts,
-    convexUserId ? { userId: convexUserId } : "skip"
+    userId ? { clerkId: userId } : "skip"
   );
 
   const saveMutation = useMutation(api.social.savePost);
@@ -106,35 +104,35 @@ export function useSavedPosts(
    * Save a post
    */
   const savePost = useCallback(async (postId: string, _postData: SavePostParams = {}): Promise<boolean> => {
-    if (!convexUserId) return false;
+    if (!userId) return false;
     try {
-      await saveMutation({ 
-        userId: convexUserId, 
-        targetId: postId as any
+      await saveMutation({
+        userId: userId,
+        postId: postId as Id<"posts">
       });
       return true;
     } catch (error) {
       console.error('Error saving post:', error);
       return false;
     }
-  }, [convexUserId, saveMutation]);
+  }, [userId, saveMutation]);
 
   /**
    * Unsave a post
    */
   const removeSavedPost = useCallback(async (postId: string): Promise<boolean> => {
-    if (!convexUserId) return false;
+    if (!userId) return false;
     try {
-      await unsaveMutation({ 
-        userId: convexUserId, 
-        targetId: postId as any
+      await unsaveMutation({
+        userId: userId,
+        postId: postId as Id<"posts">
       });
       return true;
     } catch (error) {
       console.error('Error unsaving post:', error);
       return false;
     }
-  }, [convexUserId, unsaveMutation]);
+  }, [userId, unsaveMutation]);
 
   /**
    * Get the full post data for saved posts

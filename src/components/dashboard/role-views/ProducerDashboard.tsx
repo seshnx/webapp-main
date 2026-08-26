@@ -25,7 +25,7 @@ export function ProducerDashboard({ userData, className = '' }: ProducerDashboar
     userData ? { sellerId: userData.clerkId, status: "completed" } : "skip"
   );
   const posts = useQuery(api.social.getPostsByAuthor,
-    userData ? { authorId: userData._id, limit: 20 } : "skip"
+    userData ? { clerkId: userData.clerkId, limit: 20 } : "skip"
   );
 
   // Calculate metrics from real data

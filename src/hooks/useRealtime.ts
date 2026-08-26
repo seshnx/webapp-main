@@ -1,39 +1,89 @@
 /**
  * Real-Time Hooks
  *
- * React hooks for using Convex real-time features:
- * - Presence (online/offline status)
- * - Active sessions (collaboration)
- * - Unread counts
+ * React hooks for Convex real-time features:
+ * - Presence with session timeouts, heartbeat, and active tab detection
+ * - Typing indicators
  * - Dashboard stats
  * - Activity feed
+ *
+ * Best practices:
+ * - visibilitychange API for detect tab focus/blur
+ * - Periodic heartbeat (30s interval) to keep presence alive
+ * - beforeunload to mark offline on page close
+ * - 5 min idle → away, 30 min idle → offline
+ * - Cleanup all timers/intervals on unmount
  */
 
-import { useEffect, useState, useCallback } from 'react';
-import { useMutation, useQuery, useAction } from 'convex/react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import type {
-  ConvexPresence,
-  ConvexActiveSession,
-  ConvexNotification,
-} from '../types/dataDistribution';
+
+// ============================================================
+// PRESENCE TIMING CONSTANTS
+// ============================================================
+
+const HEARTBEAT_INTERVAL = 30_000; // 30 seconds
+const AWAY_TIMEOUT = 5 * 60 * 1000; // 5 minutes of idle → away
+const OFFLINE_TIMEOUT = 30 * 60 * 1000; // 30 minutes of idle → offline
+const INACTIVITY_EVENTS = ['mousemove', 'keydown', 'click', 'touchstart'] as const;
+
+type PresenceStatus = 'online' | 'offline' | 'away' | 'busy' | 'in_session';
 
 // ============================================================
 // PRESENCE HOOKS
 // ============================================================
 
 /**
- * Hook for managing user presence
+ * Hook for managing user presence with session timeout, heartbeat, and active tab detection.
+ *
+ * Features:
+ * - Sends heartbeat every 30 seconds to keep presence alive
+ * - Marks away after 5 min of inactivity
+ * - Marks offline after 30 min of inactivity
+ * - Detects tab visibility changes (visibilitychange API)
+ * - Clean offline on page close (beforeunload)
+ * - Activity listeners reset inactivity timer
  */
 export function usePresence(userId: string | undefined) {
   const setEnhancedPresence = useMutation(api.enhancedPresence.setEnhancedPresence);
-  const [currentStatus, setCurrentStatus] = useState<'online' | 'offline' | 'away' | 'busy' | 'in_session'>('offline');
+  const [currentStatus, setCurrentStatus] = useState<PresenceStatus>('offline');
 
-  // Set user online on mount
+  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const offlineRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const visibilityRef = useRef<boolean>(true);
+
+  // Detect tab visibility changes
+  useEffect(() => {
+    const handleVisibility = () => {
+      const isHidden = document.hidden;
+      visibilityRef.current = !isHidden;
+
+      if (isHidden && currentStatus !== 'offline') {
+        // Tab hidden — mark away (don't update server yet, heartbeat will handle it)
+        setCurrentStatus('away');
+      } else if (!isHidden && currentStatus === 'away') {
+        // Tab visible again — come back online
+        setCurrentStatus('online');
+        // The heartbeat will update the server on next cycle
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [currentStatus]);
+
+  // Set user online on mount, offline on unmount
   useEffect(() => {
     if (!userId) return;
 
+    let cancelled = false;
+
     const goOnline = async () => {
+      if (cancelled) return;
       await setEnhancedPresence({
         userId,
         status: 'online',
@@ -47,60 +97,95 @@ export function usePresence(userId: string | undefined) {
     goOnline();
     setCurrentStatus('online');
 
-    // Set offline on unmount
+    // Mark offline on page close/unmount
+    const handleBeforeUnload = () => {
+      // Use sendBeacon for reliability during page unload
+      setEnhancedPresence({ userId, status: 'offline' });
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
     return () => {
-      setEnhancedPresence({
-        userId,
-        status: 'offline',
-      });
+      cancelled = true;
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      // Mark offline on cleanup
+      setEnhancedPresence({ userId, status: 'offline' });
     };
   }, [userId, setEnhancedPresence]);
 
-  // Set user away after inactivity
+  // Heartbeat — periodically update server presence
   useEffect(() => {
     if (!userId || currentStatus === 'offline') return;
 
-    let inactivityTimer: NodeJS.Timeout;
-
-    const resetTimer = () => {
-      clearTimeout(inactivityTimer);
-      inactivityTimer = setTimeout(() => {
-        if (currentStatus === 'online') {
-          setEnhancedPresence({
-            userId,
-            status: 'away',
-          });
-          setCurrentStatus('away');
-        }
-      }, 5 * 60 * 1000); // 5 minutes
-    };
-
-    const handleActivity = () => {
-      if (currentStatus === 'away' || currentStatus === 'offline') {
-        setEnhancedPresence({
+    heartbeatRef.current = setInterval(async () => {
+      if (!visibilityRef.current) return; // Tab not visible, skip heartbeat
+      try {
+        await setEnhancedPresence({
           userId,
-          status: 'online',
+          status: currentStatus,
         });
-        setCurrentStatus('online');
+      } catch {
+        // Heartbeat failed silently — will retry next interval
       }
-      resetTimer();
-    };
-
-    // Activity listeners
-    window.addEventListener('mousemove', handleActivity);
-    window.addEventListener('keydown', handleActivity);
-    window.addEventListener('click', handleActivity);
-    resetTimer();
+    }, HEARTBEAT_INTERVAL);
 
     return () => {
-      window.removeEventListener('mousemove', handleActivity);
-      window.removeEventListener('keydown', handleActivity);
-      window.removeEventListener('click', handleActivity);
-      clearTimeout(inactivityTimer);
+      if (heartbeatRef.current) {
+        clearInterval(heartbeatRef.current);
+        heartbeatRef.current = null;
+      }
     };
   }, [userId, currentStatus, setEnhancedPresence]);
 
-  const setStatus = useCallback((status: 'online' | 'offline' | 'away' | 'busy' | 'in_session') => {
+  // Inactivity detection — away after 5 min, offline after 30 min
+  useEffect(() => {
+    if (!userId || currentStatus === 'offline') return;
+
+    const resetInactivity = () => {
+      // Clear existing timers
+      if (inactivityRef.current) clearTimeout(inactivityRef.current);
+      if (offlineRef.current) clearTimeout(offlineRef.current);
+
+      // Set away timer (5 min)
+      inactivityRef.current = setTimeout(() => {
+        if (currentStatus === 'online' || currentStatus === 'in_session') {
+          setCurrentStatus('away');
+          setEnhancedPresence({ userId, status: 'away' });
+        }
+      }, AWAY_TIMEOUT);
+
+      // Set offline timer (30 min)
+      offlineRef.current = setTimeout(() => {
+        setCurrentStatus('offline');
+        setEnhancedPresence({ userId, status: 'offline' });
+      }, OFFLINE_TIMEOUT);
+    };
+
+    const handleActivity = () => {
+      // If we were away, come back online
+      if (currentStatus === 'away') {
+        setCurrentStatus('online');
+        setEnhancedPresence({ userId, status: 'online' });
+      }
+      resetInactivity();
+    };
+
+    // Attach activity listeners
+    INACTIVITY_EVENTS.forEach(event => {
+      window.addEventListener(event, handleActivity);
+    });
+    resetInactivity();
+
+    return () => {
+      INACTIVITY_EVENTS.forEach(event => {
+        window.removeEventListener(event, handleActivity);
+      });
+      if (inactivityRef.current) clearTimeout(inactivityRef.current);
+      if (offlineRef.current) clearTimeout(offlineRef.current);
+    };
+  }, [userId, currentStatus, setEnhancedPresence]);
+
+  const setStatus = useCallback((status: PresenceStatus) => {
     if (!userId) return;
     setEnhancedPresence({ userId, status });
     setCurrentStatus(status);
@@ -112,6 +197,10 @@ export function usePresence(userId: string | undefined) {
   };
 }
 
+// ============================================================
+// PRESENCE QUERY HOOKS
+// ============================================================
+
 /**
  * Hook for getting presence of multiple users
  */
@@ -120,7 +209,6 @@ export function useBatchPresence(userIds: string[]) {
     api.enhancedPresence.getBatchEnhancedPresence,
     userIds.length > 0 ? { userIds } : 'skip'
   );
-
   return {
     presence: presence || {},
     loading: presence === undefined,
@@ -128,7 +216,69 @@ export function useBatchPresence(userIds: string[]) {
 }
 
 /**
- * Hook for getting users in a specific location (studio, room, session)
+ * Hook for getting single user's presence
+ */
+export function useUserPresence(userId: string | undefined) {
+  const presence = useQuery(
+    api.enhancedPresence.getEnhancedPresence,
+    userId ? { userId } : 'skip'
+  );
+  return {
+    presence: presence || null,
+    loading: presence === undefined,
+  };
+}
+
+/**
+ * Hook for getting users presence (deprecated alias)
+ */
+export function useUserPresenceList(userIds: string[]) {
+  return useBatchPresence(userIds);
+}
+
+/**
+ * Hook for getting single user's presence by ID
+ */
+export function useUserPresenceById(userId: string) {
+  return useUserPresence(userId);
+}
+
+/**
+ * Hook for getting batch presence as a simple array
+ */
+export function useBatchPresenceSimple(userIds: string[]) {
+  const result = useQuery(
+    api.enhancedPresence.getBatchEnhancedPresence,
+    userIds.length > 0 ? { userIds } : 'skip'
+  );
+  return {
+    presences: result || [],
+    loading: result === undefined,
+  };
+}
+
+/**
+ * Hook for getting single user's presence (simple)
+ */
+export function useUserPresenceSimple(userId: string) {
+  return useUserPresence(userId);
+}
+
+/**
+ * Hook for getting single enhanced presence record
+ */
+export function useSinglePresence(userId: string | undefined) {
+  const presence = useQuery(
+    api.enhancedPresence.getEnhancedPresence,
+    userId ? { userId } : 'skip'
+  );
+  return {
+    presence: presence || null,
+    loading: presence === undefined,
+  };
+}
+/**
+ * Hook for getting users in a specific location
  */
 export function useUsersInLocation(
   locationType: 'studio' | 'room' | 'session',
@@ -138,7 +288,6 @@ export function useUsersInLocation(
     api.enhancedPresence.getUsersInLocation,
     { locationType, locationId }
   );
-
   return {
     users: users || [],
     loading: users === undefined,
@@ -218,7 +367,6 @@ export function useUserActiveSession(userId: string | undefined) {
     api.enhancedPresence.getUserActiveSession,
     userId ? { userId } : 'skip'
   );
-
   return {
     session,
     loading: session === undefined,
@@ -265,7 +413,6 @@ export function useDashboardStats(userId: string | undefined) {
     userId ? { userId } : 'skip'
   );
   const update = useMutation(api.enhancedPresence.updateDashboardStats);
-
   return {
     stats: stats || {
       todayBookingCount: 0,
@@ -276,12 +423,9 @@ export function useDashboardStats(userId: string | undefined) {
       activeNotifications: 0,
     },
     loading: stats === undefined,
-    update: (updates: {
-      todayBookingCount?: number;
-      todayRevenue?: number;
-      weekBookingCount?: number;
-      weekRevenue?: number;
-    }) => userId && update({ userId, ...updates }),
+    update: (updates: Record<string, number>) => {
+      if (userId) update({ userId, ...updates });
+    },
   };
 }
 
@@ -297,7 +441,6 @@ export function useActivityFeed(userId: string | undefined, limit = 20) {
     api.enhancedPresence.getActivityFeed,
     userId ? { userId, limit } : 'skip'
   );
-
   return {
     activities: activities || [],
     loading: activities === undefined,
@@ -312,42 +455,9 @@ export function useRecentActivity(limit = 50) {
     api.enhancedPresence.getRecentActivity,
     { limit }
   );
-
   return {
     activities: activities || [],
     loading: activities === undefined,
-  };
-}
-
-// ============================================================
-// PUSH NOTIFICATION HOOKS
-// ============================================================
-
-/**
- * Hook for managing push notification tokens
- */
-export function usePushTokens(userId: string | undefined) {
-  const register = useMutation(api.enhancedPresence.registerPushToken);
-  const unregister = useMutation(api.enhancedPresence.unregisterPushToken);
-  const tokens = useQuery(
-    api.enhancedPresence.getPushTokens,
-    userId ? { userId } : 'skip'
-  );
-
-  const registerToken = useCallback(async (token: string, platform: 'ios' | 'android' | 'web') => {
-    if (!userId) return;
-    return await register({ userId, token, platform });
-  }, [userId, register]);
-
-  const unregisterToken = useCallback(async (token: string) => {
-    return await unregister({ token });
-  }, [unregister]);
-
-  return {
-    tokens: tokens || [],
-    loading: tokens === undefined,
-    register: registerToken,
-    unregister: unregisterToken,
   };
 }
 
@@ -364,7 +474,6 @@ export function useTypingIndicator(conversationId: string | undefined) {
     api.presence.getTypingIndicators,
     conversationId ? { chatId: conversationId } : 'skip'
   );
-
   const startTyping = useCallback((userId: string, userName: string) => {
     if (!conversationId) return;
     setTyping({

@@ -1,65 +1,95 @@
 import Stripe from 'stripe';
+import { ConvexHttpClient } from 'convex/browser';
+import pkg from '../../convex/_generated/api.js';
+const { api } = pkg;
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const convexUrl = process.env.VITE_CONVEX_URL;
+
+// Initialize Convex Client for Node side
+const httpClient = new ConvexHttpClient(convexUrl);
+
+// Constant mapping of product IDs to token counts (should match useDynamicConfig)
+const TOKEN_PACKS = {
+  'tkn_25': 25,
+  'tkn_50': 50,
+  'tkn_100': 100,
+  'tkn_200': 200,
+  'tkn_500': 500,
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // To support local testing with Stripe CLI, verify sign-off
   const sig = req.headers['stripe-signature'];
-
   let event;
 
   try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    const rawBody = await buffer(req);
+    event = stripe.webhooks.constructEvent(rawBody, sig, webhookSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Handle the event
-  switch (event.type) {
-    case 'payment_intent.succeeded':
-      const paymentIntent = event.data.object;
-      // TODO: Update database with successful payment
-      // TODO: Add tokens to user account based on metadata.packId
-      // TODO: Update wallet balance
-      console.log('PaymentIntent succeeded:', paymentIntent.id, paymentIntent.metadata);
-      break;
+  try {
+    switch (event.type) {
+      case 'payment_intent.succeeded': {
+        const pi = event.data.object;
+        const { userId, packId } = pi.metadata;
 
-    case 'payment_intent.payment_failed':
-      // TODO: Handle failed payment
-      // TODO: Notify user
-      console.log('PaymentIntent failed:', event.data.object.id);
-      break;
+        if (userId && packId) {
+          const tokenAmount = TOKEN_PACKS[packId] || 0;
+          console.log(`Processing top-up for ${userId}: ${tokenAmount} tokens`);
 
-    case 'checkout.session.completed':
-      const session = event.data.object;
-      // TODO: Update subscription or tokens based on session.metadata
-      // TODO: Update user tier if subscription
-      console.log('Checkout session completed:', session.id);
-      break;
+          // Call Convex to record the payment and top up balance
+          await httpClient.mutation(api.wallets.topUpBalance, {
+            clerkId: userId,
+            amount: tokenAmount,
+            stripePaymentIntentId: pi.id,
+            description: `Purchased ${packId} package`
+          });
+        }
+        break;
+      }
 
-    case 'transfer.created':
-      const transfer = event.data.object;
-      // TODO: Update wallet payout balance
-      // TODO: Create transaction record
-      console.log('Transfer created:', transfer.id);
-      break;
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const { userId, packId, mode } = session.metadata;
 
-    case 'account.updated':
-      const account = event.data.object;
-      // TODO: Update user's Stripe Connect status
-      // TODO: Enable payout features if account is fully onboarded
-      console.log('Account updated:', account.id);
-      break;
+        // If it was a subscription (membership plan)
+        if (session.mode === 'subscription' && userId && packId) {
+          console.log(`Subscription ${packId} completed for user: ${userId}`);
+          // Call Convex to update user tier
+          await httpClient.mutation(api.users.updateUserTier, {
+            clerkId: userId,
+            tier: packId, // Assuming packId is the tier name like 'PRO' or 'STUDIO'
+          });
+        }
+        break;
+      }
 
-    default:
-      console.log(`Unhandled event type ${event.type}`);
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    return res.status(200).json({ received: true });
+  } catch (error) {
+    console.error('Webhook processing error:', error);
+    return res.status(500).json({ error: 'Internal server error' });
   }
+}
 
-  return res.status(200).json({ received: true });
+// Helper to buffer the raw request body (needed for Stripe webhook verification)
+async function buffer(readable) {
+  const chunks = [];
+  for await (const chunk of readable) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+  return Buffer.concat(chunks);
 }
 

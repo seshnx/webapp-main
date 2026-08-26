@@ -14,11 +14,13 @@ export interface TierLimits {
  * Tier data interface
  */
 export interface TierData {
+  id?: string;
   name: string;
   price: number;
   feeMultiplier: number;
   features: string[];
   limits: TierLimits;
+  stripePriceId?: string;
 }
 
 /**
@@ -26,8 +28,11 @@ export interface TierData {
  */
 export interface TokenPackage {
   id: string;
-  amount: number;
+  label: string;
+  tokens: number;
+  amount: number; // For compatibility
   price: number;
+  stripePriceId: string;
 }
 
 /**
@@ -145,11 +150,11 @@ export function useDynamicConfig(): UseDynamicConfigReturn {
     };
 
     const FALLBACK_TOKEN_PACKAGES_DEF: TokenPackage[] = [
-      { id: 'tkn_25', amount: 25, price: 2.99 },
-      { id: 'tkn_50', amount: 50, price: 4.99 },
-      { id: 'tkn_100', amount: 100, price: 8.99 },
-      { id: 'tkn_200', amount: 200, price: 16.99 },
-      { id: 'tkn_500', amount: 500, price: 39.99 },
+      { id: 'tkn_25', label: 'Starter Pack', tokens: 25, amount: 25, price: 2.99, stripePriceId: 'price_1ShEvlH6VakTaMvg7...'}, 
+      { id: 'tkn_50', label: 'Artist Choice', tokens: 50, amount: 50, price: 4.99, stripePriceId: 'price_1ShEvlH6VakTaMvg8...' },
+      { id: 'tkn_100', label: 'Pro Pack', tokens: 100, amount: 100, price: 8.99, stripePriceId: 'price_1ShEvlH6VakTaMvg9...' },
+      { id: 'tkn_200', label: 'Elite Pack', tokens: 200, amount: 200, price: 16.99, stripePriceId: 'price_1ShEvlH6VakTaMvgA...' },
+      { id: 'tkn_500', label: 'Ultimate Hub', tokens: 500, amount: 500, price: 39.99, stripePriceId: 'price_1ShEvlH6VakTaMvgB...' },
     ];
 
     return {
@@ -161,10 +166,15 @@ export function useDynamicConfig(): UseDynamicConfigReturn {
   // Load config from database or use fallback
   useEffect(() => {
     const loadConfig = async () => {
-      // TODO: Implement Neon query for dynamic config
-      // For now, use fallback data
+      // Transform record to array with IDs if needed, then back to record
+      // This ensures each tier object has its own id field
+      const tiersWithIds: Record<string, TierData> = {};
+      Object.entries(DEFAULT_TIER_DATA).forEach(([key, tier]) => {
+        tiersWithIds[key] = { ...tier, id: key };
+      });
+
       setConfig({
-        tierData: DEFAULT_TIER_DATA,
+        tierData: tiersWithIds,
         tokenPackages: FALLBACK_TOKEN_PACKAGES,
       });
       setLoading(false);

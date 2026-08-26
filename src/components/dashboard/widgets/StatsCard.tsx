@@ -1,12 +1,12 @@
 /**
  * Stats Card Widget Component
  *
- * Displays a single statistic with optional trend indicator.
+ * Displays a single statistic with a premium glassmorphism aesthetic.
  */
 
 import React from 'react';
 import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ArrowUpRight } from 'lucide-react';
 import AnimatedNumber from '../../shared/AnimatedNumber';
 
 export interface StatsCardProps {
@@ -22,37 +22,13 @@ export interface StatsCardProps {
   className?: string;
 }
 
-const COLOR_CLASSES = {
-  blue: {
-    bg: 'bg-blue-50 dark:bg-blue-900/20',
-    text: 'text-blue-600 dark:text-blue-400',
-    iconBg: 'bg-blue-100 dark:bg-blue-900/40'
-  },
-  green: {
-    bg: 'bg-green-50 dark:bg-green-900/20',
-    text: 'text-green-600 dark:text-green-400',
-    iconBg: 'bg-green-100 dark:bg-green-900/40'
-  },
-  red: {
-    bg: 'bg-red-50 dark:bg-red-900/20',
-    text: 'text-red-600 dark:text-red-400',
-    iconBg: 'bg-red-100 dark:bg-red-900/40'
-  },
-  amber: {
-    bg: 'bg-amber-50 dark:bg-amber-900/20',
-    text: 'text-amber-600 dark:text-amber-400',
-    iconBg: 'bg-amber-100 dark:bg-amber-900/40'
-  },
-  purple: {
-    bg: 'bg-purple-50 dark:bg-purple-900/20',
-    text: 'text-purple-600 dark:text-purple-400',
-    iconBg: 'bg-purple-100 dark:bg-purple-900/40'
-  },
-  pink: {
-    bg: 'bg-pink-50 dark:bg-pink-900/20',
-    text: 'text-pink-600 dark:text-pink-400',
-    iconBg: 'bg-pink-100 dark:bg-pink-900/40'
-  }
+const GRADIENT_CLASSES = {
+  blue: 'bg-gradient-to-br from-blue-500/90 to-indigo-600/90',
+  green: 'bg-gradient-to-br from-emerald-500/90 to-teal-600/90',
+  red: 'bg-gradient-to-br from-red-500/90 to-rose-600/90',
+  amber: 'bg-gradient-to-br from-amber-500/90 to-orange-600/90',
+  purple: 'bg-gradient-to-br from-purple-500/90 to-fuchsia-600/90',
+  pink: 'bg-gradient-to-br from-pink-500/90 to-rose-600/90'
 };
 
 const SIZE_CLASSES = {
@@ -73,72 +49,52 @@ export function StatsCard({
   size = 'medium',
   className = ''
 }: StatsCardProps) {
-  const colorClass = COLOR_CLASSES[color];
-  const sizeClass = SIZE_CLASSES[size];
+  const gradientClass = GRADIENT_CLASSES[color] || GRADIENT_CLASSES.blue;
+  const sizeClass = SIZE_CLASSES[size] || SIZE_CLASSES.medium;
 
-  const getTrendIcon = () => {
-    switch (trend) {
-      case 'up':
-        return <TrendingUp className="w-3 h-3" />;
-      case 'down':
-        return <TrendingDown className="w-3 h-3" />;
-      default:
-        return <Minus className="w-3 h-3" />;
-    }
-  };
-
-  const getTrendColor = () => {
-    switch (trend) {
-      case 'up':
-        return 'text-green-600 dark:text-green-400';
-      case 'down':
-        return 'text-red-600 dark:text-red-400';
-      default:
-        return 'text-gray-600 dark:text-gray-400';
-    }
-  };
+  const isTrendUp = trend === 'up';
+  const isTrendDown = trend === 'down';
 
   return (
     <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.3 }}
-      className={`bg-white dark:bg-gray-800 rounded-xl shadow-sm hover:shadow-md transition-shadow ${sizeClass} ${className}`}
+        whileHover={{ scale: 1.02, y: -4 }}
+        className={`relative ${sizeClass} rounded-[1.25rem] cursor-pointer overflow-hidden group backdrop-blur-md shadow-lg border border-white/10 ${gradientClass} ${className}`}
     >
-      <div className="flex items-start justify-between mb-3">
-        {Icon && (
-          <div className={`p-2.5 rounded-lg ${colorClass.iconBg}`}>
-            <Icon className={`w-5 h-5 ${colorClass.text}`} />
-          </div>
-        )}
-        {trend && trendPercentage !== undefined && (
-          <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getTrendColor()} bg-gray-50 dark:bg-gray-700`}>
-            {getTrendIcon()}
-            {trendPercentage > 0 ? '+' : ''}{trendPercentage}%
-          </div>
-        )}
-      </div>
+        {/* Animated background elements */}
+        <div className="absolute inset-0 opacity-30 pointer-events-none">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-16 -translate-y-16 group-hover:scale-150 transition-transform duration-700" />
+            <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl transform -translate-x-8 translate-y-8" />
+        </div>
 
-      <div className="mb-1">
-        <p className={`text-2xl font-bold text-gray-900 dark:text-white ${size === 'large' ? 'text-3xl' : ''}`}>
-          {typeof value === 'number' ? (
-            <AnimatedNumber value={value} />
-          ) : (
-            value
-          )}
-          {unit && <span className="text-lg text-gray-500 ml-1">{unit}</span>}
-        </p>
-      </div>
+        <div className="relative z-10 flex flex-col h-full justify-between min-h-[100px]">
+            <div className="flex items-start justify-between mb-3 w-full">
+                <div className="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl border border-white/10 shadow-inner">
+                    {Icon && <Icon className="w-5 h-5 text-white drop-shadow-md" />}
+                </div>
+                {trend && trendPercentage !== undefined && (
+                    <div className={`flex items-center gap-1 text-xs font-bold leading-none backdrop-blur-sm px-2.5 py-1.5 rounded-full border border-white/10 shadow-sm ${isTrendUp ? 'bg-green-500/20 text-green-100' : isTrendDown ? 'bg-red-500/20 text-red-100' : 'bg-white/10 text-white'}`}>
+                        {isTrendUp ? <ArrowUpRight size={12} className="text-green-300" /> : isTrendDown ? <ArrowUpRight size={12} className="rotate-90 text-red-300" /> : <Minus size={12} className="text-white/70" />}
+                        {trendPercentage > 0 ? '+' : ''}{trendPercentage}%
+                    </div>
+                )}
+            </div>
+            
+            <div className="mt-auto">
+                <div className="text-3xl font-black text-white mb-1 tracking-tight flex items-baseline drop-shadow-sm">
+                    {typeof value === 'number' ? <AnimatedNumber value={value} /> : value}
+                    {unit && <span className="text-lg text-white/80 ml-1 font-semibold">{unit}</span>}
+                </div>
+                <div className="text-white/90 text-sm font-semibold tracking-wide">{title}</div>
+                {previousValue !== undefined && (
+                    <div className="text-white/80 text-xs mt-2 font-medium bg-black/20 inline-block px-2.5 py-1 rounded-full backdrop-blur-md border border-white/5">
+                        Previous: {previousValue}
+                    </div>
+                )}
+            </div>
+        </div>
 
-      <p className="text-sm text-gray-600 dark:text-gray-400">
-        {title}
-      </p>
-
-      {previousValue !== undefined && (
-        <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-          Previous: {previousValue}
-        </p>
-      )}
+        {/* Hover shine effect */}
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
     </motion.div>
   );
 }

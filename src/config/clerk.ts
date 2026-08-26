@@ -118,6 +118,28 @@ export const clerkConfig = {
   // This is simpler for single-page apps using React Router
   router: 'virtual',
 
+  // ── Organizations (Clerk Billing B2B) ────────────────────
+  // Each studio = one Clerk Organization. Org plans gate
+  // subdomain dashboard access, room limits, staff limits.
+  // Users CANNOT create orgs manually — only via StudioSetupWizard,
+  // which calls /api/studio/create-org (Backend SDK) silently.
+  organizationSettings: {
+    enabled: true,
+  },
+  // Hide default Clerk org creation UI (OrganizationSwitcher, CreateOrganization)
+  // We provide a custom StudioOrgManager component instead.
+  hideOrganizerInOrganizationSwitcher: true,
+
+  // ── Multi-domain / subdomain support ─────────────────────
+  // Tells Clerk which domain holds the main sign-in page.
+  // Sessions are shared across *.seshnx.com so authenticated
+  // studio members can access their dashboard on subdomains.
+  domain: window?.location?.hostname?.includes('seshnx.com')
+    ? 'seshnx.com'
+    : undefined,
+  signInUrl: '/login',
+  afterSignInUrl: '/',
+
   // Appearance customization
   appearance: {
     // Customize the Clerk components appearance

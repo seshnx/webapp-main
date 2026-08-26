@@ -40,7 +40,7 @@ if (sentryDsn) {
     integrations: [
       Sentry.browserTracingIntegration({
         // Track navigation performance
-        tracePropagationTargets: ['localhost', /^https:\/\/(app\.seshnx\.com|webapp-main-.*\.vercel\.app)/],
+        tracePropagationTargets: ['localhost', /^https:\/\/([a-z0-9-]+\.)?seshnx\.com/, /^https:\/\/webapp-main-.*\.vercel\.app/],
       }),
       Sentry.replayIntegration({
         maskAllText: false,

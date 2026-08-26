@@ -28,9 +28,9 @@ export function useHomeFeed(userId: string, limit = 20) {
 /**
  * Get posts by author
  */
-export function usePostsByAuthor(authorId: string, limit = 20) {
+export function usePostsByAuthor(clerkId: string, limit = 20) {
   return useQuery(api.social.getPostsByAuthor, {
-    authorId,
+    clerkId,
     limit,
   });
 }
@@ -198,9 +198,9 @@ export function useIsPostSaved(userId: string, postId: string) {
 /**
  * Get user's saved posts
  */
-export function useSavedPosts(userId: string, limit = 50) {
+export function useSavedPosts(clerkId: string, limit = 50) {
   return useQuery(api.social.getSavedPosts, {
-    userId,
+    clerkId,
     limit,
   });
 }
@@ -249,7 +249,7 @@ export function useCurrentUser(clerkId: string) {
  */
 export function useSearchUsers(searchQuery: string, limit = 20) {
   return useQuery(api.users.searchUsers, {
-    searchQuery,
+    searchText: searchQuery,
     limit,
   });
 }
@@ -259,6 +259,31 @@ export function useSearchUsers(searchQuery: string, limit = 20) {
  */
 export function useUpdateProfile() {
   return useMutation(api.users.updateProfile);
+}
+
+/**
+ * Update sub-profile
+ */
+export function useUpdateSubProfile() {
+  return useMutation(api.users.updateSubProfile);
+}
+
+/**
+ * Create sub-profile
+ */
+export function useCreateSubProfile() {
+  return useMutation(api.users.createSubProfile);
+}
+
+/**
+ * Get user's public display name based on their active role
+ * Resolves display name using SubProfile preferences
+ */
+export function usePublicDisplayName(clerkId: string, role?: string) {
+  return useQuery(
+    api.users.getPublicDisplayName,
+    clerkId ? { clerkId, role } : "skip"
+  );
 }
 
 // =====================================================
@@ -304,28 +329,31 @@ export function useUnfollowUser() {
 }
 
 // =====================================================
-// BOOKINGS
+// STUDIO BOOKINGS (sbookings)
 // =====================================================
 
 /**
  * Get studios by owner
  */
 export function useStudiosByOwner(ownerId: string) {
-  return useQuery(api.bookings.getStudiosByOwner, { ownerId });
+  return useQuery(api.sbookings.getStudiosByOwner, { ownerId });
 }
 
 /**
  * Get studio by ID
  */
 export function useStudio(studioId: Id<'studios'>) {
-  return useQuery(api.bookings.getStudioById, { studioId });
+  return useQuery(api.sbookings.getStudioById, { studioId });
 }
 
 /**
  * Get rooms by studio
  */
-export function useRoomsByStudio(studioId: Id<'studios'>) {
-  return useQuery(api.bookings.getRoomsByStudio, { studioId });
+export function useRoomsByStudio(studioId?: string) {
+  return useQuery(
+    api.sbookings.getRoomsByStudio,
+    studioId ? { studioId: studioId as Id<'studios'> } : "skip"
+  );
 }
 
 /**
@@ -338,7 +366,7 @@ export function useAvailableRooms(
   endTime: string,
   minCapacity?: number
 ) {
-  return useQuery(api.bookings.getAvailableRooms, {
+  return useQuery(api.sbookings.getAvailableRooms, {
     studioId,
     date,
     startTime,
@@ -348,119 +376,186 @@ export function useAvailableRooms(
 }
 
 /**
- * Get bookings by studio
+ * Get studio bookings by studio
  */
-export function useBookingsByStudio(studioId: Id<'studios'>, status?: string) {
-  return useQuery(api.bookings.getBookingsByStudio, {
-    studioId,
+export function useBookingsByStudio(studioId?: string, status?: string) {
+  return useQuery(
+    api.sbookings.getBookingsByStudio,
+    studioId ? { studioId: studioId as Id<'studios'>, status } : "skip"
+  );
+}
+
+/**
+ * Get studio bookings by client
+ */
+export function useStudioBookingsByClient(clerkId: string, status?: string) {
+  return useQuery(api.sbookings.getBookingsByClient, {
+    clientClerkId: clerkId,
     status,
   });
 }
 
 /**
- * Get bookings by client
+ * Get upcoming studio bookings for a client
  */
-export function useBookingsByClient(clientId: string, status?: string) {
-  return useQuery(api.bookings.getBookingsByClient, {
-    clientId,
-    status,
-  });
-}
-
-/**
- * Get upcoming bookings for a client
- */
-export function useUpcomingBookings(clientId: string, limit = 10) {
-  return useQuery(api.bookings.getUpcomingBookings, {
-    clientId,
+export function useUpcomingStudioBookings(clerkId: string, limit = 10) {
+  return useQuery(api.sbookings.getUpcomingBookings, {
+    clerkId,
     limit,
   });
 }
 
 /**
- * Create a booking
+ * Create a studio booking
  */
-export function useCreateBooking() {
-  return useMutation(api.bookings.createBooking);
+export function useCreateStudioBooking() {
+  return useMutation(api.sbookings.createBooking);
 }
 
 /**
- * Update a booking
+ * Update a studio booking
  */
-export function useUpdateBooking() {
-  return useMutation(api.bookings.updateBooking);
+export function useUpdateStudioBooking() {
+  return useMutation(api.sbookings.updateBooking);
 }
 
 /**
- * Confirm a booking
+ * Confirm a studio booking
  */
-export function useConfirmBooking() {
-  return useMutation(api.bookings.confirmBooking);
+export function useConfirmStudioBooking() {
+  return useMutation(api.sbookings.confirmBooking);
 }
 
 /**
- * Start a booking
+ * Start a studio booking
  */
-export function useStartBooking() {
-  return useMutation(api.bookings.startBooking);
+export function useStartStudioBooking() {
+  return useMutation(api.sbookings.startBooking);
 }
 
 /**
- * Complete a booking
+ * Complete a studio booking
  */
-export function useCompleteBooking() {
-  return useMutation(api.bookings.completeBooking);
+export function useCompleteStudioBooking() {
+  return useMutation(api.sbookings.completeBooking);
 }
 
 /**
- * Cancel a booking
+ * Cancel a studio booking
  */
-export function useCancelBooking() {
-  return useMutation(api.bookings.cancelBooking);
+export function useCancelStudioBooking() {
+  return useMutation(api.sbookings.cancelBooking);
 }
 
 /**
- * Get payments by booking
+ * Get payments by booking ID
  */
-export function usePaymentsByBooking(bookingId: Id<'bookings'>) {
-  return useQuery(api.bookings.getPaymentsByBooking, {
+export function usePaymentsByBooking(bookingId: string) {
+  return useQuery(api.sbookings.getPaymentsByBooking, {
     bookingId,
   });
 }
 
 /**
- * Create a payment
+ * Create a payment (universal)
  */
 export function useCreatePayment() {
-  return useMutation(api.bookings.createPayment);
+  return useMutation(api.sbookings.createPayment);
 }
 
 /**
  * Update payment status
  */
 export function useUpdatePaymentStatus() {
-  return useMutation(api.bookings.updatePaymentStatus);
+  return useMutation(api.sbookings.updatePaymentStatus);
 }
 
 /**
  * Get blocked dates for a studio
  */
 export function useBlockedDates(studioId: string) {
-  return useQuery(api.bookings.getBlockedDates, { studioId });
+  return useQuery(api.sbookings.getBlockedDates, { studioId });
 }
 
 /**
  * Add blocked date
  */
 export function useAddBlockedDate() {
-  return useMutation(api.bookings.addBlockedDate);
+  return useMutation(api.sbookings.addBlockedDate);
 }
 
 /**
  * Remove blocked date
  */
 export function useRemoveBlockedDate() {
-  return useMutation(api.bookings.removeBlockedDate);
+  return useMutation(api.sbookings.removeBlockedDate);
+}
+
+// =====================================================
+// BACKWARD-COMPAT ALIASES (Studio Booking hooks)
+// =====================================================
+/** @deprecated Use useStudioBookingsByClient */
+export const useBookingsByClient = useStudioBookingsByClient;
+/** @deprecated Use useConfirmStudioBooking */
+export const useConfirmBooking = useConfirmStudioBooking;
+/** @deprecated Use useCancelStudioBooking */
+export const useCancelBooking = useCancelStudioBooking;
+/** @deprecated Use useUpdateStudioBooking */
+export const useUpdateBooking = useUpdateStudioBooking;
+/** @deprecated Use useCreateStudioBooking */
+export const useCreateBooking = useCreateStudioBooking;
+
+// =====================================================
+// TALENT BOOKINGS (bookings) - Direct Talent Hiring
+// =====================================================
+
+/**
+ * Create a talent booking (direct hire request)
+ */
+export function useCreateTalentBooking() {
+  return useMutation(api.bookings.createBooking);
+}
+
+/**
+ * Get bookings where user is the talent (incoming)
+ */
+export function useTalentBookings(talentClerkId: string, status?: string, limit = 50) {
+  return useQuery(api.bookings.getTalentBookings, { talentClerkId, status, limit });
+}
+
+/**
+ * Get bookings where user is the client (outgoing)
+ */
+export function useClientBookings(clientClerkId: string, status?: string, limit = 50) {
+  return useQuery(api.bookings.getClientBookings, { clientClerkId, status, limit });
+}
+
+/**
+ * Get upcoming talent bookings for a user
+ */
+export function useUpcomingTalentBookings(clerkId: string, limit = 10) {
+  return useQuery(api.bookings.getUpcomingBookings, { clerkId, limit });
+}
+
+/**
+ * Accept a talent booking (talent action)
+ */
+export function useAcceptTalentBooking() {
+  return useMutation(api.bookings.acceptBooking);
+}
+
+/**
+ * Decline a talent booking (talent action)
+ */
+export function useDeclineTalentBooking() {
+  return useMutation(api.bookings.declineBooking);
+}
+
+/**
+ * Cancel a talent booking (either party)
+ */
+export function useCancelTalentBooking() {
+  return useMutation(api.bookings.cancelBooking);
 }
 
 // =====================================================
@@ -1080,4 +1175,338 @@ export function useExportUserData() {
  */
 export function useDeleteUserAccount() {
   return useMutation(api.settings.deleteUserAccount);
+}
+
+// =====================================================
+// STUDIOS
+// =====================================================
+
+/**
+ * Get studio by owner ID
+ */
+export function useStudioByOwner(ownerId: string | undefined) {
+  return useQuery(
+    api.studios.getStudioByOwner,
+    ownerId ? { ownerId } : "skip"
+  );
+}
+
+/**
+ * Get all active studios
+ */
+export function useActiveStudios(filters?: {
+  city?: string;
+  state?: string;
+}) {
+  return useQuery(
+    api.studios.getActiveStudios,
+    filters || {}
+  );
+}
+
+/**
+ * Create a new studio
+ */
+export function useCreateStudio() {
+  return useMutation(api.studios.createStudio);
+}
+
+/**
+ * Update studio settings
+ */
+export function useUpdateStudio() {
+  return useMutation(api.studios.updateStudio);
+}
+
+/**
+ * Update studio by owner (convenience function)
+ */
+export function useUpdateStudioByOwner() {
+  return useMutation(api.studios.updateStudioByOwner);
+}
+
+/**
+ * Delete studio (soft delete)
+ */
+export function useDeleteStudio() {
+  return useMutation(api.studios.deleteStudio);
+}
+
+// =====================================================
+// STUDIO MANAGER - FLOOR PLANS
+// =====================================================
+
+/**
+ * Get floor plan by studio ID
+ */
+export function useFloorplanByStudio(studioId: Id<'studios'>) {
+  return useQuery(
+    api.studioManager.getFloorplanByStudio,
+    { studioId }
+  );
+}
+
+/**
+ * Get floor plan by room ID
+ */
+export function useFloorplanByRoom(roomId: Id<'rooms'>) {
+  return useQuery(
+    api.studioManager.getFloorplanByRoom,
+    { roomId }
+  );
+}
+
+/**
+ * Get floor plan version history
+ */
+export function useFloorplanHistory(studioId: Id<'studios'>, limit?: number) {
+  return useQuery(
+    api.studioManager.getFloorplanHistory,
+    { studioId, limit }
+  );
+}
+
+/**
+ * Save floor plan
+ */
+export function useSaveFloorplan() {
+  return useMutation(api.studioManager.saveFloorplan);
+}
+
+/**
+ * Delete floor plan
+ */
+export function useDeleteFloorplan() {
+  return useMutation(api.studioManager.deleteFloorplan);
+}
+
+// =====================================================
+// STUDIO MANAGER - EQUIPMENT
+// =====================================================
+
+/**
+ * Get all equipment for a studio
+ */
+export function useEquipmentByStudio(studioId: Id<'studios'>, includeInactive?: boolean) {
+  return useQuery(
+    api.studioManager.getEquipmentByStudio,
+    { studioId, includeInactive }
+  );
+}
+
+/**
+ * Get equipment by category
+ */
+export function useEquipmentByCategory(studioId: Id<'studios'>, category: string) {
+  return useQuery(
+    api.studioManager.getEquipmentByCategory,
+    { studioId, category }
+  );
+}
+
+/**
+ * Get equipment by room
+ */
+export function useEquipmentByRoom(roomId: Id<'rooms'>) {
+  return useQuery(
+    api.studioManager.getEquipmentByRoom,
+    { roomId }
+  );
+}
+
+/**
+ * Get equipment by status
+ */
+export function useEquipmentByStatus(studioId: Id<'studios'>, status: string) {
+  return useQuery(
+    api.studioManager.getEquipmentByStatus,
+    { studioId, status }
+  );
+}
+
+/**
+ * Create equipment
+ */
+export function useCreateEquipment() {
+  return useMutation(api.studioManager.createEquipment);
+}
+
+/**
+ * Update equipment
+ */
+export function useUpdateEquipment() {
+  return useMutation(api.studioManager.updateEquipment);
+}
+
+/**
+ * Delete equipment
+ */
+export function useDeleteEquipment() {
+  return useMutation(api.studioManager.deleteEquipment);
+}
+
+// =====================================================
+// STUDIO MANAGER - CLIENTS
+// =====================================================
+
+/**
+ * Get all clients for a studio
+ */
+export function useClientsByStudio(studioId: Id<'studios'>, clientType?: string, includeBlacklisted?: boolean) {
+  return useQuery(
+    api.studioManager.getClientsByStudio,
+    { studioId, clientType, includeBlacklisted }
+  );
+}
+
+/**
+ * Get client profile by user ID
+ */
+export function useClientByUser(studioId: Id<'studios'>, userId: Id<'users'>) {
+  return useQuery(
+    api.studioManager.getClientByUser,
+    { studioId, userId }
+  );
+}
+
+/**
+ * Get blacklisted clients
+ */
+export function useBlacklistedClients(studioId: Id<'studios'>) {
+  return useQuery(
+    api.studioManager.getBlacklistedClients,
+    { studioId }
+  );
+}
+
+/**
+ * Create client
+ */
+export function useCreateClient() {
+  return useMutation(api.studioManager.createClient);
+}
+
+/**
+ * Update client
+ */
+export function useUpdateClient() {
+  return useMutation(api.studioManager.updateClient);
+}
+
+/**
+ * Update client metrics
+ */
+export function useUpdateClientMetrics() {
+  return useMutation(api.studioManager.updateClientMetrics);
+}
+
+/**
+ * Delete client
+ */
+export function useDeleteClient() {
+  return useMutation(api.studioManager.deleteClient);
+}
+
+// =====================================================
+// STUDIO MANAGER - STAFF
+// =====================================================
+
+/**
+ * Get all staff for a studio
+ */
+export function useStaffByStudio(studioId: Id<'studios'>, includeInactive?: boolean) {
+  return useQuery(
+    api.studioManager.getStaffByStudio,
+    { studioId, includeInactive }
+  );
+}
+
+/**
+ * Get staff by role
+ */
+export function useStaffByRole(studioId: Id<'studios'>, role: string) {
+  return useQuery(
+    api.studioManager.getStaffByRole,
+    { studioId, role }
+  );
+}
+
+/**
+ * Get staff member by user ID
+ */
+export function useStaffByUser(studioId: Id<'studios'>, userId: Id<'users'>) {
+  return useQuery(
+    api.studioManager.getStaffByUser,
+    { studioId, userId }
+  );
+}
+
+/**
+ * Create staff
+ */
+export function useCreateStaff() {
+  return useMutation(api.studioManager.createStaff);
+}
+
+/**
+ * Update staff
+ */
+export function useUpdateStaff() {
+  return useMutation(api.studioManager.updateStaff);
+}
+
+/**
+ * Delete staff
+ */
+export function useDeleteStaff() {
+  return useMutation(api.studioManager.deleteStaff);
+}
+
+// =====================================================
+// STUDIO MANAGER - ANALYTICS
+// =====================================================
+
+/**
+ * Get analytics for a studio
+ */
+export function useStudioAnalytics(studioId: Id<'studios'>, period?: string, startDate?: string, endDate?: string) {
+  return useQuery(
+    api.studioManager.getAnalytics,
+    { studioId, period, startDate, endDate }
+  );
+}
+
+/**
+ * Get all analytics for a studio
+ */
+export function useAllStudioAnalytics(studioId: Id<'studios'>) {
+  return useQuery(
+    api.studioManager.getAllAnalytics,
+    { studioId }
+  );
+}
+
+/**
+ * Generate analytics
+ */
+export function useGenerateAnalytics() {
+  return useMutation(api.studioManager.generateAnalytics);
+}
+
+/**
+ * Delete analytics
+ */
+export function useDeleteAnalytics() {
+  return useMutation(api.studioManager.deleteAnalytics);
+}
+
+// =====================================================
+// STUDIO MANAGER - GALLERY
+// =====================================================
+
+/**
+ * Update studio photos
+ */
+export function useUpdateStudioPhotos() {
+  return useMutation(api.studioManager.updateStudioPhotos);
 }

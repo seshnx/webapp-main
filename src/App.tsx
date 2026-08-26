@@ -6,12 +6,14 @@ import { Loader2 } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 
 import { useUserSync } from './hooks/useUserSync';
+import { useStudioSubdomain } from './hooks/useStudioSubdomain';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { queryClient } from './config/queryClient';
 
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
 const AppRoutes = lazy(() => import('./routes/AppRoutes'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
+const SubdomainRouter = lazy(() => import('./components/SubdomainRouter'));
 
 export default function App(): JSX.Element {
   const navigate = useNavigate();
@@ -47,6 +49,25 @@ export default function App(): JSX.Element {
     navigate('/login', { replace: true });
   }, [clerk, navigate]);
 
+  // ── Subdomain bypass ────────────────────────────────────
+  // Studio subdomains render their own UI without requiring auth.
+  const { isSubdomain, slug } = useStudioSubdomain();
+  if (isSubdomain && slug) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <LanguageProvider>
+          <Suspense fallback={
+            <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
+              <Loader2 className="animate-spin text-brand-blue" size={48} />
+            </div>
+          }>
+            <SubdomainRouter slug={slug} />
+          </Suspense>
+        </LanguageProvider>
+      </QueryClientProvider>
+    );
+  }
+
   // =========================================================
   // CRITICAL LOADING LOGIC:
   // We ONLY block the screen if Clerk is initializing.
@@ -62,6 +83,41 @@ export default function App(): JSX.Element {
   const isAuthenticated = !!isSignedIn;
   const isOnLoginPage = location.pathname === '/login';
   const isTestLoginPage = location.pathname === '/test-login';
+
+  // ── Public Routes Bypass ────────────────────────────────
+  // Public studio profiles (/s/:slug), kiosk (/kiosk/:id), legal (/legal), and not-found pages
+  // do not require authentication and must render AppRoutes directly.
+  const isPublicRoute =
+    location.pathname.startsWith('/s/') ||
+    location.pathname.startsWith('/kiosk/') ||
+    location.pathname === '/legal' ||
+    location.pathname === '/studio-not-found';
+
+  if (isPublicRoute) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <LanguageProvider userData={userData}>
+          <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
+            <Toaster position="bottom-right" />
+            <Suspense fallback={
+              <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
+                <Loader2 className="animate-spin text-brand-blue" size={48} />
+              </div>
+            }>
+              <AppRoutes
+                user={user}
+                userData={userData}
+                darkMode={darkMode}
+                toggleTheme={toggleTheme}
+                handleLogout={handleLogout}
+                loading={false}
+              />
+            </Suspense>
+          </div>
+        </LanguageProvider>
+      </QueryClientProvider>
+    );
+  }
 
   // 3. Auth Guard: If not signed in, show AuthWizard
   // Note: We render AuthWizard for both root and /login if unauthenticated

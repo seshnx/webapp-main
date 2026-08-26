@@ -51,7 +51,7 @@ export default function RecurringBookingModal({ booking, onClose, onSuccess }: R
     const [loading, setLoading] = useState<boolean>(false);
 
     // Convex mutation for creating bookings
-    const createBooking = useMutation(api.bookings.createBooking);
+    const createBooking = useMutation(api.sbookings.createBooking);
 
     const handleDayToggle = (day: number): void => {
         setDaysOfWeek(prev =>

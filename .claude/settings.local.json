@@ -48,7 +48,14 @@
       "Bash(cd:*)",
       "Bash(git pull:*)",
       "Bash(cd convex:*)",
-      "mcp__Sanity__search_docs"
+      "mcp__Sanity__search_docs",
+      "Bash(npm dev:*)",
+      "Bash(netstat:*)",
+      "Bash(taskkill:*)",
+      "Bash(package \")",
+      "mcp__plugin_playwright_playwright__browser_snapshot",
+      "mcp__plugin_playwright_playwright__browser_fill_form",
+      "mcp__plugin_playwright_playwright__browser_click"
     ]
   }
 }
