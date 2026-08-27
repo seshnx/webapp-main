@@ -67,6 +67,14 @@ const initSentry = async (): Promise<any | null> => {
       init({
         dsn,
         environment: import.meta.env.MODE || 'development',
+        // Avoid sending sentry-trace to Clerk by limiting propagation targets
+        tracePropagationTargets: [
+          'localhost',
+          'https://seshnx.com',
+          'https://app.seshnx.com',
+          /^https:\/\/(?!clerk\.)[a-z0-9-]+\.seshnx\.com/,
+          /^https:\/\/webapp-main-.*\.vercel\.app/,
+        ],
         tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
         replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
         replaysOnErrorSampleRate: 1.0,

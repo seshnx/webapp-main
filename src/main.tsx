@@ -37,7 +37,15 @@ if (sentryDsn) {
     environment: import.meta.env.MODE || 'development',
     // Release tracking for better error grouping
     release: import.meta.env.VERCEL_GIT_COMMIT_SHA || 'local-dev',
-    tracePropagationTargets: ['localhost', /^https:\/\/([a-z0-9-]+\.)?seshnx\.com/, /^https:\/\/webapp-main-.*\.vercel\.app/],
+    // Only propagate traces to our app origins — explicitly exclude Clerk (clerk.seshnx.com)
+    tracePropagationTargets: [
+      'localhost',
+      'https://seshnx.com',
+      'https://app.seshnx.com',
+      // Match other seshnx subdomains but explicitly exclude the 'clerk' subdomain
+      /^https:\/\/(?!clerk\.)[a-z0-9-]+\.seshnx\.com/,
+      /^https:\/\/webapp-main-.*\.vercel\.app/,
+    ],
     integrations: [
       Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({
