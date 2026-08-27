@@ -7,7 +7,8 @@ import {
     MessageSquare, UserX, Download, Globe, Calendar, ShoppingBag,
     Image, Accessibility, Zap, Clock, Volume2, VolumeX, Monitor,
     Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
-    FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save, Trash2, LucideIcon
+    FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save, Trash2, LucideIcon,
+    Radio, Play, Mic, Heart
 } from 'lucide-react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -129,6 +130,19 @@ interface SocialSettings {
     showSuggestedAccounts?: boolean;
     mutedUsers?: string[];
     blockedUsers?: string[];
+    // Live Audio Spaces
+    enableLiveSpaces?: boolean;
+    autoMuteMicOnJoin?: boolean;
+    allowHandRaising?: boolean;
+    notifyOnLiveSpaceStart?: boolean;
+    // Ephemeral 24h Stories
+    allowStoryReplies?: 'everyone' | 'followers' | 'none';
+    autoArchiveStories?: boolean;
+    notifyOnNewStories?: boolean;
+    // Creator Tipping & Monetization
+    enableTipping?: boolean;
+    showTopSupporters?: boolean;
+    notifyOnTipReceived?: boolean;
 }
 
 // Content filtering settings
@@ -269,6 +283,7 @@ interface SubProfiles {
 interface SettingsTabProps {
     user: User | null;
     userData?: UserData | null;
+    handleLogout?: () => void;
     onUpdate?: (updatedUserData: UserData) => void;
     onRoleSwitch?: (newRole: AccountType) => void;
     subProfiles?: SubProfiles;
@@ -368,26 +383,45 @@ export default function SettingsTab({
     const updateProfileMutation = useMutation(api.users.updateProfile);
     const updateSubProfileMutation = useMutation(api.users.updateSubProfile);
 
+    const VALID_TABS: SettingsTabId[] = [
+        'general', 'security', 'notifications', 'messaging', 'social',
+        'bookings', 'marketplace', 'content', 'accessibility', 'performance'
+    ];
+
     // Get settings sub-tab from URL path
     const getSettingsTabFromPath = (path: string): SettingsTabId => {
         const parts = path.split('/').filter(Boolean);
         if (parts[0] === 'profile' && parts[1] === 'settings' && parts[2]) {
-            return parts[2] as SettingsTabId;
+            if (VALID_TABS.includes(parts[2] as SettingsTabId)) {
+                return parts[2] as SettingsTabId;
+            }
+        }
+        if (parts[0] === 'settings' && parts[1]) {
+            if (VALID_TABS.includes(parts[1] as SettingsTabId)) {
+                return parts[1] as SettingsTabId;
+            }
         }
         return 'general';
     };
 
     const [activeTab, setActiveTab] = useState<SettingsTabId>(() => getSettingsTabFromPath(location.pathname));
+    const isInitialMount = React.useRef(true);
 
-    // Sync URL with active settings tab
+    // Sync URL when activeTab changes explicitly by user selection
     useEffect(() => {
-        const currentPath = `/profile/settings/${activeTab}`;
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+        const isDirectSettings = location.pathname.startsWith('/settings');
+        const basePath = isDirectSettings ? '/settings' : '/profile/settings';
+        const currentPath = `${basePath}/${activeTab}`;
         if (location.pathname !== currentPath) {
             navigate(currentPath, { replace: true });
         }
-    }, [activeTab, navigate, location.pathname]);
+    }, [activeTab]);
 
-    // Update tab when URL changes
+    // Update tab when URL changes (e.g. browser back/forward or external navigation)
     useEffect(() => {
         const tabFromPath = getSettingsTabFromPath(location.pathname);
         if (tabFromPath !== activeTab) {
@@ -489,6 +523,19 @@ export default function SettingsTab({
                 showSuggestedAccounts: true,
                 mutedUsers: [],
                 blockedUsers: [],
+                // Live Audio Spaces
+                enableLiveSpaces: true,
+                autoMuteMicOnJoin: true,
+                allowHandRaising: true,
+                notifyOnLiveSpaceStart: true,
+                // Ephemeral Stories
+                allowStoryReplies: 'everyone',
+                autoArchiveStories: true,
+                notifyOnNewStories: true,
+                // Creator Tipping & Monetization
+                enableTipping: true,
+                showTopSupporters: true,
+                notifyOnTipReceived: true,
             },
             contentFiltering: {
                 sensitivityFilter: 'medium',
@@ -610,6 +657,23 @@ export default function SettingsTab({
     const [roleToRemove, setRoleToRemove] = useState<AccountType | null>(null);
     const [showRoleRemoveModal, setShowRoleRemoveModal] = useState(false);
 
+    // Role Save Prompt Modal State
+    const [showRoleSavePromptModal, setShowRoleSavePromptModal] = useState(false);
+
+    // Track whether roles or workflow context have been modified
+    const hasRoleChanges = React.useMemo(() => {
+        const initialRoles = userData?.accountTypes || [];
+        if (roles.length !== initialRoles.length) return true;
+        const sortedCurrent = [...roles].sort();
+        const sortedInitial = [...initialRoles].sort();
+        for (let i = 0; i < sortedCurrent.length; i++) {
+            if (sortedCurrent[i] !== sortedInitial[i]) return true;
+        }
+        if (activeRole !== (userData?.activeProfileRole || initialRoles[0] || 'Fan')) return true;
+        if (defaultProfileRole !== (userData?.defaultProfileRole || userData?.activeProfileRole || initialRoles[0] || 'Fan')) return true;
+        return false;
+    }, [roles, activeRole, defaultProfileRole, userData]);
+
     // Security / Account State
     const [showSecurityModal, setShowSecurityModal] = useState(false);
     const [securityAction, setSecurityAction] = useState<SecurityAction>(null);
@@ -652,7 +716,8 @@ export default function SettingsTab({
             } else {
                 (updated as any)[key] = !(prev as any)[key];
             }
-            // Apply immediately and save
+            // Apply immediately to DOM & localStorage
+            applySettingsToDom(updated as any);
             onUpdate?.({ ...userData!, settings: updated });
             // Auto-save to Convex
             if (user?.id) {
@@ -693,7 +758,8 @@ export default function SettingsTab({
             } else {
                 (updated as any)[key] = value;
             }
-            // Apply immediately and save
+            // Apply immediately to DOM & localStorage
+            applySettingsToDom(updated as any);
             onUpdate?.({ ...userData!, settings: updated });
             // Auto-save to Convex
             if (user?.id) {
@@ -711,7 +777,8 @@ export default function SettingsTab({
         handleValueChange(null, 'theme', val);
     };
 
-    const saveSettings = async (): Promise<void> => {
+    const saveSettings = async (options?: { showAlert?: boolean }): Promise<void> => {
+        const showAlert = options?.showAlert !== false;
         if (!user) return;
         setSaving(true);
         try {
@@ -743,16 +810,20 @@ export default function SettingsTab({
                 onUpdate(updatedUserData);
             }
 
-            alert("Settings saved successfully!");
+            if (showAlert) alert("Settings saved successfully!");
         } catch (e) {
             console.error(e);
-            alert("Failed to save settings.");
+            if (showAlert) alert("Failed to save settings.");
         }
         setSaving(false);
     };
 
-    const updateAccountTypes = async (): Promise<void> => {
-        if (roles.length === 0 || !user?.id) return alert("You must have at least one role.");
+    const updateAccountTypes = async (options?: { showAlert?: boolean }): Promise<boolean> => {
+        const showAlert = options?.showAlert !== false;
+        if (roles.length === 0 || !user?.id) {
+            if (showAlert) alert("You must have at least one role.");
+            return false;
+        }
         setSaving(true);
         try {
             const userId = user.id;
@@ -780,16 +851,6 @@ export default function SettingsTab({
                 setDefaultProfileRole(newActiveRole);
             }
 
-            // Delete sub-profiles for removed roles
-            // Note: deleteSubProfile not implemented yet - placeholder for future functionality
-            // for (const role of removedRoles) {
-            //     try {
-            //         await deleteSubProfile(userId, role);
-            //     } catch (err) {
-            //         console.warn(`Failed to delete sub-profile for ${role}:`, err);
-            //     }
-            // }
-
             // Update user in Convex with new roles
             await updateProfileMutation({
                 clerkId: userId,
@@ -798,7 +859,6 @@ export default function SettingsTab({
             });
 
             // Update parent component's userData with new roles
-            // Note: Convex real-time updates will automatically refresh userData
             if (onUpdate && userData) {
                 const updatedUserData: UserData = {
                     ...userData,
@@ -809,12 +869,23 @@ export default function SettingsTab({
                 onUpdate(updatedUserData);
             }
 
-            alert("Roles & Preferences updated!");
+            if (showAlert) alert("Roles & Preferences updated!");
+            return true;
         } catch (e) {
             console.error("Failed to update roles:", e);
-            alert("Failed to update: " + (e instanceof Error ? e.message : "Unknown error"));
+            if (showAlert) alert("Failed to update: " + (e instanceof Error ? e.message : "Unknown error"));
+            return false;
+        } finally {
+            setSaving(false);
         }
-        setSaving(false);
+    };
+
+    const handleSaveAllClick = (): void => {
+        if (hasRoleChanges) {
+            setShowRoleSavePromptModal(true);
+        } else {
+            saveSettings();
+        }
     };
 
     const toggleRole = (role: AccountType): void => {
@@ -1110,7 +1181,7 @@ export default function SettingsTab({
                         {activeTabInfo ? t(activeTabInfo.labelKey) : t('general')}
                     </h3>
                     <button
-                        onClick={saveSettings}
+                        onClick={handleSaveAllClick}
                         disabled={saving}
                         className="flex items-center gap-2 px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-blue-600 disabled:opacity-50 text-sm font-medium transition"
                     >
@@ -1180,7 +1251,7 @@ export default function SettingsTab({
                             />
 
                             <button
-                                onClick={updateAccountTypes}
+                                onClick={() => updateAccountTypes()}
                                 disabled={saving}
                                 className="mt-4 w-full bg-purple-600 text-white px-4 py-2.5 rounded-lg font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2 shadow-md transition"
                             >
@@ -1823,6 +1894,107 @@ export default function SettingsTab({
                             />
                         </div>
 
+                        {/* Live Audio Spaces & Rooms Settings */}
+                        <div className="border-t dark:border-gray-700 pt-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Radio size={16} className="text-red-500" /> Live Audio Spaces
+                            </h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.social?.enableLiveSpaces !== false}
+                                    onChange={() => handleToggle('social', 'enableLiveSpaces')}
+                                    label="Enable Live Audio Spaces"
+                                    description="Participate in or host live audio sessions"
+                                    icon={Radio}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.social?.autoMuteMicOnJoin !== false}
+                                    onChange={() => handleToggle('social', 'autoMuteMicOnJoin')}
+                                    label="Auto-Mute Microphone on Join"
+                                    description="Join live rooms muted by default"
+                                    icon={Mic}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.social?.allowHandRaising !== false}
+                                    onChange={() => handleToggle('social', 'allowHandRaising')}
+                                    label="Allow Audience Hand Raising"
+                                    description="Let listeners request to speak in your live spaces"
+                                    icon={Users}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.social?.notifyOnLiveSpaceStart !== false}
+                                    onChange={() => handleToggle('social', 'notifyOnLiveSpaceStart')}
+                                    label="Live Space Start Notifications"
+                                    description="Get notified when creators you follow start a space"
+                                    icon={Bell}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Ephemeral 24-Hour Stories Settings */}
+                        <div className="border-t dark:border-gray-700 pt-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <Play size={16} className="text-purple-500" /> Ephemeral 24h Stories
+                            </h4>
+                            <div className="space-y-3">
+                                <SelectField
+                                    label="Who Can Reply to Your Stories"
+                                    value={localSettings.social?.allowStoryReplies || 'everyone'}
+                                    onChange={val => handleValueChange('social', 'allowStoryReplies', val)}
+                                    options={[
+                                        { value: 'everyone', label: 'Everyone' },
+                                        { value: 'followers', label: 'Followers Only' },
+                                        { value: 'none', label: 'No One' },
+                                    ]}
+                                    icon={MessageSquare}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.social?.autoArchiveStories !== false}
+                                    onChange={() => handleToggle('social', 'autoArchiveStories')}
+                                    label="Auto-Archive Expired Stories"
+                                    description="Automatically save stories to your private archive after 24h"
+                                    icon={Clock}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.social?.notifyOnNewStories !== false}
+                                    onChange={() => handleToggle('social', 'notifyOnNewStories')}
+                                    label="New Story Notifications"
+                                    description="Receive alerts when followed creators post a story"
+                                    icon={Bell}
+                                />
+                            </div>
+                        </div>
+
+                        {/* Creator Tipping & Monetization Settings */}
+                        <div className="border-t dark:border-gray-700 pt-6">
+                            <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
+                                <DollarSign size={16} className="text-emerald-500" /> Creator Tipping & Monetization
+                            </h4>
+                            <div className="space-y-3">
+                                <ToggleSwitch
+                                    checked={localSettings.social?.enableTipping !== false}
+                                    onChange={() => handleToggle('social', 'enableTipping')}
+                                    label="Allow Tips on Profile & Content"
+                                    description="Let fans and clients send tips and monetary support"
+                                    icon={DollarSign}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.social?.showTopSupporters !== false}
+                                    onChange={() => handleToggle('social', 'showTopSupporters')}
+                                    label="Show Top Supporters Publicly"
+                                    description="Display top tipper badges on your profile page"
+                                    icon={Heart}
+                                />
+                                <ToggleSwitch
+                                    checked={localSettings.social?.notifyOnTipReceived !== false}
+                                    onChange={() => handleToggle('social', 'notifyOnTipReceived')}
+                                    label="Tip Received Notifications"
+                                    description="Get instant notifications whenever a tip is sent"
+                                    icon={Bell}
+                                />
+                            </div>
+                        </div>
+
                         <div className="border-t dark:border-gray-700 pt-6">
                             <h4 className="text-sm font-bold dark:text-white mb-4">Content Filtering</h4>
                             <div className="space-y-3">
@@ -2083,6 +2255,18 @@ export default function SettingsTab({
                                 ]}
                                 icon={FileText}
                             />
+                            <div className="pb-1">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        localStorage.removeItem('seshnx_font_scale_prompt_dismissed');
+                                        window.location.reload();
+                                    }}
+                                    className="text-xs text-brand-blue dark:text-blue-400 hover:underline flex items-center gap-1.5"
+                                >
+                                    <RefreshCw size={12} /> Re-check Device Font Scaling Alerts
+                                </button>
+                            </div>
                             <ToggleSwitch
                                 checked={localSettings.accessibility?.reducedMotion || false}
                                 onChange={() => handleToggle('accessibility', 'reducedMotion')}
@@ -2291,6 +2475,65 @@ export default function SettingsTab({
                                     Cancel
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Roles Updated Prompt Dialogue */}
+            {showRoleSavePromptModal && (
+                <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-[#1f2128] rounded-2xl max-w-md w-full p-6 shadow-2xl border border-purple-200 dark:border-purple-800/50 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2.5">
+                                <div className="p-2 bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300 rounded-xl">
+                                    <Users size={20} />
+                                </div>
+                                <h3 className="text-base font-bold dark:text-white">
+                                    Roles have been updated. Save?
+                                </h3>
+                            </div>
+                            <button
+                                onClick={() => setShowRoleSavePromptModal(false)}
+                                className="p-1 rounded-full text-gray-400 hover:text-gray-600 dark:hover:text-white transition"
+                            >
+                                <X size={18} />
+                            </button>
+                        </div>
+
+                        <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                            You updated your active account roles or workflow context in General Settings without clicking <strong>Save Workflow Settings</strong>. Would you like to save your updated roles along with your settings?
+                        </p>
+
+                        <div className="flex flex-col gap-2 pt-2">
+                            <button
+                                onClick={async () => {
+                                    setShowRoleSavePromptModal(false);
+                                    const roleOk = await updateAccountTypes({ showAlert: false });
+                                    if (roleOk) {
+                                        await saveSettings({ showAlert: false });
+                                        alert("Roles & Settings saved successfully!");
+                                    }
+                                }}
+                                className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl shadow-md transition flex items-center justify-center gap-2"
+                            >
+                                <Save size={14} /> Yes, Save Roles & Settings
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    setShowRoleSavePromptModal(false);
+                                    await saveSettings();
+                                }}
+                                className="w-full py-2.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-bold rounded-xl transition"
+                            >
+                                Save Settings Only (Skip Roles)
+                            </button>
+                            <button
+                                onClick={() => setShowRoleSavePromptModal(false)}
+                                className="w-full py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 hover:underline"
+                            >
+                                Cancel
+                            </button>
                         </div>
                     </div>
                 </div>

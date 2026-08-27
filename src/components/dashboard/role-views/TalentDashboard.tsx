@@ -19,13 +19,13 @@ interface TalentDashboardProps extends DashboardProps {
   className?: string;
 }
 
-export function TalentDashboard({ userData, className = '' }: TalentDashboardProps) {
+export function TalentDashboard({ userData, setActiveTab, className = '' }: TalentDashboardProps) {
   // Fetch data from Convex
   const upcomingBookings = useQuery(api.bookings.getUpcomingBookings,
-    userData?.clerkId ? { clerkId: userData.clerkId, limit: 10 } : "skip"
+    (userData as any)?.clerkId ? { clerkId: (userData as any).clerkId, limit: 10 } : "skip"
   );
   const followers = useQuery(api.users.getFollowers,
-    userData ? { userId: userData._id } : "skip"
+    (userData as any)?._id ? { userId: (userData as any)._id } : "skip"
   );
 
   // Calculate metrics from real data
@@ -76,35 +76,39 @@ export function TalentDashboard({ userData, className = '' }: TalentDashboardPro
 
   const quickActions: QuickAction[] = [
     {
+      id: 'book-studio',
+      label: 'Book Studio / Engineer',
+      description: 'Find top recording studios & sound engineers',
+      icon: Calendar,
+      action: () => setActiveTab?.('bookings'),
+      variant: 'primary',
+      featured: true,
+      roles: ['Talent', '*']
+    },
+    {
       id: 'new-post',
       label: 'New Post',
+      description: 'Share music, media or updates on feed',
       icon: Plus,
-      action: () => console.log('Navigate to create post'),
-      variant: 'primary',
+      action: () => setActiveTab?.('feed'),
+      variant: 'secondary',
       roles: ['Talent', '*']
     },
     {
       id: 'my-gigs',
-      label: 'My Gigs',
-      icon: Calendar,
-      action: () => console.log('Navigate to gigs'),
+      label: 'My Performances',
+      description: 'View upcoming studio bookings & live gigs',
+      icon: Music,
+      action: () => setActiveTab?.('bookings'),
       variant: 'secondary',
       roles: ['Talent', '*']
     },
     {
-      id: 'messages',
-      label: 'Messages',
-      icon: MessageSquare,
-      action: () => console.log('Navigate to messages'),
-      variant: 'secondary',
-      roles: ['Talent', '*'],
-      badge: 3
-    },
-    {
-      id: 'analytics',
-      label: 'Analytics',
+      id: 'profile',
+      label: 'Talent Profile',
+      description: 'Manage bio, portfolio & booking rates',
       icon: TrendingUp,
-      action: () => console.log('Navigate to analytics'),
+      action: () => setActiveTab?.('profile'),
       variant: 'secondary',
       roles: ['Talent', '*']
     }
@@ -132,7 +136,7 @@ export function TalentDashboard({ userData, className = '' }: TalentDashboardPro
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Key Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
         <StatsCard
           title="Upcoming Gigs"
           value={data.upcomingGigs}

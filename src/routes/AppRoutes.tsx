@@ -60,7 +60,7 @@ const retryLazyLoad = <T extends ComponentType<any>>(
             promise
               .then((module) => {
                 // Ensure we get the default export
-                resolve(module.default ? module : { default: module });
+                resolve((module as any).default ? module : ({ default: module } as any));
               })
               .catch((error) => {
                 if (attemptNumber < retries) {
@@ -205,7 +205,7 @@ export default function AppRoutes({
           <ProtectedRoute loading={loading}>
             <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
               <Dashboard
-                user={user}
+                user={user as any}
                 userData={userData}
                 subProfiles={{}}
                 setActiveTab={() => {}}
@@ -293,8 +293,8 @@ export default function AppRoutes({
           <ProtectedRoute loading={loading}>
             <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
               <SettingsTab
-              user={user}
-              userData={userData}
+              user={user as any}
+              userData={userData as any}
               onUpdate={async (newData: UserData | Partial<UserData>) => {
                 // Handle both settings updates (object) and userData updates (UserData object)
                 if (onUserDataUpdate && newData) {
@@ -322,7 +322,7 @@ export default function AppRoutes({
                     await updateProfile({
                       clerkId: userId,
                       activeRole: newRole,
-                    });
+                    } as any);
                     console.log('Role switched to:', newRole);
                     // Reload page to reflect changes
                     window.location.reload();
@@ -355,22 +355,28 @@ export default function AppRoutes({
       {/* Redirect root to feed (active module) */}
       <Route path="/" element={<Navigate to="/feed" replace />} />
 
-      {/* Redirect disabled routes to active modules */}
+      {/* RE-ENABLED MODULE ROUTES */}
+      <Route path="/messages" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/messages/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/chat" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/chat/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/marketplace" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/marketplace/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/tech" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/tech/*" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/payments" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/billing" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/business-center" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+      <Route path="/legal" element={<ProtectedRoute loading={loading}><div /></ProtectedRoute>} />
+
+      {/* Redirect disabled/on-hold routes */}
       <Route path="/home" element={<Navigate to="/feed" replace />} />
       <Route path="/social" element={<Navigate to="/feed" replace />} />
-      <Route path="/chat" element={<Navigate to="/feed" replace />} />
-      <Route path="/messages" element={<Navigate to="/feed" replace />} />
-      <Route path="/marketplace" element={<Navigate to="/bookings" replace />} />
-      <Route path="/tech" element={<Navigate to="/bookings" replace />} />
-      <Route path="/billing" element={<Navigate to="/bookings" replace />} />
-      <Route path="/payments" element={<Navigate to="/bookings" replace />} />
-      <Route path="/business-center" element={<Navigate to="/bookings" replace />} />
       <Route path="/edu-student" element={<Navigate to="/feed" replace />} />
       <Route path="/edu-intern" element={<Navigate to="/feed" replace />} />
       <Route path="/edu-overview" element={<Navigate to="/feed" replace />} />
       <Route path="/edu-admin" element={<Navigate to="/feed" replace />} />
       <Route path="/studio-ops" element={<Navigate to="/studio-manager" replace />} />
-      <Route path="/labels" element={<Navigate to="/bookings" replace />} />
 
       {/* Public Studio Profile - NO ProtectedRoute wrapper */}
       <Route path="/s/:slug" element={

@@ -37,11 +37,9 @@ if (sentryDsn) {
     environment: import.meta.env.MODE || 'development',
     // Release tracking for better error grouping
     release: import.meta.env.VERCEL_GIT_COMMIT_SHA || 'local-dev',
+    tracePropagationTargets: ['localhost', /^https:\/\/([a-z0-9-]+\.)?seshnx\.com/, /^https:\/\/webapp-main-.*\.vercel\.app/],
     integrations: [
-      Sentry.browserTracingIntegration({
-        // Track navigation performance
-        tracePropagationTargets: ['localhost', /^https:\/\/([a-z0-9-]+\.)?seshnx\.com/, /^https:\/\/webapp-main-.*\.vercel\.app/],
-      }),
+      Sentry.browserTracingIntegration(),
       Sentry.replayIntegration({
         maskAllText: false,
         blockAllMedia: false,

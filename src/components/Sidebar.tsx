@@ -95,57 +95,36 @@ export function Sidebar({
 
   // Organized navigation groups
   const navGroups: NavigationGroup[] = useMemo(() => [
-    // ACTIVE MODULES ONLY: Social Feed, Bookings, Profile
     {
-      label: 'Active',
+      label: 'Main',
       icon: Home,
       items: [
-        { id: 'dashboard', icon: Home, label: t('dashboard') },
         { id: 'feed', icon: MessageSquare, label: t('socialNx') },
+        { id: 'messages', icon: MessageCircle, label: t('messages') },
         { id: 'bookings', icon: Calendar, label: t('bookings') },
         { id: 'profile', icon: Settings, label: t('profile') },
       ]
     },
     {
-      label: 'Studio',
+      label: 'Work & Gear',
+      icon: Wrench,
+      items: [
+        { id: 'marketplace', icon: ShoppingBag, label: t('marketplace') },
+        { id: 'tech', icon: Wrench, label: t('techServices') },
+      ]
+    },
+    {
+      label: 'Business',
       icon: Briefcase,
       items: [
-        ...(hasBusinessFeatures ? [{ id: 'studio-manager', icon: Briefcase, label: 'Studio Manager' }] : []),
+        ...(hasBusinessFeatures ? [
+          { id: 'studio-manager', icon: Briefcase, label: 'Studio Manager' },
+          { id: 'business-center', icon: Briefcase, label: t('businessCenter') }
+        ] : []),
+        { id: 'payments', icon: CreditCard, label: t('billing') },
       ]
     }
-    // DISABLED MODULES
-    // {
-    //   label: 'Primary',
-    //   icon: Home,
-    //   items: [
-    //     { id: 'dashboard', icon: Home, label: t('dashboard') },
-    //     { id: 'messages', icon: MessageCircle, label: t('messages') },
-    //   ]
-    // },
-    // {
-    //   label: 'Work',
-    //   icon: BriefcaseIcon,
-    //   items: [
-    //     { id: 'marketplace', icon: ShoppingBag, label: t('marketplace') },
-    //     { id: 'tech', icon: Wrench, label: t('techServices') },
-    //   ]
-    // },
-    // {
-    //   label: 'Business',
-    //   icon: Briefcase,
-    //   items: [
-    //     ...(hasBusinessFeatures ? [{ id: 'business-center', icon: Briefcase, label: t('businessCenter') }] : []),
-    //     { id: 'payments', icon: CreditCard, label: t('billing') },
-    //   ]
-    // },
-    // ...(eduRoute ? [{
-    //   label: 'Education',
-    //   icon: GraduationCap,
-    //   items: [
-    //     { id: eduRoute, icon: GraduationCap, label: eduLabel, highlight: true }
-    //   ]
-    // }] : [])
-  ], [t]);
+  ], [t, hasBusinessFeatures]);
 
   const onLogout = handleLogout || (async () => {
     try {
@@ -173,9 +152,15 @@ export function Sidebar({
     const pathMap: Record<string, string> = {
       'dashboard': '/dashboard',
       'feed': '/feed',
+      'messages': '/messages',
+      'chat': '/messages',
       'bookings': '/bookings',
       'profile': '/profile',
       'studio-manager': '/studio-manager',
+      'marketplace': '/marketplace',
+      'tech': '/tech',
+      'payments': '/payments',
+      'business-center': '/business-center',
       'settings': '/settings',
       'legal': '/legal',
       'debug-report': '/debug-report',

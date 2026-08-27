@@ -136,25 +136,62 @@ export default function PublicProfileModal({
     useEffect(() => {
         if (convexProfile !== undefined) {
             if (!convexProfile) {
-                setError("Profile not found or is private.");
+                // If viewer is owner or if currentUserData matches, fallback to currentUserData
+                if (currentUserData && (isOwner || currentUserData.clerkId === userId || currentUserData._id === userId || currentUserData.id === userId)) {
+                    setProfile({
+                        ...currentUserData,
+                        firstName: currentUserData.firstName || currentUserData.first_name,
+                        lastName: currentUserData.lastName || currentUserData.last_name,
+                        displayName: currentUserData.displayName || currentUserData.display_name || currentUserData.profileName || currentUserData.username || currentUser?.displayName || '[Deleted User]',
+                        photoURL: currentUserData.photoURL || currentUserData.avatar_url || currentUserData.photo_url || currentUserData.imageUrl,
+                        bannerURL: currentUserData.bannerURL || currentUserData.banner_url || currentUserData.bannerUrl,
+                        rate: currentUserData.hourlyRate || currentUserData.rate || currentUserData.hourly_rate,
+                        zip: currentUserData.zipCode || currentUserData.zip
+                    } as any);
+                    setError(null);
+                    setLoading(false);
+                    return;
+                }
+
+                // If user is not found or deleted, render [Deleted User] profile
+                setProfile({
+                    id: userId || 'deleted',
+                    displayName: '[Deleted User]',
+                    firstName: '[Deleted',
+                    lastName: 'User]',
+                    bio: 'This account has been deleted or is no longer available.',
+                    accountTypes: ['User'],
+                } as any);
+                setError(null);
                 setLoading(false);
                 return;
             }
 
             // Normalize data structure
+            const resolvedName = convexProfile.profileName || 
+                convexProfile.displayName || 
+                (convexProfile as any).display_name || 
+                convexProfile.username || 
+                ((convexProfile.firstName || (convexProfile as any).first_name) 
+                    ? `${convexProfile.firstName || (convexProfile as any).first_name} ${(convexProfile.lastName || (convexProfile as any).last_name) || ''}`.trim() 
+                    : null);
+
+            const isDeletedOrMissing = !convexProfile.clerkId || !resolvedName;
+
             setProfile({
                 ...convexProfile,
-                firstName: convexProfile.firstName,
-                lastName: convexProfile.lastName,
-                displayName: convexProfile.profileName,
-                photoURL: convexProfile.imageUrl,
-                bannerURL: convexProfile.bannerUrl,
-                rate: convexProfile.hourlyRate,
-                zip: convexProfile.zipCode
+                firstName: convexProfile.firstName || (convexProfile as any).first_name,
+                lastName: convexProfile.lastName || (convexProfile as any).last_name,
+                displayName: isDeletedOrMissing ? '[Deleted User]' : resolvedName,
+                photoURL: convexProfile.imageUrl || (convexProfile as any).avatar_url || (convexProfile as any).photo_url,
+                bannerURL: convexProfile.bannerUrl || (convexProfile as any).banner_url,
+                rate: convexProfile.hourlyRate || (convexProfile as any).rate || (convexProfile as any).hourly_rate,
+                zip: convexProfile.zipCode || (convexProfile as any).zip
             } as ProfileData);
+            setError(null);
             setLoading(false);
         }
-    }, [convexProfile, userId]);
+    }, [convexProfile, userId, isOwner, currentUserData, currentUser]);
 
     const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

@@ -71,7 +71,7 @@ export function useUserSubProfiles(
   // Get all sub-profiles from Convex (real-time!)
   const subProfiles = useQuery(
     api.users.getSubProfiles,
-    clerkUserId ? { userId: clerkUserId } : "skip"
+    clerkUserId ? { userId: clerkUserId as any } : "skip"
   );
 
   if (!clerkUserId || !roles || roles.length === 0) {
@@ -86,7 +86,7 @@ export function useUserSubProfiles(
     const profile = availableProfiles.find(p => p.role === role);
     if (profile) {
       profilesMap[role] = {
-        useRealName: profile.useRealName,
+        useRealName: (profile as any).useRealName,
         displayName: profile.displayName,
         bio: profile.bio,
         location: profile.location,
@@ -133,7 +133,7 @@ export function useBookingRequests(ownerId: string | null | undefined): number {
   // Get bookings by studio owner from Convex (real-time!)
   const bookings = useQuery(
     api.sbookings.getBookingsByStudio,
-    ownerId ? { ownerId, status: "Pending" } : "skip"
+    ownerId ? { studioId: ownerId as any } : "skip"
   );
 
   if (!ownerId) {
@@ -185,7 +185,7 @@ export function useAppDataNotifications(
     text: n.message,
     timestamp: new Date(n.createdAt),
     read: n.read,
-    actionData: n.actionData,
+    actionData: (n as any).metadata,
   }));
 }
 

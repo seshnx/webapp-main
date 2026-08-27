@@ -544,6 +544,22 @@ export const confirmPurchase = mutation({
   },
 });
 
+export const addTrackingNumber = mutation({
+  args: {
+    transactionId: v.id("marketTransactions"),
+    trackingNumber: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const transaction = await ctx.db.get(args.transactionId);
+    if (!transaction) throw new Error("Transaction not found");
+    await ctx.db.patch(args.transactionId, {
+      trackingNumber: args.trackingNumber,
+      updatedAt: Date.now(),
+    });
+    return { success: true };
+  },
+});
+
 export const completeTransaction = mutation({
   args: {
     transactionId: v.id("marketTransactions"),

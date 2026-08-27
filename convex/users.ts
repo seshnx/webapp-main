@@ -12,12 +12,40 @@ import { v } from "convex/values";
 export const getUserByClerkId = query({
   args: { clerkId: v.string() },
   handler: async (ctx, args) => {
-    const user = await ctx.db
+    // 1. Try by clerk_id index
+    let user: any = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
       .first();
 
+    // 2. Try by Convex _id if clerkId is a valid ID string
+    if (!user) {
+      try {
+        const fetchedDoc: any = await ctx.db.get(args.clerkId as any);
+        if (fetchedDoc && ("clerkId" in fetchedDoc || "email" in fetchedDoc || "username" in fetchedDoc)) {
+          user = fetchedDoc;
+        }
+      } catch (e) {
+        user = null;
+      }
+    }
+
+    // 3. Fallback: filter all users by clerkId, _id, username, or email match
+    if (!user) {
+      const allUsers = await ctx.db.query("users").collect();
+      user = allUsers.find((u: any) =>
+        u.clerkId === args.clerkId ||
+        u._id === args.clerkId ||
+        u.username === args.clerkId ||
+        u.email === args.clerkId
+      ) || null;
+    }
+
     if (!user) return null;
+
+    // Check if user has no clerkId or missing profileName/username (deleted/orphaned account)
+    const isDeletedOrMissing = !user.clerkId || (!user.profileName && !user.username && !user.displayName && !user.firstName);
+    const profileName = isDeletedOrMissing ? "[Deleted User]" : (user.profileName || user.displayName || user.username || user.firstName);
 
     // Fetch and append subprofiles
     const subProfilesList = await ctx.db
@@ -27,6 +55,8 @@ export const getUserByClerkId = query({
 
     return {
       ...user,
+      profileName,
+      displayName: profileName,
       subProfilesList,
     };
   },
@@ -106,13 +136,13 @@ export const searchUsers = query({
   handler: async (ctx, args) => {
     const limit = args.limit || 20;
 
-    // Get all users
+    // Get all users (scan sufficient users to ensure high recall)
     const allUsers = await ctx.db
       .query("users")
-      .take(limit * 3); // Fetch extra to filter
+      .take(200);
 
-    // Filter by search text (covers name, username, bio, accountTypes)
-    const searchTerm = args.searchText.toLowerCase();
+    // Filter by search text (covers name, username, bio, accountTypes, email)
+    const searchTerm = args.searchText.toLowerCase().trim();
     const filtered = searchTerm
       ? allUsers.filter((user) =>
           (user.username || "").toLowerCase().includes(searchTerm) ||
@@ -120,6 +150,8 @@ export const searchUsers = query({
           (user.firstName || "").toLowerCase().includes(searchTerm) ||
           (user.lastName || "").toLowerCase().includes(searchTerm) ||
           (user.bio || "").toLowerCase().includes(searchTerm) ||
+          (user.email || "").toLowerCase().includes(searchTerm) ||
+          (user.clerkId || "").toLowerCase().includes(searchTerm) ||
           (user.accountTypes || []).some((t: string) =>
             t.toLowerCase().includes(searchTerm)
           )
@@ -725,6 +757,7 @@ export const updateSettings = mutation({
     notificationsEnabled: v.optional(v.boolean()),
     showEmail: v.optional(v.boolean()),
     showLocation: v.optional(v.boolean()),
+    settings: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     const user = await ctx.db
@@ -736,17 +769,22 @@ export const updateSettings = mutation({
       throw new Error("User not found");
     }
 
+    const currentSettings = (user.settings && typeof user.settings === "object") ? user.settings : {};
+    const newSettings = {
+      ...currentSettings,
+      ...(args.settings && typeof args.settings === "object" ? args.settings : {}),
+      ...(args.privacy !== undefined ? { privacy: args.privacy } : {}),
+      ...(args.notificationsEnabled !== undefined ? { notificationsEnabled: args.notificationsEnabled } : {}),
+      ...(args.showEmail !== undefined ? { showEmail: args.showEmail } : {}),
+      ...(args.showLocation !== undefined ? { showLocation: args.showLocation } : {}),
+    };
+
     await ctx.db.patch(user._id, {
-      settings: {
-        privacy: args.privacy ?? user.settings?.privacy ?? "public",
-        notificationsEnabled: args.notificationsEnabled ?? user.settings?.notificationsEnabled ?? true,
-        showEmail: args.showEmail ?? user.settings?.showEmail ?? false,
-        showLocation: args.showLocation ?? user.settings?.showLocation ?? false,
-      },
+      settings: newSettings,
       updatedAt: Date.now(),
     });
 
-    return { success: true };
+    return { success: true, settings: newSettings };
   },
 });
 

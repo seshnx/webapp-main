@@ -34,7 +34,7 @@ export interface UseReadReceiptsReturn {
   readReceipts: ReadReceiptsMap;
   myLastRead: string | null;
   markAsRead: (messageIds: string | string[]) => Promise<void>;
-  isMessageRead: (messageId: string, userId: string, messages?: Message[] | null) => boolean;
+  isMessageRead: (messageId: string, userId?: string, messages?: Message[] | null) => boolean;
   getLastReadMessage: (userId: string) => string | null;
   hasCurrentUserRead: (messageId: string) => boolean;
 }
@@ -154,39 +154,51 @@ export function useReadReceipts(
   }, [chatId, currentUserId, markAsReadMutation, markMultipleAsReadMutation]);
 
   /**
-   * Check if a specific message has been read by a user
+   * Check if a specific message has been read by a user (or any other user if userId is not specified)
    */
   const isMessageRead = useCallback((
     messageId: string,
-    userId: string,
+    userId?: string,
     messages?: Message[] | null
   ): boolean => {
-    if (!messageId || !userId) return false;
+    if (!messageId) return false;
 
-    const userReceipt = readReceipts[userId];
-    if (!userReceipt || !userReceipt.lastReadMessageId) return false;
+    // Check specific user if provided
+    if (userId) {
+      const userReceipt = readReceipts[userId];
+      if (!userReceipt || !userReceipt.lastReadMessageId) return false;
 
-    const lastReadMessageId = userReceipt.lastReadMessageId;
+      const lastReadMessageId = userReceipt.lastReadMessageId;
+      if (lastReadMessageId === messageId) return true;
 
-    // If exact match, definitely read
-    if (lastReadMessageId === messageId) {
-      return true;
-    }
-
-    // If we have messages array, compare timestamps
-    if (messages && Array.isArray(messages)) {
-      const message = messages.find(m => m.id === messageId);
-      const lastReadMessage = messages.find(m => m.id === lastReadMessageId);
-
-      if (message && lastReadMessage && message.t && lastReadMessage.t) {
-        return message.t <= lastReadMessage.t;
+      if (messages && Array.isArray(messages)) {
+        const message = messages.find(m => m.id === messageId);
+        const lastReadMessage = messages.find(m => m.id === lastReadMessageId);
+        if (message && lastReadMessage && message.t && lastReadMessage.t) {
+          return message.t <= lastReadMessage.t;
+        }
       }
+
+      return lastReadMessageId >= messageId;
     }
 
-    // For Convex, we can compare IDs directly
-    // Convex IDs are sortable and maintain order
-    return lastReadMessageId >= messageId;
-  }, [readReceipts]);
+    // If userId not specified, check if any other user in the chat has read it
+    const otherUserIds = Object.keys(readReceipts).filter(id => id !== currentUserId);
+    return otherUserIds.some(id => {
+      const userReceipt = readReceipts[id];
+      if (!userReceipt || !userReceipt.lastReadMessageId) return false;
+      const lastReadMessageId = userReceipt.lastReadMessageId;
+      if (lastReadMessageId === messageId) return true;
+      if (messages && Array.isArray(messages)) {
+        const message = messages.find(m => m.id === messageId);
+        const lastReadMessage = messages.find(m => m.id === lastReadMessageId);
+        if (message && lastReadMessage && message.t && lastReadMessage.t) {
+          return message.t <= lastReadMessage.t;
+        }
+      }
+      return lastReadMessageId >= messageId;
+    });
+  }, [readReceipts, currentUserId]);
 
   /**
    * Get the latest read message ID for a user

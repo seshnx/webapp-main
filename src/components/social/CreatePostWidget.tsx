@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Send, Image as ImageIcon, Music, Video, X, Sliders, Paperclip, Loader2 } from 'lucide-react';
+import { Send, Image as ImageIcon, Music, Video, X, Sliders, Paperclip, Loader2, Calendar } from 'lucide-react';
 import { useUpload } from '../../hooks/useUpload';
 import { POPULAR_PLUGINS_LIST } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
 import { motion, AnimatePresence } from 'framer-motion';
+import ScheduledPostsModal, { ScheduledPostItem } from './ScheduledPostsModal';
 
 /**
  * Media attachment interface
@@ -48,6 +49,7 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
     const [pluginsUsed, setPluginsUsed] = useState<string[]>([]);
     const [presetFile, setPresetFile] = useState<File | null>(null);
     const [isPosting, setIsPosting] = useState<boolean>(false);
+    const [showScheduledModal, setShowScheduledModal] = useState<boolean>(false);
     const [uploadProgress, setUploadProgress] = useState<UploadProgress>({ current: 0, total: 0, percent: 0 });
 
     // Get active profile info
@@ -277,6 +279,9 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                             <button onClick={() => setSeshFxOpen(!seshFxOpen)} disabled={isPosting} className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition ${seshFxOpen ? 'bg-blue-50 dark:bg-blue-900/20 text-brand-blue' : 'text-gray-400'} ${isPosting ? 'opacity-50' : ''}`} title="Add Plugin Data">
                                 <Sliders size={20} />
                             </button>
+                            <button onClick={() => setShowScheduledModal(true)} disabled={isPosting} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 text-amber-500 rounded-full transition" title="Scheduled Posts & Drafts">
+                                <Calendar size={20} />
+                            </button>
                         </div>
                         <button
                             onClick={handleSubmit}
@@ -288,6 +293,17 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                     </div>
                 </div>
             </div>
+
+            {/* Scheduled Posts & Drafts Modal */}
+            {showScheduledModal && (
+                <ScheduledPostsModal
+                    onClose={() => setShowScheduledModal(false)}
+                    onPublishNow={async (item) => {
+                        setText(item.text);
+                        setShowScheduledModal(false);
+                    }}
+                />
+            )}
         </div>
     );
 }

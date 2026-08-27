@@ -19,16 +19,16 @@ interface TechnicianDashboardProps extends DashboardProps {
   className?: string;
 }
 
-export function TechnicianDashboard({ userData, className = '' }: TechnicianDashboardProps) {
+export function TechnicianDashboard({ userData, setActiveTab, className = '' }: TechnicianDashboardProps) {
   // Fetch data from Convex
   const serviceRequests = useQuery(api.sbookings.getTechnicianServiceRequests,
-    userData ? { technicianId: userData._id, status: "pending" } : "skip"
+    (userData as any)?._id ? { technicianId: (userData as any)._id, status: "pending" } : "skip"
   );
   const activeJobs = useQuery(api.sbookings.getBookingsByTechnician,
-    userData ? { technicianId: userData._id, status: "confirmed" } : "skip"
+    (userData as any)?._id ? { technicianId: (userData as any)._id, status: "confirmed" } : "skip"
   );
   const earnings = useQuery(api.sbookings.getTechnicianEarnings,
-    userData ? { technicianId: userData._id } : "skip"
+    (userData as any)?._id ? { technicianId: (userData as any)._id } : "skip"
   );
 
   // Calculate metrics from real data
@@ -38,8 +38,8 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
   const totalEarnings = earnings?.totalEarnings || 0;
 
   const [data, setData] = useState<TechnicianDashboardData>({
-    serviceRequests: serviceRequests || [],
-    activeJobs: activeJobs || [],
+    serviceRequests: (serviceRequests as any) || [],
+    activeJobs: (activeJobs as any) || [],
     equipmentWarnings: [] // TODO: Implement equipment warnings tracking
   });
 
@@ -77,25 +77,29 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
   const quickActions: QuickAction[] = [
     {
       id: 'new-service',
-      label: 'New Service Request',
+      label: 'Service Requests',
+      description: 'Review pending studio technician job requests',
       icon: Wrench,
-      action: () => console.log('Create service request'),
+      action: () => setActiveTab?.('bookings'),
       variant: 'primary',
+      featured: true,
       roles: ['Technician', '*']
     },
     {
       id: 'my-schedule',
       label: 'My Schedule',
+      description: 'View confirmed engineering shifts & gigs',
       icon: Calendar,
-      action: () => console.log('Navigate to schedule'),
+      action: () => setActiveTab?.('bookings'),
       variant: 'secondary',
       roles: ['Technician', '*']
     },
     {
-      id: 'equipment-log',
-      label: 'Equipment Log',
+      id: 'profile',
+      label: 'Tech Profile',
+      description: 'Update engineering skills, rates & bio',
       icon: AlertTriangle,
-      action: () => console.log('Navigate to equipment log'),
+      action: () => setActiveTab?.('profile'),
       variant: 'secondary',
       roles: ['Technician', '*']
     }
@@ -104,8 +108,8 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
   // Update metrics when data changes
   useEffect(() => {
     setData({
-      serviceRequests: serviceRequests || [],
-      activeJobs: activeJobs || [],
+      serviceRequests: (serviceRequests as any) || [],
+      activeJobs: (activeJobs as any) || [],
       equipmentWarnings: [] // TODO: Implement equipment warnings tracking
     });
 
@@ -121,7 +125,7 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Key Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
         <StatsCard
           title="Pending Requests"
           value={data.serviceRequests.length}
@@ -173,9 +177,9 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
           </div>
         ) : (
           <div className="space-y-3">
-            {data.serviceRequests.map(request => (
+            {(data.serviceRequests as any[]).map((request: any) => (
               <div
-                key={request._id}
+                key={request._id || request.id}
                 className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
               >
                 <div className="flex-1 min-w-0">
@@ -197,7 +201,7 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
                     ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
                     : "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300"
                 }`}>
-                  {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                  {request.status ? request.status.charAt(0).toUpperCase() + request.status.slice(1) : 'Pending'}
                 </span>
               </div>
             ))}
@@ -217,9 +221,9 @@ export function TechnicianDashboard({ userData, className = '' }: TechnicianDash
             Active Jobs
           </h3>
           <div className="space-y-3">
-            {data.activeJobs.map(job => (
+            {(data.activeJobs as any[]).map((job: any) => (
               <div
-                key={job._id}
+                key={job._id || job.id}
                 className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800"
               >
                 <div className="flex items-start justify-between">

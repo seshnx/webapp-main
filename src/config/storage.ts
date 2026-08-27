@@ -18,6 +18,7 @@ const R2_PUBLIC_URL: string = import.meta.env.VITE_R2_PUBLIC_URL || "";
 
 export const STORAGE_FOLDERS = {
   PROFILE_PHOTOS: "profile-photos",
+  PROFILE_BANNERS: "profile-banners",
   POST_MEDIA: "post-media",
   DOCUMENTS: "documents",
   STUDIO_IMAGES: "studio-images",

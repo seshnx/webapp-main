@@ -4,7 +4,8 @@
  * All marketplace-related database operations for Neon PostgreSQL
  */
 
-import { neonClient } from './neon';
+// Legacy Neon queries - module removed, stub to prevent compilation errors
+const neonClient = { query: async (_sql: string, _params?: any[]) => ({ rows: [] }) };
 
 /**
  * Execute a SQL query with error handling

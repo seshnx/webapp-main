@@ -319,7 +319,7 @@ export default function ChatWindow({ user, userData, subProfiles, activeChat, co
         if (editingMessage) {
             try {
                 await editMessageMutation({
-                    messageId: editingMessage.id,
+                    messageId: editingMessage.id as any,
                     content: msgText,
                     senderId: userId,
                 });
@@ -396,8 +396,12 @@ export default function ChatWindow({ user, userData, subProfiles, activeChat, co
                     lastMessage: summary,
                     lastMessageTime: Date.now(),
                     lastSenderId: userId,
-                    chatName: activeChat?.type === 'group' ? chatName : (activeChat?.name || activeChat?.n),
-                    chatPhoto: activeChat?.photo || '',
+                    chatName: activeChat?.type === 'group'
+                        ? chatName
+                        : (recipientUid === userId ? (activeChat?.name || activeChat?.n || 'User') : senderName),
+                    chatPhoto: activeChat?.type === 'group'
+                        ? (activeChat?.photo || '')
+                        : (recipientUid === userId ? (activeChat?.photo || '') : (senderPhoto || '')),
                     chatType: activeChat?.type || 'direct',
                     otherUserId: activeChat?.type === 'direct' ? (recipientUid === userId ? otherUid : userId) : undefined,
                 });
@@ -425,18 +429,37 @@ export default function ChatWindow({ user, userData, subProfiles, activeChat, co
     };
 
     // --- DELETE HANDLER ---
-    const handleDelete = async (messageId: string, forEveryone: boolean = false) => {
+    const handleDelete = async (message: ChatMessage | any, scope: 'me' | 'everyone' | boolean = 'me') => {
         if (!chatId || !userId || !isConvexAvailable() || !deleteMessageMutation) return;
 
         try {
+            const messageId = typeof message === 'string' ? message : message.id;
+            const forEveryone = typeof scope === 'boolean' ? scope : scope === 'everyone';
             await deleteMessageMutation({
-                messageId,
+                messageId: messageId as any,
                 senderId: userId,
                 forEveryone,
             });
         } catch (error) {
             console.error('Delete error:', error);
         }
+    };
+
+    // Format last seen helper
+    const formatLastSeen = (timestamp: number): string => {
+        if (!timestamp) return 'Never';
+        const lastSeenMs = timestamp;
+        const now = Date.now();
+        const diffMs = now - lastSeenMs;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMins / 60);
+        const diffDays = Math.floor(diffHours / 24);
+
+        if (diffMins < 1) return 'Just now';
+        if (diffMins < 60) return `${diffMins}m ago`;
+        if (diffHours < 24) return `${diffHours}h ago`;
+        if (diffDays < 7) return `${diffDays}d ago`;
+        return new Date(lastSeenMs).toLocaleDateString();
     };
 
     // --- HEADER ---
@@ -455,7 +478,7 @@ export default function ChatWindow({ user, userData, subProfiles, activeChat, co
                     onClick={() => otherUserId && openPublicProfile?.(otherUserId, chatName)}
                 >
                     <UserAvatar
-                        src={activeChat?.photo || activeChat?.n?.photo || ''}
+                        src={activeChat?.photo || ''}
                         name={chatName}
                         size="md"
                     />
@@ -489,23 +512,6 @@ export default function ChatWindow({ user, userData, subProfiles, activeChat, co
             </button>
         </div>
     ), [activeChat, chatName, online, lastSeen, presenceLoading, otherUserId, onBack, toggleDetails, openPublicProfile]);
-
-    // Format last seen helper
-    const formatLastSeen = (timestamp: number): string => {
-        if (!timestamp) return 'Never';
-        const lastSeenMs = timestamp;
-        const now = Date.now();
-        const diffMs = now - lastSeenMs;
-        const diffMins = Math.floor(diffMs / 60000);
-        const diffHours = Math.floor(diffMins / 60);
-        const diffDays = Math.floor(diffHours / 24);
-
-        if (diffMins < 1) return 'Just now';
-        if (diffMins < 60) return `${diffMins}m ago`;
-        if (diffHours < 24) return `${diffHours}h ago`;
-        if (diffDays < 7) return `${diffDays}d ago`;
-        return new Date(lastSeenMs).toLocaleDateString();
-    };
 
     // Early return for no active chat (after all hooks are called to maintain hook count)
     if (!activeChat || !chatId) {
@@ -549,10 +555,10 @@ export default function ChatWindow({ user, userData, subProfiles, activeChat, co
                                 onReaction={(emoji: string) => handleReaction(message.id, emoji)}
                                 onReply={() => setReplyingTo(message)}
                                 onEdit={() => setEditingMessage(message)}
-                                onDelete={(forEveryone: boolean) => handleDelete(message.id, forEveryone)}
+                                onDelete={(msg: any, scope: any) => handleDelete(msg, scope)}
                                 onForward={() => setForwardingMessage(message)}
                                 onSeshNxLinkClick={(data: any) => setEmbedModal({ isOpen: true, url: '', previewData: data })}
-                                onUserClick={() => message.s && openPublicProfile?.(message.s, message.n)}
+                                onUserClick={(uid: string) => uid && openPublicProfile?.(uid, message.n)}
                             />
                         );
                     })
@@ -578,7 +584,8 @@ export default function ChatWindow({ user, userData, subProfiles, activeChat, co
             {forwardingMessage && (
                 <ForwardMessageModal
                     message={forwardingMessage}
-                    conversations={conversations}
+                    conversations={conversations || []}
+                    currentUserId={userId}
                     onClose={() => setForwardingMessage(null)}
                     onForward={handleForward}
                 />
@@ -587,6 +594,7 @@ export default function ChatWindow({ user, userData, subProfiles, activeChat, co
             {/* Embed Modal */}
             {embedModal.isOpen && (
                 <SeshNxEmbedModal
+                    isOpen={embedModal.isOpen}
                     url={embedModal.url}
                     previewData={embedModal.previewData}
                     onClose={() => setEmbedModal({ isOpen: false, url: '', previewData: null })}

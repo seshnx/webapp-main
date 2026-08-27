@@ -12,6 +12,7 @@ import { getDisplayRole } from '../config/constants';
 import { useLanguage } from '../contexts/LanguageContext';
 import { BreadcrumbNav } from './ui/breadcrumb';
 import { toast } from 'react-hot-toast';
+import QuickDashboard from './QuickDashboard';
 
 // Import TypeScript types
 import type { AccountType, UserData } from '../types';
@@ -125,6 +126,7 @@ export default function Navbar({
   const location = useLocation();
   const navigate = useNavigate();
   const [showNotifs, setShowNotifs] = useState<boolean>(false);
+  const [showDashboardModal, setShowDashboardModal] = useState<boolean>(false);
   const [showRoleMenu, setShowRoleMenu] = useState<boolean>(false);
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
@@ -412,13 +414,23 @@ export default function Navbar({
               <Menu size={24} aria-hidden="true" />
           </button>
 
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('dashboard'); navigate('/dashboard'); }}>
+          <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('feed'); navigate('/feed'); }}>
               <img
                 src={darkMode ? LogoWhite : LogoDark}
                 alt="SeshNx Logo"
                 className="h-8 w-auto object-contain transition-opacity duration-300"
               />
           </div>
+
+          {/* Dashboard Pop-up Module Button */}
+          <button
+            onClick={() => setShowDashboardModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-900/30 text-brand-blue dark:text-blue-400 text-xs font-bold hover:bg-blue-100 dark:hover:bg-blue-900/50 transition border border-blue-200 dark:border-blue-800/40"
+            title="Dashboard Overview"
+          >
+            <Layout size={15} />
+            <span className="hidden sm:inline">Dashboard</span>
+          </button>
         </div>
 
         {/* Global Search - desktop only */}
@@ -647,6 +659,20 @@ export default function Navbar({
               onClick={() => { setActiveTab('profile'); navigate('/profile'); }}
           />
         </div>
+
+        {/* Quick Dashboard Pop-up Module Overlay */}
+        {showDashboardModal && (
+          <QuickDashboard
+            user={user}
+            userData={userData}
+            subProfiles={subProfiles}
+            onClose={() => setShowDashboardModal(false)}
+            onNavigateTab={(tab, path) => {
+              setActiveTab(tab);
+              if (path) navigate(path);
+            }}
+          />
+        )}
       </nav>
     </>
   );

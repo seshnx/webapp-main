@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Users, Plus, X, Search, ArrowLeft, ChevronRight, Loader2 } from 'lucide-react';
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { isConvexAvailable } from '../../config/convex';
 import ConversationItem from './ConversationItem';
@@ -13,10 +13,14 @@ import { useLanguage } from '../../contexts/LanguageContext';
  */
 interface SearchResult {
     id: string;
+    clerkId?: string;
+    convexId?: string;
     firstName: string;
     lastName: string;
+    displayName?: string;
     photoURL?: string;
     role?: string;
+    username?: string;
 }
 
 /**
@@ -26,6 +30,7 @@ interface GroupMember {
     id: string;
     firstName: string;
     lastName: string;
+    displayName?: string;
     photoURL?: string;
     [key: string]: any;
 }
@@ -68,50 +73,55 @@ export default function ChatSidebar({ user, userData, subProfiles = {}, conversa
     const [groupName, setGroupName] = useState<string>('');
     const [groupMembers, setGroupMembers] = useState<GroupMember[]>([]);
     const [searchQuery, setSearchQuery] = useState<string>('');
-    const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
 
     // Convex mutations
     const createGroupChatMutation = useMutation(api.conversations.createGroupChat);
     const deleteConversationMutation = useMutation(api.conversations.deleteConversation);
 
-    const handleUserSearch = async (term: string) => {
-        setSearchQuery(term);
-        const searchTerm = term.trim();
-        const userId = user?.id || user?.uid;
+    // Current user identifier
+    const currentUserId = user?.id || user?.uid;
 
-        if (searchTerm.length > 1) {
-            try {
-                // Build query parameters
-                const params = new URLSearchParams({
-                    q: searchTerm,
-                    exclude_user_id: userId,
-                    limit: '20',
-                });
+    // Search users query via Convex
+    const searchUsersData = useQuery(
+        api.users.searchUsers,
+        showSearch ? { searchText: searchQuery.trim(), limit: 30 } : "skip"
+    );
 
-                // Search using new MongoDB API
-                const response = await fetch(`/api/user/search?${params}`);
-
-                if (!response.ok) {
-                    throw new Error(`Search failed: ${response.statusText}`);
-                }
-
-                const data = await response.json();
-                setSearchResults(data.results || []);
-            } catch (e) {
-                console.error("Search error:", e);
-                setSearchResults([]);
-            }
-        } else {
-            setSearchResults([]);
-        }
-    };
+    // Map and filter results
+    const searchResults: SearchResult[] = useMemo(() => {
+        if (!searchUsersData) return [];
+        return searchUsersData
+            .filter((u: any) => u.clerkId !== currentUserId && u._id !== currentUserId)
+            .map((u: any) => ({
+                id: u.clerkId || u._id,
+                clerkId: u.clerkId,
+                convexId: u._id,
+                firstName: u.firstName || u.displayName?.split(' ')[0] || u.username || 'User',
+                lastName: u.lastName || u.displayName?.split(' ').slice(1).join(' ') || '',
+                displayName: u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username || 'User',
+                photoURL: u.profilePhoto || u.imageUrl || u.avatarUrl,
+                role: u.activeProfileRole || (Array.isArray(u.accountTypes) ? u.accountTypes[0] : u.accountTypes) || 'Creator',
+                username: u.username
+            }));
+    }, [searchUsersData, currentUserId]);
 
     const handleSelectSearchResult = (result: SearchResult) => {
         const userId = user?.id || user?.uid;
         if (searchMode === 'direct') {
-            // Show profile selection modal before creating chat
-            setPendingChatTarget(result);
-            setShowProfileModal(true);
+            const targetUserId = result.clerkId || result.id;
+            const chatId = [userId, targetUserId].sort().join('_');
+            const targetName = result.displayName || `${result.firstName} ${result.lastName}`.trim() || result.username || 'User';
+            const currentRole = userData?.activeProfileRole || (Array.isArray(userData?.accountTypes) ? userData.accountTypes[0] : 'User');
+
+            onSelectChat?.({
+                id: chatId,
+                uid: targetUserId,
+                name: targetName,
+                type: 'direct',
+                profileRole: currentRole,
+                photo: result.photoURL
+            });
+            closeSearch();
         } else if (searchMode === 'add_member') {
             if (!groupMembers.find(m => m.id === result.id)) {
                 setGroupMembers(prev => [...prev, result as GroupMember]);
@@ -124,13 +134,16 @@ export default function ChatSidebar({ user, userData, subProfiles = {}, conversa
         setSelectedChatProfile(role);
         if (pendingChatTarget) {
             const userId = user?.id || user?.uid;
-            const chatId = [userId, pendingChatTarget.id].sort().join('_');
+            const targetUserId = pendingChatTarget.clerkId || pendingChatTarget.id;
+            const chatId = [userId, targetUserId].sort().join('_');
+            const targetName = pendingChatTarget.displayName || `${pendingChatTarget.firstName} ${pendingChatTarget.lastName}`.trim() || pendingChatTarget.username || 'User';
             onSelectChat?.({
                 id: chatId,
-                uid: pendingChatTarget.id,
-                name: `${pendingChatTarget.firstName} ${pendingChatTarget.lastName}`,
+                uid: targetUserId,
+                name: targetName,
                 type: 'direct',
-                profileRole: role // Store the selected profile role
+                profileRole: role,
+                photo: pendingChatTarget.photoURL
             });
             setPendingChatTarget(null);
         }
@@ -140,7 +153,6 @@ export default function ChatSidebar({ user, userData, subProfiles = {}, conversa
     const closeSearch = () => {
         setShowSearch(false);
         setSearchQuery('');
-        setSearchResults([]);
     };
 
     const openGroupModal = () => {
@@ -279,21 +291,47 @@ export default function ChatSidebar({ user, userData, subProfiles = {}, conversa
                 <div className="absolute inset-0 bg-white dark:bg-[#1f2128] z-30 flex flex-col animate-in fade-in duration-200">
                     <div className="p-3 border-b dark:border-gray-700 flex items-center gap-2 bg-white dark:bg-[#1f2128]">
                         <Search size={18} className="text-gray-400 ml-2"/>
-                        <input autoFocus className="flex-1 p-2 bg-transparent outline-none dark:text-white placeholder-gray-400" placeholder={t('search') + '...'} value={searchQuery} onChange={(e) => handleUserSearch(e.target.value)}/>
-                        <button onClick={closeSearch} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full"><X size={20} className="text-gray-500"/></button>
+                        <input
+                            autoFocus
+                            className="flex-1 p-2 bg-transparent outline-none dark:text-white placeholder-gray-400 text-sm"
+                            placeholder="Search creators, producers, engineers..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        {searchUsersData === undefined && (
+                            <Loader2 size={16} className="animate-spin text-brand-blue mr-1" />
+                        )}
+                        <button onClick={closeSearch} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full">
+                            <X size={20} className="text-gray-500"/>
+                        </button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-2">
-                        {searchResults.length === 0 && searchQuery.length > 1 && <div className="text-center py-10 text-gray-400 text-sm">{t('noUsersFound')}.</div>}
+                        {searchResults.length === 0 && searchUsersData !== undefined && searchQuery.length > 0 && (
+                            <div className="text-center py-10 text-gray-400 text-sm">{t('noUsersFound')}.</div>
+                        )}
+                        {searchResults.length === 0 && searchUsersData !== undefined && searchQuery.length === 0 && (
+                            <div className="text-center py-10 text-gray-400 text-sm">Type a name, handle, or specialty to search.</div>
+                        )}
                         {searchResults.map(res => {
                             const isSelected = searchMode === 'add_member' && groupMembers.find(m => m.id === res.id);
                             return (
-                                <div key={res.id} onClick={() => handleSelectSearchResult(res)} className={`flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl cursor-pointer transition mb-1 ${isSelected ? 'opacity-50 pointer-events-none' : ''}`}>
-                                    <UserAvatar src={res.photoURL} name={res.firstName} size="md" />
-                                    <div className="flex-1">
-                                        <div className="text-sm font-bold dark:text-white">{res.firstName} {res.lastName}</div>
-                                        <div className="text-xs text-gray-500">{res.role || 'User'}</div>
+                                <div
+                                    key={res.id}
+                                    onClick={() => handleSelectSearchResult(res)}
+                                    className={`flex items-center gap-3 p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-xl cursor-pointer transition mb-1 ${isSelected ? 'opacity-50 pointer-events-none' : ''}`}
+                                >
+                                    <UserAvatar src={res.photoURL} name={res.displayName || res.firstName} size="md" />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="text-sm font-bold dark:text-white truncate">
+                                            {res.displayName || `${res.firstName} ${res.lastName}`.trim()}
+                                        </div>
+                                        <div className="text-xs text-gray-500 flex items-center gap-1.5 truncate">
+                                            {res.username && <span>@{res.username}</span>}
+                                            {res.username && res.role && <span>•</span>}
+                                            <span className="text-brand-blue font-medium">{res.role || 'Creator'}</span>
+                                        </div>
                                     </div>
-                                    {searchMode === 'add_member' && <Plus size={18} className="text-brand-blue"/>}
+                                    {searchMode === 'add_member' && <Plus size={18} className="text-brand-blue shrink-0"/>}
                                 </div>
                             );
                         })}

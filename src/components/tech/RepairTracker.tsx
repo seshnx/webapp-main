@@ -134,7 +134,7 @@ export default function RepairTracker({ bookingId, currentUser }: RepairTrackerP
   const currentStageIndex = REPAIR_STAGES.findIndex(s => s.id === (booking.repair_status || booking.repairStatus || 'Pending'));
   const progressPercent = (currentStageIndex / (REPAIR_STAGES.length - 1)) * 100;
   const repairLogs = booking.repair_logs || booking.repairLogs || [];
-  const visibleLogs = repairLogs.filter((l: RepairLog) => isTech || !(l.is_private || l.isPrivate));
+  const visibleLogs = repairLogs.filter((l: RepairLog) => isTech || !((l as any).is_private || (l as any).isPrivate));
 
   if (activeInspection) {
     return (
@@ -285,9 +285,9 @@ export default function RepairTracker({ bookingId, currentUser }: RepairTrackerP
         </h3>
         <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-4 max-h-[400px] overflow-y-auto">
           {visibleLogs.map((log: RepairLog, i: number) => {
-            const isPrivate = log.is_private || log.isPrivate;
-            const authorName = log.author_name || log.authorName;
-            const imageUrl = log.image_url || log.imageUrl;
+            const isPrivate = (log as any).is_private || (log as any).isPrivate;
+            const authorName = (log as any).author_name || (log as any).authorName;
+            const imageUrl = (log as any).image_url || (log as any).imageUrl;
             return (
               <div key={i} className={`mb-4 pl-4 border-l-2 ${
                 isPrivate ? 'border-yellow-500' : 'border-blue-500'

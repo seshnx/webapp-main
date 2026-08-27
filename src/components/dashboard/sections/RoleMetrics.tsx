@@ -109,7 +109,7 @@ export function RoleMetrics({ metrics, className = '' }: RoleMetricsProps) {
   }
 
   return (
-    <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 ${className}`}>
+    <div className={`grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4 ${className}`}>
       {metrics.map((metric, index) => (
         <MetricCard key={metric.id} metric={metric} index={index} />
       ))}

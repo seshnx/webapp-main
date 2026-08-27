@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { Id } from '../../convex/_generated/dataModel';
+import type { Id } from '../../convex/_generated/dataModel';
 
 /**
  * Saved post data from database
  */
 export interface SavedPostData {
-  _id: Id<"saved_posts">;
+  _id: string; // Convex generated ID (from savedPosts table)
   id: string; // compatibility
   postId: Id<"posts">;
   userId: Id<"users">;

@@ -255,7 +255,7 @@ export function useProfileSearch(filters: {
 export function useSubProfiles(userId: string | undefined) {
   return useQuery(
     api.users.getSubProfiles,
-    userId ? { userId } : "skip"
+    userId ? { userId: userId as any } : "skip"
   );
 }
 

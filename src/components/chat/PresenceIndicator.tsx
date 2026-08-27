@@ -14,11 +14,13 @@ export interface PresenceIndicatorProps {
     /** Whether the user is currently online */
     online: boolean;
     /** Last seen timestamp (if offline) */
-    lastSeen?: Date | string | null;
+    lastSeen?: number | Date | string | null;
     /** Whether to show text status */
     showText?: boolean;
     /** Size of the indicator */
     size?: PresenceSize;
+    /** Loading status */
+    loading?: boolean;
 }
 
 /**
@@ -28,7 +30,7 @@ export interface StatusBadgeProps {
     /** Whether the user is currently online */
     online: boolean;
     /** Last seen timestamp (if offline) */
-    lastSeen?: Date | string | null;
+    lastSeen?: number | Date | string | null;
     /** Whether to show "Last seen X time ago" when offline */
     showLastSeen?: boolean;
 }

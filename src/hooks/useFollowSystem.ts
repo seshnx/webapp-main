@@ -265,7 +265,7 @@ export function useIsFollowing(
   );
 
   return useMemo(() => ({
-    isFollowing: isFollowingData?.isFollowing || false,
+    isFollowing: isFollowingData ?? false,
     loading: isFollowingData === undefined,
   }), [isFollowingData]);
 }

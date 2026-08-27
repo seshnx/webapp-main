@@ -2,8 +2,6 @@
 // CORE TYPE DEFINITIONS FOR SESHNX WEBAPP
 // =====================================================
 
-// Leverage existing Convex types
-import type { Doc, Id } from '../../convex/_generated/dataModel';
 
 // =====================================================
 // USER & ACCOUNT TYPES
@@ -460,11 +458,14 @@ export type Dict<T> = Record<string, T>;
 // CONVEX INTEGRATION TYPES
 // =====================================================
 
-export type ConvexDocument<T extends keyof Doc<"tableName">> = Doc<T>;
-export type ConvexId<T extends keyof Doc<"tableName">> = Id<T>;
+import type { Doc, Id, TableNames } from '../../convex/_generated/dataModel';
+
+export type ConvexDocument<T extends TableNames> = Doc<T>;
+export type ConvexId<T extends TableNames> = Id<T>;
 
 // =====================================================
 // RE-export Convex types for convenience
 // =====================================================
 
-export type { Doc, Id } from '../../convex/_generated/dataModel';
+export type { Doc, Id, TableNames } from '../../convex/_generated/dataModel';
+

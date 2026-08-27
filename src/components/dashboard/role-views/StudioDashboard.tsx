@@ -26,22 +26,22 @@ interface StudioDashboardProps extends DashboardProps {
   className?: string;
 }
 
-export function StudioDashboard({ userData, subProfiles, className = '' }: StudioDashboardProps) {
+export function StudioDashboard({ userData, subProfiles, setActiveTab, className = '' }: StudioDashboardProps) {
   // Get user by clerk ID to get the Convex user ID
   const userRecord = useQuery(
     api.users.getUserByClerkId,
-    userData?.clerkId ? { clerkId: userData.clerkId } : "skip"
+    (userData as any)?.clerkId ? { clerkId: (userData as any).clerkId } : "skip"
   );
 
   // Fetch studio data
-  const studio = useStudioByOwner(userRecord?._id || (userData?.id as any));
+  const studio = useStudioByOwner(userRecord?._id || ((userData as any)?.id as any));
 
   // Get studio ID from studio data
   const studioId = studio?._id;
 
   // Fetch real data from Convex
   const allBookings = useBookingsByStudio(studioId);
-  const upcomingBookings = useUpcomingBookings(userData?.clerkId || '', 10);
+  const upcomingBookings = useUpcomingBookings((userData as any)?.clerkId || '', 10);
   const rooms = useRoomsByStudio(studioId);
 
   // Calculate real dashboard data
@@ -59,17 +59,18 @@ export function StudioDashboard({ userData, subProfiles, className = '' }: Studi
       })
       .map(booking => ({
         id: booking._id,
-        startTime: new Date(booking.startTime),
-        endTime: new Date(booking.endTime),
-        clientName: booking.clientName || 'Client',
-        roomName: booking.roomName || 'Studio',
-        status: booking.status
+        roomId: (booking as any).roomId || booking._id,
+        startTime: new Date((booking as any).startTime || (booking as any).startDate || Date.now()),
+        endTime: new Date((booking as any).endTime || (booking as any).endDate || Date.now()),
+        clientName: (booking as any).clientName || 'Client',
+        roomName: (booking as any).roomName || 'Studio',
+        status: (booking as any).status || 'confirmed'
       }))
       .sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
 
     // Calculate room utilization
     const totalRooms = (rooms || []).length;
-    const bookedRooms = new Set(todayBookings.map(b => b.roomId)).size;
+    const bookedRooms = new Set(todayBookings.map(b => (b as any).roomId)).size;
     const roomUtilization = totalRooms > 0 ? Math.round((bookedRooms / totalRooms) * 100) : 0;
 
     // Pending maintenance (TODO: connect to maintenance system when implemented)
@@ -122,25 +123,29 @@ export function StudioDashboard({ userData, subProfiles, className = '' }: Studi
   const quickActions: QuickAction[] = [
     {
       id: 'new-booking',
-      label: 'New Booking',
+      label: 'New Session Booking',
+      description: 'Schedule client session or reserve studio room',
       icon: Calendar,
-      action: () => console.log('Create new booking'),
+      action: () => setActiveTab?.('bookings'),
       variant: 'primary',
+      featured: true,
       roles: ['Studio', '*']
     },
     {
       id: 'view-calendar',
-      label: 'View Calendar',
+      label: 'Booking Calendar',
+      description: 'Review room schedules & upcoming slots',
       icon: Calendar,
-      action: () => console.log('Navigate to calendar'),
+      action: () => setActiveTab?.('bookings'),
       variant: 'secondary',
       roles: ['Studio', '*']
     },
     {
-      id: 'manage-equipment',
-      label: 'Equipment',
+      id: 'studio-manager',
+      label: 'Studio Manager',
+      description: 'Manage rooms, gear & technician roster',
       icon: Wrench,
-      action: () => console.log('Navigate to equipment'),
+      action: () => setActiveTab?.('studio-manager'),
       variant: 'secondary',
       roles: ['Studio', '*']
     }
@@ -149,7 +154,7 @@ export function StudioDashboard({ userData, subProfiles, className = '' }: Studi
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Key Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
         <StatsCard
           title="Today's Bookings"
           value={data.todayBookings.length}

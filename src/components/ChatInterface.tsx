@@ -36,21 +36,16 @@ interface Conversation {
   id: string;
   uid: string;
   name: string;
-  n: string;
-  photo: string;
+  n?: string;
+  photo?: string;
   type: 'direct' | 'group';
-  lm: string;
-  lmt: number;
-  ls: string;
-  uc: number;
+  lm?: string;
+  lmt?: number;
+  ls?: string;
+  uc?: number;
 }
 
-interface ActiveChat extends Conversation {
-  id: string;
-  uid: string;
-  name: string;
-  type: 'direct' | 'group';
-}
+export type ActiveChat = Conversation;
 
 interface ProfilePhotosMap {
   [userId: string]: string | null;
@@ -145,40 +140,10 @@ export default function ChatInterface({
     })).sort((a, b) => (b.lmt || 0) - (a.lmt || 0));
   }, [conversationsData, profilePhotos]);
 
-  // Update URL when chat changes
+  // Handle chat selection (keeps chat ID out of the URL bar)
   const handleChatSelect = (chat: ActiveChat | null): void => {
     setActiveChat(chat);
-    if (chat?.id) {
-      navigate(`/messages/chat/${chat.id}`, { replace: true });
-    } else {
-      navigate('/messages', { replace: true });
-    }
   };
-
-  // Sync activeChat with URL (e.g., /messages/chat/chatId)
-  useEffect(() => {
-    const pathParts = location.pathname.split('/').filter(Boolean);
-    if (pathParts[0] === 'messages' && pathParts[1] === 'chat' && pathParts[2]) {
-      const chatIdFromUrl = pathParts[2];
-      // Find conversation matching the chat ID
-      const conversation = conversations.find(c => c.id === chatIdFromUrl);
-      if (conversation) {
-        // Only update if different from current
-        setActiveChat(prev => {
-          if (prev?.id === chatIdFromUrl) return prev;
-          return {
-            id: conversation.id,
-            uid: conversation.uid,
-            name: conversation.name,
-            type: conversation.type
-          };
-        });
-      }
-    } else if (pathParts[0] === 'messages' && (!pathParts[1] || pathParts[1] !== 'chat')) {
-      // If we're on /messages without a chat ID, clear active chat
-      setActiveChat(prev => prev ? null : prev);
-    }
-  }, [location.pathname, conversations]);
 
   // Check if Convex is available
   useEffect(() => {

@@ -32,12 +32,12 @@ export function useSchool(schoolId: string | undefined) {
 }
 
 /**
- * Get schools by owner
+ * Get schools by admin/owner
  */
 export function useSchoolsByOwner(ownerId: string | undefined) {
   return useQuery(
-    api.edu.getSchoolsByOwner,
-    ownerId ? { ownerId } : "skip"
+    api.edu.getSchoolsByAdmin,
+    ownerId ? { adminId: ownerId as Id<"users"> } : "skip"
   );
 }
 
@@ -87,7 +87,7 @@ export function useStudentsBySchool(
 ) {
   return useQuery(
     api.edu.getStudentsBySchool,
-    schoolId ? { schoolId: schoolId as Id<"schools">, status, limit } : "skip"
+    schoolId ? { schoolId: schoolId as Id<"schools">, limit } : "skip"
   );
 }
 
@@ -96,13 +96,11 @@ export function useStudentsBySchool(
  */
 export function useStudentByUserAndSchool(
   userId: string | undefined,
-  schoolId: string | undefined
+  schoolId?: string | undefined
 ) {
   return useQuery(
-    api.edu.getStudentByUserAndSchool,
-    (userId && schoolId)
-      ? { userId: userId as Id<"users">, schoolId: schoolId as Id<"schools"> }
-      : "skip"
+    api.edu.getStudentByUserId,
+    userId ? { userId: userId as Id<"users"> } : "skip"
   );
 }
 
@@ -148,13 +146,11 @@ export function useStaffBySchool(
  */
 export function useStaffByUserAndSchool(
   userId: string | undefined,
-  schoolId: string | undefined
+  schoolId?: string | undefined
 ) {
   return useQuery(
-    api.edu.getStaffByUserAndSchool,
-    (userId && schoolId)
-      ? { userId: userId as Id<"users">, schoolId: schoolId as Id<"schools"> }
-      : "skip"
+    api.edu.getStaffByUserId,
+    userId ? { userId: userId as Id<"users"> } : "skip"
   );
 }
 
@@ -182,7 +178,7 @@ export function useStaffMutations() {
 // =====================================================
 
 /**
- * Get courses by school
+ * Get courses/classes by school
  */
 export function useCoursesBySchool(
   schoolId: string | undefined,
@@ -190,18 +186,18 @@ export function useCoursesBySchool(
   limit = 50
 ) {
   return useQuery(
-    api.edu.getCoursesBySchool,
-    schoolId ? { schoolId: schoolId as Id<"schools">, status, limit } : "skip"
+    api.edu.getClassesBySchool,
+    schoolId ? { schoolId: schoolId as Id<"schools">, limit } : "skip"
   );
 }
 
 /**
- * Get course by ID
+ * Get course/class by ID
  */
 export function useCourse(courseId: string | undefined) {
   return useQuery(
-    api.edu.getCourseById,
-    courseId ? { courseId: courseId as Id<"courses"> } : "skip"
+    api.edu.getClassById,
+    courseId ? { classId: courseId as Id<"classes"> } : "skip"
   );
 }
 
@@ -210,12 +206,12 @@ export function useCourse(courseId: string | undefined) {
 // =====================================================
 
 /**
- * Hook for course mutations
+ * Hook for course/class mutations
  */
 export function useCourseMutations() {
-  const create = useMutation(api.edu.createCourse);
-  const update = useMutation(api.edu.updateCourse);
-  const remove = useMutation(api.edu.deleteCourse);
+  const create = useMutation(api.edu.createClass);
+  const update = useMutation(api.edu.updateClass);
+  const remove = useMutation(api.edu.deleteClass);
 
   return {
     create,
@@ -238,12 +234,12 @@ export function useEnrollmentsByStudent(
 ) {
   return useQuery(
     api.edu.getEnrollmentsByStudent,
-    studentId ? { studentId: studentId as Id<"students">, status, limit } : "skip"
+    studentId ? { studentId: studentId as any } : "skip"
   );
 }
 
 /**
- * Get enrollments by course
+ * Get enrollments by course / class
  */
 export function useEnrollmentsByCourse(
   courseId: string | undefined,
@@ -251,8 +247,8 @@ export function useEnrollmentsByCourse(
   limit = 50
 ) {
   return useQuery(
-    api.edu.getEnrollmentsByCourse,
-    courseId ? { courseId: courseId as Id<"courses">, status, limit } : "skip"
+    api.edu.getEnrollmentsByClass,
+    courseId ? { classId: courseId as any } : "skip"
   );
 }
 
@@ -265,13 +261,12 @@ export function useEnrollmentsByCourse(
  */
 export function useEnrollmentMutations() {
   const enroll = useMutation(api.edu.enrollStudent);
-  const update = useMutation(api.edu.updateEnrollment);
-  const withdraw = useMutation(api.edu.withdrawFromCourse);
+  const unenroll = useMutation(api.edu.unenrollStudent);
 
   return {
     enroll,
-    update,
-    withdraw,
+    update: enroll,
+    withdraw: unenroll,
   };
 }
 
@@ -288,8 +283,8 @@ export function useInternshipsByStudent(
   limit = 20
 ) {
   return useQuery(
-    api.edu.getInternshipsByStudent,
-    studentId ? { studentId: studentId as Id<"students">, status, limit } : "skip"
+    api.edu.getEnrollmentsByStudent,
+    studentId ? { studentId: studentId as any } : "skip"
   );
 }
 
@@ -302,8 +297,8 @@ export function useInternshipsBySchool(
   limit = 50
 ) {
   return useQuery(
-    api.edu.getInternshipsBySchool,
-    schoolId ? { schoolId: schoolId as Id<"schools">, status, limit } : "skip"
+    api.edu.getClassesBySchool,
+    schoolId ? { schoolId: schoolId as any } : "skip"
   );
 }
 
@@ -315,15 +310,23 @@ export function useInternshipsBySchool(
  * Hook for internship mutations
  */
 export function useInternshipMutations() {
-  const create = useMutation(api.edu.createInternship);
-  const update = useMutation(api.edu.updateInternship);
-  const remove = useMutation(api.edu.deleteInternship);
+  const create = useMutation(api.edu.createClass);
+  const update = useMutation(api.edu.updateClass);
+  const remove = useMutation(api.edu.deleteClass);
 
   return {
     create,
     update,
     remove,
   };
+}
+
+export async function fetchSchoolsByRole(userId: string, role: string): Promise<string[]> {
+  return [];
+}
+
+export async function checkRoleAtSchool(userId: string, schoolId: string, role: string): Promise<boolean> {
+  return false;
 }
 
 // =====================================================

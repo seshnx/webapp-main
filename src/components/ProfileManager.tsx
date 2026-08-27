@@ -20,11 +20,14 @@ import PageLayout from './shared/PageLayout';
 interface UserData {
   id?: string;
   uid?: string;
+  email?: string;
   firstName?: string;
   lastName?: string;
   displayName?: string;
+  username?: string;
   bio?: string;
   zip?: string;
+  zipCode?: string;
   hourlyRate?: number;
   website?: string;
   photoURL?: string;
@@ -38,6 +41,7 @@ interface UserData {
   activeProfileRole?: string;
   studioName?: string;
   searchTerms?: string[];
+  settings?: any;
 }
 
 interface UserAuth {
@@ -142,9 +146,19 @@ export default function ProfileManager({
 
     // Sync URL with active tab
     useEffect(() => {
-        const currentTab = activeSubTab === 'details' ? '/profile' : `/profile/${activeSubTab}`;
-        if (location.pathname !== currentTab) {
-            navigate(currentTab); // Allow back button for profile tab switching
+        if (activeSubTab === 'details') {
+            if (location.pathname !== '/profile') {
+                navigate('/profile');
+            }
+        } else if (activeSubTab === 'settings') {
+            if (!location.pathname.startsWith('/profile/settings')) {
+                navigate('/profile/settings/general');
+            }
+        } else {
+            const currentTab = `/profile/${activeSubTab}`;
+            if (location.pathname !== currentTab) {
+                navigate(currentTab);
+            }
         }
     }, [activeSubTab]);
 
@@ -239,7 +253,9 @@ export default function ProfileManager({
         const userId = user?.id || user?.uid;
         const toastId = toast.loading('Uploading photo...');
         try {
-            const url = await uploadImage(file, 'profile-photos');
+            const res = await uploadImage(file, 'profile-photos');
+            const url = res?.url;
+            if (!url) throw new Error('Failed to get upload URL');
 
             // Update profile photo URL in Convex
             await updateProfile({
@@ -263,8 +279,9 @@ export default function ProfileManager({
         setBannerUploading(true);
         const toastId = toast.loading('Uploading cover banner...');
         try {
-            // Upload to Vercel Blob
-            const url = await uploadImage(file, 'profile-banners');
+            const res = await uploadImage(file, 'profile-banners');
+            const url = res?.url;
+            if (!url) throw new Error('Failed to get upload URL');
 
             // Update banner URL in Convex
             await updateProfile({
@@ -404,7 +421,7 @@ export default function ProfileManager({
                                             <p className="text-xs text-blue-800 dark:text-blue-300">Display name preferences are now configured per role (Talent, Studio, Producer, etc.) in each SubProfile tab.</p>
                                         </div>
 
-                                        <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Bio / About</label><textarea {...register("bio")} rows="4" className={inputClass(errors.bio)} placeholder="Tell us about your musical journey..." /></div>
+                                        <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block">Bio / About</label><textarea {...register("bio")} rows={4} className={inputClass(errors.bio)} placeholder="Tell us about your musical journey..." /></div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                             <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block flex items-center gap-1"><MapPin size={12}/> ZIP Code</label><input {...register("zip")} className={inputClass(errors.zip)} /></div>
                                             <div><label className="text-xs font-bold text-gray-500 uppercase mb-1 block flex items-center gap-1"><DollarSign size={12}/> Hourly Rate ($)</label><input type="number" {...register("hourlyRate", { valueAsNumber: true })} className={inputClass(errors.hourlyRate)} /></div>
@@ -432,7 +449,7 @@ export default function ProfileManager({
                     </div>
                 </div>
             ) : (
-                <div className="animate-in fade-in slide-in-from-right-2"><SettingsTab user={user} userData={userData} handleLogout={handleLogout} onUpdate={handleSettingsUpdate} onRoleSwitch={onRoleSwitch} subProfiles={subProfiles}/></div>
+                <div className="animate-in fade-in slide-in-from-right-2"><SettingsTab user={user as any} userData={userData as any} handleLogout={handleLogout} onUpdate={handleSettingsUpdate} onRoleSwitch={onRoleSwitch} subProfiles={subProfiles}/></div>
             )}
             </div>
         </PageLayout>
@@ -444,9 +461,9 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
     const [formData, setFormData] = useState<any>(initialData);
     const [isSaving, setIsSaving] = useState<boolean>(false);
 
-    // NEW: Display name preference states
+    // Display name preference states: "global" | "legal" | "username" | "custom"
     const [displayNamePreference, setDisplayNamePreference] = useState<string>(
-        initialData.displayNamePreference || "legal"
+        initialData.displayNamePreference || "global"
     );
     const [customDisplayName, setCustomDisplayName] = useState<string>(
         initialData.customDisplayName || ""
@@ -454,19 +471,21 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
 
     useEffect(() => {
         setFormData(initialData || {});
-        setDisplayNamePreference(initialData.displayNamePreference || "legal");
+        setDisplayNamePreference(initialData.displayNamePreference || "global");
         setCustomDisplayName(initialData.customDisplayName || "");
     }, [initialData]);
 
     const handleChange = (key: string, value: any): void => setFormData(prev => ({ ...prev, [key]: value }));
 
-    // NEW: Compute preview name based on preference
+    // Compute preview name based on preference
     const getPreviewName = (): string => {
         switch (displayNamePreference) {
+            case "global":
+                return userData?.displayName || "Not Set";
             case "legal":
                 return `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim() || "Not Set";
             case "username":
-                return userData?.username || "Not Set";
+                return userData?.username ? `@${userData.username}` : "Not Set";
             case "custom":
                 return customDisplayName || "Not Set";
             default:
@@ -482,6 +501,9 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
             // Compute display name based on preference
             let computedDisplayName = "";
             switch (displayNamePreference) {
+                case "global":
+                    computedDisplayName = userData?.displayName || "";
+                    break;
                 case "legal":
                     computedDisplayName = `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim();
                     break;
@@ -491,10 +513,12 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
                 case "custom":
                     computedDisplayName = customDisplayName ||
                                         formData.profileName ||
+                                        userData?.displayName ||
                                         `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim();
                     break;
                 default:
                     computedDisplayName = formData.profileName ||
+                                        userData?.displayName ||
                                         `${userData?.firstName || ''} ${userData?.lastName || ''}`.trim();
             }
 
@@ -643,8 +667,9 @@ function DynamicSubProfileForm({ user, userData, role, initialData, schema, onSa
                     onChange={(e) => setDisplayNamePreference(e.target.value)}
                     className="w-full p-3 border rounded-xl dark:bg-[#1f2128] dark:text-white dark:border-gray-600 focus:ring-2 focus:ring-brand-blue outline-none"
                 >
+                    <option value="global">Use Global Display Name ({userData?.displayName || 'Not Set'})</option>
                     <option value="legal">Use Legal Name ({`${userData?.firstName || ''} ${userData?.lastName || ''}`.trim()})</option>
-                    <option value="username">Use Username ({userData?.username || 'Not Set'})</option>
+                    <option value="username">Use Username ({userData?.username ? `@${userData.username}` : 'Not Set'})</option>
                     <option value="custom">Custom Name</option>
                 </select>
 

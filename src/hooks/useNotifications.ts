@@ -125,13 +125,13 @@ export function useNotifications(
       message: notif.message,
       read: notif.read,
       timestamp: new Date(notif.createdAt),
-      actionData: notif.actionData,
-      fromUserId: notif.actionData?.fromUserId,
-      fromUserName: notif.actionData?.fromUserName,
-      fromUserPhoto: notif.actionData?.fromUserPhoto,
-      postId: notif.actionData?.postId,
-      postPreview: notif.actionData?.postPreview,
-      commentId: notif.actionData?.commentId,
+      actionData: (notif as any).metadata,
+      fromUserId: (notif as any).metadata?.fromUserId,
+      fromUserName: (notif as any).metadata?.fromUserName,
+      fromUserPhoto: (notif as any).metadata?.fromUserPhoto,
+      postId: (notif as any).metadata?.postId,
+      postPreview: (notif as any).metadata?.postPreview,
+      commentId: (notif as any).metadata?.commentId,
     }));
   }, [notifications]);
 

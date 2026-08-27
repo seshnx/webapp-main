@@ -58,7 +58,8 @@ export function StatsCard({
   return (
     <motion.div
         whileHover={{ scale: 1.02, y: -4 }}
-        className={`relative ${sizeClass} rounded-[1.25rem] cursor-pointer overflow-hidden group backdrop-blur-md shadow-lg border border-white/10 ${gradientClass} ${className}`}
+        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+        className={`relative ${sizeClass} rounded-[1.25rem] cursor-pointer overflow-hidden group backdrop-blur-md shadow-lg border border-white/10 ${gradientClass} render-crisp transform-gpu-crisp ${className}`}
     >
         {/* Animated background elements */}
         <div className="absolute inset-0 opacity-30 pointer-events-none">
@@ -66,27 +67,27 @@ export function StatsCard({
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/10 rounded-full blur-xl transform -translate-x-8 translate-y-8" />
         </div>
 
-        <div className="relative z-10 flex flex-col h-full justify-between min-h-[100px]">
-            <div className="flex items-start justify-between mb-3 w-full">
-                <div className="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl border border-white/10 shadow-inner">
+        <div className="relative z-10 flex flex-col h-full justify-between min-h-[95px] min-w-0">
+            <div className="flex items-start justify-between mb-2 w-full gap-2">
+                <div className="p-2 bg-white/20 backdrop-blur-sm rounded-xl border border-white/10 shadow-inner flex-shrink-0">
                     {Icon && <Icon className="w-5 h-5 text-white drop-shadow-md" />}
                 </div>
                 {trend && trendPercentage !== undefined && (
-                    <div className={`flex items-center gap-1 text-xs font-bold leading-none backdrop-blur-sm px-2.5 py-1.5 rounded-full border border-white/10 shadow-sm ${isTrendUp ? 'bg-green-500/20 text-green-100' : isTrendDown ? 'bg-red-500/20 text-red-100' : 'bg-white/10 text-white'}`}>
+                    <div className={`flex items-center gap-1 text-xs font-bold leading-none backdrop-blur-sm px-2 py-1 rounded-full border border-white/10 shadow-sm flex-shrink-0 ${isTrendUp ? 'bg-green-500/20 text-green-100' : isTrendDown ? 'bg-red-500/20 text-red-100' : 'bg-white/10 text-white'}`}>
                         {isTrendUp ? <ArrowUpRight size={12} className="text-green-300" /> : isTrendDown ? <ArrowUpRight size={12} className="rotate-90 text-red-300" /> : <Minus size={12} className="text-white/70" />}
                         {trendPercentage > 0 ? '+' : ''}{trendPercentage}%
                     </div>
                 )}
             </div>
             
-            <div className="mt-auto">
-                <div className="text-3xl font-black text-white mb-1 tracking-tight flex items-baseline drop-shadow-sm">
+            <div className="mt-auto min-w-0">
+                <div className="text-2xl sm:text-3xl font-black text-white mb-0.5 tracking-tight flex items-baseline drop-shadow-sm truncate">
                     {typeof value === 'number' ? <AnimatedNumber value={value} /> : value}
-                    {unit && <span className="text-lg text-white/80 ml-1 font-semibold">{unit}</span>}
+                    {unit && <span className="text-sm sm:text-base text-white/80 ml-1 font-semibold">{unit}</span>}
                 </div>
-                <div className="text-white/90 text-sm font-semibold tracking-wide">{title}</div>
+                <div className="text-white/90 text-xs sm:text-sm font-semibold tracking-wide truncate">{title}</div>
                 {previousValue !== undefined && (
-                    <div className="text-white/80 text-xs mt-2 font-medium bg-black/20 inline-block px-2.5 py-1 rounded-full backdrop-blur-md border border-white/5">
+                    <div className="text-white/80 text-xs mt-1.5 font-medium bg-black/20 inline-block px-2 py-0.5 rounded-full backdrop-blur-md border border-white/5 truncate max-w-full">
                         Previous: {previousValue}
                     </div>
                 )}

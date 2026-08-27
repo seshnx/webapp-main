@@ -365,7 +365,7 @@ export const translations = {
     replyingTo: 'Replying to',
     editingMessage: 'Editing message',
     forwardingMessage: 'Forwarding message',
-    unknownUser: 'Unknown User',
+    unknownUser: '[Deleted User]',
     dropFiles: 'Drop files here',
     updateMessage: 'Update message',
     noMembersSelected: 'No members selected',

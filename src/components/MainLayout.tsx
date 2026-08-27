@@ -85,14 +85,16 @@ const SocialFeed = retryLazyLoad(() => import('./SocialFeed'));
 const ProfileManager = retryLazyLoad(() => import('./ProfileManager'));
 const BookingSystem = retryLazyLoad(() => import('./BookingSystem'));
 
-// DISABLED MODULES - Scope reduced to only Bookings, Settings, Profile, and Social
-// const Dashboard = retryLazyLoad(() => import('./Dashboard'));
-// const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
-// const Marketplace = retryLazyLoad(() => import('./Marketplace'));
-// const TechServices = retryLazyLoad(() => import('./TechServices'));
-// const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
-// const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
-// const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
+// RE-ENABLED MODULES
+const ChatInterface = retryLazyLoad(() => import('./ChatInterface'));
+const Marketplace = retryLazyLoad(() => import('./Marketplace'));
+const TechServices = retryLazyLoad(() => import('./TechServices'));
+const PaymentsManager = retryLazyLoad(() => import('./PaymentsManager'));
+const BusinessCenter = retryLazyLoad(() => import('./BusinessCenter'));
+const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
+const FloatingChatWidget = retryLazyLoad(() => import('./chat/FloatingChatWidget'));
+const DeviceFontPrompt = retryLazyLoad(() => import('./shared/DeviceFontPrompt'));
+const SharedPostModal = retryLazyLoad(() => import('./social/SharedPostModal'));
 // const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
 // const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
 // const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
@@ -118,19 +120,22 @@ export default function MainLayout({
 
   // Helper to determine active tab from URL
   const getTabFromPath = (path: string): string => {
-    // ACTIVE MODULES: feed, bookings, profile
-    if (path.startsWith('/feed') || path === '/social' || path === '/') return 'feed';
+    if (path.startsWith('/messages') || path.startsWith('/chat')) return 'messages';
     if (path.startsWith('/bookings')) return 'bookings';
     if (path.startsWith('/profile')) return 'profile';
-    // DISABLED MODULES - Redirect to feed
-    if (path.startsWith('/messages') || path.startsWith('/chat')) return 'feed';
-    if (path === '/home') return 'dashboard';
-    if (path.startsWith('/dashboard')) return 'dashboard';
+    if (path.startsWith('/marketplace')) return 'marketplace';
+    if (path.startsWith('/tech')) return 'tech';
+    if (path.startsWith('/payments') || path.startsWith('/billing')) return 'payments';
+    if (path.startsWith('/business-center')) return 'business-center';
     if (path.startsWith('/studio-manager')) return 'studio-manager';
-    if (path.startsWith('/marketplace') || path.startsWith('/tech')) return 'feed';
-    if (path.startsWith('/payments') || path.startsWith('/billing')) return 'feed';
-    if (path.startsWith('/business-center') || path.startsWith('/edu')) return 'feed';
-    if (path.startsWith('/labels') || path.startsWith('/studio-ops')) return 'feed';
+    if (path.startsWith('/dashboard') || path === '/home') return 'dashboard';
+    if (path.startsWith('/legal')) return 'legal';
+    if (path.startsWith('/edu-student')) return 'edu-student';
+    if (path.startsWith('/edu-intern')) return 'edu-intern';
+    if (path.startsWith('/edu-staff')) return 'edu-staff';
+    if (path.startsWith('/edu-admin')) return 'edu-admin';
+    if (path.startsWith('/edu')) return 'edu-overview';
+    if (path.startsWith('/feed') || path === '/social' || path === '/' || path.startsWith('/post/') || path.startsWith('/p/')) return 'feed';
     return 'feed';
   };
 
@@ -139,6 +144,14 @@ export default function MainLayout({
   const [viewingProfile, setViewingProfile] = useState<any>(null);
   const [pendingChatTarget, setPendingChatTarget] = useState<any>(null);
   const [talentBooking, setTalentBooking] = useState<{ talentClerkId: string; profile: any } | null>(null);
+
+  // Detect shared post from path (/post/:id or /p/:id) or post-login pending state
+  const sharedPostId = useMemo(() => {
+    const match = location.pathname.match(/^\/(?:post|p)\/([^/?#]+)/);
+    if (match) return match[1];
+    const pending = sessionStorage.getItem('seshnx_pending_post_modal');
+    return pending || null;
+  }, [location.pathname]);
 
   // Sync tab state with URL
   useEffect(() => {
@@ -224,24 +237,60 @@ export default function MainLayout({
             />
           </Suspense>
         );
-      // DISABLED MODULES - Redirect to active modules
       case 'messages':
       case 'chat':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <ChatInterface
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+              openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })}
+              pendingChatTarget={pendingChatTarget}
+              clearPendingChatTarget={() => setPendingChatTarget(null)}
+            />
+          </Suspense>
+        );
       case 'marketplace':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <Marketplace user={user} userData={userData} />
+          </Suspense>
+        );
       case 'tech':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <TechServices user={user} userData={userData} openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })} />
+          </Suspense>
+        );
       case 'payments':
       case 'billing':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <PaymentsManager user={user} userData={userData} />
+          </Suspense>
+        );
       case 'business-center':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <BusinessCenter user={user} userData={userData} />
+          </Suspense>
+        );
       case 'legal':
-      case 'labels':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <LegalDocs user={user} userData={userData} />
+          </Suspense>
+        );
+      // MODULES ON HOLD
       case 'edu-student':
       case 'edu-intern':
       case 'edu-staff':
       case 'edu-admin':
         return (
           <div className="p-8 text-center text-gray-500">
-            <p className="text-lg mb-2">Module Disabled</p>
-            <p className="text-sm">This module has been temporarily disabled. Please use Bookings, Social Feed, or Profile.</p>
+            <p className="text-lg mb-2">Education Module On Hold</p>
+            <p className="text-sm">The education portal is currently on hold. Please use Bookings, Marketplace, Tech Services, or Social Feed.</p>
           </div>
         );
       default:
@@ -251,7 +300,7 @@ export default function MainLayout({
   };
 
   return (
-    <SchoolProvider user={user} userData={userData}>
+    <SchoolProvider user={user} userData={userData as any}>
       <div className={`relative h-screen overflow-hidden ${darkMode ? 'dark bg-[#1a1d21]' : 'bg-gray-50'}`}>
         
         {/* Navbar */}
@@ -319,6 +368,33 @@ export default function MainLayout({
               clientClerkId={user.id}
               onClose={() => setTalentBooking(null)}
               onSuccess={() => setTalentBooking(null)}
+            />
+          </Suspense>
+        )}
+        {/* Floating Chat Widget */}
+        <Suspense fallback={null}>
+          <FloatingChatWidget user={user} userData={userData} />
+        </Suspense>
+
+        {/* Device Large Font Size Alert Prompt */}
+        <Suspense fallback={null}>
+          <DeviceFontPrompt userId={user?.id} />
+        </Suspense>
+
+        {/* Shared Post Modal (Direct URL /post/:id or /p/:id) */}
+        {sharedPostId && (
+          <Suspense fallback={null}>
+            <SharedPostModal
+              postId={sharedPostId}
+              currentUser={user}
+              currentUserData={userData}
+              onClose={() => {
+                sessionStorage.removeItem('seshnx_pending_post_modal');
+                if (location.pathname.startsWith('/post/') || location.pathname.startsWith('/p/')) {
+                  navigate('/feed', { replace: true });
+                }
+              }}
+              openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })}
             />
           </Suspense>
         )}

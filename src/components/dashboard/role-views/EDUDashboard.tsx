@@ -8,8 +8,9 @@
 import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { GraduationCap, BookOpen, Users, Calendar } from 'lucide-react';
-import type { DashboardProps, EDUDashboardData } from '../../../types/dashboard';
+import type { DashboardProps, EDUDashboardData, QuickAction } from '../../../types/dashboard';
 import { StatsCard } from '../widgets/StatsCard';
+import { QuickActions } from '../sections/QuickActions';
 import { useClassesBySchool, useEnrollmentsByStudent, useUnreadEduAnnouncements, useStudentByUserId, useStaffByUserId } from '../../../hooks/useConvex';
 
 interface EDUDashboardProps extends DashboardProps {
@@ -17,28 +18,59 @@ interface EDUDashboardProps extends DashboardProps {
   className?: string;
 }
 
-export function EDUDashboard({ userData, eduRole, className = '' }: EDUDashboardProps) {
+export function EDUDashboard({ userData, eduRole, setActiveTab, className = '' }: EDUDashboardProps) {
   // Determine the EDU role from userData if not provided
   const role = eduRole || (userData?.accountTypes?.find(t =>
     t.startsWith('EDU') || t === 'Student' || t === 'Intern'
   ) as any) || 'Student';
 
+  const quickActions: QuickAction[] = [
+    {
+      id: 'edu-portal',
+      label: 'Education Portal',
+      description: 'Access active courses & learning modules',
+      icon: GraduationCap,
+      action: () => setActiveTab?.('feed'),
+      variant: 'primary',
+      featured: true,
+      roles: ['*']
+    },
+    {
+      id: 'schedule',
+      label: 'Class Schedule',
+      description: 'View course timetables & lab bookings',
+      icon: Calendar,
+      action: () => setActiveTab?.('bookings'),
+      variant: 'secondary',
+      roles: ['*']
+    },
+    {
+      id: 'student-profile',
+      label: 'Academic Profile',
+      description: 'Track course credits & certificates',
+      icon: BookOpen,
+      action: () => setActiveTab?.('profile'),
+      variant: 'secondary',
+      roles: ['*']
+    }
+  ];
+
   // Get school ID from userData
-  const schoolId = userData?.schoolId;
+  const schoolId = (userData as any)?.schoolId;
 
   // Fetch real data from Convex
-  const { data: classes } = useClassesBySchool(schoolId, 'active');
+  const classes = useClassesBySchool(schoolId, 'active');
 
   // For students, get their enrollments
   const isStudent = role === 'Student' || role === 'Intern';
-  const { data: studentProfile } = useStudentByUserId(userData?.userId || '');
-  const { data: enrollments } = useEnrollmentsByStudent(studentProfile?._id, 'active');
+  const studentProfile = useStudentByUserId((userData as any)?.userId || '');
+  const enrollments = useEnrollmentsByStudent((studentProfile as any)?._id, 'active');
 
   // For staff, get staff profile and unread announcements
-  const { data: staffProfile } = useStaffByUserId(userData?.userId || '');
+  const staffProfile = useStaffByUserId((userData as any)?.userId || '');
   const userType = isStudent ? 'student' : 'staff';
-  const { data: unreadAnnouncements } = useUnreadEduAnnouncements(
-    userData?.userId || '',
+  const unreadAnnouncements = useUnreadEduAnnouncements(
+    (userData as any)?.userId || '',
     schoolId,
     userType
   );
@@ -52,14 +84,14 @@ export function EDUDashboard({ userData, eduRole, className = '' }: EDUDashboard
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const upcomingClasses = (classes || [])
-      .filter(cls => {
-        const classDate = new Date(cls.startTime);
+      .filter((cls: any) => {
+        const classDate = new Date(cls.startTime || cls.createdAt || Date.now());
         return classDate >= today && classDate < tomorrow;
       })
-      .map(cls => ({
+      .map((cls: any) => ({
         id: cls._id,
         courseName: cls.name,
-        startTime: new Date(cls.startTime),
+        startTime: new Date(cls.startTime || cls.createdAt || Date.now()),
         enrolled: cls.enrolledCount || 0
       }))
       .sort((a, b) => a.startTime.getTime() - b.startTime.getTime())
@@ -68,12 +100,12 @@ export function EDUDashboard({ userData, eduRole, className = '' }: EDUDashboard
     // Active courses count
     const activeCourses = isStudent
       ? (enrollments || []).length
-      : (classes || []).filter(c => c.status === 'active').length;
+      : (classes || []).filter((c: any) => c.status === 'active' || c.isActive).length;
 
     // Enrolled students (for staff) or 0 for students
     const enrolledStudents = isStudent
       ? 0
-      : (classes || []).reduce((sum, cls) => sum + (cls.enrolledCount || 0), 0);
+      : (classes || []).reduce((sum: number, cls: any) => sum + (cls.enrolledCount || 0), 0);
 
     // Assignments/announcements pending
     const assignmentsPending = (unreadAnnouncements || []).length;
@@ -111,7 +143,7 @@ export function EDUDashboard({ userData, eduRole, className = '' }: EDUDashboard
       </motion.div>
 
       {/* Key Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
         <StatsCard
           title="Active Courses"
           value={data.activeCourses}
@@ -140,7 +172,13 @@ export function EDUDashboard({ userData, eduRole, className = '' }: EDUDashboard
         />
       </div>
 
-      {/* Upcoming Classes */}
+      {/* Quick Actions */}
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+          Quick Actions
+        </h3>
+        <QuickActions actions={quickActions} role={role} />
+      </div>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

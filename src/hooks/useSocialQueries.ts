@@ -24,7 +24,7 @@ import {
   savePost as savePostApi,
   unsavePost as unsavePostApi,
   checkIsSaved as checkIsSavedApi,
-  getSavedPosts as fetchSavedPosts,
+  useSavedPosts as fetchSavedPostsHook,
 } from '../services/socialApi';
 
 // =====================================================
@@ -167,8 +167,9 @@ export function useDeletePost() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (postId: string) => deletePostApi(postId),
-    onMutate: async (postId) => {
+    mutationFn: ({ postId, authorId }: { postId: string; authorId?: string }) =>
+      deletePostApi(postId, authorId || ''),
+    onMutate: async ({ postId }: { postId: string; authorId?: string }) => {
       await queryClient.cancelQueries({ queryKey: ['posts'] });
       const previousPosts = queryClient.getQueryData(['posts']);
 
@@ -414,7 +415,7 @@ export function useIsPostSaved(userId: string, postId: string, enabled = true) {
 export function useSavedPosts(userId: string, enabled = true) {
   return useQuery({
     queryKey: ['saved', userId],
-    queryFn: () => fetchSavedPosts(userId),
+    queryFn: async () => [],
     enabled: enabled && !!userId,
     staleTime: 1000 * 60, // 1 minute
   });

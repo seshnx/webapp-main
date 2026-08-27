@@ -1,11 +1,8 @@
 /**
  * Real-time Follows Hook using Convex
- *
- * Replaces Socket.IO for real-time follow events
- * Works seamlessly with Vercel deployment
  */
 
-import { useMemo, useCallback, useEffect } from 'react';
+import { useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { isConvexAvailable } from '../config/convex';
@@ -24,194 +21,116 @@ interface FollowStats {
   isConnected: boolean;
 }
 
-/**
- * Hook for real-time follow updates using Convex
- *
- * @example
- * function ProfileHeader({ userId }) {
- *   const { followerCount, followingCount } = useRealtimeFollows({
- *     userId,
- *     onNewFollower: (followerId) => {
- *       showNotification(`New follower!`);
- *     }
- *   });
- *
- *   return (
- *     <div>
- *       <span>{followerCount} followers</span>
- *       <span>{followingCount} following</span>
- *     </div>
- *   );
- * }
- */
-export function useRealtimeFollows(
-  options: UseRealtimeFollowsOptions = {}
-): FollowStats {
-  const { enabled = true, userId, onNewFollower, onFollowChange } = options;
-
+export function useRealtimeFollows(options: UseRealtimeFollowsOptions = {}): FollowStats {
+  const { enabled = true, userId, onFollowChange } = options;
   const convexAvailable = isConvexAvailable();
   const isConnected = convexAvailable && enabled;
 
-  // Get follower count
-  const followerCountQuery = useMemo(() => {
-    if (!enabled || !userId || !convexAvailable) {
-      return 'skip';
-    }
-    return { userId };
-  }, [enabled, userId, convexAvailable]);
-
-  const followerCountData = useQuery(
-    api.follows.getFollowerCount,
-    followerCountQuery === 'skip' ? 'skip' : followerCountQuery
+  const followersData = useQuery(
+    api.social.getFollowers,
+    (enabled && userId && convexAvailable) ? { clerkId: userId } : 'skip'
   );
 
-  // Get following count
-  const followingCountQuery = useMemo(() => {
-    if (!enabled || !userId || !convexAvailable) {
-      return 'skip';
-    }
-    return { userId };
-  }, [enabled, userId, convexAvailable]);
-
-  const followingCountData = useQuery(
-    api.follows.getFollowingCount,
-    followingCountQuery === 'skip' ? 'skip' : followingCountQuery
+  const followingData = useQuery(
+    api.social.getFollowing,
+    (enabled && userId && convexAvailable) ? { clerkId: userId } : 'skip'
   );
 
-  // Notify on count changes
   useEffect(() => {
-    if (onFollowChange && followerCountData !== undefined) {
+    if (onFollowChange && followersData !== undefined) {
       onFollowChange();
     }
-  }, [followerCountData, followingCountData, onFollowChange]);
+  }, [followersData, followingData, onFollowChange]);
 
   return {
-    followerCount: followerCountData ?? 0,
-    followingCount: followingCountData ?? 0,
-    isLoading: followerCountData === undefined || followingCountData === undefined,
+    followerCount: followersData?.length ?? 0,
+    followingCount: followingData?.length ?? 0,
+    isLoading: followersData === undefined || followingData === undefined,
     isConnected,
   };
 }
 
-/**
- * Hook to check if current user is following another user
- */
 export function useIsFollowing(
   followerId?: string | null,
   followingId?: string | null,
   enabled = true
 ): boolean {
   const convexAvailable = isConvexAvailable();
-  const isConnected = convexAvailable && enabled;
-
-  const isFollowingQuery = useMemo(() => {
-    if (!enabled || !followerId || !followingId || !convexAvailable) {
-      return 'skip';
-    }
-    return { followerId, followingId };
-  }, [enabled, followerId, followingId, convexAvailable]);
 
   const isFollowingData = useQuery(
-    api.follows.isFollowing,
-    isFollowingQuery === 'skip' ? 'skip' : isFollowingQuery
+    api.social.isFollowing,
+    (enabled && followerId && followingId && convexAvailable)
+      ? { followerClerkId: followerId, followingClerkId: followingId }
+      : 'skip'
   );
 
   return isFollowingData ?? false;
 }
 
-/**
- * Hook to get user's followers list
- */
 export function useFollowers(
   userId?: string | null,
   enabled = true
 ): Array<{ followerId: string; createdAt: number }> {
   const convexAvailable = isConvexAvailable();
 
-  const followersQuery = useMemo(() => {
-    if (!enabled || !userId || !convexAvailable) {
-      return 'skip';
-    }
-    return { userId };
-  }, [enabled, userId, convexAvailable]);
-
   const followers = useQuery(
-    api.follows.getFollowers,
-    followersQuery === 'skip' ? 'skip' : followersQuery
+    api.social.getFollowers,
+    (enabled && userId && convexAvailable) ? { clerkId: userId } : 'skip'
   );
 
   return useMemo(() => {
-    if (!followers || followers === 'skip') {
-      return [];
-    }
-
+    if (!followers) return [];
     return followers.map((f: any) => ({
-      followerId: f.followerId,
-      createdAt: f.createdAt,
+      followerId: f.clerkId ?? f._id,
+      createdAt: f.timestamp ?? 0,
     }));
   }, [followers]);
 }
 
-/**
- * Hook to get who user is following
- */
 export function useFollowing(
   userId?: string | null,
   enabled = true
 ): Array<{ followingId: string; createdAt: number }> {
   const convexAvailable = isConvexAvailable();
 
-  const followingQuery = useMemo(() => {
-    if (!enabled || !userId || !convexAvailable) {
-      return 'skip';
-    }
-    return { userId };
-  }, [enabled, userId, convexAvailable]);
-
   const following = useQuery(
-    api.follows.getFollowing,
-    followingQuery === 'skip' ? 'skip' : followingQuery
+    api.social.getFollowing,
+    (enabled && userId && convexAvailable) ? { clerkId: userId } : 'skip'
   );
 
   return useMemo(() => {
-    if (!following || following === 'skip') {
-      return [];
-    }
-
+    if (!following) return [];
     return following.map((f: any) => ({
-      followingId: f.followingId,
-      createdAt: f.createdAt,
+      followingId: f.clerkId ?? f._id,
+      createdAt: f.timestamp ?? 0,
     }));
   }, [following]);
 }
 
-/**
- * Hook to sync a follow relationship from MongoDB to Convex
- */
 export function useSyncFollow() {
-  const syncFollowMutation = useMutation(api.follows.syncFollow);
-  const removeFollowMutation = useMutation(api.follows.removeFollow);
+  const followMutation = useMutation(api.users.followUser);
+  const unfollowMutation = useMutation(api.users.unfollowUser);
 
   const syncFollow = async (
     followerId: string,
     followingId: string,
-    createdAt: number
+    _createdAt: number
   ) => {
     try {
-      await syncFollowMutation({ followerId, followingId, createdAt });
+      await followMutation({ followerClerkId: followerId, followingClerkId: followingId });
       return { success: true };
     } catch (error) {
-      console.error('Failed to sync follow to Convex:', error);
+      console.error('Failed to follow user via Convex:', error);
       return { success: false, error };
     }
   };
 
   const removeFollow = async (followerId: string, followingId: string) => {
     try {
-      await removeFollowMutation({ followerId, followingId });
+      await unfollowMutation({ followerClerkId: followerId, followingClerkId: followingId });
       return { success: true };
     } catch (error) {
-      console.error('Failed to remove follow from Convex:', error);
+      console.error('Failed to unfollow user via Convex:', error);
       return { success: false, error };
     }
   };

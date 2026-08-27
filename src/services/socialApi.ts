@@ -307,7 +307,7 @@ export function useIsPostSaved(clerkId: string | undefined, postId: string | und
   return useQuery(
     api.social.isSaved,
     (clerkId && postId)
-      ? { clerkId, postId }
+      ? { clerkId, postId: postId as any }
       : "skip"
   );
 }

@@ -1,9 +1,11 @@
 /**
  * User Settings Hook
- * MongoDB-based settings management
+ * Convex-based account settings management
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 export interface UserSettings {
   theme?: 'light' | 'dark' | 'system';
@@ -17,6 +19,16 @@ export interface UserSettings {
     reducedMotion?: boolean;
     highContrast?: boolean;
   };
+  privacy?: Record<string, any>;
+  notifications?: Record<string, any>;
+  messaging?: Record<string, any>;
+  social?: Record<string, any>;
+  bookings?: Record<string, any>;
+  marketplace?: Record<string, any>;
+  content?: Record<string, any>;
+  ui?: Record<string, any>;
+  performance?: Record<string, any>;
+  [key: string]: any;
 }
 
 interface UseUserSettingsReturn {
@@ -37,103 +49,93 @@ const DEFAULT_SETTINGS: UserSettings = {
   accessibility: {
     fontSize: 'medium',
     reducedMotion: false,
-    highContrast: false
-  }
+    highContrast: false,
+  },
 };
 
 /**
- * Hook for managing user settings with MongoDB backend
+ * Hook for managing user settings directly on the accounts Convex record
  *
- * @param userId - User ID (optional, for logged-in users)
+ * @param userId - User Clerk ID (optional, for logged-in users)
  * @returns Settings state and management functions
  */
 export function useUserSettings(userId?: string | null): UseUserSettingsReturn {
-  const [settings, setSettings] = useState<UserSettings | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Load settings from MongoDB
-  const refreshSettings = useCallback(async () => {
+  // Query account data from Convex
+  const convexUser = useQuery(
+    api.users.getUserByClerkId,
+    userId ? { clerkId: userId } : 'skip'
+  );
+
+  const updateProfileMutation = useMutation(api.users.updateProfile);
+
+  // Compute merged settings
+  const settings = useMemo<UserSettings>(() => {
     if (!userId) {
-      setSettings(DEFAULT_SETTINGS);
-      setLoading(false);
-      return;
+      return DEFAULT_SETTINGS;
     }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch(`/api/user/settings?user_id=${encodeURIComponent(userId)}`);
-      if (!response.ok) {
-        throw new Error('Failed to load settings');
-      }
-
-      const data = await response.json();
-      setSettings(data);
-    } catch (err) {
-      console.error('Error loading settings:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load settings');
-      // Set default settings on error
-      setSettings(DEFAULT_SETTINGS);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  // Save settings to MongoDB
-  const saveSettings = useCallback(async (newSettings: UserSettings): Promise<boolean> => {
-    if (!userId) {
-      console.warn('Cannot save settings: No user ID provided');
-      return false;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/user/settings', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+    const userSettings = convexUser?.settings;
+    if (userSettings && typeof userSettings === 'object') {
+      return {
+        ...DEFAULT_SETTINGS,
+        ...userSettings,
+        accessibility: {
+          ...DEFAULT_SETTINGS.accessibility,
+          ...(userSettings.accessibility || {}),
         },
-        body: JSON.stringify({
-          user_id: userId,
-          settings: newSettings
-        }),
-      });
+      };
+    }
+    return DEFAULT_SETTINGS;
+  }, [userId, convexUser?.settings]);
 
-      if (!response.ok) {
-        throw new Error('Failed to save settings');
+  // Apply settings to DOM when loaded from Convex
+  useEffect(() => {
+    if (settings) {
+      applySettingsToDom(settings);
+    }
+  }, [settings]);
+
+  // Refresh settings callback (Convex is real-time, but provided for API compatibility)
+  const refreshSettings = useCallback(async () => {
+    // Convex queries update automatically in real-time
+  }, []);
+
+  // Save settings directly to Convex account
+  const saveSettings = useCallback(
+    async (newSettings: UserSettings): Promise<boolean> => {
+      if (!userId) {
+        console.warn('Cannot save settings: No user ID provided');
+        return false;
       }
 
-      const data = await response.json();
-      setSettings(data);
+      setError(null);
 
-      // Apply settings to localStorage and DOM
-      applySettingsToDom(newSettings);
+      try {
+        await updateProfileMutation({
+          clerkId: userId,
+          settings: newSettings,
+        });
 
-      return true;
-    } catch (err) {
-      console.error('Error saving settings:', err);
-      setError(err instanceof Error ? err.message : 'Failed to save settings');
-      return false;
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
+        // Apply settings to localStorage and DOM
+        applySettingsToDom(newSettings);
 
-  // Load settings on mount
-  useEffect(() => {
-    refreshSettings();
-  }, [refreshSettings]);
+        return true;
+      } catch (err) {
+        console.error('Error saving settings to Convex account:', err);
+        setError(err instanceof Error ? err.message : 'Failed to save settings');
+        return false;
+      }
+    },
+    [userId, updateProfileMutation]
+  );
 
   return {
     settings,
-    loading,
+    loading: userId ? convexUser === undefined : false,
     error,
     saveSettings,
-    refreshSettings
+    refreshSettings,
   };
 }
 

@@ -19,18 +19,18 @@ interface ProducerDashboardProps extends DashboardProps {
   className?: string;
 }
 
-export function ProducerDashboard({ userData, className = '' }: ProducerDashboardProps) {
+export function ProducerDashboard({ userData, setActiveTab, className = '' }: ProducerDashboardProps) {
   // Fetch data from Convex
   const transactions = useQuery(api.marketplace.getTransactionsBySeller,
-    userData ? { sellerId: userData.clerkId, status: "completed" } : "skip"
+    (userData as any)?.clerkId ? { sellerId: (userData as any).clerkId, status: "completed" } : "skip"
   );
   const posts = useQuery(api.social.getPostsByAuthor,
-    userData ? { clerkId: userData.clerkId, limit: 20 } : "skip"
+    (userData as any)?.clerkId ? { clerkId: (userData as any).clerkId, limit: 20 } : "skip"
   );
 
   // Calculate metrics from real data
   const recentSalesCount = transactions?.length || 0;
-  const totalRevenue = transactions?.reduce((sum, t) => sum + (t.price || 0), 0) || 0;
+  const totalRevenue = transactions?.reduce((sum, t) => sum + ((t as any).price || (t as any).offerAmount || 0), 0) || 0;
   const postsCount = posts?.length || 0;
 
   const [data, setData] = useState<ProducerDashboardData>({
@@ -83,25 +83,29 @@ export function ProducerDashboard({ userData, className = '' }: ProducerDashboar
   const quickActions: QuickAction[] = [
     {
       id: 'new-beat',
-      label: 'New Beat',
+      label: 'New Beat / Post',
+      description: 'Upload new track or beat preview to social feed',
       icon: Plus,
-      action: () => console.log('Navigate to studio'),
+      action: () => setActiveTab?.('feed'),
       variant: 'primary',
+      featured: true,
       roles: ['Producer', '*']
     },
     {
       id: 'post-feed',
-      label: 'Post to Feed',
+      label: 'Social Feed',
+      description: 'Engage with followers & fellow creators',
       icon: MessageSquare,
-      action: () => console.log('Navigate to feed'),
+      action: () => setActiveTab?.('feed'),
       variant: 'secondary',
       roles: ['Producer', '*']
     },
     {
       id: 'analytics',
-      label: 'View Analytics',
+      label: 'Profile & Sales',
+      description: 'Manage beats, sales & earnings profile',
       icon: BarChart3,
-      action: () => console.log('Navigate to analytics'),
+      action: () => setActiveTab?.('profile'),
       variant: 'secondary',
       roles: ['Producer', '*']
     }
@@ -128,7 +132,7 @@ export function ProducerDashboard({ userData, className = '' }: ProducerDashboar
   return (
     <div className={`space-y-6 ${className}`}>
       {/* Key Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:gap-4">
         <StatsCard
           title="Beat Sales (Month)"
           value={data.recentSales}

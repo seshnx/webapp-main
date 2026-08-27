@@ -11,6 +11,7 @@ import {
   useBookingsByDate,
   useUpcomingBookings,
   useBookingMutations,
+  useBookingPaymentMutations,
 } from '../services/bookingService';
 import * as Sentry from '@sentry/react';
 
@@ -39,7 +40,7 @@ export function useBooking(bookingId: string | null) {
       // For now, we'll update the notes field
       await update({
         bookingId: bookingId as any,
-        notes: content,
+        clientNotes: content,
       });
     } catch (error) {
       console.error('Failed to add note:', error);
@@ -62,7 +63,7 @@ export function useBooking(bookingId: string | null) {
       }
 
       try {
-        await updateStatus(bookingId as any, status);
+        await updateStatus({ bookingId: bookingId as any, status });
       } catch (error) {
         console.error('Failed to update status:', error);
         throw error;
@@ -173,7 +174,7 @@ export function useBookingOperations() {
 
     updateBookingStatus: async (bookingId: string, status: string, reason?: string) => {
       try {
-        await updateStatus(bookingId as any, status);
+        await updateStatus({ bookingId: bookingId as any, status });
       } catch (error) {
         console.error('Failed to update booking status:', error);
         Sentry.captureException(error, {
@@ -203,7 +204,7 @@ export function useBookingOperations() {
  * Hook for booking payment operations
  */
 export function useBookingPayments() {
-  const { createPayment, updatePayment } = useBookingMutations();
+  const { createPayment, updatePayment } = useBookingPaymentMutations();
 
   return {
     createPayment: async (paymentData: any) => {
@@ -248,9 +249,8 @@ export function useBookings(bookingIds: string[]) {
   // This would need a bulk query in Convex
   // For now, we'll use individual queries (in real app, optimize this)
   const bookings = useBookingsByClient(
-    undefined, // Would need to extract client ID from bookings
     undefined,
-    bookingIds.length
+    undefined
   );
 
   return {

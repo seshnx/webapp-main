@@ -353,6 +353,7 @@ export function useTransactionMutations() {
     try {
       await cancel({
         transactionId: transactionId as any,
+        cancelledBy: 'user',
       });
     } catch (error) {
       console.error('Failed to cancel transaction:', error);

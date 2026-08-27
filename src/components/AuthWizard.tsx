@@ -76,7 +76,7 @@ function ZipUserMap({ zip }: ZipUserMapProps) {
   }, [zip]);
 
   return (
-    <div className="w-full h-36 rounded-xl overflow-hidden relative border dark:border-gray-600 shadow-inner bg-gray-100 dark:bg-[#1f2128]">
+    <div className="w-full h-28 sm:h-32 rounded-xl overflow-hidden relative border dark:border-gray-600 shadow-inner bg-gray-100 dark:bg-[#1f2128]">
       <MapContainer center={mapState.center} zoom={11} scrollWheelZoom={false} zoomControl={false} className="h-full w-full" style={{ background: 'transparent' }}>
         <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" attribution='&copy; CARTO' />
         <RecenterAutomatically lat={mapState.center[0]} lng={mapState.center[1]} />
@@ -85,7 +85,7 @@ function ZipUserMap({ zip }: ZipUserMapProps) {
         )}
       </MapContainer>
       {mapState.isValid && (
-        <div className="absolute bottom-3 right-3 bg-white/95 dark:bg-black/85 backdrop-blur-md p-2 rounded-lg shadow-lg z-[400] text-xs font-bold border dark:border-gray-700 dark:text-white">
+        <div className="absolute bottom-2 right-2 bg-white/95 dark:bg-black/85 backdrop-blur-md px-2 py-1 rounded-lg shadow-lg z-[400] text-[11px] font-bold border dark:border-gray-700 dark:text-white">
           {mapState.locationName}
         </div>
       )}
@@ -157,14 +157,15 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
   // Initialize form from Clerk user when available
   useEffect(() => {
-    if (isNewUser && clerkUser && clerkUser.id) {
+    const isCompleted = clerkUser?.unsafeMetadata?.onboarding_completed === true;
+    if (clerkUser && clerkUser.id && (isNewUser || !isCompleted)) {
       setMode('onboarding');
       setStep(1);
       setForm(prev => ({
         ...prev,
-        email: clerkUser?.primaryEmailAddress?.emailAddress || '',
-        firstName: clerkUser?.firstName || '',
-        lastName: clerkUser?.lastName || ''
+        email: clerkUser?.primaryEmailAddress?.emailAddress || prev.email,
+        firstName: clerkUser?.firstName || prev.firstName,
+        lastName: clerkUser?.lastName || prev.lastName
       }));
     } else if (!clerkUser || !clerkUser.id) {
       setMode('login');
@@ -211,33 +212,31 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
       await updateProfile({
         clerkId: clerkUser.id,
-        email: form.email,
         firstName: form.firstName,
         lastName: form.lastName,
         zipCode: form.zip,
         accountTypes: finalRoles,
         activeProfileRole: activeRole,
-        preferredRole: activeRole,
         profileName: displayName,
       });
 
       // Create sub-profiles for each role
-      const profileData = {
+      const profileData: any = {
         displayName: displayName,
       };
 
       if (form.talentSubRole && finalRoles.includes('Talent')) {
-        (profileData as any).talentSubRole = form.talentSubRole;
+        profileData.talentSubRole = form.talentSubRole;
       }
 
       for (const role of finalRoles) {
         try {
           // Try to create sub-profile in Convex
           await createSubProfile({
-            userId: clerkUser.id as any,
+            clerkId: clerkUser.id,
             role: role,
             displayName: displayName,
-            isActive: true,
+            ...(role === 'Talent' && form.talentSubRole ? { talentSubRole: form.talentSubRole } : {}),
           });
         } catch (err: any) {
           console.warn(`Failed to create sub-profile for ${role}:`, err);
@@ -291,7 +290,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
   // === LOGIN / SIGNUP MODE (using Clerk stock components) ===
   if (mode === 'login' || mode === 'signup') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-y-auto">
         <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
           <AuthWizardBackground onImagesLoaded={setBackgroundImagesLoaded} />
         </div>
@@ -300,20 +299,20 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           style={{ opacity: backgroundImagesLoaded ? 0 : 1, pointerEvents: 'none' }}
         />
 
-        <div className="absolute top-6 right-6 z-20">
-          <button onClick={toggleTheme} className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border dark:border-gray-700">
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+        <div className="absolute top-4 sm:top-6 right-4 sm:right-6 z-20">
+          <button onClick={toggleTheme} className="p-2.5 sm:p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border dark:border-gray-700">
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
 
-        <div className="bg-white/95 dark:bg-[#1a1d21]/95 dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden z-10 backdrop-blur-md p-8">
+        <div className="bg-white/95 dark:bg-[#1a1d21]/95 dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md my-auto relative overflow-hidden z-10 backdrop-blur-md p-5 sm:p-7">
           {/* Logo */}
-          <div className="relative w-full h-48 mb-6 flex justify-center shrink-0">
-            <img src={darkMode ? LogoWhite : LogoLight} alt="SeshNx" className="w-96 h-40 object-contain drop-shadow-md" />
+          <div className="relative w-full h-16 sm:h-20 mb-3 sm:mb-4 flex items-center justify-center shrink-0">
+            <img src={darkMode ? LogoWhite : LogoLight} alt="SeshNx" className="w-auto h-14 sm:h-18 max-w-[240px] object-contain drop-shadow-md" />
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4">
+            <div className="bg-red-50 text-red-600 p-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 mb-3">
               <AlertCircle size={16} /> {error}
             </div>
           )}
@@ -321,46 +320,40 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           {/* Clerk's Stock Components */}
           {mode === 'login' ? (
             <>
-              <SignIn
-                afterSignInUrl="/"
-                redirectUrl="/"
-              />
-              <div className="mt-4 pt-4 border-t dark:border-gray-700 text-center">
+              <SignIn fallbackRedirectUrl="/" />
+              <div className="mt-3 pt-3 border-t dark:border-gray-700 text-center">
                 <button
                   onClick={() => {
                     setMode('signup');
                     setError('');
                   }}
-                  className="text-sm text-brand-blue hover:underline"
+                  className="text-xs sm:text-sm text-brand-blue hover:underline font-semibold"
                 >
                   Don&apos;t have an account? Sign up
                 </button>
               </div>
-              <div className="mt-4 text-center">
-                <button onClick={() => setShowLegalOverlay(true)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <div className="mt-2 text-center">
+                <button onClick={() => setShowLegalOverlay(true)} className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                   Terms of Service • Privacy Policy
                 </button>
               </div>
             </>
           ) : (
             <>
-              <SignUp
-                afterSignUpUrl="/"
-                redirectUrl="/"
-              />
-              <div className="mt-4 pt-4 border-t dark:border-gray-700 text-center">
+              <SignUp fallbackRedirectUrl="/" />
+              <div className="mt-3 pt-3 border-t dark:border-gray-700 text-center">
                 <button
                   onClick={() => {
                     setMode('login');
                     setError('');
                   }}
-                  className="text-sm text-brand-blue hover:underline"
+                  className="text-xs sm:text-sm text-brand-blue hover:underline font-semibold"
                 >
                   Already have an account? Sign in
                 </button>
               </div>
-              <div className="mt-4 text-center">
-                <button onClick={() => setShowLegalOverlay(true)} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+              <div className="mt-2 text-center">
+                <button onClick={() => setShowLegalOverlay(true)} className="text-[11px] text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
                   Terms of Service • Privacy Policy
                 </button>
               </div>
@@ -392,7 +385,7 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
   // === ONBOARDING MODE ===
   if (mode === 'onboarding') {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-4 relative overflow-hidden">
+      <div className="min-h-screen flex flex-col items-center justify-center p-4 sm:p-6 relative overflow-y-auto">
         <div style={{ position: 'fixed', inset: 0, zIndex: 0 }}>
           <AuthWizardBackground onImagesLoaded={setBackgroundImagesLoaded} />
         </div>
@@ -401,63 +394,63 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
           style={{ opacity: backgroundImagesLoaded ? 0 : 1, pointerEvents: 'none' }}
         />
 
-        <div className="absolute top-6 right-6 z-20">
-          <button onClick={toggleTheme} className="p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border dark:border-gray-700">
-            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+        <div className="absolute top-4 sm:top-6 right-4 sm:right-6 z-20">
+          <button onClick={toggleTheme} className="p-2.5 sm:p-3 rounded-full bg-white/80 dark:bg-black/50 backdrop-blur-md border dark:border-gray-700">
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
           </button>
         </div>
 
         <div
-          className="bg-white/95 dark:bg-[#1a1d21]/95 dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden transition-[height] duration-500 z-10 backdrop-blur-md"
-          style={{ height: cardHeight, minHeight: '500px' }}
+          className="bg-white/95 dark:bg-[#1a1d21]/95 dark:border dark:border-gray-700 rounded-3xl shadow-2xl w-full max-w-md my-auto relative overflow-hidden transition-[height] duration-500 z-10 backdrop-blur-md"
+          style={{ height: cardHeight }}
         >
-          <div ref={contentRef} className="pt-12 px-8 pb-8">
-            <div className="relative w-full h-48 mb-6 flex justify-center shrink-0">
-              <img src={darkMode ? LogoWhite : LogoLight} alt="SeshNx" className="w-96 h-40 object-contain drop-shadow-md" />
-              <div className="absolute bottom-2 w-full text-center">
-                <p className="text-sm font-bold text-gray-500 uppercase tracking-wider">
-                  Complete Your Profile
-                </p>
-              </div>
+          <div ref={contentRef} className="p-5 sm:p-6">
+            <div className="relative w-full h-14 sm:h-18 mb-2 flex items-center justify-center shrink-0">
+              <img src={darkMode ? LogoWhite : LogoLight} alt="SeshNx" className="w-auto h-12 sm:h-16 max-w-[200px] object-contain drop-shadow-md" />
+            </div>
+            <div className="w-full text-center mb-3">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                Complete Your Profile
+              </p>
             </div>
 
             {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-xl text-sm flex items-center gap-2 mb-4">
+              <div className="bg-red-50 text-red-600 p-2.5 rounded-xl text-xs sm:text-sm flex items-center gap-2 mb-3">
                 <AlertCircle size={16} /> {error}
               </div>
             )}
 
             {/* Progress Indicator */}
-            <div className="flex items-center justify-center gap-2 mb-6">
+            <div className="flex items-center justify-center gap-2 mb-3">
               <div className={`h-1 flex-1 rounded-full transition-colors ${step >= 1 ? 'bg-brand-blue' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
               <div className={`h-1 flex-1 rounded-full transition-colors ${step >= 2 ? 'bg-brand-blue' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
             </div>
-            <div className="flex justify-between text-xs text-gray-500 mb-4 px-2">
+            <div className="flex justify-between text-xs text-gray-500 mb-3 px-2">
               <span className={step === 1 ? 'font-bold text-brand-blue' : ''}>Profile</span>
               <span className={step === 2 ? 'font-bold text-brand-blue' : ''}>Roles</span>
             </div>
 
             {/* Step 1: Basic Info */}
             {step === 1 && (
-              <div className="space-y-4">
-                <h3 className="text-xl font-bold dark:text-white text-center mb-2">
+              <div className="space-y-2.5 sm:space-y-3">
+                <h3 className="text-base sm:text-lg font-bold dark:text-white text-center">
                   Let&apos;s get to know you
                 </h3>
-                <p className="text-sm text-gray-500 text-center mb-6">
+                <p className="text-xs text-gray-500 text-center mb-2">
                   Tell us your name and where you&apos;re located
                 </p>
 
-                <div className="space-y-3">
-                  <div className="flex gap-3">
+                <div className="space-y-2 sm:space-y-2.5">
+                  <div className="flex gap-2 sm:gap-3">
                     <input
-                      className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      className="w-1/2 p-2.5 sm:p-3 text-xs sm:text-sm bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
                       placeholder="First Name *"
                       value={form.firstName}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, firstName: e.target.value }))}
                       required
                     />
                     <input
-                      className="w-1/2 p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      className="w-1/2 p-2.5 sm:p-3 text-xs sm:text-sm bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
                       placeholder="Last Name *"
                       value={form.lastName}
                       onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, lastName: e.target.value }))}
@@ -468,36 +461,36 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                   <div className="relative flex gap-2">
                     <div className="relative flex-1">
                       <input
-                        className="w-full p-3.5 pl-10 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                        className="w-full p-2.5 sm:p-3 pl-9 sm:pl-10 text-xs sm:text-sm bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
                         placeholder="Zip Code *"
                         maxLength={5}
                         value={form.zip}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm(prev => ({ ...prev, zip: e.target.value.replace(/\D/g, '') }))}
                         required
                       />
-                      <MapPin className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                      <MapPin className="absolute left-3 top-2.5 sm:top-3 text-gray-400" size={16} />
                     </div>
                     <button
                       onClick={handleUseLocation}
-                      className="p-3.5 border dark:border-gray-600 rounded-xl text-brand-blue hover:bg-gray-50 dark:hover:bg-gray-800 transition"
+                      className="p-2.5 sm:p-3 border dark:border-gray-600 rounded-xl text-brand-blue hover:bg-gray-50 dark:hover:bg-gray-800 transition"
                       disabled={locating}
                       title="Use my current location"
                     >
-                      {locating ? <Loader2 className="animate-spin" size={18} /> : <Crosshair size={18} />}
+                      {locating ? <Loader2 className="animate-spin" size={16} /> : <Crosshair size={16} />}
                     </button>
                   </div>
 
                   <ZipUserMap zip={form.zip} />
 
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                    <p className="text-xs text-blue-800 dark:text-blue-200">
-                      <strong>Why we need this:</strong> Your location helps us connect you with nearby musicians, studios, and opportunities in your area.
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2 sm:p-2.5">
+                    <p className="text-[11px] text-blue-800 dark:text-blue-200">
+                      <strong>Why we need this:</strong> Connects you with nearby musicians, studios, and gigs.
                     </p>
                   </div>
                 </div>
 
                 <button
-                  className="w-full bg-brand-blue hover:bg-blue-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 transition shadow-lg mt-4"
+                  className="w-full bg-brand-blue hover:bg-blue-600 text-white py-2.5 sm:py-3 text-xs sm:text-sm rounded-xl font-bold disabled:opacity-50 transition shadow-lg mt-2"
                   onClick={() => {
                     if (!form.firstName || !form.lastName || !form.zip) {
                       setError("Please fill in all fields");
@@ -515,15 +508,15 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
             {/* Step 2: Roles */}
             {step === 2 && (
-              <div className="space-y-5">
-                <h3 className="text-xl font-bold dark:text-white text-center mb-2">
+              <div className="space-y-3 sm:space-y-4">
+                <h3 className="text-base sm:text-lg font-bold dark:text-white text-center">
                   How do you fit in the music industry?
                 </h3>
-                <p className="text-sm text-gray-500 text-center mb-4">
+                <p className="text-xs text-gray-500 text-center mb-2">
                   Select all that apply - you can always update these later
                 </p>
 
-                <div className="grid grid-cols-2 gap-2.5">
+                <div className="grid grid-cols-2 gap-2">
                   {publicRoles.map(role => {
                     const isSelected = form.roles.includes(role);
                     return (
@@ -534,13 +527,13 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                           const newRoles = isSelected ? form.roles.filter(r => r !== role) : [...form.roles, role];
                           setForm(prev => ({ ...prev, roles: newRoles }));
                         }}
-                        className={`p-3 border-2 rounded-xl cursor-pointer text-center font-bold text-sm transition-all duration-200 transform active:scale-95 ${
+                        className={`p-2 sm:p-2.5 border-2 rounded-xl cursor-pointer text-center font-bold text-xs sm:text-sm transition-all duration-200 transform active:scale-95 ${
                           isSelected
                             ? 'border-brand-blue bg-blue-50 text-brand-blue dark:bg-blue-900/30 dark:border-blue-400 shadow-md'
                             : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-[#1f2128] hover:border-brand-blue hover:bg-blue-50 dark:hover:bg-blue-900/20 dark:text-gray-200'
                         }`}
                       >
-                        {isSelected && <Check className="inline-block mr-1" size={14} />}
+                        {isSelected && <Check className="inline-block mr-1" size={13} />}
                         {role}
                       </button>
                     );
@@ -549,11 +542,11 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
 
                 {form.roles.includes('Talent') && (
                   <div className="animate-in slide-in-from-top-2">
-                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300 mb-2 block">
+                    <label className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-1 block">
                       Talent Specialization (Optional)
                     </label>
                     <select
-                      className="w-full p-3.5 bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
+                      className="w-full p-2.5 sm:p-3 text-xs sm:text-sm bg-gray-50 dark:bg-[#1f2128] border dark:border-gray-600 rounded-xl dark:text-white"
                       value={form.talentSubRole}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setForm(prev => ({ ...prev, talentSubRole: e.target.value }))}
                     >
@@ -563,22 +556,22 @@ export default function AuthWizard({ darkMode, toggleTheme, user, onSuccess, isN
                   </div>
                 )}
 
-                <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-3">
-                  <p className="text-xs text-purple-800 dark:text-purple-200">
-                    <strong>Pro tip:</strong> Don&apos;t worry if you&apos;re unsure! You can add or remove roles anytime from your settings.
+                <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg p-2 sm:p-2.5">
+                  <p className="text-[11px] text-purple-800 dark:text-purple-200">
+                    <strong>Pro tip:</strong> You can add or remove roles anytime from your settings.
                   </p>
                 </div>
 
-                <div className="space-y-2 pt-2">
+                <div className="space-y-1.5 pt-1">
                   <button
-                    className="w-full bg-brand-blue hover:bg-blue-600 text-white py-3.5 rounded-xl font-bold disabled:opacity-50 transition shadow-lg"
+                    className="w-full bg-brand-blue hover:bg-blue-600 text-white py-2.5 sm:py-3 text-xs sm:text-sm rounded-xl font-bold disabled:opacity-50 transition shadow-lg"
                     onClick={handleCompleteSignup}
                     disabled={isLoading || form.roles.length === 0}
                   >
-                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={20} /> : "Complete Setup"}
+                    {isLoading ? <Loader2 className="animate-spin mx-auto" size={18} /> : "Complete Setup"}
                   </button>
                   <button
-                    className="w-full text-gray-400 text-sm hover:text-gray-600 dark:hover:text-gray-300 transition py-2"
+                    className="w-full text-gray-400 text-xs sm:text-sm hover:text-gray-600 dark:hover:text-gray-300 transition py-1.5"
                     onClick={() => {
                       setError('');
                       setStep(1);

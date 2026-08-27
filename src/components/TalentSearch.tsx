@@ -141,7 +141,7 @@ const getAvailabilityStatus = (profile: TalentProfile): AvailabilityStatus => {
     if (!lastActive) return { status: 'unknown', label: 'Unknown', color: 'gray' };
 
     const now = new Date();
-    const diffMs = now - new Date(lastActive);
+    const diffMs = now.getTime() - new Date(lastActive as any).getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
     const diffDays = Math.floor(diffHours / 24);

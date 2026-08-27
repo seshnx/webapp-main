@@ -1,10 +1,15 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Loader2, RefreshCw, Users, Compass, UserPlus, Search } from 'lucide-react';
+import { Loader2, RefreshCw, Users, Compass, UserPlus, Search, Film, BarChart3, Radio, Bookmark, TrendingUp, Sparkles, Calendar, Settings, ShieldCheck, Eye, Flame, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PostCard from './social/PostCard';
 import CreatePostWidget from './social/CreatePostWidget';
 import ReportModal from './ReportModal';
 import Discover from './social/Discover';
+import StoriesBar from './social/StoriesBar';
+import LiveSpacesBar from './social/LiveSpacesBar';
+import ReelsFeed from './social/ReelsFeed';
+import CreatorStudio from './social/CreatorStudio';
+import CommunitiesSection from './social/CommunitiesSection';
 import { useFollowSystem } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
@@ -19,6 +24,9 @@ import type { UserData } from '../types';
 const FEED_MODES = {
   FOR_YOU: 'for_you',
   FOLLOWING: 'following',
+  REELS: 'reels',
+  COMMUNITIES: 'communities',
+  STUDIO: 'studio',
   DISCOVER: 'discover'
 } as const;
 
@@ -99,9 +107,10 @@ export default function SocialFeed({
 
   // Get feed algorithm from settings
   const { t } = useLanguage();
-  const feedAlgorithm = userData?.settings?.social?.feedAlgorithm || 'recommended';
-  const autoPlayVideos = userData?.settings?.social?.autoPlayVideos !== false;
-  const showSuggestedAccounts = userData?.settings?.social?.showSuggestedAccounts !== false;
+  const settingsObj = (userData?.settings || {}) as any;
+  const feedAlgorithm = settingsObj?.social?.feedAlgorithm || 'recommended';
+  const autoPlayVideos = settingsObj?.social?.autoPlayVideos !== false;
+  const showSuggestedAccounts = settingsObj?.social?.showSuggestedAccounts !== false;
 
   // Use the follow system hook
   const userId = user?.id || user?.uid;
@@ -112,7 +121,7 @@ export default function SocialFeed({
     isFollowing,
     toggleFollow,
     getFollowingIds
-  } = useFollowSystem(userId, userData);
+  } = useFollowSystem(userId);
 
   // Memoize following IDs for feed filtering
   const followingIds = useMemo(() => getFollowingIds(), [following]);
@@ -174,18 +183,24 @@ export default function SocialFeed({
           }));
 
       return {
+        ...post,
         id: post._id,
         userId: post.authorId,
-        displayName: post.authorName || 'Unknown User',
+        authorClerkId: post.authorClerkId,
+        displayName: post.displayName || post.authorName || '[Deleted User]',
         authorPhoto: post.authorPhoto || null,
-        username: post.authorUsername,
-        text: post.content,
+        username: post.username || post.authorUsername,
+        text: post.content || post.text,
         attachments,
         timestamp: post.createdAt,
-        commentCount: post.engagement?.commentsCount || 0,
-        reactionCount: post.engagement?.likesCount || 0,
-        saveCount: post.engagement?.savesCount || 0,
-        role: post.role
+        commentCount: post.engagement?.commentsCount ?? post.commentCount ?? 0,
+        reactionCount: post.engagement?.likesCount ?? post.reactionCount ?? 0,
+        saveCount: post.engagement?.savesCount ?? post.saveCount ?? 0,
+        role: post.role,
+        repostOf: post.repostOf,
+        originalPost: post.originalPost,
+        amendments: post.amendments,
+        isEdited: post.isEdited,
       };
     });
   }, [rawPosts]);
@@ -353,200 +368,359 @@ export default function SocialFeed({
       </div>
       <FollowButton
         isFollowing={isFollowing(suggestedUser.userId)}
-        onToggle={() => toggleFollow(suggestedUser.userId, suggestedUser)}
+        onToggle={() => { toggleFollow(suggestedUser.userId); }}
         size="sm"
         variant="default"
       />
     </motion.div>
   );
 
+  const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'Creator';
+  const displayName = userData?.displayName || userData?.effectiveDisplayName || user?.firstName || 'Creator';
+  const photoUrl = userData?.photoURL || user?.imageUrl;
+
   return (
-    <div className="max-w-2xl mx-auto pb-20">
-      {/* Create Post Widget */}
-      <CreatePostWidget
-        user={user}
-        userData={userData}
-        subProfiles={subProfiles}
-        onPost={handlePost}
-      />
-
-      {/* Feed Mode Toggle */}
-      <div className="flex items-center gap-2 mb-4 bg-white dark:bg-dark-card p-1.5 rounded-xl border dark:border-gray-700 shadow-sm">
-        <button
-          onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
-          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-            feedMode === FEED_MODES.FOR_YOU
-              ? 'bg-brand-blue text-white shadow-md'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
-        >
-          <Compass size={16} />
-          <span>{t('forYou')}</span>
-        </button>
-        <button
-          onClick={() => setFeedMode(FEED_MODES.FOLLOWING)}
-          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-            feedMode === FEED_MODES.FOLLOWING
-              ? 'bg-brand-blue text-white shadow-md'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
-        >
-          <Users size={16} />
-          <span>{t('following')}</span>
-          {stats.followingCount > 0 && (
-            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
-              feedMode === FEED_MODES.FOLLOWING
-                ? 'bg-white/20'
-                : 'bg-gray-200 dark:bg-gray-700'
-            }`}>
-              {stats.followingCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setFeedMode(FEED_MODES.DISCOVER)}
-          className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-            feedMode === FEED_MODES.DISCOVER
-              ? 'bg-brand-blue text-white shadow-md'
-              : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-          }`}
-        >
-          <Search size={16} />
-          <span>{t('discover')}</span>
-        </button>
-      </div>
-
-      {/* Feed Content */}
-      {feedMode === FEED_MODES.DISCOVER ? (
-        <Discover
-          user={user}
-          userData={userData}
-          openPublicProfile={openPublicProfile}
-        />
-      ) : loading ? (
-        renderSkeleton()
-      ) : (
-        <>
-          {/* Following tab empty state with suggestions */}
-          {feedMode === FEED_MODES.FOLLOWING && followingIds.length === 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl p-6 mb-6 border border-blue-100 dark:border-blue-800/30"
-            >
-              <div className="text-center mb-6">
-                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-brand-blue/10 flex items-center justify-center">
-                  <UserPlus size={28} className="text-brand-blue" />
+    <div className="max-w-7xl mx-auto px-2 sm:px-4 pb-20">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        {/* ===================================================== */}
+        {/* LEFT COLUMN: Profile & Hub Shortcuts (LinkedIn Style) */}
+        {/* ===================================================== */}
+        <div className="hidden lg:block lg:col-span-3 space-y-4">
+          {/* User Profile Card Widget */}
+          <div className="bg-white dark:bg-dark-card rounded-2xl border dark:border-gray-700 overflow-hidden shadow-sm">
+            <div className="h-16 bg-gradient-to-r from-brand-blue via-indigo-600 to-purple-600 relative" />
+            <div className="p-4 relative pt-0 text-center">
+              <div className="-mt-10 mb-2 flex justify-center">
+                <div className="p-1 bg-white dark:bg-dark-card rounded-full shadow-md">
+                  <UserAvatar src={photoUrl} name={displayName} size="xl" />
                 </div>
-                <h3 className="text-lg font-bold dark:text-white mb-2">
-                  Start following creators
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 max-w-sm mx-auto">
-                  Follow artists, engineers, and studios to see their posts in your Following feed.
-                </p>
+              </div>
+              <h3 className="font-bold text-base dark:text-white">{displayName}</h3>
+              <p className="text-xs text-gray-500 font-medium mb-3">{activeRole}</p>
+
+              {/* Profile Completion Bar */}
+              <div className="mb-4 bg-gray-50 dark:bg-gray-800 p-2.5 rounded-xl border dark:border-gray-700 text-left">
+                <div className="flex justify-between text-[11px] font-bold text-gray-600 dark:text-gray-400 mb-1">
+                  <span>Profile Strength</span>
+                  <span className="text-brand-blue">85%</span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-brand-blue" style={{ width: '85%' }} />
+                </div>
               </div>
 
-              {/* Suggested users - only show if setting is enabled */}
-              {showSuggestedAccounts && (
-                <>
-                  {loadingSuggestions ? (
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                        Suggested for you
-                      </h4>
-                      {[1, 2, 3].map(i => (
-                        <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 animate-pulse">
-                          <div className="flex items-center gap-3 flex-1">
-                            <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700" />
-                            <div className="flex-1 space-y-2">
-                              <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
-                              <div className="h-3 w-16 bg-gray-100 dark:bg-gray-800 rounded" />
-                            </div>
-                          </div>
-                          <div className="h-8 w-20 bg-gray-200 dark:bg-gray-700 rounded-lg" />
-                        </div>
-                      ))}
-                    </div>
-                  ) : suggestedUsers.length > 0 && (
-                    <div className="space-y-2">
-                      <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-                        Suggested for you
-                      </h4>
-                      {suggestedUsers.map(suggestedUser => (
-                        <SuggestedUserCard
-                          key={suggestedUser.userId}
-                          suggestedUser={suggestedUser}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </>
-              )}
-            </motion.div>
-          )}
+              {/* Followers & Views Metrics */}
+              <div className="grid grid-cols-2 gap-2 border-t border-b dark:border-gray-800 py-3 mb-3 text-xs">
+                <div>
+                  <span className="block text-gray-400 font-medium">Followers</span>
+                  <span className="font-extrabold text-sm dark:text-white">{stats.followersCount || 0}</span>
+                </div>
+                <div>
+                  <span className="block text-gray-400 font-medium">Following</span>
+                  <span className="font-extrabold text-sm dark:text-white">{stats.followingCount || 0}</span>
+                </div>
+              </div>
 
-          {/* Posts */}
-          <motion.div
-            variants={containerVariants}
-            initial="hidden"
-            animate="show"
-            className="space-y-4"
-          >
-            <AnimatePresence mode='popLayout'>
-              {posts.map(post => (
-                <PostCard
-                  key={post.id}
-                  post={post}
-                  currentUser={user}
-                  currentUserData={userData}
-                  subProfiles={subProfiles}
-                  openPublicProfile={openPublicProfile || (() => {})}
-                  onReport={() => setReportTarget(post)}
-                  onDelete={(postId) => {
-                    // This would need to be implemented with Convex delete
-                    console.log('Delete post:', postId);
-                  }}
-                  isFollowingAuthor={isFollowing(post.userId)}
-                  onToggleFollow={() => toggleFollow(post.userId, {
-                    displayName: post.displayName,
-                    photoURL: post.authorPhoto,
-                    role: post.role
-                  })}
-                  autoPlayVideos={autoPlayVideos}
-                />
-              ))}
-            </AnimatePresence>
-
-            {posts.length === 0 && feedMode === FEED_MODES.FOR_YOU && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center py-10 text-gray-500"
-              >
-                <RefreshCw className="mx-auto mb-2 opacity-50" size={32} />
-                <p>{t('noPosts')}. {t('beFirst')}</p>
-              </motion.div>
-            )}
-
-            {posts.length === 0 && feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center py-10 text-gray-500"
-              >
-                <Users className="mx-auto mb-2 opacity-50" size={32} />
-                <p>{t('noPostsFollowing')}.</p>
+              {/* Quick Links */}
+              <div className="space-y-1 text-left">
                 <button
-                  onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
-                  className="mt-3 text-brand-blue hover:underline text-sm font-medium"
+                  onClick={() => setFeedMode(FEED_MODES.STUDIO)}
+                  className="w-full flex items-center justify-between p-2 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
                 >
-                  {t('browseForYou')}
+                  <span className="flex items-center gap-2">
+                    <BarChart3 size={16} className="text-brand-blue" /> Creator Studio
+                  </span>
+                  <ChevronRight size={14} className="text-gray-400" />
                 </button>
+
+                <button
+                  onClick={() => setFeedMode(FEED_MODES.COMMUNITIES)}
+                  className="w-full flex items-center justify-between p-2 rounded-xl text-xs font-semibold text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                >
+                  <span className="flex items-center gap-2">
+                    <Users size={16} className="text-purple-500" /> Joined Circles
+                  </span>
+                  <ChevronRight size={14} className="text-gray-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ===================================================== */}
+        {/* CENTER COLUMN: Main Activity Feed & Composer         */}
+        {/* ===================================================== */}
+        <div className="col-span-12 lg:col-span-6 space-y-4">
+          {/* 24h Stories Bar */}
+          <StoriesBar
+            user={user}
+            userData={userData}
+            subProfiles={subProfiles}
+            onOpenProfile={openPublicProfile}
+          />
+
+          {/* Live Audio Spaces Bar */}
+          <LiveSpacesBar
+            user={user}
+            userSettings={userData?.settings}
+          />
+
+          {/* Create Post Widget */}
+          <CreatePostWidget
+            user={user}
+            userData={userData}
+            subProfiles={subProfiles}
+            onPost={handlePost}
+          />
+
+          {/* Feed Mode Toggle */}
+          <div className="flex items-center gap-1.5 mb-4 bg-white dark:bg-dark-card p-1.5 rounded-xl border dark:border-gray-700 shadow-sm overflow-x-auto no-scrollbar">
+            <button
+              onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
+              className={`flex-1 min-w-[85px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                feedMode === FEED_MODES.FOR_YOU
+                  ? 'bg-brand-blue text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Compass size={15} />
+              <span>{t('forYou')}</span>
+            </button>
+
+            <button
+              onClick={() => setFeedMode(FEED_MODES.FOLLOWING)}
+              className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                feedMode === FEED_MODES.FOLLOWING
+                  ? 'bg-brand-blue text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Users size={15} />
+              <span>{t('following')}</span>
+            </button>
+
+            <button
+              onClick={() => setFeedMode(FEED_MODES.REELS)}
+              className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                feedMode === FEED_MODES.REELS
+                  ? 'bg-brand-blue text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Film size={15} />
+              <span>Shorts</span>
+            </button>
+
+            <button
+              onClick={() => setFeedMode(FEED_MODES.COMMUNITIES)}
+              className={`flex-1 min-w-[85px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                feedMode === FEED_MODES.COMMUNITIES
+                  ? 'bg-brand-blue text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Users size={15} />
+              <span>Circles</span>
+            </button>
+
+            <button
+              onClick={() => setFeedMode(FEED_MODES.STUDIO)}
+              className={`flex-1 min-w-[85px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                feedMode === FEED_MODES.STUDIO
+                  ? 'bg-brand-blue text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <BarChart3 size={15} />
+              <span>Studio</span>
+            </button>
+
+            <button
+              onClick={() => setFeedMode(FEED_MODES.DISCOVER)}
+              className={`flex-1 min-w-[85px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                feedMode === FEED_MODES.DISCOVER
+                  ? 'bg-brand-blue text-white shadow-md'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              <Search size={15} />
+              <span>{t('discover')}</span>
+            </button>
+          </div>
+
+          {/* Feed Content Selection */}
+          {feedMode === FEED_MODES.DISCOVER ? (
+            <Discover
+              user={user}
+              userData={userData}
+              openPublicProfile={openPublicProfile}
+            />
+          ) : feedMode === FEED_MODES.REELS ? (
+            <ReelsFeed
+              user={user}
+              userData={userData}
+              onOpenProfile={openPublicProfile}
+            />
+          ) : feedMode === FEED_MODES.COMMUNITIES ? (
+            <CommunitiesSection />
+          ) : feedMode === FEED_MODES.STUDIO ? (
+            <CreatorStudio
+              user={user}
+              userData={userData}
+            />
+          ) : loading ? (
+            renderSkeleton()
+          ) : (
+            <>
+              {/* Following tab empty state with suggestions */}
+              {feedMode === FEED_MODES.FOLLOWING && followingIds.length === 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-gradient-to-br from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-2xl p-6 mb-6 border border-blue-100 dark:border-blue-800/30"
+                >
+                  <div className="text-center mb-6">
+                    <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-brand-blue/10 flex items-center justify-center">
+                      <UserPlus size={28} className="text-brand-blue" />
+                    </div>
+                    <h3 className="text-lg font-bold dark:text-white mb-2">
+                      Start following creators
+                    </h3>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 max-w-sm mx-auto">
+                      Follow artists, engineers, and studios to see their posts in your Following feed.
+                    </p>
+                  </div>
+
+                  {/* Suggested users */}
+                  {showSuggestedAccounts && (
+                    <>
+                      {loadingSuggestions ? (
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                            Suggested for you
+                          </h4>
+                          {[1, 2, 3].map(i => (
+                            <div key={i} className="flex items-center justify-between p-3 bg-white dark:bg-dark-card rounded-xl border dark:border-gray-700 animate-pulse">
+                              <div className="flex items-center gap-3 flex-1">
+                                <div className="h-10 w-10 rounded-full bg-gray-200 dark:bg-gray-700" />
+                                <div className="flex-1 space-y-2">
+                                  <div className="h-4 w-24 bg-gray-200 dark:bg-gray-700 rounded" />
+                                  <div className="h-3 w-16 bg-gray-100 dark:bg-gray-800 rounded" />
+                                </div>
+                              </div>
+                              <div className="h-8 w-20 bg-gray-200 dark:bg-gray-700 rounded-lg" />
+                            </div>
+                          ))}
+                        </div>
+                      ) : suggestedUsers.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+                            Suggested for you
+                          </h4>
+                          {suggestedUsers.map(suggestedUser => (
+                            <SuggestedUserCard
+                              key={suggestedUser.userId}
+                              suggestedUser={suggestedUser}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </motion.div>
+              )}
+
+              {/* Posts Stream */}
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="show"
+                className="space-y-4"
+              >
+                <AnimatePresence mode='popLayout'>
+                  {posts.map(post => (
+                    <PostCard
+                      key={post.id}
+                      post={post}
+                      currentUser={user}
+                      currentUserData={userData}
+                      subProfiles={subProfiles}
+                      openPublicProfile={openPublicProfile || (() => {})}
+                      onReport={() => setReportTarget(post)}
+                      onDelete={(postId) => {
+                        console.log('Delete post:', postId);
+                      }}
+                      isFollowingAuthor={isFollowing(post.userId)}
+                      onToggleFollow={() => { toggleFollow(post.userId); }}
+                      autoPlayVideos={autoPlayVideos}
+                    />
+                  ))}
+                </AnimatePresence>
+
+                {posts.length === 0 && feedMode === FEED_MODES.FOR_YOU && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center py-10 text-gray-500"
+                  >
+                    <RefreshCw className="mx-auto mb-2 opacity-50" size={32} />
+                    <p>{t('noPosts')}. {t('beFirst')}</p>
+                  </motion.div>
+                )}
+
+                {posts.length === 0 && feedMode === FEED_MODES.FOLLOWING && followingIds.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center py-10 text-gray-500"
+                  >
+                    <Users className="mx-auto mb-2 opacity-50" size={32} />
+                    <p>{t('noPostsFollowing')}.</p>
+                    <button
+                      onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
+                      className="mt-3 text-brand-blue hover:underline text-sm font-medium"
+                    >
+                      {t('browseForYou')}
+                    </button>
+                  </motion.div>
+                )}
               </motion.div>
-            )}
-          </motion.div>
-        </>
-      )}
+            </>
+          )}
+        </div>
+
+        {/* ===================================================== */}
+        {/* RIGHT COLUMN: Trending Topics & News Sidebar          */}
+        {/* ===================================================== */}
+        <div className="hidden lg:block lg:col-span-3 space-y-4">
+          {/* Live Audio Spaces Bar */}
+          <LiveSpacesBar user={user} />
+
+          {/* Trending Music Topics */}
+          <div className="bg-white dark:bg-dark-card rounded-2xl p-4 border dark:border-gray-700 shadow-sm">
+            <h4 className="font-bold text-xs uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-3 flex items-center gap-1.5">
+              <TrendingUp size={16} className="text-brand-blue" /> Trending Industry News
+            </h4>
+            <div className="space-y-3">
+              {[
+                { tag: '#MixingMastering', posts: '1.4k posts', category: 'Engineering' },
+                { tag: '#VocalStems', posts: '890 posts', category: 'Production' },
+                { tag: '#AnalogGear', posts: '620 posts', category: 'Hardware' },
+                { tag: '#IndependentArtist', posts: '2.1k posts', category: 'Career' },
+              ].map((topic, i) => (
+                <div key={i} className="group cursor-pointer">
+                  <span className="text-xs text-gray-400 block">{topic.category}</span>
+                  <h5 className="text-xs font-bold dark:text-white group-hover:text-brand-blue transition">
+                    {topic.tag}
+                  </h5>
+                  <span className="text-[11px] text-gray-500">{topic.posts}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Report Modal */}
       {reportTarget && (
@@ -554,7 +728,7 @@ export default function SocialFeed({
           user={user}
           target={{
             id: reportTarget.id,
-            type: 'Post',
+            type: 'post',
             summary: reportTarget.text ? reportTarget.text.substring(0, 50) : 'Media Post'
           }}
           onClose={() => setReportTarget(null)}

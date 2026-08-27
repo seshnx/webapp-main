@@ -310,6 +310,13 @@ export default defineSchema({
     software: v.optional(v.array(v.string())),
     customFields: v.optional(v.any()),
 
+    // Amendments and edits
+    amendments: v.optional(v.array(v.object({
+      text: v.string(),
+      createdAt: v.number(),
+    }))),
+    isEdited: v.optional(v.boolean()),
+
     // Soft delete
     deletedAt: v.optional(v.number()),
 
@@ -445,24 +452,17 @@ export default defineSchema({
   // Messages table (already exists, keeping for compatibility)
   messages: defineTable({
     chatId: v.string(),
-    senderId: v.id("users"),
+    senderId: v.string(), // Clerk ID or Convex User ID
     senderName: v.string(),
     senderPhoto: v.optional(v.string()),
     content: v.optional(v.string()),
-    media: v.optional(
-      v.object({
-        type: v.string(),
-        url: v.string(),
-        thumbnail: v.optional(v.string()),
-        name: v.optional(v.string()),
-        gif: v.optional(v.boolean()),
-      })
-    ),
+    media: v.optional(v.any()),
     timestamp: v.number(),
     edited: v.optional(v.boolean()),
     editedAt: v.optional(v.number()),
     deleted: v.optional(v.boolean()),
     deletedForAll: v.optional(v.boolean()),
+    deletedFor: v.optional(v.any()),
     replyTo: v.optional(
       v.object({
         messageId: v.string(),
@@ -501,10 +501,11 @@ export default defineSchema({
   // Read receipts table
   readReceipts: defineTable({
     chatId: v.string(),
-    messageId: v.id("messages"),
-    userId: v.id("users"),
+    messageId: v.string(),
+    userId: v.string(),
     readAt: v.number(),
   })
+    .index("by_chat", ["chatId"])
     .index("by_chat_user", ["chatId", "userId"])
     .index("by_message", ["messageId"]),
 
@@ -1084,6 +1085,10 @@ export default defineSchema({
     description: v.optional(v.string()),
     logoUrl: v.optional(v.string()),
     location: v.optional(v.string()),
+    address: v.optional(v.string()),
+    slug: v.optional(v.string()),
+    clerkOrgId: v.optional(v.string()),
+    ownerId: v.optional(v.union(v.id("users"), v.string())),
 
     // Administration
     adminId: v.id("users"),
@@ -1328,7 +1333,12 @@ export default defineSchema({
     cancellationReason: v.optional(v.string()), // Alias for rejectionReason
     cancelledBy: v.optional(v.string()), // Clerk ID of user who cancelled
     shippingRequired: v.optional(v.boolean()), // Whether shipping is required
+    trackingNumber: v.optional(v.string()), // Shipping tracking number
+    paymentConfirmed: v.optional(v.boolean()),
+    paymentConfirmedAt: v.optional(v.number()),
     stripePaymentIntentId: v.optional(v.string()),
+    buyerRating: v.optional(v.number()),
+    buyerReview: v.optional(v.string()),
     sellerRating: v.optional(v.number()), // Rating given by buyer to seller (1-5)
     sellerReview: v.optional(v.string()), // Review text from buyer
     createdAt: v.number(),
@@ -1878,4 +1888,106 @@ export default defineSchema({
     .index("by_slug", ["slug"])
     .index("by_studio", ["studioId"])
     .index("by_status", ["status"]),
+
+  // 24-Hour Ephemeral Stories
+  stories: defineTable({
+    authorId: v.id("users"),
+    authorName: v.string(),
+    authorPhoto: v.optional(v.string()),
+    mediaUrl: v.string(),
+    mediaType: v.string(), // "image" | "video"
+    caption: v.optional(v.string()),
+    expiresAt: v.number(), // 24h expiration timestamp
+    createdAt: v.number(),
+  })
+    .index("by_author", ["authorId", "createdAt"])
+    .index("by_expires", ["expiresAt"]),
+
+  // Story Views
+  storyViews: defineTable({
+    storyId: v.id("stories"),
+    viewerId: v.id("users"),
+    viewedAt: v.number(),
+  })
+    .index("by_story", ["storyId"])
+    .index("by_viewer", ["viewerId"])
+    .index("by_story_viewer", ["storyId", "viewerId"]),
+
+  // Live Audio & Video Spaces / Rooms
+  liveRooms: defineTable({
+    hostId: v.id("users"),
+    hostName: v.string(),
+    hostPhoto: v.optional(v.string()),
+    title: v.string(),
+    description: v.optional(v.string()),
+    category: v.string(), // "Mixing", "Production", "Beat Battle", "Q&A", "Masterclass"
+    isLive: v.boolean(),
+    roomCode: v.string(),
+    allowHandRaising: v.optional(v.boolean()),
+    lastActivityAt: v.optional(v.number()),
+    activeSpeakersCount: v.number(),
+    listenersCount: v.number(),
+    createdAt: v.number(),
+    endedAt: v.optional(v.number()),
+  })
+    .index("by_host", ["hostId"])
+    .index("by_live", ["isLive", "createdAt"])
+    .index("by_code", ["roomCode"]),
+
+  // Live Room Participants
+  liveRoomParticipants: defineTable({
+    roomId: v.id("liveRooms"),
+    userId: v.id("users"),
+    clerkId: v.string(),
+    name: v.string(),
+    avatarUrl: v.optional(v.string()),
+    role: v.string(), // "host" | "speaker" | "listener"
+    isMuted: v.boolean(),
+    handRaised: v.boolean(),
+    handRaisedAt: v.optional(v.number()),
+    joinedAt: v.number(),
+    lastHeartbeat: v.number(),
+  })
+    .index("by_room", ["roomId"])
+    .index("by_room_and_user", ["roomId", "clerkId"])
+    .index("by_room_and_role", ["roomId", "role"]),
+
+  // Live Room Real-Time Messages / Chat
+  liveRoomMessages: defineTable({
+    roomId: v.id("liveRooms"),
+    senderId: v.id("users"),
+    senderClerkId: v.string(),
+    senderName: v.string(),
+    senderAvatar: v.optional(v.string()),
+    text: v.string(),
+    createdAt: v.number(),
+  })
+    .index("by_room", ["roomId", "createdAt"]),
+
+  // Live Room WebRTC Signaling
+  liveRoomSignals: defineTable({
+    roomId: v.id("liveRooms"),
+    senderClerkId: v.string(),
+    targetClerkId: v.string(), // target clerk ID or "all"
+    type: v.string(), // "offer" | "answer" | "ice-candidate" | "leave"
+    payload: v.string(), // JSON WebRTC data
+    createdAt: v.number(),
+  })
+    .index("by_room", ["roomId", "createdAt"])
+    .index("by_room_and_target", ["roomId", "targetClerkId", "createdAt"]),
+
+  // Creator Tipping & Monetization
+  tips: defineTable({
+    senderId: v.id("users"),
+    senderName: v.string(),
+    receiverId: v.id("users"),
+    amount: v.number(),
+    currency: v.string(),
+    message: v.optional(v.string()),
+    postId: v.optional(v.id("posts")),
+    createdAt: v.number(),
+  })
+    .index("by_sender", ["senderId", "createdAt"])
+    .index("by_receiver", ["receiverId", "createdAt"])
+    .index("by_post", ["postId"]),
 });

@@ -1,15 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check, Repeat2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check, Repeat2, Edit3, FileEdit, ExternalLink, DollarSign } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import CommentSection from './CommentSection';
 import RepostModal from './RepostModal';
+import PostEditAmendModal from './PostEditAmendModal';
 import { motion, AnimatePresence } from 'framer-motion';
 import FollowButton, { FollowButtonCompact } from './FollowButton';
 import toast from 'react-hot-toast';
 import UserAvatar from '../shared/UserAvatar';
+import AudioWaveformPlayer from './AudioWaveformPlayer';
+import TipModal from './TipModal';
 // getOptimizedImageUrl removed — Cloudflare Image Resizing not enabled
 
 const REACTION_SET = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
@@ -33,8 +37,9 @@ interface Post {
     displayName?: string;
     authorPhoto?: string;
     role?: string;
-    timestamp?: string | Date;
-    created_at?: string | Date;
+    timestamp?: string | number | Date;
+    created_at?: string | number | Date;
+    createdAt?: string | number | Date;
     text?: string;
     attachments?: Attachment[];
     imageUrl?: string;
@@ -108,6 +113,58 @@ const getFileNameFromUrl = (url: string, providedName?: string): string => {
     }
 };
 
+const detectMediaType = (url: string): 'image' | 'video' | 'audio' => {
+    if (!url || typeof url !== 'string') return 'image';
+    const path = url.split('?')[0].toLowerCase();
+    if (/\.(mp4|webm|mov|avi|mkv|m4v)(\/|$)/i.test(path) || path.includes('/video') || path.includes('video/')) return 'video';
+    if (/\.(mp3|wav|ogg|aac|flac|m4a|wma)(\/|$)/i.test(path) || path.includes('/audio') || path.includes('audio/')) return 'audio';
+    return 'image';
+};
+
+const normalizePostAttachments = (p: any): Array<{ url: string; type: 'image' | 'video' | 'audio'; name?: string }> => {
+    if (!p) return [];
+
+    // 1. Structured attachments
+    if (Array.isArray(p.attachments) && p.attachments.length > 0) {
+        return p.attachments.map((att: any, idx: number) => ({
+            url: typeof att === 'string' ? att : att.url,
+            type: (typeof att === 'object' && att.type) ? att.type : detectMediaType(typeof att === 'string' ? att : att.url),
+            name: typeof att === 'object' ? att.name : `Attachment ${idx + 1}`,
+        })).filter((a: any) => Boolean(a.url));
+    }
+
+    // 2. mediaAttachments array
+    if (Array.isArray(p.mediaAttachments) && p.mediaAttachments.length > 0) {
+        return p.mediaAttachments.map((att: any, idx: number) => ({
+            url: att.url,
+            type: att.type || detectMediaType(att.url),
+            name: att.name || `Attachment ${idx + 1}`,
+        })).filter((a: any) => Boolean(a.url));
+    }
+
+    // 3. mediaUrls array
+    if (Array.isArray(p.mediaUrls) && p.mediaUrls.length > 0) {
+        return p.mediaUrls.map((url: string, idx: number) => ({
+            url,
+            type: detectMediaType(url),
+            name: `Attachment ${idx + 1}`,
+        })).filter((a: any) => Boolean(a.url));
+    }
+
+    // 4. Single properties
+    const list: Array<{ url: string; type: 'image' | 'video' | 'audio'; name?: string }> = [];
+    if (p.audioUrl) {
+        list.push({ url: p.audioUrl, type: 'audio', name: p.audioName || 'Audio Track' });
+    }
+    if (p.imageUrl) {
+        list.push({ url: p.imageUrl, type: 'image', name: 'Image' });
+    }
+    if (p.videoUrl) {
+        list.push({ url: p.videoUrl, type: 'video', name: 'Video' });
+    }
+    return list;
+};
+
 const cardVariants = {
     hidden: { opacity: 0, y: 20 },
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
@@ -128,6 +185,7 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
     onToggleFollow,
     autoPlayVideos = false
 }, ref) {
+    const navigate = useNavigate();
     const [showComments, setShowComments] = useState<boolean>(false);
     const [commentCount, setCommentCount] = useState<number>(post.commentCount || 0);
     const [isSaved, setIsSaved] = useState<boolean>(false);
@@ -135,6 +193,9 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
     const [showMoreMenu, setShowMoreMenu] = useState<boolean>(false);
     const [showShareMenu, setShowShareMenu] = useState<boolean>(false);
     const [showRepostModal, setShowRepostModal] = useState<boolean>(false);
+    const [showTipModal, setShowTipModal] = useState<boolean>(false);
+    const [showEditAmendModal, setShowEditAmendModal] = useState<boolean>(false);
+    const [editAmendMode, setEditAmendMode] = useState<'edit' | 'amend'>('edit');
     const [linkCopied, setLinkCopied] = useState<boolean>(false);
     const [savingPost, setSavingPost] = useState<boolean>(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -142,7 +203,16 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
     const shareMenuRef = useRef<HTMLDivElement>(null);
 
     const userId = currentUser?.id || currentUser?.uid;
-    const isOwnPost = post.userId === userId;
+    const authorClerkId = (post as any)?.authorClerkId || (post as any)?.clerkId;
+    const authorDocId = post.authorId || post.userId;
+    const isOwnPost = Boolean(
+        (userId && (post.userId === userId || authorClerkId === userId || (post as any)?.userId === userId)) ||
+        (currentUserData && authorDocId && (currentUserData._id === authorDocId || currentUserData.clerkId === authorClerkId))
+    );
+
+    const postCreatedAt = (post as any)?.createdAt || (post as any)?.created_at || (post as any)?.timestamp;
+    const postAgeMs = postCreatedAt ? (Date.now() - new Date(postCreatedAt).getTime()) : 0;
+    const canEditOriginal = isOwnPost && postAgeMs <= 30 * 60 * 1000;
 
     // DEBUG: Log attachment data for first 3 posts
     const debugAttachments = () => {
@@ -175,6 +245,15 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
         (userId && post.id) ? { clerkId: userId, postId: post.id as Id<"posts"> } : "skip"
     );
 
+    // Fallback query to resolve original post if this is a repost and not pre-resolved
+    const repostId = (post as any)?.repostOf;
+    const fallbackOriginalPost = useQuery(
+        api.posts.get,
+        repostId && !(post as any)?.originalPost ? { postId: repostId as Id<"posts"> } : "skip"
+    );
+    const resolvedOriginalPost = (post as any)?.originalPost || fallbackOriginalPost;
+    const isRepost = Boolean(repostId || (post as any)?.originalPost || (post as any)?.isRepost);
+
     // Derive reaction counts from Convex
     const reactionCounts: ReactionCounts = convexReactions
         ? convexReactions.reduce((acc: ReactionCounts, r: any) => {
@@ -189,7 +268,9 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
             : {});
 
     // Get emoji from hasReacted result (no need for separate ID comparison)
-    const myReaction = myReactionData?.emoji || null;
+    const myReaction = (myReactionData && typeof myReactionData === 'object' && 'emoji' in myReactionData)
+        ? (myReactionData as any).emoji
+        : null;
 
     const totalReactions = Object.values(reactionCounts).reduce((a: number, b: number) => a + b, 0);
 
@@ -308,6 +389,14 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
             layout
             className="bg-white dark:bg-dark-card border dark:border-gray-700 rounded-xl overflow-visible shadow-sm mb-4 relative"
         >
+            {/* Repost Header Indicator */}
+            {isRepost && (
+                <div className="px-4 py-2 flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 font-semibold border-b border-purple-100 dark:border-purple-950/60 bg-purple-50/40 dark:bg-purple-950/20">
+                    <Repeat2 size={14} className="shrink-0 text-purple-500" />
+                    <span>Reposted by <strong className="hover:underline cursor-pointer" onClick={() => post.userId && openPublicProfile?.(post.userId)}>{post.displayName || 'User'}</strong></span>
+                </div>
+            )}
+
             {/* Header */}
             <div className="p-4 flex justify-between items-start">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -330,7 +419,7 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                 className="font-bold dark:text-white text-sm hover:underline decoration-brand-blue cursor-pointer truncate"
                                 onClick={() => post.userId && openPublicProfile?.(post.userId)}
                             >
-                                {post.displayName || 'Unknown User'}
+                                {post.displayName || '[Deleted User]'}
                             </h4>
                             {/* Follow button in header for non-own posts */}
                             {!isOwnPost && onToggleFollow && !isFollowingAuthor && (
@@ -345,11 +434,14 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                         <div className="text-xs text-gray-500 flex items-center gap-1">
                             <span className="truncate">{post.role}</span>
                             <span>•</span>
-                            <span className="shrink-0">
-                                {post.timestamp || post.created_at
-                                    ? new Date(post.timestamp || post.created_at).toLocaleDateString()
+                            <span className="shrink-0 flex items-center gap-1">
+                                {post.createdAt || post.timestamp || post.created_at
+                                    ? new Date(post.createdAt || post.timestamp || post.created_at).toLocaleDateString()
                                     : 'Just now'
                                 }
+                                {post.isEdited && (
+                                    <span className="text-[10px] text-gray-400 font-normal italic">(edited)</span>
+                                )}
                             </span>
                         </div>
                     </div>
@@ -404,13 +496,57 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                 )}
 
                                 {isOwnPost && (
-                                    <button
-                                        onClick={() => { handleDeletePost(); setShowMoreMenu(false); }}
-                                        className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-red-500"
-                                    >
-                                        <Trash2 size={16} />
-                                        <span>Delete post</span>
-                                    </button>
+                                    <>
+                                        {canEditOriginal ? (
+                                            <button
+                                                onClick={() => {
+                                                    setEditAmendMode('edit');
+                                                    setShowEditAmendModal(true);
+                                                    setShowMoreMenu(false);
+                                                }}
+                                                className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-brand-blue"
+                                            >
+                                                <Edit3 size={16} />
+                                                <span>Edit post</span>
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => {
+                                                    setEditAmendMode('amend');
+                                                    setShowEditAmendModal(true);
+                                                    setShowMoreMenu(false);
+                                                    toast('Original editing closed after 30 mins. Opening amendment.', { icon: 'ℹ️' });
+                                                }}
+                                                className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-gray-400"
+                                            >
+                                                <Edit3 size={16} />
+                                                <div className="flex flex-col">
+                                                    <span>Edit post</span>
+                                                    <span className="text-[10px] text-amber-500 font-semibold">30m limit passed (Amend)</span>
+                                                </div>
+                                            </button>
+                                        )}
+
+                                        <button
+                                            onClick={() => {
+                                                setEditAmendMode('amend');
+                                                setShowEditAmendModal(true);
+                                                setShowMoreMenu(false);
+                                            }}
+                                            className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-emerald-600 dark:text-emerald-400"
+                                        >
+                                            <FileEdit size={16} />
+                                            <span>Add amendment</span>
+                                        </button>
+
+                                        <button
+                                            onClick={() => { handleDeletePost(); setShowMoreMenu(false); }}
+                                            className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700 transition text-red-500"
+                                        >
+                                            <Trash2 size={16} />
+                                            <span>Delete post</span>
+                                        </button>
+                                    </>
                                 )}
                             </motion.div>
                         )}
@@ -420,61 +556,236 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
 
             {/* Content Body */}
             <div className="px-4 pb-2">
-                {post.text && (
+                {(post.content || post.text) && (
                     <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap text-sm leading-relaxed mb-3">
-                        {renderText(post.text)}
+                        {renderText(post.content || post.text)}
                     </p>
                 )}
 
-                {/* Attachments */}
-                {post.attachments && post.attachments.length > 0 && (
-                    <div className={`grid gap-2 mb-3 ${post.attachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                        {post.attachments.map((att, i) => (
-                            <div key={i} className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
-                                {att.type === 'image' && (
-                                    <img
-                                        src={att.url}
-                                        className="w-full h-auto object-contain rounded-lg"
-                                        alt="content"
-                                        style={{ maxHeight: '600px' }}
-                                        loading="lazy"
-                                        onError={(e) => {
-                                            console.error(`[PostCard IMG ERROR] Failed to load: ${(e.target as HTMLImageElement).src}`);
-                                            (e.target as HTMLImageElement).style.border = '3px solid red';
+                {/* Attachments for Current Post */}
+                {(() => {
+                    const postAttachments = normalizePostAttachments(post);
+                    if (!postAttachments.length) return null;
+
+                    return (
+                        <div className={`grid gap-2 mb-3 ${postAttachments.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                            {postAttachments.map((att, i) => (
+                                <div key={i} className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
+                                    {att.type === 'image' && (
+                                        <img
+                                            src={att.url}
+                                            className="w-full h-auto object-contain rounded-lg"
+                                            alt={att.name || 'content'}
+                                            style={{ maxHeight: '600px' }}
+                                            loading="lazy"
+                                            onError={(e) => {
+                                                console.error(`[PostCard IMG ERROR] Failed to load: ${(e.target as HTMLImageElement).src}`);
+                                                (e.target as HTMLImageElement).style.border = '3px solid red';
+                                            }}
+                                        />
+                                    )}
+                                    {att.type === 'video' && (
+                                        <video
+                                            src={att.url}
+                                            controls
+                                            className="w-full h-auto object-contain bg-black rounded-lg"
+                                            style={{ maxHeight: '600px' }}
+                                            autoPlay={autoPlayVideos}
+                                            playsInline
+                                            muted={autoPlayVideos}
+                                            preload="metadata"
+                                        />
+                                    )}
+                                    {att.type === 'audio' && (
+                                        <div className="w-full">
+                                            <AudioWaveformPlayer
+                                                audioUrl={att.url}
+                                                title={getFileNameFromUrl(att.url, att.name)}
+                                                gearUsed={post.equipment || post.software}
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })()}
+
+                {/* Embedded Original Post Card for Reposts */}
+                {isRepost && (
+                    <div className="mt-3 p-3.5 rounded-xl bg-gray-50/90 dark:bg-gray-800/60 border border-gray-200/80 dark:border-gray-700/70 space-y-2.5">
+                        {!resolvedOriginalPost ? (
+                            <div className="text-xs text-gray-400 italic py-2 flex items-center gap-2">
+                                <Repeat2 size={13} className="animate-spin text-purple-400" />
+                                <span>Loading reposted content...</span>
+                            </div>
+                        ) : resolvedOriginalPost.isDeleted ? (
+                            <div className="text-xs text-gray-400 italic py-1 flex items-center gap-2">
+                                <Trash2 size={13} className="text-gray-400" />
+                                <span>This original post is no longer available.</span>
+                            </div>
+                        ) : (
+                            <>
+                                {/* Original Author Header */}
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2.5 min-w-0">
+                                        <div
+                                            className="cursor-pointer shrink-0"
+                                            onClick={() => (resolvedOriginalPost.authorId || resolvedOriginalPost.userId) && openPublicProfile?.(resolvedOriginalPost.authorId || resolvedOriginalPost.userId)}
+                                        >
+                                            <UserAvatar
+                                                src={resolvedOriginalPost.authorPhoto}
+                                                name={resolvedOriginalPost.displayName || resolvedOriginalPost.authorName}
+                                                size="sm"
+                                            />
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                <span
+                                                    className="font-bold text-xs dark:text-white hover:underline cursor-pointer truncate"
+                                                    onClick={() => (resolvedOriginalPost.authorId || resolvedOriginalPost.userId) && openPublicProfile?.(resolvedOriginalPost.authorId || resolvedOriginalPost.userId)}
+                                                >
+                                                    {resolvedOriginalPost.displayName || resolvedOriginalPost.authorName || 'Creator'}
+                                                </span>
+                                                {resolvedOriginalPost.role && (
+                                                    <span className="text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 px-1.5 py-0.2 rounded-md">
+                                                        {resolvedOriginalPost.role}
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="text-[10px] text-gray-500 flex items-center gap-1">
+                                                <span>@{resolvedOriginalPost.username || resolvedOriginalPost.authorUsername || 'user'}</span>
+                                                <span>•</span>
+                                                <span>
+                                                    {resolvedOriginalPost.createdAt
+                                                        ? new Date(resolvedOriginalPost.createdAt).toLocaleDateString()
+                                                        : 'Original Post'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* View Original Button */}
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const origId = resolvedOriginalPost._id || resolvedOriginalPost.id || repostId;
+                                            if (origId) {
+                                                navigate(`/post/${origId}`);
+                                            }
                                         }}
-                                    />
+                                        className="flex items-center gap-1 text-[11px] font-semibold text-brand-blue hover:text-blue-500 transition px-2.5 py-1 rounded-lg bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 shrink-0"
+                                        title="View original post"
+                                    >
+                                        <ExternalLink size={12} />
+                                        <span>View Original</span>
+                                    </button>
+                                </div>
+
+                                {/* Original Body Text */}
+                                {(resolvedOriginalPost.content || resolvedOriginalPost.text) && (
+                                    <p className="text-xs text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                                        {renderText(resolvedOriginalPost.content || resolvedOriginalPost.text)}
+                                    </p>
                                 )}
-                                {att.type === 'video' && (
-                                    <video
-                                        src={att.url}
-                                        controls
-                                        className="w-full h-auto object-contain bg-black rounded-lg"
-                                        style={{ maxHeight: '600px' }}
-                                        autoPlay={autoPlayVideos}
-                                        playsInline
-                                        muted={autoPlayVideos}
-                                        preload="metadata"
-                                    />
-                                )}
-                                {att.type === 'audio' && (
-                                    <div className="w-full">
-                                        <StarFieldVisualizer audioUrl={att.url} fileName={getFileNameFromUrl(att.url, att.name)} />
+
+                                {/* Original Attachments */}
+                                {(() => {
+                                    const origAttachments = normalizePostAttachments(resolvedOriginalPost);
+                                    const origAudios = origAttachments.filter((a) => a.type === 'audio');
+                                    const origNonAudios = origAttachments.filter((a) => a.type !== 'audio');
+
+                                    return (
+                                        <>
+                                            {/* Original Audio Players */}
+                                            {origAudios.map((att, i) => (
+                                                <div key={i} className="w-full">
+                                                    <AudioWaveformPlayer
+                                                        audioUrl={att.url}
+                                                        title={getFileNameFromUrl(att.url, att.name || resolvedOriginalPost.audioName)}
+                                                        gearUsed={resolvedOriginalPost.equipment || resolvedOriginalPost.software}
+                                                    />
+                                                </div>
+                                            ))}
+
+                                            {/* Original Images & Videos */}
+                                            {origNonAudios.length > 0 && (
+                                                <div className={`grid gap-2 rounded-xl overflow-hidden ${origNonAudios.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                                    {origNonAudios.map((att, idx) => (
+                                                        <div key={idx} className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
+                                                            {att.type === 'image' ? (
+                                                                <img
+                                                                    src={att.url}
+                                                                    alt={att.name || 'Original attachment'}
+                                                                    className="w-full h-auto object-contain max-h-80 rounded-lg"
+                                                                    loading="lazy"
+                                                                />
+                                                            ) : (
+                                                                <video
+                                                                    src={att.url}
+                                                                    controls
+                                                                    className="w-full max-h-80 object-contain bg-black rounded-lg"
+                                                                    autoPlay={autoPlayVideos}
+                                                                    playsInline
+                                                                    muted={autoPlayVideos}
+                                                                    preload="metadata"
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+
+                                {/* Original Equipment / Software */}
+                                {((resolvedOriginalPost.equipment?.length > 0) || (resolvedOriginalPost.software?.length > 0)) && (
+                                    <div className="flex flex-wrap gap-1 text-[10px] text-gray-400 pt-1">
+                                        {resolvedOriginalPost.equipment?.map((gear: string, i: number) => (
+                                            <span key={i} className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700/60 rounded text-gray-600 dark:text-gray-300">
+                                                🎛️ {gear}
+                                            </span>
+                                        ))}
+                                        {resolvedOriginalPost.software?.map((sw: string, i: number) => (
+                                            <span key={i} className="px-1.5 py-0.5 bg-gray-100 dark:bg-gray-700/60 rounded text-gray-600 dark:text-gray-300">
+                                                💻 {sw}
+                                            </span>
+                                        ))}
                                     </div>
                                 )}
-                            </div>
-                        ))}
+                            </>
+                        )}
                     </div>
                 )}
 
-                {/* Fallbacks for legacy posts */}
-                {post.audioUrl && !post.attachments && (
-                    <div className="rounded-lg overflow-hidden bg-transparent mb-3">
-                        <StarFieldVisualizer audioUrl={post.audioUrl} fileName={getFileNameFromUrl(post.audioUrl, post.audioName)} />
-                    </div>
-                )}
-                {post.imageUrl && !post.attachments && (
-                    <div className="rounded-lg overflow-hidden bg-gray-100 dark:bg-gray-800 mb-3">
-                        <img src={post.imageUrl} className="w-full h-auto object-contain rounded-lg" alt="legacy content" style={{ maxHeight: '600px' }} loading="lazy" />
+                {/* Amendments List */}
+                {post.amendments && post.amendments.length > 0 && (
+                    <div className="mt-3 space-y-2 border-t border-gray-100 dark:border-gray-800 pt-3">
+                        <div className="text-[11px] font-bold tracking-wider text-emerald-600 dark:text-emerald-400 uppercase flex items-center gap-1.5">
+                            <FileEdit size={13} />
+                            Amendments ({post.amendments.length})
+                        </div>
+                        {post.amendments.map((amendment: any, index: number) => (
+                            <div
+                                key={index}
+                                className="bg-emerald-50/50 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/30 rounded-xl p-3 text-xs"
+                            >
+                                <div className="flex items-center justify-between text-[11px] text-gray-500 dark:text-gray-400 mb-1">
+                                    <span className="font-semibold text-emerald-700 dark:text-emerald-300">
+                                        Amendment #{index + 1}
+                                    </span>
+                                    <span>
+                                        {amendment.createdAt
+                                            ? new Date(amendment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })
+                                            : 'Recent'}
+                                    </span>
+                                </div>
+                                <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                                    {renderText(amendment.text)}
+                                </p>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>
@@ -590,6 +901,18 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                 </motion.div>
                             )}
                         </AnimatePresence>
+                        {/* Tip Button - Disallowed on Reposts */}
+                        {!isOwnPost && !isRepost && (
+                            <motion.button
+                                whileTap={{ scale: 0.95 }}
+                                onClick={() => setShowTipModal(true)}
+                                className="flex items-center gap-1 sm:gap-1.5 text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-500/30 transition px-2.5 py-1 rounded-lg"
+                                title="Tip Creator"
+                            >
+                                <DollarSign size={16} />
+                                <span>Tip</span>
+                            </motion.button>
+                        )}
                     </div>
                 </div>
 
@@ -637,6 +960,27 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                     console.log('Repost created:', repostId);
                 }}
             />
+            {/* Tip Creator Modal */}
+            {showTipModal && (
+                <TipModal
+                    creatorName={post.displayName || 'Creator'}
+                    creatorPhoto={post.authorPhoto}
+                    onClose={() => setShowTipModal(false)}
+                />
+            )}
+
+            {/* Edit / Amend Modal */}
+            {isOwnPost && userId && (
+                <PostEditAmendModal
+                    isOpen={showEditAmendModal}
+                    mode={editAmendMode}
+                    postId={post.id}
+                    authorId={userId}
+                    initialContent={post.content || post.text || ''}
+                    postCreatedAt={postCreatedAt}
+                    onClose={() => setShowEditAmendModal(false)}
+                />
+            )}
         </motion.div>
     );
 }));

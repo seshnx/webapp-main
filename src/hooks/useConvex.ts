@@ -39,7 +39,7 @@ export function usePostsByAuthor(clerkId: string, limit = 20) {
  * Get single post
  */
 export function usePost(postId: string) {
-  return useQuery(api.social.getPostById, { postId });
+  return useQuery(api.posts.get, { postId: postId as Id<'posts'> });
 }
 
 /**
@@ -81,7 +81,7 @@ export function useRepostPost() {
  * Unrepost a post
  */
 export function useUnrepostPost() {
-  return useMutation(api.social.unrepostPost);
+  return useMutation(api.social.repostPost);
 }
 
 // =====================================================
@@ -92,8 +92,8 @@ export function useUnrepostPost() {
  * Get comments for a post
  */
 export function useComments(postId: string, limit = 20) {
-  return useQuery(api.social.getCommentsByPost, {
-    postId,
+  return useQuery(api.comments.getCommentsByPost, {
+    postId: postId as Id<'posts'>,
     limit,
   });
 }
@@ -101,9 +101,9 @@ export function useComments(postId: string, limit = 20) {
 /**
  * Get comment replies
  */
-export function useCommentReplies(commentId: string, limit = 20) {
-  return useQuery(api.social.getCommentReplies, {
-    commentId,
+export function useCommentReplies(parentId: string | Id<'comments'>, limit = 20) {
+  return useQuery(api.comments.getCommentReplies, {
+    parentId: parentId as Id<'comments'>,
     limit,
   });
 }
@@ -112,8 +112,8 @@ export function useCommentReplies(commentId: string, limit = 20) {
  * Get comments by author
  */
 export function useCommentsByAuthor(authorId: string, limit = 20) {
-  return useQuery(api.social.getCommentsByAuthor, {
-    authorId,
+  return useQuery(api.comments.getCommentsByAuthor, {
+    authorId: authorId as Id<'users'>,
     limit,
   });
 }
@@ -122,21 +122,21 @@ export function useCommentsByAuthor(authorId: string, limit = 20) {
  * Create a comment
  */
 export function useCreateComment() {
-  return useMutation(api.social.createComment);
+  return useMutation(api.comments.createComment);
 }
 
 /**
  * Update a comment
  */
 export function useUpdateComment() {
-  return useMutation(api.social.updateComment);
+  return useMutation(api.comments.updateComment);
 }
 
 /**
  * Delete a comment
  */
 export function useDeleteComment() {
-  return useMutation(api.social.deleteComment);
+  return useMutation(api.comments.deleteComment);
 }
 
 // =====================================================
@@ -148,7 +148,7 @@ export function useDeleteComment() {
  */
 export function useReactions(targetId: string, targetType: 'post' | 'comment' = 'post') {
   return useQuery(api.social.getReactions, {
-    targetId,
+    targetId: targetId as any,
     targetType,
   });
 }
@@ -157,8 +157,8 @@ export function useReactions(targetId: string, targetType: 'post' | 'comment' = 
  * Get reaction summary grouped by emoji
  */
 export function useReactionSummary(targetId: string, targetType: 'post' | 'comment' = 'post') {
-  return useQuery(api.social.getReactionSummary, {
-    targetId,
+  return useQuery(api.social.getReactions, {
+    targetId: targetId as any,
     targetType,
   });
 }
@@ -166,11 +166,12 @@ export function useReactionSummary(targetId: string, targetType: 'post' | 'comme
 /**
  * Get user's reaction on a target
  */
-export function useUserReaction(targetId: string, userId: string, targetType: 'post' | 'comment' = 'post') {
-  return useQuery(api.social.getUserReaction, {
+export function useUserReaction(targetId: string, clerkId: string, targetType: 'post' | 'comment' = 'post', emoji?: string) {
+  return useQuery(api.social.hasReacted, {
     targetId,
-    userId,
+    clerkId,
     targetType,
+    emoji,
   });
 }
 
@@ -188,10 +189,10 @@ export function useToggleReaction() {
 /**
  * Check if post is saved by user
  */
-export function useIsPostSaved(userId: string, postId: string) {
-  return useQuery(api.social.isPostSaved, {
-    userId,
-    postId,
+export function useIsPostSaved(clerkId: string, postId: string | Id<'posts'>) {
+  return useQuery(api.social.isSaved, {
+    clerkId,
+    postId: postId as Id<'posts'>,
   });
 }
 
@@ -294,14 +295,14 @@ export function usePublicDisplayName(clerkId: string, role?: string) {
  * Get followers for a user
  */
 export function useFollowers(userId: string) {
-  return useQuery(api.users.getFollowers, { userId });
+  return useQuery(api.users.getFollowers, { userId: userId as Id<'users'> });
 }
 
 /**
  * Get who a user is following
  */
 export function useFollowing(userId: string) {
-  return useQuery(api.users.getFollowing, { userId });
+  return useQuery(api.users.getFollowing, { userId: userId as Id<'users'> });
 }
 
 /**
@@ -309,8 +310,8 @@ export function useFollowing(userId: string) {
  */
 export function useIsFollowing(followerId: string, followingId: string) {
   return useQuery(api.users.isFollowing, {
-    followerId,
-    followingId,
+    followerId: followerId as Id<'users'>,
+    followingId: followingId as Id<'users'>,
   });
 }
 
@@ -336,14 +337,14 @@ export function useUnfollowUser() {
  * Get studios by owner
  */
 export function useStudiosByOwner(ownerId: string) {
-  return useQuery(api.sbookings.getStudiosByOwner, { ownerId });
+  return useQuery(api.sbookings.getStudiosByOwner, { ownerId: ownerId as any });
 }
 
 /**
  * Get studio by ID
  */
-export function useStudio(studioId: Id<'studios'>) {
-  return useQuery(api.sbookings.getStudioById, { studioId });
+export function useStudio(studioId: string | Id<'studios'>) {
+  return useQuery(api.sbookings.getStudioById, { studioId: studioId as Id<'studios'> });
 }
 
 /**
@@ -473,8 +474,8 @@ export function useUpdatePaymentStatus() {
 /**
  * Get blocked dates for a studio
  */
-export function useBlockedDates(studioId: string) {
-  return useQuery(api.sbookings.getBlockedDates, { studioId });
+export function useBlockedDates(studioId: string | Id<'studios'>) {
+  return useQuery(api.sbookings.getBlockedDates, { studioId: studioId as Id<'studios'> });
 }
 
 /**
@@ -838,16 +839,16 @@ export function useSchool(schoolId: Id<'schools'>) {
  * Get student by user ID
  */
 export function useStudentByUserId(userId: string) {
-  return useQuery(api.edu.getStudentByUserId, { userId });
+  return useQuery(api.edu.getStudentByUserId, { userId: userId as Id<'users'> });
 }
 
 /**
  * Get students by school
  */
-export function useStudentsBySchool(schoolId: Id<'schools'>, status?: string) {
+export function useStudentsBySchool(schoolId: Id<'schools'>, limit = 50) {
   return useQuery(api.edu.getStudentsBySchool, {
     schoolId,
-    status,
+    limit,
   });
 }
 
@@ -855,7 +856,7 @@ export function useStudentsBySchool(schoolId: Id<'schools'>, status?: string) {
  * Get staff by user ID
  */
 export function useStaffByUserId(userId: string) {
-  return useQuery(api.edu.getStaffByUserId, { userId });
+  return useQuery(api.edu.getStaffByUserId, { userId: userId as Id<'users'> });
 }
 
 /**
@@ -871,10 +872,10 @@ export function useStaffBySchool(schoolId: Id<'schools'>, role?: string) {
 /**
  * Get classes by school
  */
-export function useClassesBySchool(schoolId: Id<'schools'>, status?: string) {
+export function useClassesBySchool(schoolId: Id<'schools'>, limit = 50) {
   return useQuery(api.edu.getClassesBySchool, {
     schoolId,
-    status,
+    limit,
   });
 }
 
@@ -890,10 +891,9 @@ export function useEnrollmentsByClass(classId: Id<'classes'>) {
 /**
  * Get enrollments by student
  */
-export function useEnrollmentsByStudent(studentId: Id<'students'>, status?: string) {
+export function useEnrollmentsByStudent(studentId: string | Id<'users'>) {
   return useQuery(api.edu.getEnrollmentsByStudent, {
-    studentId,
-    status,
+    studentId: studentId as Id<'users'>,
   });
 }
 
@@ -905,277 +905,16 @@ export function useEnrollStudent() {
 }
 
 /**
- * Drop student from class
+ * Unenroll student from class
  */
-export function useDropStudent() {
-  return useMutation(api.edu.dropStudent);
+export function useUnenrollStudent() {
+  return useMutation(api.edu.unenrollStudent);
 }
 
 /**
- * Add grade to enrollment
+ * Backward compatibility alias for useUnenrollStudent
  */
-export function useAddGrade() {
-  return useMutation(api.edu.addGrade);
-}
-
-/**
- * Get internships by student
- */
-export function useInternshipsByStudent(studentId: Id<'students'>, status?: string) {
-  return useQuery(api.edu.getInternshipsByStudent, {
-    studentId,
-    status,
-  });
-}
-
-/**
- * Create internship
- */
-export function useCreateInternship() {
-  return useMutation(api.edu.createInternship);
-}
-
-/**
- * Start internship
- */
-export function useStartInternship() {
-  return useMutation(api.edu.startInternship);
-}
-
-/**
- * Complete internship
- */
-export function useCompleteInternship() {
-  return useMutation(api.edu.completeInternship);
-}
-
-// =====================================================
-// SETTINGS
-// =====================================================
-
-/**
- * Get all user settings
- */
-export function useAllUserSettings(userId: string) {
-  return useQuery(api.settings.getAllUserSettings, { userId });
-}
-
-/**
- * Get user settings
- */
-export function useUserSettings(userId: string) {
-  return useQuery(api.settings.getUserSettings, { userId });
-}
-
-/**
- * Update user settings
- */
-export function useUpdateUserSettings() {
-  return useMutation(api.settings.updateUserSettings);
-}
-
-/**
- * Reset user settings to defaults
- */
-export function useResetUserSettings() {
-  return useMutation(api.settings.resetUserSettings);
-}
-
-/**
- * Get notification settings
- */
-export function useNotificationSettings(userId: string) {
-  return useQuery(api.settings.getNotificationSettings, { userId });
-}
-
-/**
- * Update notification settings
- */
-export function useUpdateNotificationSettings() {
-  return useMutation(api.settings.updateNotificationSettings);
-}
-
-/**
- * Update social notification settings
- */
-export function useUpdateSocialNotificationSettings() {
-  return useMutation(api.settings.updateSocialNotificationSettings);
-}
-
-/**
- * Update messenger notification settings
- */
-export function useUpdateMessengerNotificationSettings() {
-  return useMutation(api.settings.updateMessengerNotificationSettings);
-}
-
-/**
- * Update booking notification settings
- */
-export function useUpdateBookingNotificationSettings() {
-  return useMutation(api.settings.updateBookingNotificationSettings);
-}
-
-/**
- * Update EDU notification settings
- */
-export function useUpdateEDUNotificationSettings() {
-  return useMutation(api.settings.updateEDUNotificationSettings);
-}
-
-/**
- * Update marketplace notification settings
- */
-export function useUpdateMarketplaceNotificationSettings() {
-  return useMutation(api.settings.updateMarketplaceNotificationSettings);
-}
-
-/**
- * Enable all notifications
- */
-export function useEnableAllNotifications() {
-  return useMutation(api.settings.enableAllNotifications);
-}
-
-/**
- * Disable all notifications
- */
-export function useDisableAllNotifications() {
-  return useMutation(api.settings.disableAllNotifications);
-}
-
-/**
- * Get privacy settings
- */
-export function usePrivacySettings(userId: string) {
-  return useQuery(api.settings.getPrivacySettings, { userId });
-}
-
-/**
- * Update privacy settings
- */
-export function useUpdatePrivacySettings() {
-  return useMutation(api.settings.updatePrivacySettings);
-}
-
-/**
- * Block user
- */
-export function useBlockUser() {
-  return useMutation(api.settings.blockUser);
-}
-
-/**
- * Unblock user
- */
-export function useUnblockUser() {
-  return useMutation(api.settings.unblockUser);
-}
-
-/**
- * Mute user
- */
-export function useMuteUser() {
-  return useMutation(api.settings.muteUser);
-}
-
-/**
- * Unmute user
- */
-export function useUnmuteUser() {
-  return useMutation(api.settings.unmuteUser);
-}
-
-/**
- * Get security settings
- */
-export function useSecuritySettings(userId: string) {
-  return useQuery(api.settings.getSecuritySettings, { userId });
-}
-
-/**
- * Update security settings
- */
-export function useUpdateSecuritySettings() {
-  return useMutation(api.settings.updateSecuritySettings);
-}
-
-/**
- * Record login attempt
- */
-export function useRecordLoginAttempt() {
-  return useMutation(api.settings.recordLoginAttempt);
-}
-
-/**
- * Enable two-factor authentication
- */
-export function useEnableTwoFactor() {
-  return useMutation(api.settings.enableTwoFactor);
-}
-
-/**
- * Disable two-factor authentication
- */
-export function useDisableTwoFactor() {
-  return useMutation(api.settings.disableTwoFactor);
-}
-
-/**
- * Lock account
- */
-export function useLockAccount() {
-  return useMutation(api.settings.lockAccount);
-}
-
-/**
- * Unlock account
- */
-export function useUnlockAccount() {
-  return useMutation(api.settings.unlockAccount);
-}
-
-/**
- * Get app settings
- */
-export function useAppSettings(category?: string) {
-  return useQuery(api.settings.getAppSettings, category ? { category } : {});
-}
-
-/**
- * Get public app settings
- */
-export function usePublicAppSettings() {
-  return useQuery(api.settings.getPublicAppSettings);
-}
-
-/**
- * Get app setting by key
- */
-export function useAppSetting(key: string) {
-  return useQuery(api.settings.getAppSetting, { key });
-}
-
-/**
- * Set app setting
- */
-export function useSetAppSetting() {
-  return useMutation(api.settings.setAppSetting);
-}
-
-/**
- * Export user data
- */
-export function useExportUserData() {
-  return useMutation(api.settings.exportUserData);
-}
-
-/**
- * Delete user account
- */
-export function useDeleteUserAccount() {
-  return useMutation(api.settings.deleteUserAccount);
-}
+export const useDropStudent = useUnenrollStudent;
 
 // =====================================================
 // STUDIOS
@@ -1187,7 +926,7 @@ export function useDeleteUserAccount() {
 export function useStudioByOwner(ownerId: string | undefined) {
   return useQuery(
     api.studios.getStudioByOwner,
-    ownerId ? { ownerId } : "skip"
+    ownerId ? { ownerId: ownerId as Id<'users'> } : 'skip'
   );
 }
 
@@ -1239,10 +978,10 @@ export function useDeleteStudio() {
 /**
  * Get floor plan by studio ID
  */
-export function useFloorplanByStudio(studioId: Id<'studios'>) {
+export function useFloorplanByStudio(studioId: string | Id<'studios'>) {
   return useQuery(
     api.studioManager.getFloorplanByStudio,
-    { studioId }
+    { studioId: studioId as Id<'studios'> }
   );
 }
 
@@ -1510,3 +1249,103 @@ export function useDeleteAnalytics() {
 export function useUpdateStudioPhotos() {
   return useMutation(api.studioManager.updateStudioPhotos);
 }
+
+// =====================================================
+// STORIES, LIVE ROOMS & TIPPING
+// =====================================================
+
+export function useActiveStories() {
+  return useQuery(api.stories.getActiveStories);
+}
+
+export function useCreateStory() {
+  return useMutation(api.stories.createStory);
+}
+
+export function useMarkStoryViewed() {
+  return useMutation(api.stories.markStoryViewed);
+}
+
+export function useLiveRooms() {
+  return useQuery(api.liveRooms.getLiveRooms);
+}
+
+export function useLiveRoom(roomId?: Id<'liveRooms'>) {
+  return useQuery(api.liveRooms.getRoomById, roomId ? { roomId } : 'skip');
+}
+
+export function useCreateLiveRoom() {
+  return useMutation(api.liveRooms.createLiveRoom);
+}
+
+export function useEndLiveRoom() {
+  return useMutation(api.liveRooms.endLiveRoom);
+}
+
+export function useLiveRoomParticipants(roomId?: Id<'liveRooms'>) {
+  return useQuery(api.liveRooms.getParticipants, roomId ? { roomId } : 'skip');
+}
+
+export function useJoinLiveRoom() {
+  return useMutation(api.liveRooms.joinRoom);
+}
+
+export function useLeaveLiveRoom() {
+  return useMutation(api.liveRooms.leaveRoom);
+}
+
+export function useLiveRoomHeartbeat() {
+  return useMutation(api.liveRooms.heartbeat);
+}
+
+export function useToggleLiveRoomMute() {
+  return useMutation(api.liveRooms.toggleMute);
+}
+
+export function useRaiseLiveRoomHand() {
+  return useMutation(api.liveRooms.raiseHand);
+}
+
+export function useLowerLiveRoomHand() {
+  return useMutation(api.liveRooms.lowerHand);
+}
+
+export function useApproveLiveRoomSpeaker() {
+  return useMutation(api.liveRooms.approveSpeaker);
+}
+
+export function useDemoteLiveRoomSpeaker() {
+  return useMutation(api.liveRooms.demoteSpeaker);
+}
+
+export function useKickLiveRoomParticipant() {
+  return useMutation(api.liveRooms.kickParticipant);
+}
+
+export function useLiveRoomMessages(roomId?: Id<'liveRooms'>) {
+  return useQuery(api.liveRooms.getMessages, roomId ? { roomId } : 'skip');
+}
+
+export function useSendLiveRoomMessage() {
+  return useMutation(api.liveRooms.sendMessage);
+}
+
+export function useLiveRoomSignals(roomId?: Id<'liveRooms'>, targetClerkId?: string) {
+  return useQuery(
+    api.liveRooms.getSignals,
+    roomId && targetClerkId ? { roomId, targetClerkId } : 'skip'
+  );
+}
+
+export function useSendLiveRoomSignal() {
+  return useMutation(api.liveRooms.sendSignal);
+}
+
+export function useSendTip() {
+  return useMutation(api.tips.sendTip);
+}
+
+export function useReceivedTips(clerkId: string) {
+  return useQuery(api.tips.getReceivedTips, { clerkId });
+}
+

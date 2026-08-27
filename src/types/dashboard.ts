@@ -48,12 +48,14 @@ export type QuickActionVariant = 'primary' | 'secondary' | 'danger' | 'success';
 export interface QuickAction {
   id: string;
   label: string;
+  description?: string;
   icon: React.ElementType;
   action: () => void | Promise<void>;
   variant: QuickActionVariant;
   roles: string[];
   badge?: number | string;
   disabled?: boolean;
+  featured?: boolean;
 }
 
 // =====================================================
@@ -114,6 +116,7 @@ export interface DashboardProps {
     id: string;
     uid?: string;
     email?: string;
+    [key: string]: any;
   } | null;
   userData?: {
     accountTypes?: string[];
@@ -123,11 +126,12 @@ export interface DashboardProps {
     photoURL?: string;
     settings?: {
       dashboard?: DashboardConfig;
+      [key: string]: any;
     };
+    [key: string]: any;
   } | null;
   subProfiles?: Record<string, any>;
   setActiveTab?: (tab: string) => void;
-  // Additional props from MainLayout
   bookingCount?: number;
   tokenBalance?: number;
 }

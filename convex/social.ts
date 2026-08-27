@@ -15,6 +15,103 @@ const getNativeUser = async (ctx: any, clerkId: string | undefined) => {
     .first();
 };
 
+// Safely resolve the author profile and check if they are deleted/orphaned
+const formatPostAuthor = async (ctx: any, post: any) => {
+  if (!post) return null;
+  
+  let author = null;
+  if (post.authorId) {
+    try {
+      author = await ctx.db.get(post.authorId);
+    } catch (e) {}
+    
+    if (!author) {
+      try {
+        author = await ctx.db
+          .query("users")
+          .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", String(post.authorId)))
+          .first();
+      } catch (e) {}
+    }
+  }
+
+  // Resolve repost original if this post is a repost
+  let originalPost = null;
+  if (post.repostOf) {
+    try {
+      const rawOriginal: any = await ctx.db.get(post.repostOf);
+      if (rawOriginal && !rawOriginal.deletedAt) {
+        let origAuthor = null;
+        if (rawOriginal.authorId) {
+          try {
+            origAuthor = await ctx.db.get(rawOriginal.authorId);
+          } catch (e) {}
+          if (!origAuthor) {
+            try {
+              origAuthor = await ctx.db
+                .query("users")
+                .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", String(rawOriginal.authorId)))
+                .first();
+            } catch (e) {}
+          }
+        }
+        originalPost = {
+          ...rawOriginal,
+          id: rawOriginal._id,
+          authorClerkId: origAuthor?.clerkId,
+          displayName: rawOriginal.displayName || rawOriginal.authorName || origAuthor?.displayName || origAuthor?.profileName || "Creator",
+          username: rawOriginal.username || rawOriginal.authorUsername || origAuthor?.username || "user",
+          authorPhoto: rawOriginal.authorPhoto || origAuthor?.imageUrl || origAuthor?.avatarUrl,
+          role: rawOriginal.role || origAuthor?.activeProfileRole,
+          content: rawOriginal.content,
+          text: rawOriginal.content || rawOriginal.text,
+          mediaAttachments: rawOriginal.mediaAttachments,
+          attachments: rawOriginal.attachments,
+          mediaUrls: rawOriginal.mediaUrls,
+          imageUrl: rawOriginal.imageUrl,
+          audioUrl: rawOriginal.audioUrl,
+          audioName: rawOriginal.audioName,
+          equipment: rawOriginal.equipment,
+          software: rawOriginal.software,
+          createdAt: rawOriginal.createdAt,
+          amendments: rawOriginal.amendments,
+        };
+      } else {
+        originalPost = {
+          isDeleted: true,
+          displayName: "[Deleted Post]",
+        };
+      }
+    } catch (e) {
+      originalPost = null;
+    }
+  }
+
+  // If author is missing or has no clerkId (deleted/orphaned account)
+  const isDeletedOrMissing = !author || !author.clerkId || (!author.profileName && !author.username && !author.displayName && !author.firstName);
+
+  if (isDeletedOrMissing) {
+    return {
+      ...post,
+      authorName: "[Deleted User]",
+      authorUsername: "deleted",
+      authorPhoto: undefined,
+      displayName: "[Deleted User]",
+      username: "deleted",
+      originalPost,
+    };
+  }
+
+  // Otherwise return post preserving role-based names stored on the post document
+  return {
+    ...post,
+    authorClerkId: author.clerkId,
+    displayName: post.displayName || post.authorName || "User",
+    username: post.username || post.authorUsername || author.username || "user",
+    originalPost,
+  };
+};
+
 
 /**
  * Get user by Clerk ID
@@ -68,7 +165,8 @@ export const getFeed = query({
       const validPosts = rawPosts.filter(p => !p.deletedAt && p.visibility === "public");
       
       // Manual pagination using slice
-      return validPosts.slice(skip, skip + limit);
+      const paginated = validPosts.slice(skip, skip + limit);
+      return await Promise.all(paginated.map((p: any) => formatPostAuthor(ctx, p)));
     } catch (error) {
       console.error("Error in getFeed:", error);
       return [];
@@ -97,7 +195,8 @@ export const getHomeFeed = query({
         .order("desc")
         .take(limit + skip);
         
-      return allPosts.slice(skip, skip + limit);
+      const paginated = allPosts.slice(skip, skip + limit);
+      return await Promise.all(paginated.map((p: any) => formatPostAuthor(ctx, p)));
     }
 
     try {
@@ -136,7 +235,8 @@ export const getHomeFeed = query({
       );
 
       // 6. Apply manual pagination (slice)
-      return feedPosts.slice(skip, skip + limit);
+      const paginated = feedPosts.slice(skip, skip + limit);
+      return await Promise.all(paginated.map((p: any) => formatPostAuthor(ctx, p)));
 
     } catch (error) {
       console.error("Error in getHomeFeed:", error);
@@ -178,7 +278,7 @@ export const getTrendingPosts = query({
       })
       .slice(0, limit);
 
-    return sorted;
+    return await Promise.all(sorted.map((p: any) => formatPostAuthor(ctx, p)));
   },
 });
 
@@ -203,7 +303,7 @@ export const searchPosts = query({
 
     const query = args.searchQuery.toLowerCase();
 
-    return allPosts
+    const paginated = allPosts
       .filter((post) => {
         const inContent = post.content?.toLowerCase().includes(query);
         const inAuthor =
@@ -215,6 +315,8 @@ export const searchPosts = query({
         return inContent || inAuthor || inHashtags;
       })
       .slice(0, limit);
+
+    return await Promise.all(paginated.map((p: any) => formatPostAuthor(ctx, p)));
   },
 });
 
@@ -230,7 +332,7 @@ export const getPost = query({
     if (!post || post.deletedAt) {
       return null;
     }
-    return post;
+    return await formatPostAuthor(ctx, post);
   },
 });
 
@@ -264,7 +366,8 @@ export const getPostsByAuthor = query({
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(skip + limit);
 
-    return posts.slice(skip, skip + limit);
+    const paginated = posts.slice(skip, skip + limit);
+    return await Promise.all(paginated.map((p: any) => formatPostAuthor(ctx, p)));
   },
 });
 
@@ -288,7 +391,8 @@ export const getPostsByCategory = query({
       .filter((q) => q.eq(q.field("deletedAt"), undefined))
       .take(skip + limit);
 
-    return posts.slice(skip, skip + limit);
+    const paginated = posts.slice(skip, skip + limit);
+    return await Promise.all(paginated.map((p: any) => formatPostAuthor(ctx, p)));
   },
 });
 
@@ -467,7 +571,8 @@ export const repostPost = mutation({
 });
 
 /**
- * Update a post
+/**
+ * Update a post (allowed only within 30 minutes of creation)
  */
 export const updatePost = mutation({
   args: {
@@ -490,7 +595,13 @@ export const updatePost = mutation({
     if (!post || post.deletedAt) throw new Error("Post not found");
     if (post.authorId !== author._id) throw new Error("Unauthorized");
 
-    const updates: Record<string, any> = { updatedAt: Date.now() };
+    // Don't allow original post editing past 30 minutes of posting
+    const THIRTY_MINUTES_MS = 30 * 60 * 1000;
+    if (Date.now() - post.createdAt > THIRTY_MINUTES_MS) {
+      throw new Error("Editing original post is only allowed within 30 minutes of posting. Please add an amendment instead.");
+    }
+
+    const updates: Record<string, any> = { updatedAt: Date.now(), isEdited: true };
 
     if (args.content !== undefined) {
       updates.content = args.content;
@@ -509,6 +620,44 @@ export const updatePost = mutation({
     if (args.customFields !== undefined) updates.customFields = args.customFields;
 
     await ctx.db.patch(args.postId, updates);
+    return args.postId;
+  },
+});
+
+/**
+ * Amend a post (adds an amendment entry under the original post without modifying original content)
+ */
+export const amendPost = mutation({
+  args: {
+    postId: v.id("posts"),
+    authorId: v.string(), // Clerk ID
+    text: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const author = await getNativeUser(ctx, args.authorId);
+    if (!author) throw new Error("Author not found");
+
+    const post = await ctx.db.get(args.postId);
+    if (!post || post.deletedAt) throw new Error("Post not found");
+    if (post.authorId !== author._id) throw new Error("Unauthorized");
+
+    const trimmedText = args.text.trim();
+    if (!trimmedText) throw new Error("Amendment content cannot be empty.");
+
+    const existingAmendments = (post as any).amendments || [];
+    const newAmendments = [
+      ...existingAmendments,
+      {
+        text: trimmedText,
+        createdAt: Date.now(),
+      },
+    ];
+
+    await ctx.db.patch(args.postId, {
+      amendments: newAmendments,
+      updatedAt: Date.now(),
+    });
+
     return args.postId;
   },
 });

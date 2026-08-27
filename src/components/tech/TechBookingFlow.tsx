@@ -182,7 +182,7 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
 
       // Create service request booking using Convex
       const request = await createBooking({
-        clientId: user?.id as any,
+        clientClerkId: user?.id as any,
         studioId: tech.user_id as any,
         serviceType: formData.category,
         date: formData.preferredDate || new Date().toISOString().split('T')[0],

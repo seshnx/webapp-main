@@ -6,7 +6,8 @@
  */
 
 import { api } from '../../convex/_generated/api';
-import { useQuery, useMutation, Id } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
+import type { Id } from '../../convex/_generated/dataModel';
 import * as Sentry from '@sentry/react';
 
 // =====================================================
@@ -308,7 +309,7 @@ export function useBookingPaymentMutations() {
 export function useStudiosByOwner(ownerId: string | undefined) {
   return useQuery(
     api.sbookings.getStudiosByOwner,
-    ownerId ? { ownerId } : "skip"
+    ownerId ? { ownerId: ownerId as any } : "skip"
   );
 }
 

@@ -4,9 +4,109 @@ import { mutation, query } from "./_generated/server";
 /**
  * Convex Posts Module
  *
- * Real-time post sync layer that mirrors the MongoDB posts collection.
- * MongoDB is the source of truth, Convex provides real-time subscriptions.
+ * Queries for the posts table with deleted-user resolution.
+ * When an author's account has been deleted (no clerkId, or user record missing),
+ * the post's authorName is overridden to "[Deleted User]".
+ * 
+ * For active users, the post's original authorName is preserved to maintain
+ * role-based display names (Studio Name, Artist Stagename, Producer Tag, etc.)
+ * chosen at the time of posting.
  */
+
+/**
+ * Resolve post author - check if user is still active, override name if deleted.
+ * Preserves original role-based display name for active users.
+ */
+const resolvePostAuthor = async (ctx: any, post: any) => {
+  if (!post) return null;
+
+  let author = null;
+  if (post.authorId) {
+    try {
+      author = await ctx.db.get(post.authorId);
+    } catch (e) {
+      // authorId might not be a valid document ID
+    }
+  }
+
+  // Resolve repost original if this post is a repost
+  let originalPost = null;
+  if (post.repostOf) {
+    try {
+      const rawOriginal: any = await ctx.db.get(post.repostOf);
+      if (rawOriginal && !rawOriginal.deletedAt) {
+        let origAuthor = null;
+        if (rawOriginal.authorId) {
+          try {
+            origAuthor = await ctx.db.get(rawOriginal.authorId);
+          } catch (e) {}
+          if (!origAuthor) {
+            try {
+              origAuthor = await ctx.db
+                .query("users")
+                .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", String(rawOriginal.authorId)))
+                .first();
+            } catch (e) {}
+          }
+        }
+        originalPost = {
+          ...rawOriginal,
+          id: rawOriginal._id,
+          authorClerkId: origAuthor?.clerkId,
+          displayName: rawOriginal.displayName || rawOriginal.authorName || origAuthor?.displayName || origAuthor?.profileName || "Creator",
+          username: rawOriginal.username || rawOriginal.authorUsername || origAuthor?.username || "user",
+          authorPhoto: rawOriginal.authorPhoto || origAuthor?.imageUrl || origAuthor?.avatarUrl,
+          role: rawOriginal.role || origAuthor?.activeProfileRole,
+          content: rawOriginal.content,
+          text: rawOriginal.content || rawOriginal.text,
+          mediaAttachments: rawOriginal.mediaAttachments,
+          attachments: rawOriginal.attachments,
+          mediaUrls: rawOriginal.mediaUrls,
+          imageUrl: rawOriginal.imageUrl,
+          audioUrl: rawOriginal.audioUrl,
+          audioName: rawOriginal.audioName,
+          equipment: rawOriginal.equipment,
+          software: rawOriginal.software,
+          createdAt: rawOriginal.createdAt,
+          amendments: rawOriginal.amendments,
+        };
+      } else {
+        originalPost = {
+          isDeleted: true,
+          displayName: "[Deleted Post]",
+        };
+      }
+    } catch (e) {
+      originalPost = null;
+    }
+  }
+
+  const isDeletedOrMissing =
+    !author ||
+    !author.clerkId ||
+    (!author.profileName && !author.username && !author.displayName && !author.firstName);
+
+  if (isDeletedOrMissing) {
+    return {
+      ...post,
+      authorName: "[Deleted User]",
+      authorUsername: "deleted",
+      authorPhoto: undefined,
+      displayName: "[Deleted User]",
+      username: "deleted",
+      originalPost,
+    };
+  }
+
+  // Keep the role-based name from the post document — do NOT override with user profile name
+  return {
+    ...post,
+    authorClerkId: author.clerkId,
+    displayName: post.authorName || author.displayName || author.profileName || "User",
+    username: post.authorUsername || author.username || "user",
+    originalPost,
+  };
+};
 
 /**
  * Get recent posts - real-time query
@@ -17,34 +117,19 @@ export const list = query({
   },
   handler: async (ctx, args) => {
     const limit = args.limit || 50;
-    return await ctx.db
+    const posts = await ctx.db
       .query("posts")
       .withIndex("by_created")
       .order("desc")
+      .filter((q: any) => q.eq(q.field("deletedAt"), undefined))
       .take(limit);
+
+    return await Promise.all(posts.map((p: any) => resolvePostAuthor(ctx, p)));
   },
 });
 
 /**
- * Get posts by author - real-time query
- */
-export const listByAuthor = query({
-  args: {
-    userId: v.string(),
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const limit = args.limit || 50;
-    return await ctx.db
-      .query("posts")
-      .withIndex("by_author", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .take(limit);
-  },
-});
-
-/**
- * Get posts by specific IDs - for "Following" feed
+ * Get posts by specific user IDs - for "Following" feed
  */
 export const listByIds = query({
   args: {
@@ -54,16 +139,55 @@ export const listByIds = query({
   handler: async (ctx, args) => {
     const limit = args.limit || 100;
 
-    // Get all posts and filter client-side
-    // (Convex doesn't support "in" queries yet)
+    // Get recent posts and filter to followed users
     const allPosts = await ctx.db
       .query("posts")
       .withIndex("by_created")
       .order("desc")
+      .filter((q: any) => q.eq(q.field("deletedAt"), undefined))
       .take(limit * 2); // Fetch extra to account for filtering
 
     // Filter to only posts from followed users
-    return allPosts.filter(post => args.userIds.includes(post.userId));
+    // Note: authorId is a Convex document ID, but userIds may be Clerk IDs
+    // We need to match both formats
+    const filteredPosts = allPosts.filter((post: any) => {
+      const authorIdStr = String(post.authorId);
+      return args.userIds.includes(authorIdStr);
+    });
+
+    return await Promise.all(
+      filteredPosts.slice(0, limit).map((p: any) => resolvePostAuthor(ctx, p))
+    );
+  },
+});
+
+/**
+ * Get posts by author - real-time query
+ */
+export const listByAuthor = query({
+  args: {
+    authorId: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 50;
+
+    // Try to find user by Clerk ID to get the Convex document ID
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", args.authorId))
+      .first();
+
+    if (!user) return [];
+
+    const posts = await ctx.db
+      .query("posts")
+      .withIndex("by_author", (q: any) => q.eq("authorId", user._id))
+      .order("desc")
+      .filter((q: any) => q.eq(q.field("deletedAt"), undefined))
+      .take(limit);
+
+    return await Promise.all(posts.map((p: any) => resolvePostAuthor(ctx, p)));
   },
 });
 
@@ -75,201 +199,12 @@ export const get = query({
     postId: v.string(),
   },
   handler: async (ctx, args) => {
-    const post = await ctx.db
-      .query("posts")
-      .withIndex("by_post_id", (q) => q.eq("postId", args.postId))
-      .first();
-
-    return post;
-  },
-});
-
-/**
- * Sync a post from MongoDB to Convex (called from backend/action)
- */
-export const syncPost = mutation({
-  args: {
-    postId: v.string(),
-    userId: v.string(),
-    displayName: v.optional(v.string()),
-    authorPhoto: v.optional(v.string()),
-    username: v.optional(v.string()),
-    content: v.optional(v.string()),
-    media: v.optional(v.array(v.any())),
-    createdAt: v.number(),
-    updatedAt: v.optional(v.number()),
-    commentCount: v.optional(v.number()),
-    reactionCount: v.optional(v.number()),
-    saveCount: v.optional(v.number()),
-    role: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("posts")
-      .withIndex("by_post_id", (q) => q.eq("postId", args.postId))
-      .first();
-
-    if (existing) {
-      // Update existing post
-      await ctx.db.patch(existing._id, {
-        content: args.content,
-        media: args.media,
-        updatedAt: args.updatedAt,
-        commentCount: args.commentCount ?? 0,
-        reactionCount: args.reactionCount ?? 0,
-        saveCount: args.saveCount ?? 0,
-      });
-      return existing._id;
-    } else {
-      // Insert new post
-      const postId = await ctx.db.insert("posts", {
-        postId: args.postId,
-        userId: args.userId,
-        displayName: args.displayName,
-        authorPhoto: args.authorPhoto,
-        username: args.username,
-        content: args.content,
-        media: args.media,
-        createdAt: args.createdAt,
-        updatedAt: args.updatedAt,
-        commentCount: args.commentCount ?? 0,
-        reactionCount: args.reactionCount ?? 0,
-        saveCount: args.saveCount ?? 0,
-        role: args.role,
-      });
-      return postId;
+    try {
+      const post: any = await ctx.db.get(args.postId as any);
+      if (!post || post.deletedAt) return null;
+      return resolvePostAuthor(ctx, post);
+    } catch {
+      return null;
     }
-  },
-});
-
-/**
- * Delete a post from Convex (soft delete sync from MongoDB)
- */
-export const deletePost = mutation({
-  args: {
-    postId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("posts")
-      .withIndex("by_post_id", (q) => q.eq("postId", args.postId))
-      .first();
-
-    if (existing) {
-      await ctx.db.delete(existing._id);
-    }
-  },
-});
-
-/**
- * Update reaction count for a post
- */
-export const updateReactionCount = mutation({
-  args: {
-    postId: v.string(),
-    reactionCount: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("posts")
-      .withIndex("by_post_id", (q) => q.eq("postId", args.postId))
-      .first();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        reactionCount: args.reactionCount,
-        updatedAt: Date.now(),
-      });
-    }
-  },
-});
-
-/**
- * Update comment count for a post
- */
-export const updateCommentCount = mutation({
-  args: {
-    postId: v.string(),
-    commentCount: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const existing = await ctx.db
-      .query("posts")
-      .withIndex("by_post_id", (q) => q.eq("postId", args.postId))
-      .first();
-
-    if (existing) {
-      await ctx.db.patch(existing._id, {
-        commentCount: args.commentCount,
-        updatedAt: Date.now(),
-      });
-    }
-  },
-});
-
-/**
- * Bulk sync posts from MongoDB (for initial sync)
- */
-export const bulkSyncPosts = mutation({
-  args: {
-    posts: v.array(
-      v.object({
-        postId: v.string(),
-        userId: v.string(),
-        displayName: v.optional(v.string()),
-        authorPhoto: v.optional(v.string()),
-        username: v.optional(v.string()),
-        content: v.optional(v.string()),
-        media: v.optional(v.array(v.any())),
-        createdAt: v.number(),
-        updatedAt: v.optional(v.number()),
-        commentCount: v.optional(v.number()),
-        reactionCount: v.optional(v.number()),
-        saveCount: v.optional(v.number()),
-        role: v.optional(v.string()),
-      })
-    ),
-  },
-  handler: async (ctx, args) => {
-    let inserted = 0;
-    let updated = 0;
-
-    for (const post of args.posts) {
-      const existing = await ctx.db
-        .query("posts")
-        .withIndex("by_post_id", (q) => q.eq("postId", post.postId))
-        .first();
-
-      if (existing) {
-        await ctx.db.patch(existing._id, {
-          content: post.content,
-          media: post.media,
-          updatedAt: post.updatedAt,
-          commentCount: post.commentCount ?? 0,
-          reactionCount: post.reactionCount ?? 0,
-          saveCount: post.saveCount ?? 0,
-        });
-        updated++;
-      } else {
-        await ctx.db.insert("posts", {
-          postId: post.postId,
-          userId: post.userId,
-          displayName: post.displayName,
-          authorPhoto: post.authorPhoto,
-          username: post.username,
-          content: post.content,
-          media: post.media,
-          createdAt: post.createdAt,
-          updatedAt: post.updatedAt,
-          commentCount: post.commentCount ?? 0,
-          reactionCount: post.reactionCount ?? 0,
-          saveCount: post.saveCount ?? 0,
-          role: post.role,
-        });
-        inserted++;
-      }
-    }
-
-    return { success: true, total: args.posts.length, inserted, updated };
   },
 });

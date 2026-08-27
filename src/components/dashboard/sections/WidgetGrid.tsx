@@ -42,11 +42,11 @@ const getGridClass = (size: GridSlot['size']): string => {
     case 'small':
       return 'col-span-1';
     case 'medium':
-      return 'col-span-1 lg:col-span-1';
+      return 'col-span-1 md:col-span-1';
     case 'large':
-      return 'col-span-1 lg:col-span-2';
+      return 'col-span-1 md:col-span-2';
     case 'full':
-      return 'col-span-1 lg:col-span-3';
+      return 'col-span-1 md:col-span-2 xl:col-span-3';
     default:
       return 'col-span-1';
   }
@@ -109,7 +109,7 @@ export function WidgetGrid({
       {/* Widget Grid */}
       {config?.layout === 'custom' ? (
         // Custom Layout - User-defined widget arrangement
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 items-start">
           {config.widgets
             .filter(w => w.visible)
             .sort((a, b) => {
@@ -122,7 +122,7 @@ export function WidgetGrid({
               <motion.div
                 key={widget.id}
                 layout
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 transition={{ duration: 0.3 }}
                 className={getGridClass(widget.size)}
@@ -156,7 +156,7 @@ export function WidgetGrid({
         </div>
       ) : (
         // Default Layout - Role-based grid with children directly in grid cells
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 md:gap-6 items-start">
           {React.Children.map(children, (child, index) => {
             const animations = [
               { initial: { opacity: 0, x: -20 }, animate: { opacity: 1, x: 0 } },

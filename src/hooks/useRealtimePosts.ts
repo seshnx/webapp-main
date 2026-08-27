@@ -77,23 +77,20 @@ export function useRealtimePosts(
 
   // Convert Convex posts to app Post format
   const posts = useMemo(() => {
-    if (!convexPosts || convexPosts === 'skip') {
+    if (!convexPosts || !Array.isArray(convexPosts)) {
       return [];
     }
 
-    return convexPosts.map((convexPost: any) => ({
-      id: convexPost.postId,
-      userId: convexPost.userId,
-      displayName: convexPost.displayName || 'Unknown User',
-      authorPhoto: convexPost.authorPhoto,
-      username: convexPost.username,
-      text: convexPost.content,
-      attachments: convexPost.media,
-      timestamp: new Date(convexPost.createdAt).toISOString(),
-      commentCount: convexPost.commentCount || 0,
-      reactionCount: convexPost.reactionCount || 0,
-      saveCount: convexPost.saveCount || 0,
-      role: convexPost.role,
+    return convexPosts.map((convexPost: any): Post => ({
+      id: convexPost._id,
+      userId: convexPost.authorId,
+      displayName: convexPost.displayName || convexPost.authorName || '[Deleted User]',
+      photoURL: convexPost.authorPhoto,
+      text: convexPost.content || '',
+      imageUrl: convexPost.mediaUrls?.[0] || convexPost.mediaAttachments?.[0]?.url,
+      timestamp: convexPost.createdAt || Date.now(),
+      commentCount: convexPost.engagement?.commentsCount || 0,
+      reactions: {},
     }));
   }, [convexPosts]);
 
@@ -125,75 +122,3 @@ export function useRealtimePosts(
   }), [posts, convexPosts, isConnected]);
 }
 
-/**
- * Hook to sync a new post from MongoDB to Convex
- * Call this after creating a post in MongoDB
- */
-export function useSyncPost() {
-  const syncPostMutation = useMutation(api.posts.syncPost);
-
-  const syncPost = useCallback(async (
-    post: {
-      postId: string;
-      userId: string;
-      displayName?: string;
-      authorPhoto?: string;
-      username?: string;
-      content?: string;
-      media?: any[];
-      createdAt: number;
-      commentCount?: number;
-      reactionCount?: number;
-      saveCount?: number;
-      role?: string;
-    }
-  ) => {
-    try {
-      await syncPostMutation(post);
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to sync post to Convex:', error);
-      return { success: false, error };
-    }
-  }, [syncPostMutation]);
-
-  return syncPost;
-}
-
-/**
- * Hook to update post reaction count in real-time
- */
-export function useUpdatePostReactionCount() {
-  const updateMutation = useMutation(api.posts.updateReactionCount);
-
-  const updateCount = useCallback(async (postId: string, reactionCount: number) => {
-    try {
-      await updateMutation({ postId, reactionCount });
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to update reaction count:', error);
-      return { success: false, error };
-    }
-  }, [updateMutation]);
-
-  return updateCount;
-}
-
-/**
- * Hook to update post comment count in real-time
- */
-export function useUpdatePostCommentCount() {
-  const updateMutation = useMutation(api.posts.updateCommentCount);
-
-  const updateCount = useCallback(async (postId: string, commentCount: number) => {
-    try {
-      await updateMutation({ postId, commentCount });
-      return { success: true };
-    } catch (error) {
-      console.error('Failed to update comment count:', error);
-      return { success: false, error };
-    }
-  }, [updateMutation]);
-
-  return updateCount;
-}

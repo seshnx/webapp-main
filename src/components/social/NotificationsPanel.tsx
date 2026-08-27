@@ -32,7 +32,8 @@ type NotificationType =
     | 'save'
     | 'booking'
     | 'booking_accepted'
-    | 'booking_declined';
+    | 'booking_declined'
+    | 'message';
 
 /**
  * Notification data interface
@@ -74,6 +75,7 @@ const NotificationIcon = ({ type }: NotificationIconProps) => {
         follow: <UserPlus {...iconProps} />,
         like: <Heart {...iconProps} />,
         comment: <MessageCircle {...iconProps} />,
+        message: <MessageCircle {...iconProps} />,
         mention: <AtSign {...iconProps} />,
         reply: <CornerDownRight {...iconProps} />,
         save: <Bookmark {...iconProps} />,
@@ -86,6 +88,7 @@ const NotificationIcon = ({ type }: NotificationIconProps) => {
         follow: 'bg-brand-blue/10 text-brand-blue dark:bg-brand-blue/20',
         like: 'bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400',
         comment: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
+        message: 'bg-brand-blue/10 text-brand-blue dark:bg-brand-blue/20',
         mention: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
         reply: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
         save: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
@@ -104,11 +107,11 @@ const NotificationIcon = ({ type }: NotificationIconProps) => {
 /**
  * Format timestamp to relative time
  */
-const formatTime = (ts?: Date | string | { toMillis: () => number }): string => {
+const formatTime = (ts?: Date | string | number | { toMillis: () => number }): string => {
     if (!ts) return '';
-    const date = ts && typeof ts === 'object' && 'toMillis' in ts
+    const date = typeof ts === 'object' && ts !== null && 'toMillis' in ts
         ? new Date(ts.toMillis())
-        : new Date(ts);
+        : new Date(ts as string | number | Date);
     const now = new Date();
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
