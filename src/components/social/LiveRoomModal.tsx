@@ -41,6 +41,7 @@ import {
   useSendLiveRoomMessage,
   useEndLiveRoom,
 } from '../../hooks/useConvex';
+import { useAuth } from '@clerk/react';
 import { useLiveSpaceAudio } from '../../hooks/useLiveSpaceAudio';
 import type { Id } from '../../../convex/_generated/dataModel';
 
@@ -57,7 +58,8 @@ export default function LiveRoomModal({
   userSettings,
   onClose,
 }: LiveRoomModalProps) {
-  const clerkId = user?.id || user?.uid || '';
+  const { userId: authClerkId } = useAuth();
+  const clerkId = authClerkId || user?.id || user?.uid || user?.clerkId || '';
   
   const [chatMessage, setChatMessage] = useState('');
   const [isMinimized, setIsMinimized] = useState(false);
@@ -82,13 +84,20 @@ export default function LiveRoomModal({
   const sendMessageMutation = useSendLiveRoomMessage();
   const endRoomMutation = useEndLiveRoom();
 
-
   // Current participant data
   const currentParticipant = participants.find((p) => p.clerkId === clerkId);
   const isHost = currentParticipant?.role === 'host' || room?.hostId === user?._id;
   const isSpeaker = currentParticipant?.role === 'speaker' || isHost;
   const isMuted = currentParticipant?.isMuted ?? (userSettings?.social?.autoMuteMicOnJoin !== false);
   const hasHandRaised = currentParticipant?.handRaised ?? false;
+
+  useEffect(() => {
+    console.log(
+      `%c[LiveRoomModal] Room State Changed%c: roomId=${roomId}, clerkId=${clerkId}, role=${currentParticipant?.role || 'pending'}, isSpeaker=${isSpeaker}, isMuted=${isMuted}, participantsCount=${participants.length}`,
+      'background: #2563eb; color: #fff; padding: 2px 5px; border-radius: 3px; font-weight: bold;',
+      'color: #93c5fd;'
+    );
+  }, [roomId, clerkId, currentParticipant?.role, isSpeaker, isMuted, participants.length]);
 
   // Real WebRTC Audio Hook with Device & Interface Manager
   const {
@@ -121,14 +130,16 @@ export default function LiveRoomModal({
   // 1. Join room on mount, leave on unmount
   useEffect(() => {
     if (!clerkId || !roomId) return;
+    console.log(`%c[LiveRoomModal] Joining room ${roomId} as ${clerkId}`, 'color: #34d399; font-weight: bold;');
 
     joinRoomMutation({
       roomId,
       clerkId,
       autoMute: userSettings?.social?.autoMuteMicOnJoin !== false,
-    }).catch((err) => console.warn('Join room error:', err));
+    }).catch((err) => console.warn('[LiveRoomModal] Join room error:', err));
 
     return () => {
+      console.log(`%c[LiveRoomModal] Leaving room ${roomId}`, 'color: #f87171; font-weight: bold;');
       leaveRoomMutation({
         roomId,
         clerkId,

@@ -7,12 +7,25 @@ const ICE_SERVERS: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
   ],
 };
 
 const STORAGE_INPUT_KEY = 'seshnx_audio_input_device';
 const STORAGE_OUTPUT_KEY = 'seshnx_audio_output_device';
 const STORAGE_STUDIO_MODE_KEY = 'seshnx_studio_audio_mode';
+
+// Debug logger helper with color styling
+const logAudio = (category: string, message: string, data?: any) => {
+  const badgeStyle = 'background: #7c3aed; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold; font-size: 10px;';
+  const tagStyle = 'color: #06b6d4; font-weight: bold;';
+  if (data !== undefined) {
+    console.log(`%cLiveAudio%c [${category}] ${message}`, badgeStyle, tagStyle, data);
+  } else {
+    console.log(`%cLiveAudio%c [${category}] ${message}`, badgeStyle, tagStyle);
+  }
+};
 
 interface UseLiveSpaceAudioProps {
   roomId: Id<'liveRooms'>;
@@ -79,6 +92,7 @@ export function useLiveSpaceAudio({
 
       setAudioInputs(inputs);
       setAudioOutputs(outputs);
+      logAudio('Devices', `Discovered ${inputs.length} inputs, ${outputs.length} outputs`);
 
       if (selectedAudioInput !== 'default' && !inputs.some((d) => d.deviceId === selectedAudioInput)) {
         if (inputs.length > 0) setSelectedAudioInput(inputs[0].deviceId);
@@ -87,7 +101,7 @@ export function useLiveSpaceAudio({
         if (outputs.length > 0) setSelectedAudioOutput(outputs[0].deviceId);
       }
     } catch (e) {
-      console.warn('Error enumerating audio devices:', e);
+      console.warn('[LiveAudio] Error enumerating audio devices:', e);
     }
   }, [selectedAudioInput, selectedAudioOutput]);
 
@@ -132,34 +146,53 @@ export function useLiveSpaceAudio({
     };
   }, [selectedAudioInput, studioAudioMode]);
 
-  // Attach or replace audio track in a peer connection
+  // Attach or replace audio track in a peer connection with transceiver direction sync
   const syncLocalTrackToPeer = useCallback(
-    (pc: RTCPeerConnection, stream: MediaStream | null) => {
+    async (pc: RTCPeerConnection, stream: MediaStream | null, targetClerkId: string) => {
       const audioTrack = stream ? stream.getAudioTracks()[0] : null;
-      const senders = pc.getSenders();
-      const audioSender = senders.find((s) => s.track?.kind === 'audio' || s.track === null);
+      logAudio(
+        'TrackSync',
+        `Syncing track with peer ${targetClerkId}: isSpeaker=${isSpeaker}, hasTrack=${!!audioTrack}, trackEnabled=${audioTrack?.enabled}`
+      );
 
-      if (audioTrack) {
-        if (audioSender) {
-          if (audioSender.track !== audioTrack) {
-            audioSender.replaceTrack(audioTrack).catch((err) => {
-              console.warn('Error replacing audio track:', err);
+      // Find existing audio transceiver
+      let audioTransceiver = pc
+        .getTransceivers()
+        .find((t) => t.receiver.track.kind === 'audio' || t.sender.track?.kind === 'audio');
+
+      if (isSpeaker && audioTrack) {
+        if (audioTransceiver) {
+          logAudio('TrackSync', `Updating audio transceiver for ${targetClerkId} to sendrecv`);
+          if (audioTransceiver.direction !== 'sendrecv') {
+            audioTransceiver.direction = 'sendrecv';
+          }
+          if (audioTransceiver.sender.track !== audioTrack) {
+            await audioTransceiver.sender.replaceTrack(audioTrack).catch((err) => {
+              console.warn('[LiveAudio] replaceTrack error:', err);
             });
           }
         } else {
+          logAudio('TrackSync', `Adding new audio track for ${targetClerkId}`);
           try {
             pc.addTrack(audioTrack, stream!);
           } catch (err) {
-            console.warn('Error adding track to peer:', err);
+            console.warn('[LiveAudio] addTrack error:', err);
           }
         }
       } else {
-        if (audioSender && audioSender.track) {
-          audioSender.replaceTrack(null).catch(() => {});
+        // Listener mode: set to recvonly
+        if (audioTransceiver) {
+          logAudio('TrackSync', `Setting audio transceiver for ${targetClerkId} to recvonly`);
+          if (audioTransceiver.direction !== 'recvonly') {
+            audioTransceiver.direction = 'recvonly';
+          }
+          if (audioTransceiver.sender.track) {
+            await audioTransceiver.sender.replaceTrack(null).catch(() => {});
+          }
         }
       }
     },
-    []
+    [isSpeaker]
   );
 
   // Helper to create or get PeerConnection with Perfect Negotiation
@@ -170,34 +203,38 @@ export function useLiveSpaceAudio({
         return pc;
       }
 
+      logAudio('PeerInit', `Creating new RTCPeerConnection for target: ${targetClerkId}`);
       pc = new RTCPeerConnection(ICE_SERVERS);
       peerConnections.current.set(targetClerkId, pc);
 
-      // Polite peer if our clerkId is lexicographically greater
       const isPolite = currentClerkId.localeCompare(targetClerkId) > 0;
+      logAudio('PeerInit', `Peer ${targetClerkId} registered. Role: ${isPolite ? 'Polite' : 'Impolite'}`);
 
       // Sync existing local track if available
-      syncLocalTrackToPeer(pc, localAudioStream);
+      syncLocalTrackToPeer(pc, localAudioStream, targetClerkId);
 
       // Handle ICE Candidates
       pc.onicecandidate = (event) => {
         if (event.candidate) {
+          logAudio('ICE', `Local ICE candidate generated for ${targetClerkId}`);
           sendSignalMutation({
             roomId,
             senderClerkId: currentClerkId,
             targetClerkId,
             type: 'ice-candidate',
             payload: JSON.stringify(event.candidate),
-          }).catch(() => {});
+          }).catch((err) => console.warn('[LiveAudio] sendSignal ICE error:', err));
         }
       };
 
       // Perfect Negotiation: On Negotiation Needed
       pc.onnegotiationneeded = async () => {
         try {
+          logAudio('Negotiation', `onnegotiationneeded triggered for ${targetClerkId}`);
           isMakingOffer.current.set(targetClerkId, true);
           await pc!.setLocalDescription();
           if (pc!.localDescription) {
+            logAudio('Negotiation', `Sending offer to ${targetClerkId}`);
             await sendSignalMutation({
               roomId,
               senderClerkId: currentClerkId,
@@ -207,35 +244,69 @@ export function useLiveSpaceAudio({
             });
           }
         } catch (err) {
-          console.warn(`Negotiation error with ${targetClerkId}:`, err);
+          console.warn(`[LiveAudio] Negotiation error with ${targetClerkId}:`, err);
         } finally {
           isMakingOffer.current.set(targetClerkId, false);
         }
       };
 
+      // Connection State Changes
+      pc.onconnectionstatechange = () => {
+        logAudio(
+          'ConnState',
+          `Peer ${targetClerkId} connectionState changed to: %c${pc!.connectionState}`,
+          pc!.connectionState === 'connected' ? 'color: #10b981; font-weight: bold;' : 'color: #f59e0b;'
+        );
+        if (pc!.connectionState === 'failed') {
+          logAudio('ConnState', `Restarting ICE for failed peer ${targetClerkId}`);
+          pc!.restartIce();
+        }
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        logAudio('ICEState', `Peer ${targetClerkId} iceConnectionState: ${pc!.iceConnectionState}`);
+      };
+
+      pc.onsignalingstatechange = () => {
+        logAudio('SignalingState', `Peer ${targetClerkId} signalingState: ${pc!.signalingState}`);
+      };
+
       // Handle incoming remote audio tracks
       pc.ontrack = (event) => {
+        logAudio(
+          'RemoteTrack',
+          `ontrack received from ${targetClerkId}: trackId=${event.track.id}, kind=${event.track.kind}, enabled=${event.track.enabled}`
+        );
+
         const remoteStream = event.streams[0] || new MediaStream([event.track]);
         let audioEl = remoteAudioElements.current.get(targetClerkId);
         if (!audioEl) {
           audioEl = document.createElement('audio');
           audioEl.autoplay = true;
           (audioEl as any).playsInline = true;
+          audioEl.volume = 1.0;
+          audioEl.muted = false;
           audioEl.id = `live-space-audio-${targetClerkId}`;
           document.body.appendChild(audioEl);
           remoteAudioElements.current.set(targetClerkId, audioEl);
+          logAudio('RemoteTrack', `Created DOM audio element for ${targetClerkId}`);
         }
         audioEl.srcObject = remoteStream;
 
         if (selectedAudioOutput && selectedAudioOutput !== 'default' && (audioEl as any).setSinkId) {
           (audioEl as any).setSinkId(selectedAudioOutput).catch((err: any) => {
-            console.warn('Failed to set audio sink ID:', err);
+            console.warn('[LiveAudio] Failed to set audio sink ID:', err);
           });
         }
 
-        audioEl.play().catch((playErr) => {
-          console.warn(`Autoplay blocked for ${targetClerkId}:`, playErr);
-        });
+        audioEl
+          .play()
+          .then(() => {
+            logAudio('RemoteTrack', `Audio playback active for speaker: ${targetClerkId}`);
+          })
+          .catch((playErr) => {
+            console.warn(`[LiveAudio] Autoplay blocked for ${targetClerkId}:`, playErr);
+          });
 
         // Setup remote volume analyzer for visual speaking indicator
         try {
@@ -268,13 +339,7 @@ export function useLiveSpaceAudio({
             checkRemoteAudio();
           }
         } catch (e) {
-          console.warn('Remote audio analyzer setup failed:', e);
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (pc!.connectionState === 'failed') {
-          pc!.restartIce();
+          console.warn('[LiveAudio] Remote audio analyzer setup failed:', e);
         }
       };
 
@@ -288,8 +353,10 @@ export function useLiveSpaceAudio({
     let active = true;
 
     async function initMicrophone() {
+      logAudio('Mic', `initMicrophone called: isSpeaker=${isSpeaker}, isMuted=${isMuted}`);
       if (!isSpeaker) {
         if (localAudioStream) {
+          logAudio('Mic', 'Stopping microphone tracks because user is not a speaker');
           localAudioStream.getTracks().forEach((t) => t.stop());
           setLocalAudioStream(null);
         }
@@ -300,6 +367,7 @@ export function useLiveSpaceAudio({
 
       try {
         const constraints = getAudioConstraints();
+        logAudio('Mic', 'Requesting getUserMedia with constraints:', constraints);
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: constraints,
           video: false,
@@ -309,6 +377,9 @@ export function useLiveSpaceAudio({
           stream.getTracks().forEach((t) => t.stop());
           return;
         }
+
+        const audioTrack = stream.getAudioTracks()[0];
+        logAudio('Mic', `Microphone stream acquired! Track: ${audioTrack?.label}, enabled=${!isMuted}`);
 
         // Apply initial mute state
         stream.getAudioTracks().forEach((track) => {
@@ -369,10 +440,10 @@ export function useLiveSpaceAudio({
             analyzeAudio();
           }
         } catch (audioErr) {
-          console.warn('AudioContext volume meter setup failed:', audioErr);
+          console.warn('[LiveAudio] AudioContext volume meter setup failed:', audioErr);
         }
       } catch (err: any) {
-        console.error('Microphone access error:', err);
+        console.error('[LiveAudio] Microphone access error:', err);
         setPermissionError(err.message || 'Microphone access denied');
       }
     }
@@ -392,14 +463,16 @@ export function useLiveSpaceAudio({
 
   // 2. Propagate local audio stream changes to all existing peer connections immediately
   useEffect(() => {
-    peerConnections.current.forEach((pc) => {
-      syncLocalTrackToPeer(pc, localAudioStream);
+    logAudio('TrackPropagate', `Propagating stream update to ${peerConnections.current.size} peer connections`);
+    peerConnections.current.forEach((pc, targetClerkId) => {
+      syncLocalTrackToPeer(pc, localAudioStream, targetClerkId);
     });
   }, [localAudioStream, syncLocalTrackToPeer]);
 
   // 3. Handle mute/unmute state changes
   useEffect(() => {
     if (localAudioStream) {
+      logAudio('MuteState', `Microphone tracks mute set to: ${isMuted}`);
       localAudioStream.getAudioTracks().forEach((track) => {
         track.enabled = !isMuted;
       });
@@ -428,18 +501,25 @@ export function useLiveSpaceAudio({
   useEffect(() => {
     if (!participants || !currentClerkId) return;
 
+    logAudio(
+      'ParticipantsSync',
+      `Syncing ${participants.length} room participants:`,
+      participants.map((p) => `${p.name || p.clerkId} (${p.role})`)
+    );
+
     const currentParticipantClerks = new Set(participants.map((p) => p.clerkId));
 
     // Ensure connection exists for all other participants
     participants.forEach((p) => {
       if (p.clerkId === currentClerkId) return;
       const pc = getOrCreatePeerConnection(p.clerkId);
-      syncLocalTrackToPeer(pc, localAudioStream);
+      syncLocalTrackToPeer(pc, localAudioStream, p.clerkId);
     });
 
     // Cleanup disconnected participants
     peerConnections.current.forEach((pc, clerkId) => {
       if (!currentParticipantClerks.has(clerkId)) {
+        logAudio('Cleanup', `Closing peer connection for departed participant: ${clerkId}`);
         pc.close();
         peerConnections.current.delete(clerkId);
         isMakingOffer.current.delete(clerkId);
@@ -480,6 +560,8 @@ export function useLiveSpaceAudio({
       const senderId = sig.senderClerkId;
       if (senderId === currentClerkId) return;
 
+      logAudio('SignalIn', `Received [${sig.type}] from ${senderId}`);
+
       const pc = getOrCreatePeerConnection(senderId);
       const isPolite = currentClerkId.localeCompare(senderId) > 0;
 
@@ -491,19 +573,21 @@ export function useLiveSpaceAudio({
 
           isIgnoringOffer.current.set(senderId, !isPolite && offerCollision);
           if (isIgnoringOffer.current.get(senderId)) {
-            console.log(`[WebRTC] Glare collision: Impolite peer ignoring offer from ${senderId}`);
+            logAudio('Negotiation', `Glare collision: Impolite peer ignoring offer from ${senderId}`);
             return;
           }
 
           if (offerCollision && isPolite) {
-            console.log(`[WebRTC] Glare collision: Polite peer rolling back for ${senderId}`);
+            logAudio('Negotiation', `Glare collision: Polite peer rolling back local offer for ${senderId}`);
             await pc.setLocalDescription({ type: 'rollback' });
           }
 
+          logAudio('Negotiation', `Setting remote description (offer) from ${senderId}`);
           await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
           // Drain queued ICE candidates
           const queued = candidateQueues.current.get(senderId) || [];
+          logAudio('ICE', `Draining ${queued.length} queued ICE candidates for ${senderId}`);
           for (const cand of queued) {
             await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
           }
@@ -512,6 +596,7 @@ export function useLiveSpaceAudio({
           // Create & send answer
           await pc.setLocalDescription();
           if (pc.localDescription) {
+            logAudio('Negotiation', `Sending answer to ${senderId}`);
             await sendSignalMutation({
               roomId,
               senderClerkId: currentClerkId,
@@ -522,11 +607,13 @@ export function useLiveSpaceAudio({
           }
         } else if (sig.type === 'answer') {
           const answer = JSON.parse(sig.payload);
+          logAudio('Negotiation', `Processing answer from ${senderId}. SignalingState=${pc.signalingState}`);
           if (pc.signalingState === 'have-local-offer') {
             await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
             // Drain queued ICE candidates
             const queued = candidateQueues.current.get(senderId) || [];
+            logAudio('ICE', `Draining ${queued.length} queued ICE candidates after answer from ${senderId}`);
             for (const cand of queued) {
               await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
             }
@@ -539,11 +626,12 @@ export function useLiveSpaceAudio({
           if (pc.remoteDescription && pc.remoteDescription.type) {
             await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) => {
               if (!isIgnoringOffer.current.get(senderId)) {
-                console.warn(`ICE candidate error for ${senderId}:`, err);
+                console.warn(`[LiveAudio] ICE candidate error for ${senderId}:`, err);
               }
             });
           } else {
             // Queue candidate until remote description is set
+            logAudio('ICE', `Queueing ICE candidate for ${senderId} (no remoteDescription yet)`);
             if (!candidateQueues.current.has(senderId)) {
               candidateQueues.current.set(senderId, []);
             }
@@ -551,7 +639,7 @@ export function useLiveSpaceAudio({
           }
         }
       } catch (err) {
-        console.warn(`Failed to process WebRTC signal (${sig.type}) from ${senderId}:`, err);
+        console.warn(`[LiveAudio] Failed to process WebRTC signal (${sig.type}) from ${senderId}:`, err);
       }
     });
   }, [incomingSignals, currentClerkId, getOrCreatePeerConnection, roomId, sendSignalMutation]);
@@ -577,8 +665,8 @@ export function useLiveSpaceAudio({
         if (newAudioTrack) {
           newAudioTrack.enabled = !isMuted;
 
-          peerConnections.current.forEach((pc) => {
-            syncLocalTrackToPeer(pc, newStream);
+          peerConnections.current.forEach((pc, targetClerkId) => {
+            syncLocalTrackToPeer(pc, newStream, targetClerkId);
           });
 
           if (localAudioStream) {
@@ -587,7 +675,7 @@ export function useLiveSpaceAudio({
           setLocalAudioStream(newStream);
         }
       } catch (err) {
-        console.error('Error switching audio input interface:', err);
+        console.error('[LiveAudio] Error switching audio input interface:', err);
       }
     },
     [isSpeaker, isMuted, getAudioConstraints, localAudioStream, syncLocalTrackToPeer]
@@ -601,7 +689,7 @@ export function useLiveSpaceAudio({
       remoteAudioElements.current.forEach((audioEl) => {
         if ((audioEl as any).setSinkId) {
           (audioEl as any).setSinkId(deviceId !== 'default' ? deviceId : '').catch((err: any) => {
-            console.warn('Failed to route audio to selected device:', err);
+            console.warn('[LiveAudio] Failed to route audio to selected device:', err);
           });
         }
       });
@@ -637,13 +725,14 @@ export function useLiveSpaceAudio({
       osc.start();
       osc.stop(ctx.currentTime + 0.45);
     } catch (e) {
-      console.warn('Audio test chime failed:', e);
+      console.warn('[LiveAudio] Audio test chime failed:', e);
     }
   }, []);
 
   // 9. Cleanup on unmount or room leave
   useEffect(() => {
     return () => {
+      logAudio('Cleanup', 'Live audio space unmounting: Cleaning up all audio and WebRTC resources');
       if (localAudioStream) {
         localAudioStream.getTracks().forEach((t) => t.stop());
       }
@@ -689,4 +778,5 @@ export function useLiveSpaceAudio({
     refreshAudioDevices,
   };
 }
+
 
