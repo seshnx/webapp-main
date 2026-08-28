@@ -94,6 +94,7 @@ export default function LiveRoomModal({
   const {
     isSpeaking,
     speakingVolume,
+    remoteSpeakingUsers,
     permissionError,
     audioInputs,
     audioOutputs,
@@ -380,7 +381,10 @@ export default function LiveRoomModal({
 
                 <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 sm:gap-4">
                   {speakers.map((spk) => {
-                    const isSpkSpeaking = spk.clerkId === clerkId ? isSpeaking : false;
+                    const isSpkSpeaking =
+                      spk.clerkId === clerkId
+                        ? isSpeaking
+                        : (remoteSpeakingUsers[spk.clerkId] ?? false);
                     return (
                       <div key={spk._id} className="flex flex-col items-center gap-1.5 relative group">
                         <div

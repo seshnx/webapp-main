@@ -19,7 +19,7 @@ interface UseLiveSpaceAudioProps {
   currentClerkId: string;
   isSpeaker: boolean;
   isMuted: boolean;
-  participants: Array<{ clerkId: string; role: string }>;
+  participants: Array<{ clerkId: string; role: string; name?: string }>;
 }
 
 export function useLiveSpaceAudio({
@@ -32,6 +32,7 @@ export function useLiveSpaceAudio({
   const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [speakingVolume, setSpeakingVolume] = useState(0); // 0 to 100
+  const [remoteSpeakingUsers, setRemoteSpeakingUsers] = useState<Record<string, boolean>>({});
   const [permissionError, setPermissionError] = useState<string | null>(null);
 
   // Audio Device Manager State
@@ -49,14 +50,21 @@ export function useLiveSpaceAudio({
   const [inputGain, setInputGain] = useState<number>(1.0); // 0.0 to 2.0
   const [isMonitoring, setIsMonitoring] = useState<boolean>(false);
 
+  // WebRTC refs
   const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
   const remoteAudioElements = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const candidateQueues = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
+  const isMakingOffer = useRef<Map<string, boolean>>(new Map());
+  const isIgnoringOffer = useRef<Map<string, boolean>>(new Map());
+  const processedSignals = useRef<Set<string>>(new Set());
+
+  // Audio Processing Refs
   const audioContextRef = useRef<AudioContext | null>(null);
   const gainNodeRef = useRef<GainNode | null>(null);
   const monitorNodeRef = useRef<GainNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
-  const processedSignals = useRef<Set<string>>(new Set());
+  const remoteAnalysersRef = useRef<Map<string, { ctx: AudioContext; analyser: AnalyserNode }>>(new Map());
 
   const sendSignalMutation = useSendLiveRoomSignal();
   const incomingSignals = useLiveRoomSignals(roomId, currentClerkId);
@@ -72,7 +80,6 @@ export function useLiveSpaceAudio({
       setAudioInputs(inputs);
       setAudioOutputs(outputs);
 
-      // Validate selected devices exist
       if (selectedAudioInput !== 'default' && !inputs.some((d) => d.deviceId === selectedAudioInput)) {
         if (inputs.length > 0) setSelectedAudioInput(inputs[0].deviceId);
       }
@@ -84,7 +91,7 @@ export function useLiveSpaceAudio({
     }
   }, [selectedAudioInput, selectedAudioOutput]);
 
-  // Listen for device changes (e.g. plugging in Scarlett/Apollo interface or USB headset)
+  // Listen for device changes
   useEffect(() => {
     refreshAudioDevices();
     if (navigator.mediaDevices?.addEventListener) {
@@ -104,7 +111,6 @@ export function useLiveSpaceAudio({
     }
 
     if (studioAudioMode) {
-      // Pro Studio Mode: Raw full-frequency audio for XLR/Interfaces/Instruments
       return {
         ...base,
         echoCancellation: false,
@@ -116,7 +122,6 @@ export function useLiveSpaceAudio({
       };
     }
 
-    // Voice Communication Mode: Standard WebRTC AEC/NS
     return {
       ...base,
       echoCancellation: true,
@@ -126,6 +131,157 @@ export function useLiveSpaceAudio({
       sampleRate: { ideal: 48000 },
     };
   }, [selectedAudioInput, studioAudioMode]);
+
+  // Attach or replace audio track in a peer connection
+  const syncLocalTrackToPeer = useCallback(
+    (pc: RTCPeerConnection, stream: MediaStream | null) => {
+      const audioTrack = stream ? stream.getAudioTracks()[0] : null;
+      const senders = pc.getSenders();
+      const audioSender = senders.find((s) => s.track?.kind === 'audio' || s.track === null);
+
+      if (audioTrack) {
+        if (audioSender) {
+          if (audioSender.track !== audioTrack) {
+            audioSender.replaceTrack(audioTrack).catch((err) => {
+              console.warn('Error replacing audio track:', err);
+            });
+          }
+        } else {
+          try {
+            pc.addTrack(audioTrack, stream!);
+          } catch (err) {
+            console.warn('Error adding track to peer:', err);
+          }
+        }
+      } else {
+        if (audioSender && audioSender.track) {
+          audioSender.replaceTrack(null).catch(() => {});
+        }
+      }
+    },
+    []
+  );
+
+  // Helper to create or get PeerConnection with Perfect Negotiation
+  const getOrCreatePeerConnection = useCallback(
+    (targetClerkId: string): RTCPeerConnection => {
+      let pc = peerConnections.current.get(targetClerkId);
+      if (pc && pc.connectionState !== 'closed') {
+        return pc;
+      }
+
+      pc = new RTCPeerConnection(ICE_SERVERS);
+      peerConnections.current.set(targetClerkId, pc);
+
+      // Polite peer if our clerkId is lexicographically greater
+      const isPolite = currentClerkId.localeCompare(targetClerkId) > 0;
+
+      // Sync existing local track if available
+      syncLocalTrackToPeer(pc, localAudioStream);
+
+      // Handle ICE Candidates
+      pc.onicecandidate = (event) => {
+        if (event.candidate) {
+          sendSignalMutation({
+            roomId,
+            senderClerkId: currentClerkId,
+            targetClerkId,
+            type: 'ice-candidate',
+            payload: JSON.stringify(event.candidate),
+          }).catch(() => {});
+        }
+      };
+
+      // Perfect Negotiation: On Negotiation Needed
+      pc.onnegotiationneeded = async () => {
+        try {
+          isMakingOffer.current.set(targetClerkId, true);
+          await pc!.setLocalDescription();
+          if (pc!.localDescription) {
+            await sendSignalMutation({
+              roomId,
+              senderClerkId: currentClerkId,
+              targetClerkId,
+              type: 'offer',
+              payload: JSON.stringify(pc!.localDescription),
+            });
+          }
+        } catch (err) {
+          console.warn(`Negotiation error with ${targetClerkId}:`, err);
+        } finally {
+          isMakingOffer.current.set(targetClerkId, false);
+        }
+      };
+
+      // Handle incoming remote audio tracks
+      pc.ontrack = (event) => {
+        const remoteStream = event.streams[0] || new MediaStream([event.track]);
+        let audioEl = remoteAudioElements.current.get(targetClerkId);
+        if (!audioEl) {
+          audioEl = document.createElement('audio');
+          audioEl.autoplay = true;
+          (audioEl as any).playsInline = true;
+          audioEl.id = `live-space-audio-${targetClerkId}`;
+          document.body.appendChild(audioEl);
+          remoteAudioElements.current.set(targetClerkId, audioEl);
+        }
+        audioEl.srcObject = remoteStream;
+
+        if (selectedAudioOutput && selectedAudioOutput !== 'default' && (audioEl as any).setSinkId) {
+          (audioEl as any).setSinkId(selectedAudioOutput).catch((err: any) => {
+            console.warn('Failed to set audio sink ID:', err);
+          });
+        }
+
+        audioEl.play().catch((playErr) => {
+          console.warn(`Autoplay blocked for ${targetClerkId}:`, playErr);
+        });
+
+        // Setup remote volume analyzer for visual speaking indicator
+        try {
+          const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+          if (AudioContextClass) {
+            const ctx = new AudioContextClass();
+            const source = ctx.createMediaStreamSource(remoteStream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 256;
+            source.connect(analyser);
+
+            remoteAnalysersRef.current.set(targetClerkId, { ctx, analyser });
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const checkRemoteAudio = () => {
+              if (!peerConnections.current.has(targetClerkId)) return;
+              analyser.getByteFrequencyData(dataArray);
+              let sum = 0;
+              for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+              const avg = sum / dataArray.length;
+              const isRemSpeaking = avg > 8;
+
+              setRemoteSpeakingUsers((prev) => {
+                if (prev[targetClerkId] === isRemSpeaking) return prev;
+                return { ...prev, [targetClerkId]: isRemSpeaking };
+              });
+
+              requestAnimationFrame(checkRemoteAudio);
+            };
+            checkRemoteAudio();
+          }
+        } catch (e) {
+          console.warn('Remote audio analyzer setup failed:', e);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc!.connectionState === 'failed') {
+          pc!.restartIce();
+        }
+      };
+
+      return pc;
+    },
+    [currentClerkId, localAudioStream, roomId, selectedAudioOutput, sendSignalMutation, syncLocalTrackToPeer]
+  );
 
   // 1. Manage local microphone stream for speakers
   useEffect(() => {
@@ -137,6 +293,8 @@ export function useLiveSpaceAudio({
           localAudioStream.getTracks().forEach((t) => t.stop());
           setLocalAudioStream(null);
         }
+        setIsSpeaking(false);
+        setSpeakingVolume(0);
         return;
       }
 
@@ -169,18 +327,15 @@ export function useLiveSpaceAudio({
             audioContextRef.current = ctx;
 
             const source = ctx.createMediaStreamSource(stream);
-            
-            // Gain control
+
             const gainNode = ctx.createGain();
             gainNode.gain.value = inputGain;
             gainNodeRef.current = gainNode;
 
-            // Direct Monitor Node
             const monitorNode = ctx.createGain();
             monitorNode.gain.value = isMonitoring ? 1.0 : 0.0;
             monitorNodeRef.current = monitorNode;
 
-            // Analyser for volume metering
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 256;
             analyser.smoothingTimeConstant = 0.4;
@@ -233,23 +388,16 @@ export function useLiveSpaceAudio({
         audioContextRef.current.close().catch(() => {});
       }
     };
-  }, [isSpeaker, selectedAudioInput, studioAudioMode]);
+  }, [isSpeaker, selectedAudioInput, studioAudioMode, getAudioConstraints, refreshAudioDevices]);
 
-  // Handle Input Gain changes
+  // 2. Propagate local audio stream changes to all existing peer connections immediately
   useEffect(() => {
-    if (gainNodeRef.current) {
-      gainNodeRef.current.gain.value = inputGain;
-    }
-  }, [inputGain]);
+    peerConnections.current.forEach((pc) => {
+      syncLocalTrackToPeer(pc, localAudioStream);
+    });
+  }, [localAudioStream, syncLocalTrackToPeer]);
 
-  // Handle Direct Monitoring changes
-  useEffect(() => {
-    if (monitorNodeRef.current) {
-      monitorNodeRef.current.gain.value = isMonitoring ? 1.0 : 0.0;
-    }
-  }, [isMonitoring]);
-
-  // 2. Handle mute/unmute state changes
+  // 3. Handle mute/unmute state changes
   useEffect(() => {
     if (localAudioStream) {
       localAudioStream.getAudioTracks().forEach((track) => {
@@ -262,64 +410,153 @@ export function useLiveSpaceAudio({
     }
   }, [isMuted, localAudioStream]);
 
-  // 3. Helper to create or get PeerConnection
-  const getOrCreatePeerConnection = useCallback(
-    (targetClerkId: string): RTCPeerConnection => {
-      let pc = peerConnections.current.get(targetClerkId);
-      if (!pc || pc.connectionState === 'closed') {
-        pc = new RTCPeerConnection(ICE_SERVERS);
+  // 4. Handle Input Gain changes
+  useEffect(() => {
+    if (gainNodeRef.current) {
+      gainNodeRef.current.gain.value = inputGain;
+    }
+  }, [inputGain]);
 
-        // Add local audio tracks if we are a speaker
-        if (localAudioStream) {
-          localAudioStream.getAudioTracks().forEach((track) => {
-            pc!.addTrack(track, localAudioStream);
-          });
+  // 5. Handle Direct Monitoring changes
+  useEffect(() => {
+    if (monitorNodeRef.current) {
+      monitorNodeRef.current.gain.value = isMonitoring ? 1.0 : 0.0;
+    }
+  }, [isMonitoring]);
+
+  // 6. Synchronize PeerConnections for all participants in room
+  useEffect(() => {
+    if (!participants || !currentClerkId) return;
+
+    const currentParticipantClerks = new Set(participants.map((p) => p.clerkId));
+
+    // Ensure connection exists for all other participants
+    participants.forEach((p) => {
+      if (p.clerkId === currentClerkId) return;
+      const pc = getOrCreatePeerConnection(p.clerkId);
+      syncLocalTrackToPeer(pc, localAudioStream);
+    });
+
+    // Cleanup disconnected participants
+    peerConnections.current.forEach((pc, clerkId) => {
+      if (!currentParticipantClerks.has(clerkId)) {
+        pc.close();
+        peerConnections.current.delete(clerkId);
+        isMakingOffer.current.delete(clerkId);
+        isIgnoringOffer.current.delete(clerkId);
+        candidateQueues.current.delete(clerkId);
+
+        const el = remoteAudioElements.current.get(clerkId);
+        if (el) {
+          el.srcObject = null;
+          el.remove();
+          remoteAudioElements.current.delete(clerkId);
         }
 
-        // Send local ICE candidates via Convex
-        pc.onicecandidate = (event) => {
-          if (event.candidate) {
-            sendSignalMutation({
+        const remCtx = remoteAnalysersRef.current.get(clerkId);
+        if (remCtx) {
+          remCtx.ctx.close().catch(() => {});
+          remoteAnalysersRef.current.delete(clerkId);
+        }
+
+        setRemoteSpeakingUsers((prev) => {
+          const next = { ...prev };
+          delete next[clerkId];
+          return next;
+        });
+      }
+    });
+  }, [participants, currentClerkId, getOrCreatePeerConnection, localAudioStream, syncLocalTrackToPeer]);
+
+  // 7. Process incoming WebRTC signals with Perfect Negotiation & Candidate Queueing
+  useEffect(() => {
+    if (!incomingSignals) return;
+
+    incomingSignals.forEach(async (sig: any) => {
+      const signalId = `${sig._id || sig.createdAt}-${sig.senderClerkId}-${sig.type}`;
+      if (processedSignals.current.has(signalId)) return;
+      processedSignals.current.add(signalId);
+
+      const senderId = sig.senderClerkId;
+      if (senderId === currentClerkId) return;
+
+      const pc = getOrCreatePeerConnection(senderId);
+      const isPolite = currentClerkId.localeCompare(senderId) > 0;
+
+      try {
+        if (sig.type === 'offer') {
+          const offer = JSON.parse(sig.payload);
+          const offerCollision =
+            isMakingOffer.current.get(senderId) || pc.signalingState !== 'stable';
+
+          isIgnoringOffer.current.set(senderId, !isPolite && offerCollision);
+          if (isIgnoringOffer.current.get(senderId)) {
+            console.log(`[WebRTC] Glare collision: Impolite peer ignoring offer from ${senderId}`);
+            return;
+          }
+
+          if (offerCollision && isPolite) {
+            console.log(`[WebRTC] Glare collision: Polite peer rolling back for ${senderId}`);
+            await pc.setLocalDescription({ type: 'rollback' });
+          }
+
+          await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+          // Drain queued ICE candidates
+          const queued = candidateQueues.current.get(senderId) || [];
+          for (const cand of queued) {
+            await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+          }
+          candidateQueues.current.delete(senderId);
+
+          // Create & send answer
+          await pc.setLocalDescription();
+          if (pc.localDescription) {
+            await sendSignalMutation({
               roomId,
               senderClerkId: currentClerkId,
-              targetClerkId,
-              type: 'ice-candidate',
-              payload: JSON.stringify(event.candidate),
-            }).catch(() => {});
-          }
-        };
-
-        // Handle incoming remote audio tracks
-        pc.ontrack = (event) => {
-          const remoteStream = event.streams[0] || new MediaStream([event.track]);
-          let audioEl = remoteAudioElements.current.get(targetClerkId);
-          if (!audioEl) {
-            audioEl = document.createElement('audio');
-            audioEl.autoplay = true;
-            audioEl.id = `live-space-audio-${targetClerkId}`;
-            document.body.appendChild(audioEl);
-            remoteAudioElements.current.set(targetClerkId, audioEl);
-          }
-          audioEl.srcObject = remoteStream;
-
-          // Apply selected audio output sink if supported
-          if (selectedAudioOutput && selectedAudioOutput !== 'default' && (audioEl as any).setSinkId) {
-            (audioEl as any).setSinkId(selectedAudioOutput).catch((err: any) => {
-              console.warn('Failed to set audio sink ID:', err);
+              targetClerkId: senderId,
+              type: 'answer',
+              payload: JSON.stringify(pc.localDescription),
             });
           }
+        } else if (sig.type === 'answer') {
+          const answer = JSON.parse(sig.payload);
+          if (pc.signalingState === 'have-local-offer') {
+            await pc.setRemoteDescription(new RTCSessionDescription(answer));
 
-          audioEl.play().catch(() => {});
-        };
+            // Drain queued ICE candidates
+            const queued = candidateQueues.current.get(senderId) || [];
+            for (const cand of queued) {
+              await pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
+            }
+            candidateQueues.current.delete(senderId);
+          }
+        } else if (sig.type === 'ice-candidate') {
+          const candidate = JSON.parse(sig.payload);
+          if (!candidate) return;
 
-        peerConnections.current.set(targetClerkId, pc);
+          if (pc.remoteDescription && pc.remoteDescription.type) {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate)).catch((err) => {
+              if (!isIgnoringOffer.current.get(senderId)) {
+                console.warn(`ICE candidate error for ${senderId}:`, err);
+              }
+            });
+          } else {
+            // Queue candidate until remote description is set
+            if (!candidateQueues.current.has(senderId)) {
+              candidateQueues.current.set(senderId, []);
+            }
+            candidateQueues.current.get(senderId)!.push(candidate);
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to process WebRTC signal (${sig.type}) from ${senderId}:`, err);
       }
-      return pc;
-    },
-    [localAudioStream, roomId, currentClerkId, sendSignalMutation, selectedAudioOutput]
-  );
+    });
+  }, [incomingSignals, currentClerkId, getOrCreatePeerConnection, roomId, sendSignalMutation]);
 
-  // 4. Switch audio input device without dropping peers
+  // 8. Device management helpers
   const changeAudioInput = useCallback(
     async (deviceId: string) => {
       setSelectedAudioInput(deviceId);
@@ -340,16 +577,10 @@ export function useLiveSpaceAudio({
         if (newAudioTrack) {
           newAudioTrack.enabled = !isMuted;
 
-          // Seamlessly hot-swap track across all existing WebRTC connections
           peerConnections.current.forEach((pc) => {
-            pc.getSenders().forEach((sender) => {
-              if (sender.track && sender.track.kind === 'audio') {
-                sender.replaceTrack(newAudioTrack).catch(console.error);
-              }
-            });
+            syncLocalTrackToPeer(pc, newStream);
           });
 
-          // Stop old track
           if (localAudioStream) {
             localAudioStream.getTracks().forEach((t) => t.stop());
           }
@@ -359,10 +590,9 @@ export function useLiveSpaceAudio({
         console.error('Error switching audio input interface:', err);
       }
     },
-    [isSpeaker, isMuted, getAudioConstraints, localAudioStream]
+    [isSpeaker, isMuted, getAudioConstraints, localAudioStream, syncLocalTrackToPeer]
   );
 
-  // 5. Switch audio output device (e.g. Scarlett Out, Headphone Out, Studio Monitors)
   const changeAudioOutput = useCallback(
     async (deviceId: string) => {
       setSelectedAudioOutput(deviceId);
@@ -379,23 +609,21 @@ export function useLiveSpaceAudio({
     []
   );
 
-  // 6. Toggle Pro Studio Audio Mode (48kHz Uncompressed / Zero Voice Gating)
   const toggleStudioAudioMode = useCallback(async () => {
     const nextMode = !studioAudioMode;
     setStudioAudioMode(nextMode);
     localStorage.setItem(STORAGE_STUDIO_MODE_KEY, String(nextMode));
   }, [studioAudioMode]);
 
-  // 7. Output test chime for audio interface / monitor testing
   const testSound = useCallback(() => {
     try {
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
       if (!AudioContextClass) return;
       const ctx = new AudioContextClass();
-      
+
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      
+
       osc.type = 'sine';
       osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
       osc.frequency.exponentialRampToValueAtTime(880, ctx.currentTime + 0.15); // A5
@@ -413,75 +641,7 @@ export function useLiveSpaceAudio({
     }
   }, []);
 
-  // 8. Initiate WebRTC Offers to all other participants when speaker stream is ready
-  useEffect(() => {
-    if (!isSpeaker || !localAudioStream || !participants) return;
-
-    participants.forEach(async (p) => {
-      if (p.clerkId === currentClerkId) return;
-
-      try {
-        const pc = getOrCreatePeerConnection(p.clerkId);
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-
-        await sendSignalMutation({
-          roomId,
-          senderClerkId: currentClerkId,
-          targetClerkId: p.clerkId,
-          type: 'offer',
-          payload: JSON.stringify(offer),
-        });
-      } catch (err) {
-        console.warn(`WebRTC offer creation failed for ${p.clerkId}:`, err);
-      }
-    });
-  }, [isSpeaker, localAudioStream, participants, currentClerkId, roomId, getOrCreatePeerConnection, sendSignalMutation]);
-
-  // 9. Process incoming WebRTC signals
-  useEffect(() => {
-    if (!incomingSignals) return;
-
-    incomingSignals.forEach(async (sig: any) => {
-      const signalId = `${sig._id || sig.createdAt}-${sig.senderClerkId}-${sig.type}`;
-      if (processedSignals.current.has(signalId)) return;
-      processedSignals.current.add(signalId);
-
-      const senderId = sig.senderClerkId;
-      const pc = getOrCreatePeerConnection(senderId);
-
-      try {
-        if (sig.type === 'offer') {
-          const offer = JSON.parse(sig.payload);
-          await pc.setRemoteDescription(new RTCSessionDescription(offer));
-          const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-
-          await sendSignalMutation({
-            roomId,
-            senderClerkId: currentClerkId,
-            targetClerkId: senderId,
-            type: 'answer',
-            payload: JSON.stringify(answer),
-          });
-        } else if (sig.type === 'answer') {
-          const answer = JSON.parse(sig.payload);
-          if (pc.signalingState !== 'stable') {
-            await pc.setRemoteDescription(new RTCSessionDescription(answer));
-          }
-        } else if (sig.type === 'ice-candidate') {
-          const candidate = JSON.parse(sig.payload);
-          if (pc.remoteDescription) {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          }
-        }
-      } catch (err) {
-        console.warn(`Failed to process WebRTC signal (${sig.type}) from ${senderId}:`, err);
-      }
-    });
-  }, [incomingSignals, getOrCreatePeerConnection, currentClerkId, roomId, sendSignalMutation]);
-
-  // 10. Cleanup on unmount or room leave
+  // 9. Cleanup on unmount or room leave
   useEffect(() => {
     return () => {
       if (localAudioStream) {
@@ -489,12 +649,20 @@ export function useLiveSpaceAudio({
       }
       peerConnections.current.forEach((pc) => pc.close());
       peerConnections.current.clear();
+      candidateQueues.current.clear();
+      isMakingOffer.current.clear();
+      isIgnoringOffer.current.clear();
 
       remoteAudioElements.current.forEach((el) => {
         el.srcObject = null;
         el.remove();
       });
       remoteAudioElements.current.clear();
+
+      remoteAnalysersRef.current.forEach((ctxObj) => {
+        ctxObj.ctx.close().catch(() => {});
+      });
+      remoteAnalysersRef.current.clear();
     };
   }, []);
 
@@ -502,6 +670,7 @@ export function useLiveSpaceAudio({
     localAudioStream,
     isSpeaking,
     speakingVolume,
+    remoteSpeakingUsers,
     permissionError,
     // Device manager features
     audioInputs,
@@ -520,3 +689,4 @@ export function useLiveSpaceAudio({
     refreshAudioDevices,
   };
 }
+
