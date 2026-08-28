@@ -28,48 +28,63 @@ interface ErrorFallbackProps {
 // SENTRY INITIALIZATION
 // =====================================================
 
-// Initialize Sentry if DSN is provided
+// Initialize Sentry if DSN is provided (lightweight first, heavy replays deferred)
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 
 if (sentryDsn) {
+  const integrations: any[] = [
+    Sentry.browserTracingIntegration(),
+    Sentry.extraErrorDataIntegration(),
+    Sentry.captureConsoleIntegration({
+      levels: ['error'],
+    }),
+  ];
+
+  // Defer session replay to idle callback to prevent blocking the initial paint
+  if (typeof window !== 'undefined') {
+    const initReplay = () => {
+      try {
+        const client = Sentry.getClient();
+        if (client) {
+          client.addIntegration(
+            Sentry.replayIntegration({
+              maskAllText: false,
+              blockAllMedia: false,
+            })
+          );
+        }
+      } catch (e) {
+        // Silently fail if replay is not supported
+      }
+    };
+
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(initReplay, { timeout: 2500 });
+    } else {
+      setTimeout(initReplay, 1000);
+    }
+  }
+
   Sentry.init({
     dsn: sentryDsn,
     environment: import.meta.env.MODE || 'development',
-    // Release tracking for better error grouping
     release: import.meta.env.VERCEL_GIT_COMMIT_SHA || 'local-dev',
-    // Only propagate traces to our app origins — explicitly exclude Clerk (clerk.seshnx.com)
     tracePropagationTargets: [
       'localhost',
       'https://seshnx.com',
       'https://app.seshnx.com',
-      // Match other seshnx subdomains but explicitly exclude the 'clerk' subdomain
       /^https:\/\/(?!clerk\.)[a-z0-9-]+\.seshnx\.com/,
       /^https:\/\/webapp-main-.*\.vercel\.app/,
     ],
-    integrations: [
-      Sentry.browserTracingIntegration(),
-      Sentry.replayIntegration({
-        maskAllText: false,
-        blockAllMedia: false,
-      }),
-      Sentry.extraErrorDataIntegration(),
-      Sentry.captureConsoleIntegration({
-        levels: ['error'],
-      }),
-    ],
-    // Performance Monitoring
+    integrations,
     tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
-    // Session Replay
     replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
     replaysOnErrorSampleRate: 1.0,
-    // Filter out common non-critical errors
     beforeSend(event) {
-      // Filter out localStorage errors (tracking prevention)
       if (event.exception?.values?.[0]?.value?.includes('localStorage') ||
           event.exception?.values?.[0]?.value?.includes('QuotaExceededError')) {
-        return null; // Don't send these errors
+        return null;
       }
-      // Add custom context for all errors
       event.contexts = {
         ...event.contexts,
         app: {
@@ -79,7 +94,6 @@ if (sentryDsn) {
       };
       return event;
     },
-    // Set user ID when available
     initialScope: {
       tags: {
         framework: 'react',
@@ -159,7 +173,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 // =====================================================
 
 /**
- * Removes the loading fallback element after the app has mounted
+ * Removes the loading fallback element immediately after initial paint
  */
 const removeLoader = (): void => {
   const loader = document.getElementById('loading-fallback');
@@ -170,9 +184,14 @@ const removeLoader = (): void => {
         loader.parentNode.removeChild(loader);
       }
       document.body.style.overflow = 'auto';
-    }, 400);
+    }, 300);
   }
 };
 
-// Remove loader after 600ms
-setTimeout(removeLoader, 600);
+// Fade out fallback loader as soon as the DOM paint cycle completes
+if (typeof window !== 'undefined') {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(removeLoader);
+  });
+}
+
