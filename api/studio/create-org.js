@@ -6,7 +6,8 @@
  */
 
 import { createClerkClient } from '@clerk/backend';
-import { fetchQuery, fetchMutation, anyApi } from 'convex/server';
+import { ConvexHttpClient } from 'convex/browser';
+import { anyApi } from 'convex/server';
 
 const SLUG_WORD_COMPACTIONS = {
   recording: 'rec',
@@ -119,6 +120,8 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'Server configuration error: Convex URL missing' });
     }
 
+    const httpClient = new ConvexHttpClient(convexUrl);
+
     // Verify authentication header
     const sessionToken = req.headers['authorization']?.replace('Bearer ', '');
     if (!sessionToken) {
@@ -157,7 +160,7 @@ export default async function handler(req, res) {
     // Resolve caller's Convex user record
     let caller = null;
     try {
-      caller = await fetchQuery(convexUrl, anyApi.users.getUserByClerkId, { clerkId: ownerClerkId });
+      caller = await httpClient.query(anyApi.users.getUserByClerkId, { clerkId: ownerClerkId });
     } catch (userErr) {
       console.error('❌ Failed to look up user in Convex:', userErr);
     }
@@ -170,7 +173,7 @@ export default async function handler(req, res) {
     let studio = null;
     if (studioId) {
       try {
-        studio = await fetchQuery(convexUrl, anyApi.studios.getStudioById, { studioId });
+        studio = await httpClient.query(anyApi.studios.getStudioById, { studioId });
       } catch (idErr) {
         console.warn('⚠️ getStudioById failed, trying fallback by owner:', idErr.message);
       }
@@ -178,7 +181,7 @@ export default async function handler(req, res) {
 
     if (!studio) {
       try {
-        studio = await fetchQuery(convexUrl, anyApi.studios.getStudioByOwner, { ownerId: caller._id });
+        studio = await httpClient.query(anyApi.studios.getStudioByOwner, { ownerId: caller._id });
       } catch (ownerErr) {
         console.error('❌ getStudioByOwner failed:', ownerErr.message);
       }
@@ -236,7 +239,7 @@ export default async function handler(req, res) {
 
     // Link org to Convex studio record
     try {
-      await fetchMutation(convexUrl, anyApi.studios.linkClerkOrg, {
+      await httpClient.mutation(anyApi.studios.linkClerkOrg, {
         clerkId: ownerClerkId,
         studioId: studio._id,
         clerkOrgId: org.id,
