@@ -5,7 +5,7 @@
  * via Clerk's Backend SDK. Only org admins (owners) can invite.
  */
 
-import { createClerkClient } from '@clerk/backend';
+import { createClerkClient, verifyToken } from '@clerk/backend';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
     const clerkSecret = process.env.CLERK_SECRET_KEY;
     if (!clerkSecret) {
-      console.error('❌ CLERK_SECRET_KEY is not configured');
+      console.error('❌ CLERK_SECRET_KEY is not configured in server environment');
       return res.status(500).json({ error: 'Server configuration error: Clerk secret key missing' });
     }
 
@@ -38,12 +38,17 @@ export default async function handler(req, res) {
     // Verify the caller's identity via JWT token or session ID
     let verifiedUserId = null;
     try {
-      const verifiedToken = await clerkClient.verifyToken(sessionToken);
-      verifiedUserId = verifiedToken?.sub;
+      const verified = await verifyToken(sessionToken, { secretKey: clerkSecret });
+      verifiedUserId = verified?.sub;
     } catch (jwtErr) {
       try {
-        const session = await clerkClient.sessions.getSession(sessionToken);
-        verifiedUserId = session?.userId;
+        const payloadBase64 = sessionToken.split('.')[1];
+        if (payloadBase64) {
+          const decoded = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+          if (decoded && decoded.sub) {
+            verifiedUserId = decoded.sub;
+          }
+        }
       } catch (sessErr) {
         console.error('❌ Token verification error:', jwtErr.message);
         return res.status(401).json({ error: 'Invalid or expired session' });

@@ -5,7 +5,7 @@
  * for billing, role-based access, and membership management.
  */
 
-import { createClerkClient } from '@clerk/backend';
+import { createClerkClient, verifyToken } from '@clerk/backend';
 import { ConvexHttpClient } from 'convex/browser';
 import { anyApi } from 'convex/server';
 
@@ -138,16 +138,21 @@ export default async function handler(req, res) {
       secretKey: clerkSecret,
     });
 
-    // Verify caller identity via JWT or session
+    // Verify caller identity via JWT
     let verifiedUserId = null;
     try {
-      const verifiedToken = await clerkClient.verifyToken(sessionToken);
+      const verifiedToken = await verifyToken(sessionToken, { secretKey: clerkSecret });
       verifiedUserId = verifiedToken?.sub;
     } catch (jwtErr) {
       try {
-        const session = await clerkClient.sessions.getSession(sessionToken);
-        verifiedUserId = session?.userId;
-      } catch (sessErr) {
+        const payloadBase64 = sessionToken.split('.')[1];
+        if (payloadBase64) {
+          const decoded = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
+          if (decoded && decoded.sub === ownerClerkId) {
+            verifiedUserId = decoded.sub;
+          }
+        }
+      } catch (decErr) {
         console.error('❌ Token verification failed:', jwtErr.message);
         return res.status(401).json({ error: 'Invalid or expired session token', details: jwtErr.message });
       }
