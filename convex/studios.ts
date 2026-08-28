@@ -871,20 +871,22 @@ export const syncOrgMemberToStaff = mutation({
       return { skipped: true, reason: "user_not_found" };
     }
 
-    // Check if staff record already exists
+    // Check if staff record already exists by userId or email
     const existing = await ctx.db
       .query("studioStaff")
       .withIndex("by_studio", (q) => q.eq("studioId", studio._id))
       .collect();
 
     const existingStaff = existing.find(
-      (s) => s.userId === user._id && !s.deletedAt
+      (s) => (!s.deletedAt && (s.userId === user._id || (s.email && s.email.toLowerCase() === user.email.toLowerCase())))
     );
 
     if (existingStaff) {
-      // Update existing record
+      // Update existing record and link userId
       await ctx.db.patch(existingStaff._id, {
+        userId: user._id,
         role: args.role,
+        invitationStatus: "active",
         isActive: true,
         updatedAt: Date.now(),
       });
@@ -895,7 +897,10 @@ export const syncOrgMemberToStaff = mutation({
     await ctx.db.insert("studioStaff", {
       studioId: studio._id,
       userId: user._id,
+      name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.displayName || user.username,
+      email: user.email,
       role: args.role,
+      invitationStatus: "active",
       isActive: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),

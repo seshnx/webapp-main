@@ -40,6 +40,37 @@ export default function StudioOrgManager({ studioId }: { studioId?: string }) {
     );
   }
 
+  const [creatingOrg, setCreatingOrg] = useState(false);
+
+  const handleCreateOrg = async () => {
+    if (!studioId) return;
+    setCreatingOrg(true);
+    try {
+      const token = await clerk.session?.getToken();
+      const res = await fetch('/api/studio/create-org', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          studioId,
+          slug: clerk.user?.username || 'studio-' + Date.now().toString().slice(-6),
+          ownerClerkId: clerk.user?.id,
+          studioName: clerk.user?.fullName || 'Studio Org',
+        })
+      });
+      const data = await res.json();
+      if (res.ok && data.organizationId) {
+        await setActive?.({ organization: data.organizationId });
+      }
+    } catch (e) {
+      console.error('Failed to create org:', e);
+    } finally {
+      setCreatingOrg(false);
+    }
+  };
+
   // No org memberships at all
   if (!memberships || memberships.length === 0) {
     return (
@@ -48,17 +79,28 @@ export default function StudioOrgManager({ studioId }: { studioId?: string }) {
           <Building2 size={18} className="text-brand-blue" />
           Studio Organization
         </h3>
-        <div className="flex items-start gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
-          <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-              No organization linked
-            </p>
-            <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-              This is created automatically when you set up your studio. If setup was interrupted,
-              go to the Studio tab to complete it.
-            </p>
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800">
+          <div className="flex items-start gap-3">
+            <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                No organization linked
+              </p>
+              <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                Link or create a Clerk Organization for automated staff rosters, role-based access, and client billing.
+              </p>
+            </div>
           </div>
+          {studioId && (
+            <button
+              onClick={handleCreateOrg}
+              disabled={creatingOrg}
+              className="px-4 py-2 bg-brand-blue hover:bg-blue-600 text-white rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-2 disabled:opacity-50"
+            >
+              {creatingOrg ? <Loader2 size={14} className="animate-spin" /> : <Building2 size={14} />}
+              Create Clerk Org
+            </button>
+          )}
         </div>
       </div>
     );

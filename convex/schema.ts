@@ -819,11 +819,20 @@ export default defineSchema({
   // Studio Staff Management
   studioStaff: defineTable({
     studioId: v.id("studios"),
-    userId: v.id("users"), // Linked user account
+    userId: v.optional(v.id("users")), // Linked user account (optional for pending invites)
+
+    // Identity (for invitations or non-registered staff)
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
 
     // Role and permissions
-    role: v.string(), // 'Manager', 'Technician', 'Assistant', 'Receptionist'
+    role: v.string(), // 'Manager', 'Technician', 'Assistant', 'Receptionist', 'Engineer', 'Intern'
     permissions: v.optional(v.array(v.string())), // Additional permissions
+
+    // Clerk Organization Invitation
+    clerkInvitationId: v.optional(v.string()),
+    invitationStatus: v.optional(v.string()), // 'pending' | 'active' | 'declined'
 
     // Availability
     availability: v.optional(v.object({
@@ -837,6 +846,7 @@ export default defineSchema({
     })),
 
     // Compensation
+    payRateType: v.optional(v.string()), // 'hourly' | 'per_session' | 'percentage' | 'salary'
     hourlyRate: v.optional(v.number()),
     salary: v.optional(v.number()),
     commissionRate: v.optional(v.number()), // Percentage
@@ -861,7 +871,8 @@ export default defineSchema({
     .index("by_studio", ["studioId"])
     .index("by_user", ["userId"])
     .index("by_role", ["studioId", "role"])
-    .index("by_active", ["studioId", "isActive"]),
+    .index("by_active", ["studioId", "isActive"])
+    .index("by_email", ["studioId", "email"]),
 
   // Studio Analytics
   studioAnalytics: defineTable({

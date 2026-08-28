@@ -848,7 +848,7 @@ export const deleteClient = mutation({
 // =====================================================
 
 /**
- * Get all staff for a studio
+ * Get all staff for a studio enriched with user details
  */
 export const getStaffByStudio = query({
   args: {
@@ -869,7 +869,35 @@ export const getStaffByStudio = query({
       filtered = filtered.filter((s) => s.isActive);
     }
 
-    return filtered;
+    // Enrich each staff member with linked user profile data if available
+    const enrichedStaff = await Promise.all(
+      filtered.map(async (s) => {
+        let userProfile = null;
+        if (s.userId) {
+          const u = await ctx.db.get(s.userId);
+          if (u) {
+            userProfile = {
+              id: u._id,
+              clerkId: u.clerkId,
+              displayName: u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username,
+              email: u.email,
+              avatarUrl: u.avatarUrl,
+              username: u.username,
+            };
+          }
+        }
+
+        return {
+          ...s,
+          user: userProfile,
+          displayName: s.name || userProfile?.displayName || "Staff Member",
+          displayEmail: s.email || userProfile?.email || "",
+          displayPhone: s.phone || "",
+        };
+      })
+    );
+
+    return enrichedStaff;
   },
 });
 
@@ -917,15 +945,24 @@ export const getStaffByUser = query({
 // =====================================================
 
 /**
- * Create new staff member
+ * Create new staff member with optional Clerk invitation
  */
 export const createStaff = mutation({
   args: {
     clerkId: v.string(),
     studioId: v.id("studios"),
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
     role: v.string(),
+    payRateType: v.optional(v.string()),
+    hourlyRate: v.optional(v.number()),
+    salary: v.optional(v.number()),
+    commissionRate: v.optional(v.number()),
     permissions: v.optional(v.array(v.string())),
+    clerkInvitationId: v.optional(v.string()),
+    invitationStatus: v.optional(v.string()),
     availability: v.optional(v.object({
       monday: v.optional(v.array(v.string())),
       tuesday: v.optional(v.array(v.string())),
@@ -935,55 +972,81 @@ export const createStaff = mutation({
       saturday: v.optional(v.array(v.string())),
       sunday: v.optional(v.array(v.string())),
     })),
-    hourlyRate: v.optional(v.number()),
-    salary: v.optional(v.number()),
-    commissionRate: v.optional(v.number()),
     hireDate: v.optional(v.string()),
     notes: v.optional(v.string()),
     skills: v.optional(v.array(v.string())),
     certifications: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
-    // Get the user by Clerk ID
-    const user = await ctx.db
+    // Get the caller user by Clerk ID
+    const caller = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
       .first();
 
-    if (!user) {
-      throw new Error("User not found");
+    if (!caller) {
+      throw new Error("Caller user not found");
     }
 
     // Verify studio ownership
     const studio = await ctx.db.get(args.studioId);
-    if (!studio || studio.ownerId !== user._id) {
+    if (!studio || studio.ownerId !== caller._id) {
       throw new Error("Not authorized to modify this studio");
     }
 
-    // Check if staff already exists
-    const existingStaff = await ctx.db
-      .query("studioStaff")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .filter((q) => q.eq(q.field("studioId"), args.studioId))
-      .first();
+    // Try finding user by email if userId wasn't directly provided
+    let targetUserId = args.userId;
+    if (!targetUserId && args.email) {
+      const existingUser = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", args.email!))
+        .first();
+      if (existingUser) {
+        targetUserId = existingUser._id;
+      }
+    }
 
-    if (existingStaff) {
-      throw new Error("Staff member already exists for this user");
+    // Check if staff already exists by userId or email
+    if (targetUserId) {
+      const existingStaff = await ctx.db
+        .query("studioStaff")
+        .withIndex("by_user", (q) => q.eq("userId", targetUserId))
+        .filter((q) => q.eq(q.field("studioId"), args.studioId))
+        .first();
+
+      if (existingStaff && !existingStaff.deletedAt) {
+        throw new Error("Staff member already exists for this user");
+      }
+    } else if (args.email) {
+      const existingStaff = await ctx.db
+        .query("studioStaff")
+        .withIndex("by_email", (q) => q.eq("studioId", args.studioId).eq("email", args.email))
+        .first();
+
+      if (existingStaff && !existingStaff.deletedAt) {
+        throw new Error("Staff member already invited with this email");
+      }
     }
 
     const now = Date.now();
 
     const staffId = await ctx.db.insert("studioStaff", {
       studioId: args.studioId,
-      userId: args.userId,
+      userId: targetUserId,
+      name: args.name,
+      email: args.email,
+      phone: args.phone,
       role: args.role,
       permissions: args.permissions,
+      clerkInvitationId: args.clerkInvitationId,
+      invitationStatus: args.invitationStatus || (targetUserId ? "active" : "pending"),
       availability: args.availability,
+      payRateType: args.payRateType || "hourly",
       hourlyRate: args.hourlyRate,
       salary: args.salary,
       commissionRate: args.commissionRate,
       isActive: true,
-      hireDate: args.hireDate,
+      hireDate: args.hireDate || new Date().toISOString().split("T")[0],
       notes: args.notes,
       skills: args.skills,
       certifications: args.certifications,
@@ -1002,8 +1065,13 @@ export const updateStaff = mutation({
   args: {
     clerkId: v.string(),
     staffId: v.id("studioStaff"),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
     role: v.optional(v.string()),
+    payRateType: v.optional(v.string()),
     permissions: v.optional(v.array(v.string())),
+    invitationStatus: v.optional(v.string()),
     availability: v.optional(v.object({
       monday: v.optional(v.array(v.string())),
       tuesday: v.optional(v.array(v.string())),
@@ -1051,8 +1119,13 @@ export const updateStaff = mutation({
       updatedAt: Date.now(),
     };
 
+    if (args.name !== undefined) updateData.name = args.name;
+    if (args.email !== undefined) updateData.email = args.email;
+    if (args.phone !== undefined) updateData.phone = args.phone;
     if (args.role !== undefined) updateData.role = args.role;
+    if (args.payRateType !== undefined) updateData.payRateType = args.payRateType;
     if (args.permissions !== undefined) updateData.permissions = args.permissions;
+    if (args.invitationStatus !== undefined) updateData.invitationStatus = args.invitationStatus;
     if (args.availability !== undefined) updateData.availability = args.availability;
     if (args.hourlyRate !== undefined) updateData.hourlyRate = args.hourlyRate;
     if (args.salary !== undefined) updateData.salary = args.salary;

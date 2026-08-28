@@ -192,6 +192,7 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
     const commonProps = {
       user,
       userData: mergedUserData,
+      studio,
       onUpdate: handleUpdate
     };
 

@@ -1,861 +1,783 @@
-import React, { useState, useEffect } from 'react';
-import { Briefcase, Plus, Search, Mail, Phone, DollarSign, Calendar, Edit2, Trash2, X, Clock, UserCheck } from 'lucide-react';
-import { STAFF_ROLES } from '../../config/constants';
+import React, { useState, useMemo } from 'react';
+import {
+  Briefcase, Plus, Search, Mail, Phone, DollarSign, Calendar,
+  Edit2, Trash2, X, Clock, UserCheck, Shield, Send, CheckCircle2,
+  AlertCircle, Loader2, Building2
+} from 'lucide-react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { useClerk, useAuth } from '@clerk/react';
+import { toast } from 'react-hot-toast';
 
-/**
- * Staff data interface
- */
-interface StaffMember {
-    id: string;
-    name: string;
-    email?: string;
-    phone?: string;
-    role: string;
-    pay_rate_type: 'hourly' | 'per_session' | 'percentage' | 'salary';
-    pay_rate?: number;
-    skills?: string[];
-    status: 'active' | 'inactive' | 'on_leave';
-    hire_date?: string;
-    total_shifts?: number;
-    hours_worked?: number;
-    total_earnings?: number;
-    studio_id?: string;
-    created_at?: string;
-    [key: string]: any;
-}
-
-/**
- * Form data interface for staff
- */
-interface StaffFormData {
-    name: string;
-    email: string;
-    phone: string;
-    role: string;
-    pay_rate_type: string;
-    pay_rate: string;
-    skills: string[];
-    status: string;
-    hire_date: string;
-}
-
-/**
- * Props for StudioStaff component
- */
 export interface StudioStaffProps {
-    user?: any;
-    userData?: any;
+  user?: any;
+  userData?: any;
+  studio?: any;
 }
 
-/**
- * StudioStaff - Staff management and scheduling
- * Phase 1: Full CRUD functionality with search, filter, add, edit, delete
- */
-export default function StudioStaff({ user, userData }: StudioStaffProps) {
-    const [staff, setStaff] = useState<StaffMember[]>([]);
-    const [filteredStaff, setFilteredStaff] = useState<StaffMember[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
-    const [searchTerm, setSearchTerm] = useState<string>('');
-    const [filterRole, setFilterRole] = useState<string>('all');
-    const [filterStatus, setFilterStatus] = useState<string>('all');
-    const [showAddModal, setShowAddModal] = useState<boolean>(false);
-    const [showEditModal, setShowEditModal] = useState<boolean>(false);
-    const [selectedStaff, setSelectedStaff] = useState<StaffMember | null>(null);
-    const [formData, setFormData] = useState<StaffFormData>({
-        name: '',
-        email: '',
-        phone: '',
-        role: 'assistant',
-        pay_rate_type: 'hourly',
-        pay_rate: '',
-        skills: [],
-        status: 'active',
-        hire_date: ''
+interface StaffFormData {
+  name: string;
+  email: string;
+  phone: string;
+  role: string;
+  pay_rate_type: string;
+  pay_rate: string;
+  skills: string[];
+  status: string;
+  hire_date: string;
+  notes: string;
+}
+
+const AVAILABLE_ROLES = [
+  { id: 'Manager', label: 'Studio Manager', clerkRole: 'org:admin', desc: 'Full administrative access to studio operations and team' },
+  { id: 'Engineer', label: 'Audio Engineer', clerkRole: 'org:member', desc: 'Handles recording, mixing, and studio sessions' },
+  { id: 'Producer', label: 'Producer', clerkRole: 'org:member', desc: 'Music production and beat creation' },
+  { id: 'Assistant', label: 'Assistant / Runner', clerkRole: 'org:member', desc: 'Session setup, client support, and studio upkeep' },
+  { id: 'Technician', label: 'Tech / Maintenance', clerkRole: 'org:member', desc: 'Gear repair, calibration, and maintenance' },
+  { id: 'Intern', label: 'Intern', clerkRole: 'org:member', desc: 'Apprenticeship and support duties' },
+];
+
+export default function StudioStaff({ user, userData, studio }: StudioStaffProps) {
+  const clerk = useClerk();
+  const { getToken } = useAuth();
+
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [filterRole, setFilterRole] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [showAddModal, setShowAddModal] = useState<boolean>(false);
+  const [showEditModal, setShowEditModal] = useState<boolean>(false);
+  const [selectedStaff, setSelectedStaff] = useState<any | null>(null);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+
+  const [formData, setFormData] = useState<StaffFormData>({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'Engineer',
+    pay_rate_type: 'hourly',
+    pay_rate: '',
+    skills: [],
+    status: 'active',
+    hire_date: new Date().toISOString().split('T')[0],
+    notes: '',
+  });
+
+  const staffData = useQuery(
+    api.studioManager.getStaffByStudio,
+    studio?._id ? { studioId: studio._id, includeInactive: true } : 'skip'
+  );
+
+  const createStaffMutation = useMutation(api.studioManager.createStaff);
+  const updateStaffMutation = useMutation(api.studioManager.updateStaff);
+  const deleteStaffMutation = useMutation(api.studioManager.deleteStaff);
+
+  const staffList = useMemo(() => staffData || [], [staffData]);
+
+  const filteredStaff = useMemo(() => {
+    return staffList.filter((member: any) => {
+      // Filter by role
+      if (filterRole !== 'all' && member.role?.toLowerCase() !== filterRole.toLowerCase()) {
+        return false;
+      }
+      // Filter by status
+      if (filterStatus !== 'all') {
+        const isPending = member.invitationStatus === 'pending';
+        if (filterStatus === 'pending' && !isPending) return false;
+        if (filterStatus === 'active' && (!member.isActive || isPending)) return false;
+        if (filterStatus === 'inactive' && member.isActive) return false;
+      }
+      // Search
+      if (searchTerm.trim()) {
+        const term = searchTerm.toLowerCase();
+        const nameMatch = member.displayName?.toLowerCase().includes(term);
+        const emailMatch = member.displayEmail?.toLowerCase().includes(term);
+        const roleMatch = member.role?.toLowerCase().includes(term);
+        return nameMatch || emailMatch || roleMatch;
+      }
+      return true;
     });
+  }, [staffList, filterRole, filterStatus, searchTerm]);
 
-    // Fetch staff on mount
-    useEffect(() => {
-        fetchStaff();
-    }, []);
+  // Derived stats
+  const totalStaff = staffList.length;
+  const activeStaff = staffList.filter((s: any) => s.isActive && s.invitationStatus !== 'pending').length;
+  const pendingInvites = staffList.filter((s: any) => s.invitationStatus === 'pending').length;
 
-    // Filter staff based on search and filters
-    useEffect(() => {
-        let filtered = staff;
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      email: '',
+      phone: '',
+      role: 'Engineer',
+      pay_rate_type: 'hourly',
+      pay_rate: '',
+      skills: [],
+      status: 'active',
+      hire_date: new Date().toISOString().split('T')[0],
+      notes: '',
+    });
+  };
 
-        // Filter by role
-        if (filterRole !== 'all') {
-            filtered = filtered.filter(member => member.role === filterRole);
-        }
+  const handleAddStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!studio?._id) {
+      toast.error('Studio profile not found.');
+      return;
+    }
+    if (!formData.email.trim()) {
+      toast.error('Please provide an email address.');
+      return;
+    }
 
-        // Filter by status
-        if (filterStatus !== 'all') {
-            filtered = filtered.filter(member => member.status === filterStatus);
-        }
+    setSubmitting(true);
+    try {
+      const clerkId = userData?.clerkId || user?.id;
+      let clerkInvitationId: string | undefined = undefined;
 
-        // Filter by search term
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            filtered = filtered.filter(member =>
-                member.name?.toLowerCase().includes(term) ||
-                member.email?.toLowerCase().includes(term) ||
-                member.role?.toLowerCase().includes(term)
-            );
-        }
-
-        setFilteredStaff(filtered);
-    }, [staff, searchTerm, filterRole, filterStatus]);
-
-    const fetchStaff = async () => {
-        setLoading(true);
+      // If studio is linked to a Clerk Org, automatically send a Clerk Org invitation
+      if (studio.clerkOrgId) {
         try {
-            // TODO: Replace with actual API call
-            // const response = await fetch(`/api/studio-ops/staff?studioId=${userData?.id}`);
-            // const data = await response.json();
+          const token = await getToken();
+          const roleConfig = AVAILABLE_ROLES.find(r => r.id === formData.role);
+          const clerkRole = roleConfig?.clerkRole || 'org:member';
 
-            // Mock data for now
-            const mockStaff: StaffMember[] = [
-                {
-                    id: '1',
-                    name: 'Mike Chen',
-                    email: 'mike@studio.com',
-                    phone: '555-0201',
-                    role: 'engineer',
-                    pay_rate_type: 'hourly',
-                    pay_rate: 75,
-                    skills: ['mixing', 'mastering', 'pro-tools'],
-                    status: 'active',
-                    hire_date: '2023-06-15',
-                    total_shifts: 156,
-                    hours_worked: 1248,
-                    total_earnings: 93600,
-                    created_at: '2023-06-15T09:00:00Z'
-                },
-                {
-                    id: '2',
-                    name: 'Sarah Williams',
-                    email: 'sarah@studio.com',
-                    phone: '555-0202',
-                    role: 'assistant',
-                    pay_rate_type: 'hourly',
-                    pay_rate: 25,
-                    skills: ['setup', 'teardown', 'equipment'],
-                    status: 'active',
-                    hire_date: '2024-01-10',
-                    total_shifts: 89,
-                    hours_worked: 356,
-                    total_earnings: 8900,
-                    created_at: '2024-01-10T14:00:00Z'
-                },
-                {
-                    id: '3',
-                    name: 'Alex Johnson',
-                    email: 'alex@studio.com',
-                    phone: '555-0203',
-                    role: 'producer',
-                    pay_rate_type: 'per_session',
-                    pay_rate: 200,
-                    skills: ['production', 'songwriting', 'arrangement'],
-                    status: 'active',
-                    hire_date: '2023-09-01',
-                    total_shifts: 45,
-                    hours_worked: 180,
-                    total_earnings: 9000,
-                    created_at: '2023-09-01T10:30:00Z'
-                },
-                {
-                    id: '4',
-                    name: 'Jordan Lee',
-                    email: 'jordan@studio.com',
-                    phone: '555-0204',
-                    role: 'intern',
-                    pay_rate_type: 'hourly',
-                    pay_rate: 15,
-                    skills: ['assistant', 'learning'],
-                    status: 'active',
-                    hire_date: '2025-01-05',
-                    total_shifts: 12,
-                    hours_worked: 48,
-                    total_earnings: 720,
-                    created_at: '2025-01-05T11:00:00Z'
-                }
-            ];
+          const res = await fetch('/api/studio/invite-member', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            },
+            body: JSON.stringify({
+              orgId: studio.clerkOrgId,
+              email: formData.email.trim(),
+              role: clerkRole
+            })
+          });
 
-            setStaff(mockStaff);
-        } catch (error) {
-            console.error('Error fetching staff:', error);
-        } finally {
-            setLoading(false);
+          const data = await res.json();
+          if (res.ok && data.invitationId) {
+            clerkInvitationId = data.invitationId;
+            toast.success(`Clerk Org invite sent to ${formData.email}`);
+          } else {
+            console.warn('Clerk invite notice:', data.error || data.message);
+          }
+        } catch (inviteErr) {
+          console.error('Failed to send Clerk Org invite:', inviteErr);
         }
-    };
+      }
 
-    const handleAddStaff = async (e: React.FormEvent) => {
-        e.preventDefault();
+      // Create staff record in Convex
+      const rateNum = formData.pay_rate ? parseFloat(formData.pay_rate) : undefined;
+      await createStaffMutation({
+        clerkId,
+        studioId: studio._id,
+        name: formData.name.trim() || undefined,
+        email: formData.email.trim().toLowerCase(),
+        phone: formData.phone.trim() || undefined,
+        role: formData.role,
+        payRateType: formData.pay_rate_type,
+        hourlyRate: formData.pay_rate_type === 'hourly' ? rateNum : undefined,
+        salary: formData.pay_rate_type === 'salary' ? rateNum : undefined,
+        commissionRate: formData.pay_rate_type === 'percentage' ? rateNum : undefined,
+        skills: formData.skills,
+        hireDate: formData.hire_date,
+        notes: formData.notes,
+        clerkInvitationId,
+        invitationStatus: clerkInvitationId ? 'pending' : 'active',
+      });
 
-        try {
-            // TODO: Replace with actual API call
-            // const response = await fetch('/api/studio-ops/staff', {
-            //     method: 'POST',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({
-            //         ...formData,
-            //         studio_id: userData?.id,
-            //         pay_rate: parseFloat(formData.pay_rate)
-            //     })
-            // });
+      toast.success(`${formData.name || formData.email} added to studio staff!`);
+      setShowAddModal(false);
+      resetForm();
+    } catch (err: any) {
+      console.error('Error adding staff:', err);
+      toast.error(err.message || 'Failed to add staff member.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-            const newStaff: StaffMember = {
-                id: Date.now().toString(),
-                name: formData.name,
-                email: formData.email,
-                phone: formData.phone,
-                role: formData.role as any,
-                pay_rate_type: formData.pay_rate_type,
-                pay_rate: parseFloat(formData.pay_rate),
-                skills: formData.skills,
-                status: formData.status,
-                hire_date: formData.hire_date,
-                studio_id: userData?.id,
-                total_shifts: 0,
-                hours_worked: 0,
-                total_earnings: 0,
-                created_at: new Date().toISOString()
-            };
+  const handleEditStaff = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedStaff?._id) return;
 
-            setStaff([...staff, newStaff]);
-            setShowAddModal(false);
-            resetForm();
-        } catch (error) {
-            console.error('Error adding staff:', error);
-        }
-    };
+    setSubmitting(true);
+    try {
+      const clerkId = userData?.clerkId || user?.id;
+      const rateNum = formData.pay_rate ? parseFloat(formData.pay_rate) : undefined;
 
-    const handleEditStaff = async (e: React.FormEvent) => {
-        e.preventDefault();
+      await updateStaffMutation({
+        clerkId,
+        staffId: selectedStaff._id,
+        name: formData.name.trim() || undefined,
+        email: formData.email.trim().toLowerCase() || undefined,
+        phone: formData.phone.trim() || undefined,
+        role: formData.role,
+        payRateType: formData.pay_rate_type,
+        hourlyRate: formData.pay_rate_type === 'hourly' ? rateNum : undefined,
+        salary: formData.pay_rate_type === 'salary' ? rateNum : undefined,
+        commissionRate: formData.pay_rate_type === 'percentage' ? rateNum : undefined,
+        skills: formData.skills,
+        hireDate: formData.hire_date,
+        notes: formData.notes,
+        isActive: formData.status === 'active',
+      });
 
-        try {
-            // TODO: Replace with actual API call
-            // const response = await fetch(`/api/studio-ops/staff/${selectedStaff.id}`, {
-            //     method: 'PUT',
-            //     headers: { 'Content-Type': 'application/json' },
-            //     body: JSON.stringify({
-            //         ...formData,
-            //         pay_rate: parseFloat(formData.pay_rate)
-            //     })
-            // });
+      toast.success('Staff details updated successfully.');
+      setShowEditModal(false);
+      setSelectedStaff(null);
+      resetForm();
+    } catch (err: any) {
+      console.error('Error updating staff:', err);
+      toast.error(err.message || 'Failed to update staff member.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
-            const updatedStaff = staff.map(member => {
-                if (member.id === selectedStaff!.id) {
-                    return {
-                        ...member,
-                        name: formData.name,
-                        email: formData.email,
-                        phone: formData.phone,
-                        role: formData.role as any,
-                        pay_rate_type: formData.pay_rate_type,
-                        pay_rate: parseFloat(formData.pay_rate),
-                        skills: formData.skills,
-                        status: formData.status,
-                        hire_date: formData.hire_date
-                    };
-                }
-                return member;
-            });
+  const handleDeleteStaff = async (staffId: any, name: string) => {
+    if (!window.confirm(`Are you sure you want to remove ${name} from your studio staff roster?`)) {
+      return;
+    }
 
-            setStaff(updatedStaff);
-            setShowEditModal(false);
-            setSelectedStaff(null);
-            resetForm();
-        } catch (error) {
-            console.error('Error updating staff:', error);
-        }
-    };
+    try {
+      const clerkId = userData?.clerkId || user?.id;
+      await deleteStaffMutation({
+        clerkId,
+        staffId,
+      });
+      toast.success(`${name} removed from studio staff.`);
+    } catch (err: any) {
+      console.error('Error deleting staff:', err);
+      toast.error(err.message || 'Failed to remove staff member.');
+    }
+  };
 
-    const handleDeleteStaff = async (staffId: string) => {
-        if (!confirm('Are you sure you want to remove this staff member?')) return;
+  const openEditModal = (member: any) => {
+    setSelectedStaff(member);
+    setFormData({
+      name: member.displayName || '',
+      email: member.displayEmail || '',
+      phone: member.displayPhone || '',
+      role: member.role || 'Engineer',
+      pay_rate_type: member.payRateType || 'hourly',
+      pay_rate: (member.hourlyRate || member.salary || member.commissionRate || '').toString(),
+      skills: member.skills || [],
+      status: member.isActive ? 'active' : 'inactive',
+      hire_date: member.hireDate || '',
+      notes: member.notes || '',
+    });
+    setShowEditModal(true);
+  };
 
-        try {
-            // TODO: Replace with actual API call
-            // await fetch(`/api/studio-ops/staff/${staffId}`, {
-            //     method: 'DELETE'
-            // });
-
-            setStaff(staff.filter(member => member.id !== staffId));
-        } catch (error) {
-            console.error('Error deleting staff:', error);
-        }
-    };
-
-    const openEditModal = (member: StaffMember) => {
-        setSelectedStaff(member);
-        setFormData({
-            name: member.name || '',
-            email: member.email || '',
-            phone: member.phone || '',
-            role: member.role || 'assistant',
-            pay_rate_type: member.pay_rate_type || 'hourly',
-            pay_rate: member.pay_rate?.toString() || '',
-            skills: member.skills || [],
-            status: member.status || 'active',
-            hire_date: member.hire_date || ''
-        });
-        setShowEditModal(true);
-    };
-
-    const resetForm = () => {
-        setFormData({
-            name: '',
-            email: '',
-            phone: '',
-            role: 'assistant',
-            pay_rate_type: 'hourly',
-            pay_rate: '',
-            skills: [],
-            status: 'active',
-            hire_date: ''
-        });
-    };
-
-    const formatCurrency = (amount: number): string => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD'
-        }).format(amount);
-    };
-
-    const getRoleBadgeColor = (role: string): string => {
-        const colors: Record<string, string> = {
-            engineer: 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400',
-            assistant: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
-            manager: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
-            intern: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
-            technician: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
-            producer: 'bg-pink-100 text-pink-600 dark:bg-pink-900/30 dark:text-pink-400'
-        };
-        return colors[role] || 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
-    };
-
-    const getStatusBadgeColor = (status: string): string => {
-        const colors: Record<string, string> = {
-            active: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
-            inactive: 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400',
-            on_leave: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400'
-        };
-        return colors[status] || 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400';
-    };
-
-    const stats = {
-        total: staff.length,
-        active: staff.filter(s => s.status === 'active').length,
-        onLeave: staff.filter(s => s.status === 'on_leave').length,
-        totalShifts: staff.reduce((sum, s) => sum + (s.total_shifts || 0), 0),
-        totalHours: staff.reduce((sum, s) => sum + (s.hours_worked || 0), 0),
-        totalPayroll: staff.reduce((sum, s) => sum + (s.total_earnings || 0), 0)
-    };
-
+  if (!studio) {
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-6">
-                <div className="flex items-center justify-between mb-4">
-                    <div>
-                        <h2 className="text-2xl font-bold dark:text-white flex items-center gap-3">
-                            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center text-white">
-                                <Briefcase size={20} />
-                            </div>
-                            Staff Management
-                        </h2>
-                        <p className="text-gray-600 dark:text-gray-400 mt-1">
-                            Manage your team, schedule shifts, and track performance
-                        </p>
-                    </div>
-                    <button
-                        onClick={() => setShowAddModal(true)}
-                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                    >
-                        <Plus size={18} />
-                        Add Staff
-                    </button>
-                </div>
-
-                {/* Stats Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                        <div className="text-2xl font-bold dark:text-white">{stats.total}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Total Staff</div>
-                    </div>
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">{stats.active}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Active</div>
-                    </div>
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.onLeave}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">On Leave</div>
-                    </div>
-                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.totalShifts}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Total Shifts</div>
-                    </div>
-                    <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.totalHours}h</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Hours Worked</div>
-                    </div>
-                </div>
-            </div>
-
-            {/* Search and Filter */}
-            <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-4">
-                <div className="flex flex-col md:flex-row gap-4">
-                    {/* Search */}
-                    <div className="flex-1 relative">
-                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search staff by name, email, or role..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                    </div>
-
-                    {/* Role Filter */}
-                    <select
-                        value={filterRole}
-                        onChange={(e) => setFilterRole(e.target.value)}
-                        className="px-4 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                        <option value="all">All Roles</option>
-                        {STAFF_ROLES.map(role => (
-                            <option key={role.id} value={role.id}>{role.label}</option>
-                        ))}
-                    </select>
-
-                    {/* Status Filter */}
-                    <select
-                        value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value)}
-                        className="px-4 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                        <option value="all">All Status</option>
-                        <option value="active">Active</option>
-                        <option value="inactive">Inactive</option>
-                        <option value="on_leave">On Leave</option>
-                    </select>
-                </div>
-            </div>
-
-            {/* Staff List */}
-            <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden">
-                {loading ? (
-                    <div className="p-8 text-center text-gray-600 dark:text-gray-400">
-                        Loading staff...
-                    </div>
-                ) : filteredStaff.length === 0 ? (
-                    <div className="p-8 text-center text-gray-600 dark:text-gray-400">
-                        {searchTerm || filterRole !== 'all' || filterStatus !== 'all'
-                            ? 'No staff members match your search'
-                            : 'No staff members yet. Add your first team member to get started.'}
-                    </div>
-                ) : (
-                    <div className="divide-y dark:divide-gray-700">
-                        {filteredStaff.map((member) => (
-                            <div key={member.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-3 mb-2">
-                                            <h3 className="text-lg font-semibold dark:text-white">{member.name}</h3>
-                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getRoleBadgeColor(member.role)}`}>
-                                                {STAFF_ROLES.find(r => r.id === member.role)?.label || 'Unknown'}
-                                            </span>
-                                            <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusBadgeColor(member.status)}`}>
-                                                {member.status === 'on_leave' ? 'On Leave' : member.status}
-                                            </span>
-                                        </div>
-
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400">
-                                            {member.email && (
-                                                <div className="flex items-center gap-2">
-                                                    <Mail size={14} />
-                                                    {member.email}
-                                                </div>
-                                            )}
-                                            {member.phone && (
-                                                <div className="flex items-center gap-2">
-                                                    <Phone size={14} />
-                                                    {member.phone}
-                                                </div>
-                                            )}
-                                            <div className="flex items-center gap-2">
-                                                <DollarSign size={14} />
-                                                {member.pay_rate_type === 'hourly' && '$'}
-                                                {member.pay_rate}
-                                                {member.pay_rate_type === 'hourly' && '/hr'}
-                                                {member.pay_rate_type === 'per_session' && '/session'}
-                                                {member.pay_rate_type === 'percentage' && '%'}
-                                                {member.pay_rate_type === 'salary' && '/yr'}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                <UserCheck size={14} />
-                                                Hired {new Date(member.hire_date || '').toLocaleDateString()}
-                                            </div>
-                                        </div>
-
-                                        {member.skills && member.skills.length > 0 && (
-                                            <div className="mt-2 flex flex-wrap gap-1">
-                                                {member.skills.map((skill, index) => (
-                                                    <span key={index} className="px-2 py-0.5 text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 rounded">
-                                                        {skill}
-                                                    </span>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="flex items-center gap-2 ml-4">
-                                        <div className="text-right mr-4">
-                                            <div className="text-sm text-gray-600 dark:text-gray-400">
-                                                {member.total_shifts} shifts · {member.hours_worked}h
-                                            </div>
-                                            <div className="text-sm font-semibold text-green-600 dark:text-green-400">
-                                                {formatCurrency(member.total_earnings || 0)}
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => openEditModal(member)}
-                                            className="p-2 text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400 transition-colors"
-                                            title="Edit staff"
-                                        >
-                                            <Edit2 size={16} />
-                                        </button>
-                                        <button
-                                            onClick={() => handleDeleteStaff(member.id)}
-                                            className="p-2 text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400 transition-colors"
-                                            title="Remove staff"
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
-            </div>
-
-            {/* Add Staff Modal */}
-            {showAddModal && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 max-w-md w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b dark:border-gray-700 flex items-center justify-between">
-                            <h3 className="text-xl font-bold dark:text-white">Add Staff Member</h3>
-                            <button
-                                onClick={() => {
-                                    setShowAddModal(false);
-                                    resetForm();
-                                }}
-                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                            >
-                                <X size={20} className="dark:text-gray-400" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleAddStaff} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Email
-                                </label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Phone
-                                </label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Role *
-                                    </label>
-                                    <select
-                                        required
-                                        value={formData.role}
-                                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        {STAFF_ROLES.map(role => (
-                                            <option key={role.id} value={role.id}>{role.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Status *
-                                    </label>
-                                    <select
-                                        required
-                                        value={formData.status}
-                                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive</option>
-                                        <option value="on_leave">On Leave</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Pay Rate Type *
-                                    </label>
-                                    <select
-                                        required
-                                        value={formData.pay_rate_type}
-                                        onChange={(e) => setFormData({ ...formData, pay_rate_type: e.target.value })}
-                                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="hourly">Hourly</option>
-                                        <option value="per_session">Per Session</option>
-                                        <option value="percentage">Percentage</option>
-                                        <option value="salary">Salary</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Pay Rate *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        required
-                                        value={formData.pay_rate}
-                                        onChange={(e) => setFormData({ ...formData, pay_rate: e.target.value })}
-                                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Hire Date
-                                </label>
-                                <input
-                                    type="date"
-                                    value={formData.hire_date}
-                                    onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowAddModal(false);
-                                        resetForm();
-                                    }}
-                                    className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                                >
-                                    Add Staff
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Edit Staff Modal */}
-            {showEditModal && selectedStaff && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 max-w-md w-full max-h-[90vh] overflow-y-auto">
-                        <div className="p-6 border-b dark:border-gray-700 flex items-center justify-between">
-                            <h3 className="text-xl font-bold dark:text-white">Edit Staff Member</h3>
-                            <button
-                                onClick={() => {
-                                    setShowEditModal(false);
-                                    setSelectedStaff(null);
-                                    resetForm();
-                                }}
-                                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-                            >
-                                <X size={20} className="dark:text-gray-400" />
-                            </button>
-                        </div>
-
-                        <form onSubmit={handleEditStaff} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Name *
-                                </label>
-                                <input
-                                    type="text"
-                                    required
-                                    value={formData.name}
-                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Email
-                                </label>
-                                <input
-                                    type="email"
-                                    value={formData.email}
-                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Phone
-                                </label>
-                                <input
-                                    type="tel"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Role *
-                                    </label>
-                                    <select
-                                        required
-                                        value={formData.role}
-                                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        {STAFF_ROLES.map(role => (
-                                            <option key={role.id} value={role.id}>{role.label}</option>
-                                        ))}
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Status *
-                                    </label>
-                                    <select
-                                        required
-                                        value={formData.status}
-                                        onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive</option>
-                                        <option value="on_leave">On Leave</option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Pay Rate Type *
-                                    </label>
-                                    <select
-                                        required
-                                        value={formData.pay_rate_type}
-                                        onChange={(e) => setFormData({ ...formData, pay_rate_type: e.target.value })}
-                                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    >
-                                        <option value="hourly">Hourly</option>
-                                        <option value="per_session">Per Session</option>
-                                        <option value="percentage">Percentage</option>
-                                        <option value="salary">Salary</option>
-                                    </select>
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                        Pay Rate *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        required
-                                        value={formData.pay_rate}
-                                        onChange={(e) => setFormData({ ...formData, pay_rate: e.target.value })}
-                                        className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                                    Hire Date
-                                </label>
-                                <input
-                                    type="date"
-                                    value={formData.hire_date}
-                                    onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
-                                    className="w-full px-3 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-
-                            <div className="flex gap-3 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setShowEditModal(false);
-                                        setSelectedStaff(null);
-                                        resetForm();
-                                    }}
-                                    className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
-                                >
-                                    Save Changes
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-        </div>
+      <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-8 text-center">
+        <Building2 size={48} className="mx-auto text-brand-blue mb-4 opacity-70" />
+        <h2 className="text-xl font-bold dark:text-white mb-2">Studio Not Found</h2>
+        <p className="text-gray-500 dark:text-gray-400 text-sm max-w-md mx-auto">
+          Please complete your studio profile setup to manage staff and team members.
+        </p>
+      </div>
     );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header & Stats */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold dark:text-white flex items-center gap-2">
+            <Briefcase className="text-brand-blue" size={24} />
+            Studio Staff & Team Management
+          </h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Manage your studio engineers, managers, and assistants with automated Clerk Organization syncing.
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            resetForm();
+            setShowAddModal(true);
+          }}
+          className="inline-flex items-center gap-2 bg-brand-blue hover:bg-blue-600 text-white font-medium px-4 py-2.5 rounded-xl transition-all shadow-lg shadow-blue-500/20 text-sm"
+        >
+          <Plus size={18} />
+          Add Staff Member
+        </button>
+      </div>
+
+      {/* Clerk Org Status Banner */}
+      {studio.clerkOrgId ? (
+        <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-lg bg-blue-500/10 flex items-center justify-center text-brand-blue shrink-0">
+              <Shield size={20} />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-300">
+                Clerk Organization Connected
+              </p>
+              <p className="text-xs text-blue-700 dark:text-blue-400">
+                Staff invited here receive automated invitations to your Clerk Organization (<code className="font-mono">{studio.slug || studio.clerkOrgId}</code>).
+              </p>
+            </div>
+          </div>
+          <span className="text-xs bg-blue-100 dark:bg-blue-800 text-blue-800 dark:text-blue-200 font-semibold px-2.5 py-1 rounded-full">
+            Auto-Sync Active
+          </span>
+        </div>
+      ) : (
+        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <AlertCircle size={20} className="text-amber-600 shrink-0" />
+            <div>
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-300">
+                Clerk Organization Not Linked
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">
+                Link an organization in Studio Settings to automatically manage staff authentication and permissions.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white dark:bg-[#2c2e36] p-5 rounded-xl border dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Total Staff Roster</p>
+          <p className="text-2xl font-bold dark:text-white mt-2">{totalStaff}</p>
+        </div>
+        <div className="bg-white dark:bg-[#2c2e36] p-5 rounded-xl border dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Active Members</p>
+          <p className="text-2xl font-bold text-emerald-500 mt-2">{activeStaff}</p>
+        </div>
+        <div className="bg-white dark:bg-[#2c2e36] p-5 rounded-xl border dark:border-gray-700">
+          <p className="text-xs text-gray-500 dark:text-gray-400 font-medium uppercase tracking-wider">Pending Invites</p>
+          <p className="text-2xl font-bold text-amber-500 mt-2">{pendingInvites}</p>
+        </div>
+      </div>
+
+      {/* Search & Filters */}
+      <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-4 flex flex-col md:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by name, email, or role..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-lg text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+          />
+        </div>
+        <div className="flex gap-2">
+          <select
+            value={filterRole}
+            onChange={(e) => setFilterRole(e.target.value)}
+            className="bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-lg px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+          >
+            <option value="all">All Roles</option>
+            {AVAILABLE_ROLES.map((r) => (
+              <option key={r.id} value={r.id}>{r.label}</option>
+            ))}
+          </select>
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-lg px-3 py-2 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+          >
+            <option value="all">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="pending">Pending Invite</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Staff Roster Grid / Table */}
+      {staffData === undefined ? (
+        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-12 text-center">
+          <Loader2 size={32} className="animate-spin text-brand-blue mx-auto" />
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-3">Loading studio staff roster...</p>
+        </div>
+      ) : filteredStaff.length === 0 ? (
+        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-12 text-center">
+          <Briefcase size={40} className="mx-auto text-gray-400 mb-3 opacity-60" />
+          <h3 className="text-base font-semibold dark:text-white mb-1">
+            {searchTerm || filterRole !== 'all' || filterStatus !== 'all' ? 'No staff matching filters' : 'No staff members added yet'}
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 text-xs max-w-sm mx-auto mb-5">
+            {searchTerm || filterRole !== 'all' || filterStatus !== 'all'
+              ? 'Try adjusting your search criteria.'
+              : 'Add your team members to manage schedules, assign sessions, and send Clerk Org invites.'}
+          </p>
+          <button
+            onClick={() => {
+              resetForm();
+              setShowAddModal(true);
+            }}
+            className="inline-flex items-center gap-2 bg-brand-blue hover:bg-blue-600 text-white font-medium px-4 py-2 rounded-xl text-sm transition-all"
+          >
+            <Plus size={16} />
+            Add First Staff Member
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredStaff.map((member: any) => {
+            const isPending = member.invitationStatus === 'pending';
+            const rateLabel = member.payRateType === 'salary'
+              ? `$${member.salary?.toLocaleString() || 0}/yr`
+              : member.payRateType === 'percentage'
+              ? `${member.commissionRate || 0}% cut`
+              : `$${member.hourlyRate || 0}/hr`;
+
+            return (
+              <div
+                key={member._id}
+                className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-5 flex flex-col justify-between hover:shadow-lg transition-all"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-brand-blue/10 border border-brand-blue/20 flex items-center justify-center font-bold text-brand-blue overflow-hidden text-sm">
+                        {member.user?.avatarUrl ? (
+                          <img src={member.user.avatarUrl} alt={member.displayName} className="w-full h-full object-cover" />
+                        ) : (
+                          (member.displayName?.[0] || 'S').toUpperCase()
+                        )}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold dark:text-white text-sm">
+                          {member.displayName}
+                        </h4>
+                        <span className="text-xs font-medium text-brand-blue bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded-full inline-block mt-0.5">
+                          {member.role}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isPending ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-600 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full">
+                        <Send size={10} /> Pending Invite
+                      </span>
+                    ) : member.isActive ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded-full">
+                        <CheckCircle2 size={10} /> Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                        Inactive
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 text-xs text-gray-600 dark:text-gray-300 mb-4">
+                    {member.displayEmail && (
+                      <div className="flex items-center gap-2">
+                        <Mail size={13} className="text-gray-400 shrink-0" />
+                        <span className="truncate">{member.displayEmail}</span>
+                      </div>
+                    )}
+                    {member.displayPhone && (
+                      <div className="flex items-center gap-2">
+                        <Phone size={13} className="text-gray-400 shrink-0" />
+                        <span>{member.displayPhone}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <DollarSign size={13} className="text-gray-400 shrink-0" />
+                      <span>Compensation: <strong className="font-semibold dark:text-white">{rateLabel}</strong></span>
+                    </div>
+                    {member.hireDate && (
+                      <div className="flex items-center gap-2">
+                        <Calendar size={13} className="text-gray-400 shrink-0" />
+                        <span>Joined: {new Date(member.hireDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {member.skills && member.skills.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {member.skills.map((skill: string, idx: number) => (
+                        <span key={idx} className="text-[10px] bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 px-2 py-0.5 rounded">
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3 border-t dark:border-gray-700/60">
+                  <button
+                    onClick={() => openEditModal(member)}
+                    className="p-1.5 text-gray-500 hover:text-brand-blue hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    title="Edit staff details"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteStaff(member._id, member.displayName)}
+                    className="p-1.5 text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    title="Remove from roster"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Add Staff Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowAddModal(false)}
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 dark:hover:text-white"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 className="text-xl font-bold dark:text-white mb-1 flex items-center gap-2">
+              <Plus className="text-brand-blue" size={20} />
+              Add Staff Member
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+              An invitation to your Clerk Organization will be sent to the email address provided.
+            </p>
+
+            <form onSubmit={handleAddStaff} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Alex Rivera"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">
+                  Email Address <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="staff@example.com"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Phone</label>
+                  <input
+                    type="tel"
+                    placeholder="Optional"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Role</label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  >
+                    {AVAILABLE_ROLES.map((r) => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Pay Structure</label>
+                  <select
+                    value={formData.pay_rate_type}
+                    onChange={(e) => setFormData({ ...formData, pay_rate_type: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  >
+                    <option value="hourly">Hourly ($/hr)</option>
+                    <option value="per_session">Per Session ($)</option>
+                    <option value="percentage">Commission (%)</option>
+                    <option value="salary">Annual Salary ($)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Rate / Amount</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 50"
+                    value={formData.pay_rate}
+                    onChange={(e) => setFormData({ ...formData, pay_rate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Skills & Specialties (comma separated)</label>
+                <input
+                  type="text"
+                  placeholder="Pro Tools, Vocal Tracking, SSL Console..."
+                  value={formData.skills.join(', ')}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                  })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setShowAddModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-brand-blue hover:bg-blue-600 text-white text-sm font-medium transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                  Send Invite & Save
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Staff Modal */}
+      {showEditModal && selectedStaff && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 max-w-lg w-full p-6 relative max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowEditModal(false)}
+              className="absolute top-5 right-5 text-gray-400 hover:text-gray-600 dark:hover:text-white"
+            >
+              <X size={20} />
+            </button>
+
+            <h3 className="text-xl font-bold dark:text-white mb-1 flex items-center gap-2">
+              <Edit2 className="text-brand-blue" size={20} />
+              Edit Staff Member
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-5">
+              Update role, rate, and permissions for {selectedStaff.displayName}.
+            </p>
+
+            <form onSubmit={handleEditStaff} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Role</label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  >
+                    {AVAILABLE_ROLES.map((r) => (
+                      <option key={r.id} value={r.id}>{r.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  >
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Pay Structure</label>
+                  <select
+                    value={formData.pay_rate_type}
+                    onChange={(e) => setFormData({ ...formData, pay_rate_type: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  >
+                    <option value="hourly">Hourly ($/hr)</option>
+                    <option value="per_session">Per Session ($)</option>
+                    <option value="percentage">Commission (%)</option>
+                    <option value="salary">Annual Salary ($)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Rate / Amount</label>
+                  <input
+                    type="number"
+                    value={formData.pay_rate}
+                    onChange={(e) => setFormData({ ...formData, pay_rate: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Skills & Specialties (comma separated)</label>
+                <input
+                  type="text"
+                  value={formData.skills.join(', ')}
+                  onChange={(e) => setFormData({
+                    ...formData,
+                    skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean)
+                  })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-[#1a1d21] border dark:border-gray-700 rounded-xl text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-blue"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4 border-t dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="flex-1 px-4 py-2.5 rounded-xl border dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 text-sm font-medium transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="flex-1 px-4 py-2.5 rounded-xl bg-brand-blue hover:bg-blue-600 text-white text-sm font-medium transition-colors shadow-lg shadow-blue-500/20 disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 size={16} className="animate-spin" /> : null}
+                  Update Details
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

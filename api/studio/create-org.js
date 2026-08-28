@@ -12,7 +12,7 @@ import { ConvexHttpClient } from 'convex/browser';
 import pkg from '../../convex/_generated/api.js';
 const { api } = pkg;
 
-const convexUrl = process.env.VITE_CONVEX_URL;
+const convexUrl = process.env.CONVEX_URL || process.env.VITE_CONVEX_URL;
 const httpClient = new ConvexHttpClient(convexUrl);
 
 export default async function handler(req, res) {
