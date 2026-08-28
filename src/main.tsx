@@ -28,43 +28,10 @@ interface ErrorFallbackProps {
 // SENTRY INITIALIZATION
 // =====================================================
 
-// Initialize Sentry if DSN is provided (lightweight first, heavy replays deferred)
+// Initialize Sentry if DSN is provided
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 
 if (sentryDsn) {
-  const integrations: any[] = [
-    Sentry.browserTracingIntegration(),
-    Sentry.extraErrorDataIntegration(),
-    Sentry.captureConsoleIntegration({
-      levels: ['error'],
-    }),
-  ];
-
-  // Defer session replay to idle callback to prevent blocking the initial paint
-  if (typeof window !== 'undefined') {
-    const initReplay = () => {
-      try {
-        const client = Sentry.getClient();
-        if (client) {
-          client.addIntegration(
-            Sentry.replayIntegration({
-              maskAllText: false,
-              blockAllMedia: false,
-            })
-          );
-        }
-      } catch (e) {
-        // Silently fail if replay is not supported
-      }
-    };
-
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(initReplay, { timeout: 2500 });
-    } else {
-      setTimeout(initReplay, 1000);
-    }
-  }
-
   Sentry.init({
     dsn: sentryDsn,
     environment: import.meta.env.MODE || 'development',
@@ -76,7 +43,17 @@ if (sentryDsn) {
       /^https:\/\/(?!clerk\.)[a-z0-9-]+\.seshnx\.com/,
       /^https:\/\/webapp-main-.*\.vercel\.app/,
     ],
-    integrations,
+    integrations: [
+      Sentry.browserTracingIntegration(),
+      Sentry.replayIntegration({
+        maskAllText: false,
+        blockAllMedia: false,
+      }),
+      Sentry.extraErrorDataIntegration(),
+      Sentry.captureConsoleIntegration({
+        levels: ['error'],
+      }),
+    ],
     tracesSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
     replaysSessionSampleRate: import.meta.env.PROD ? 0.1 : 1.0,
     replaysOnErrorSampleRate: 1.0,

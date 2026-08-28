@@ -57,24 +57,28 @@ export default defineConfig({
         manualChunks: (id) => {
           // Code splitting strategy for better caching and performance
           if (id.includes('node_modules')) {
-            // Core React runtime & router together to ensure stable initialization
-            if (id.includes('react/') || id.includes('react-dom/') || id.includes('react-router')) {
-              return 'vendor-core';
+            // CRITICAL: React and React ecosystem (Router, Clerk, Query, Convex, Sentry)
+            // must stay in the main vendor chunk to prevent createContext / React singleton initialization issues
+            if (
+              id.includes('react') ||
+              id.includes('react-dom') ||
+              id.includes('react-router') ||
+              id.includes('@clerk') ||
+              id.includes('@tanstack') ||
+              id.includes('convex') ||
+              id.includes('@sentry')
+            ) {
+              return 'vendor';
             }
-            if (id.includes('@clerk')) return 'vendor-clerk';
-            if (id.includes('@sentry')) return 'vendor-sentry';
-            if (id.includes('@tanstack')) return 'vendor-query';
-            if (id.includes('lucide-react')) return 'vendor-icons';
+            // Heavy isolated third-party modules can be separated cleanly
             if (id.includes('framer-motion')) return 'vendor-framer';
-            if (id.includes('convex')) return 'vendor-convex';
-            if (id.includes('react-leaflet') || id.includes('leaflet')) return 'vendor-maps';
+            if (id.includes('leaflet')) return 'vendor-maps';
             if (id.includes('wavesurfer')) return 'vendor-audio';
             if (id.includes('@stripe') || id.includes('stripe')) return 'vendor-stripe';
             if (id.includes('react-big-calendar') || id.includes('date-fns')) return 'vendor-calendar';
             if (id.includes('pannellum')) return 'vendor-pannellum';
-            if (id.includes('clsx') || id.includes('tailwind-merge')) return 'vendor-ui';
-            // Other vendor dependencies
-            return 'vendor-misc';
+            // Default vendor
+            return 'vendor';
           }
           // IMPORTANT: Keep config files in their own chunk to ensure proper initialization
           if (id.includes('/config/constants')) return 'config';
