@@ -1,7 +1,7 @@
 /**
  * Invite a Team Member to a Studio Organization
  *
- * Called by StudioOrgManager to send an organization invitation
+ * Called by StudioStaff / StudioOrgManager to send an organization invitation
  * via Clerk's Backend SDK. Only org admins (owners) can invite.
  */
 
@@ -25,14 +25,33 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Missing authorization header' });
     }
 
+    const clerkSecret = process.env.CLERK_SECRET_KEY;
+    if (!clerkSecret) {
+      console.error('❌ CLERK_SECRET_KEY is not configured');
+      return res.status(500).json({ error: 'Server configuration error: Clerk secret key missing' });
+    }
+
     const clerkClient = createClerkClient({
-      secretKey: process.env.CLERK_SECRET_KEY,
+      secretKey: clerkSecret,
     });
 
-    // Verify the session belongs to a user who is an admin of this org
-    const session = await clerkClient.sessions.getSession(sessionToken);
-    if (!session) {
-      return res.status(401).json({ error: 'Invalid session' });
+    // Verify the caller's identity via JWT token or session ID
+    let verifiedUserId = null;
+    try {
+      const verifiedToken = await clerkClient.verifyToken(sessionToken);
+      verifiedUserId = verifiedToken?.sub;
+    } catch (jwtErr) {
+      try {
+        const session = await clerkClient.sessions.getSession(sessionToken);
+        verifiedUserId = session?.userId;
+      } catch (sessErr) {
+        console.error('❌ Token verification error:', jwtErr.message);
+        return res.status(401).json({ error: 'Invalid or expired session' });
+      }
+    }
+
+    if (!verifiedUserId) {
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
     // Check the user's role in the organization
@@ -41,11 +60,11 @@ export default async function handler(req, res) {
     });
 
     const callerMembership = memberships?.find(
-      (m) => m.publicUserData?.userId === session.userId
+      (m) => m.publicUserData?.userId === verifiedUserId
     );
 
     if (!callerMembership || callerMembership.role !== 'org:admin') {
-      return res.status(403).json({ error: 'Only organization owners can invite members' });
+      return res.status(403).json({ error: 'Only organization owners/admins can invite members' });
     }
 
     // Create the invitation
@@ -67,7 +86,7 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       error: 'Failed to send invitation',
-      message: error.message,
+      message: error.message || 'Internal server error',
     });
   }
 }

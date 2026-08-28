@@ -1,19 +1,14 @@
 /**
  * Create Clerk Organization for Studio
  *
- * Called when a studio owner claims a slug and needs a Clerk Organization
- * for billing and membership management.
+ * Called when a studio owner sets up or links a Clerk Organization
+ * for billing, role-based access, and membership management.
  *
  * Uses @clerk/backend to create the org server-side.
  */
 
 import { createClerkClient } from '@clerk/backend';
-import { ConvexHttpClient } from 'convex/browser';
-import pkg from '../../convex/_generated/api.js';
-const { api } = pkg;
-
-const convexUrl = process.env.CONVEX_URL || process.env.VITE_CONVEX_URL;
-const httpClient = new ConvexHttpClient(convexUrl);
+import { fetchQuery, fetchMutation } from 'convex/server';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -23,8 +18,14 @@ export default async function handler(req, res) {
   try {
     const { studioId, slug, ownerClerkId, studioName } = req.body;
 
-    if (!studioId || !slug || !ownerClerkId || !studioName) {
-      return res.status(400).json({ error: 'Missing required fields: studioId, slug, ownerClerkId, studioName' });
+    if (!studioId || !ownerClerkId || !studioName) {
+      return res.status(400).json({ error: 'Missing required fields: studioId, ownerClerkId, studioName' });
+    }
+
+    const convexUrl = process.env.CONVEX_URL || process.env.VITE_CONVEX_URL;
+    if (!convexUrl) {
+      console.error('❌ CONVEX_URL is not configured');
+      return res.status(500).json({ error: 'Server configuration error: Convex URL missing' });
     }
 
     // Verify the caller is authenticated and owns this studio
@@ -33,29 +34,50 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Missing authorization header' });
     }
 
+    const clerkSecret = process.env.CLERK_SECRET_KEY;
+    if (!clerkSecret) {
+      console.error('❌ CLERK_SECRET_KEY is not configured');
+      return res.status(500).json({ error: 'Server configuration error: Clerk secret key missing' });
+    }
+
     const clerkClient = createClerkClient({
-      secretKey: process.env.CLERK_SECRET_KEY,
+      secretKey: clerkSecret,
     });
 
-    // Verify the caller's identity matches ownerClerkId
-    const session = await clerkClient.sessions.getSession(sessionToken);
-    if (!session || session.userId !== ownerClerkId) {
+    // Verify the caller's identity via JWT token or session ID
+    let verifiedUserId = null;
+    try {
+      const verifiedToken = await clerkClient.verifyToken(sessionToken);
+      verifiedUserId = verifiedToken?.sub;
+    } catch (jwtErr) {
+      try {
+        const session = await clerkClient.sessions.getSession(sessionToken);
+        verifiedUserId = session?.userId;
+      } catch (sessErr) {
+        console.error('❌ Token verification error:', jwtErr.message);
+        return res.status(401).json({ error: 'Invalid or expired session' });
+      }
+    }
+
+    if (!verifiedUserId || verifiedUserId !== ownerClerkId) {
       return res.status(403).json({ error: 'Not authorized to create org for this studio' });
     }
 
-    // Verify studio exists and belongs to this user
-    const studio = await httpClient.query(api.studios.getStudioById, { studioId });
+    const { api } = await import('../../convex/_generated/api.js');
+
+    // Verify studio exists
+    const studio = await fetchQuery(convexUrl, api.studios.getStudioById, { studioId });
     if (!studio) {
       return res.status(404).json({ error: 'Studio not found' });
     }
 
-    // Resolve the caller's Convex user by Clerk ID, then verify they own the studio
-    const caller = await httpClient.query(api.users.getUserByClerkId, { clerkId: ownerClerkId });
+    // Resolve caller's Convex user
+    const caller = await fetchQuery(convexUrl, api.users.getUserByClerkId, { clerkId: ownerClerkId });
     if (!caller || caller._id !== studio.ownerId) {
-      return res.status(403).json({ error: 'Not the studio owner' });
+      return res.status(403).json({ error: 'Only the studio owner can create an organization' });
     }
 
-    // Check if studio already has an org
+    // If studio already has an org, return it
     if (studio.clerkOrgId) {
       return res.status(200).json({
         organizationId: studio.clerkOrgId,
@@ -63,10 +85,15 @@ export default async function handler(req, res) {
       });
     }
 
+    const { generateSlug } = await import('../../convex/utils/slugs.js');
+
+    // Clean and compact slug for Clerk requirements (lowercase, letters, numbers, hyphens, min 2 chars)
+    const cleanSlug = generateSlug(slug || studio.slug || studioName);
+
     // Create Clerk Organization
     const org = await clerkClient.organizations.createOrganization({
       name: studioName,
-      slug: slug,
+      slug: cleanSlug,
       createdBy: ownerClerkId,
       privateMetadata: {
         studioId: studioId,
@@ -74,10 +101,10 @@ export default async function handler(req, res) {
       },
     });
 
-    console.log(`✅ Created Clerk org ${org.id} for studio ${studioId} (${slug})`);
+    console.log(`✅ Created Clerk org ${org.id} for studio ${studioId} (${cleanSlug})`);
 
     // Link org back to Convex studio record
-    await httpClient.mutation(api.studios.linkClerkOrg, {
+    await fetchMutation(convexUrl, api.studios.linkClerkOrg, {
       clerkId: ownerClerkId,
       studioId: studioId,
       clerkOrgId: org.id,
@@ -99,7 +126,7 @@ export default async function handler(req, res) {
 
     return res.status(500).json({
       error: 'Failed to create organization',
-      message: error.message,
+      message: error.message || 'Internal server error',
     });
   }
 }

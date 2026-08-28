@@ -69,13 +69,14 @@ interface AddressData {
 export interface StudioSettingsProps {
     user?: any;
     userData?: any;
+    studio?: any;
     onUpdate?: (data: Partial<StudioSettingsFormData>) => void;
 }
 
 /**
  * StudioSettings - Basic studio information and contact settings
  */
-export default function StudioSettings({ user, userData, onUpdate }: StudioSettingsProps) {
+export default function StudioSettings({ user, userData, studio, onUpdate }: StudioSettingsProps) {
     const [saving, setSaving] = useState<boolean>(false);
     const [slugAvailable, setSlugAvailable] = useState<boolean | null>(null);
     const [slugRequiresVerification, setSlugRequiresVerification] = useState<boolean>(false);
@@ -559,7 +560,7 @@ export default function StudioSettings({ user, userData, onUpdate }: StudioSetti
             </div>
 
             {/* Studio Organization (Clerk Org Management) */}
-            <StudioOrgManager studioId={userData?.studio?._id} />
+            <StudioOrgManager studioId={studio?._id || userData?.studio?._id || userData?.id} />
 
             {/* Save Button (Bottom) */}
             <div className="flex justify-end">

@@ -1,4 +1,4 @@
-// Slug utility functions for SeshNx studio URLs
+// Client-side Slug utility functions for SeshNx studio URLs
 
 /**
  * Common dictionary for slug compaction.
@@ -73,14 +73,12 @@ export const SLUG_WORD_COMPACTIONS: Record<string, string> = {
  * Compacts words within a slug string based on known dictionary abbreviations.
  */
 export function compactSlugWords(raw: string): string {
-  // Split into word tokens separated by spaces, hyphens, or underscores
   const tokens = raw
     .toLowerCase()
     .split(/[\s\-_]+/)
     .filter(Boolean);
 
   const compactedTokens = tokens.map((token) => {
-    // Strip non-alphanumeric characters for dictionary lookup
     const cleanWord = token.replace(/[^a-z0-9]/g, '');
     if (SLUG_WORD_COMPACTIONS[cleanWord]) {
       return SLUG_WORD_COMPACTIONS[cleanWord];
@@ -91,7 +89,10 @@ export function compactSlugWords(raw: string): string {
   return compactedTokens.join('-');
 }
 
-// Helper function to generate URL-friendly compacted slugs
+/**
+ * Generates a compacted, URL-friendly slug from a studio or business name.
+ * Example: "El Monte Recording Studio" -> "el-monte-rec-studio"
+ */
 export function generateSlug(name: string): string {
   if (!name) return 'studio-' + Math.random().toString(36).substring(2, 6);
 
@@ -121,63 +122,4 @@ export function generateSlug(name: string): string {
   }
 
   return slug;
-}
-
-// Validate a slug according to our rules
-export function validateSlug(slug: string): { valid: boolean; error?: string; requiresVerification?: boolean } {
-  // Basic validation: 3-50 chars, regex: ^[a-z0-9][a-z0-9-]*[a-z0-9]$
-  if (slug.length < 3 || slug.length > 50) {
-    return {
-      valid: false,
-      error: "Slug must be between 3 and 50 characters"
-    };
-  }
-
-  if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(slug)) {
-    return {
-      valid: false,
-      error: "Slug can only contain lowercase letters, numbers, and hyphens. Must start and end with alphanumeric."
-    };
-  }
-
-  // Block reserved slugs
-  const reserved = [
-    'app', 'www', 'api', 'admin', 'media', 'kiosk',
-    'studio', 'studios', 'feed', 'bookings', 'dashboard',
-    'profile', 'login', 'signup', 'logout', 'account',
-    'settings', 'messages', 'marketplace', 'tech', 'labels',
-    'edu', 'education', 'school', 'schools'
-  ];
-
-  if (reserved.includes(slug)) {
-    return {
-      valid: false,
-      error: "This slug is reserved and cannot be used"
-    };
-  }
-
-  return { valid: true };
-}
-
-// Generate a verification code for slug claims
-export function generateVerificationCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
-
-// Calculate cooldown expiration date (15 days after claim rejection)
-export function getCooldownEndsAt(rejectedAt: number): number {
-  return rejectedAt + (15 * 24 * 60 * 60 * 1000); // 15 days in milliseconds
-}
-
-// Check if a slug is in cooldown period
-export function isInCooldown(rejectedAt: number, now: number = Date.now()): boolean {
-  return now < getCooldownEndsAt(rejectedAt);
-}
-
-// Extract claimant Clerk ID from auth context
-export function getClaimantClerkId(ctx: { auth: any }): string | null {
-  if (!ctx.auth || !ctx.auth.userId) {
-    return null;
-  }
-  return ctx.auth.userId;
 }

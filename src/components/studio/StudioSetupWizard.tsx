@@ -4,21 +4,7 @@ import { useAuth, useClerk } from '@clerk/react';
 import { api } from '../../../convex/_generated/api';
 import { Home, Check, X, Loader2, ArrowRight, Building2, RefreshCw } from 'lucide-react';
 
-// Inline slug generation (same logic as convex/utils/slugs.ts)
-function generateSlug(name: string): string {
-  let slug = name.toLowerCase();
-  slug = slug.replace(/[^a-z0-9]+/g, '-');
-  slug = slug.replace(/^-+|-+$/g, '');
-  slug = slug.replace(/-+/g, '-');
-  if (slug.length > 40) {
-    slug = slug.substring(0, 40).replace(/-+$/, '');
-  }
-  slug = slug.replace(/^-/, '').replace(/-$/, '');
-  if (slug.length < 3) {
-    slug = 'studio-' + Math.random().toString(36).substring(2, 6);
-  }
-  return slug;
-}
+import { generateSlug } from '../../utils/slugs';
 
 type SetupStep = 'form' | 'creating-studio' | 'creating-org' | 'activating' | 'complete' | 'partial';
 
