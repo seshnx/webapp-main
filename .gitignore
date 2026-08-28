@@ -2,6 +2,14 @@ serviceAccountKey.json
 .env
 functions/.env
 .env.local
+.env*.local
+.env.production
+.env.development
+
+# Build & distribution outputs
+dist/
+dist-ssr/
+*.tsbuildinfo
 
 # Dependencies
 node_modules/
@@ -9,8 +17,15 @@ node_modules/
 .pnp.js
 supabase-schema-fixed.sql
 .vercel
-.env*.local
 .sentryclirc
 
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
 # convex/_generated is committed (stub files needed for build before npx convex dev)
-# Real generated files are overwritten by 'npx convex dev'
+# Real generated files are overwritten by 'npx convex dev'
+
