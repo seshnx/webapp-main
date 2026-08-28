@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
-import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Zap } from 'lucide-react';
+import { User, MessageSquare, Calendar, MessageCircle, Settings, Sliders, LogOut, ShoppingBag, CreditCard, X, ShieldCheck, Wrench, Briefcase, GraduationCap, Home, Zap, BarChart3 } from 'lucide-react';
 import { useClerk } from '@clerk/react';
 import { useSchool } from '../contexts/SchoolContext';
 import { useLanguage } from '../contexts/LanguageContext';
@@ -100,8 +100,8 @@ export function Sidebar({
       icon: Home,
       items: [
         { id: 'feed', icon: MessageSquare, label: t('socialNx') },
+        { id: 'creator-studio', icon: BarChart3, label: 'Creator Studio' },
         { id: 'messages', icon: MessageCircle, label: t('messages') },
-        { id: 'bookings', icon: Calendar, label: t('bookings') },
         { id: 'profile', icon: Settings, label: t('profile') },
       ]
     },
@@ -118,7 +118,6 @@ export function Sidebar({
       icon: Briefcase,
       items: [
         ...(hasBusinessFeatures ? [
-          { id: 'studio-manager', icon: Briefcase, label: 'Studio Manager' },
           { id: 'business-center', icon: Briefcase, label: t('businessCenter') }
         ] : []),
         { id: 'payments', icon: CreditCard, label: t('billing') },
@@ -152,11 +151,12 @@ export function Sidebar({
     const pathMap: Record<string, string> = {
       'dashboard': '/dashboard',
       'feed': '/feed',
+      'creator-studio': '/creator-studio',
+      'bookings': '/creator-studio?tab=bookings',
       'messages': '/messages',
       'chat': '/messages',
-      'bookings': '/bookings',
       'profile': '/profile',
-      'studio-manager': '/studio-manager',
+      'studio-manager': '/business-center/studio',
       'marketplace': '/marketplace',
       'tech': '/tech',
       'payments': '/payments',

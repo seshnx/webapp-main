@@ -1775,3 +1775,62 @@ export const discoverSchools = query({
     }));
   },
 });
+
+/**
+ * Get Studio Feed posts
+ * Returns posts created by Studio accounts, posts with role "Studio", or posts where a studio was tagged
+ */
+export const getStudioPosts = query({
+  args: {
+    limit: v.optional(v.number()),
+    skip: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit ?? 20;
+    const skip = args.skip ?? 0;
+
+    try {
+      // 1. Fetch recent posts
+      const rawPosts = await ctx.db
+        .query("posts")
+        .withIndex("by_created")
+        .order("desc")
+        .take(150);
+
+      // 2. Fetch all studio users to cross-check authors
+      const allUsers = await ctx.db.query("users").take(200);
+      const studioUserIds = new Set(
+        allUsers
+          .filter(
+            (u) =>
+              u.activeRole === "Studio" ||
+              (u.accountTypes && u.accountTypes.includes("Studio"))
+          )
+          .map((u) => u._id.toString())
+      );
+
+      // 3. Filter for studio-created posts or posts with studio tagged
+      const validPosts = rawPosts.filter((p) => {
+        if (p.deletedAt || p.visibility !== "public") return false;
+
+        const isStudioAuthor = p.authorId && studioUserIds.has(p.authorId.toString());
+        const isStudioRole = p.role?.toLowerCase() === "studio";
+        const isStudioCategory = p.category?.toLowerCase() === "studio";
+        const hasTaggedStudio = !!(
+          p.customFields?.taggedStudio ||
+          p.customFields?.taggedStudioId ||
+          p.customFields?.studioName
+        );
+
+        return isStudioAuthor || isStudioRole || isStudioCategory || hasTaggedStudio;
+      });
+
+      const paginated = validPosts.slice(skip, skip + limit);
+      return await Promise.all(paginated.map((p: any) => formatPostAuthor(ctx, p)));
+    } catch (error) {
+      console.error("Error in getStudioPosts:", error);
+      return [];
+    }
+  },
+});
+

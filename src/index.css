@@ -30,6 +30,10 @@
 }
 
 /* Base Styles */
+html {
+  font-size: 12px; /* Reduced all font sizes by 4px (default 16px -> 12px) */
+}
+
 body {
   @apply bg-gray-50 text-gray-900 dark:bg-[#1a1d21] dark:text-white transition-colors duration-300 antialiased;
   /* Prevent bounce on iOS/Mac */

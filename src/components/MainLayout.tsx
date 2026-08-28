@@ -95,6 +95,7 @@ const LegalDocs = retryLazyLoad(() => import('./LegalDocs'));
 const FloatingChatWidget = retryLazyLoad(() => import('./chat/FloatingChatWidget'));
 const DeviceFontPrompt = retryLazyLoad(() => import('./shared/DeviceFontPrompt'));
 const SharedPostModal = retryLazyLoad(() => import('./social/SharedPostModal'));
+const CreatorStudioPage = retryLazyLoad(() => import('./studio/CreatorStudioPage'));
 // const LabelDashboard = retryLazyLoad(() => import('./labels/LabelDashboard'));
 // const EduStudentDashboard = retryLazyLoad(() => import('./EDU/EduStudentDashboard'));
 // const EduInternDashboard = retryLazyLoad(() => import('./EDU/EduInternDashboard'));
@@ -121,13 +122,12 @@ export default function MainLayout({
   // Helper to determine active tab from URL
   const getTabFromPath = (path: string): string => {
     if (path.startsWith('/messages') || path.startsWith('/chat')) return 'messages';
-    if (path.startsWith('/bookings')) return 'bookings';
+    if (path.startsWith('/creator-studio') || path.startsWith('/studio-dashboard') || path.startsWith('/bookings')) return 'creator-studio';
     if (path.startsWith('/profile')) return 'profile';
     if (path.startsWith('/marketplace')) return 'marketplace';
     if (path.startsWith('/tech')) return 'tech';
     if (path.startsWith('/payments') || path.startsWith('/billing')) return 'payments';
-    if (path.startsWith('/business-center')) return 'business-center';
-    if (path.startsWith('/studio-manager')) return 'studio-manager';
+    if (path.startsWith('/business-center') || path.startsWith('/studio-manager')) return 'business-center';
     if (path.startsWith('/dashboard') || path === '/home') return 'dashboard';
     if (path.startsWith('/legal')) return 'legal';
     if (path.startsWith('/edu-student')) return 'edu-student';
@@ -177,40 +177,24 @@ export default function MainLayout({
     // Non-blocking loading state
     if (loading) {
       return (
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="animate-spin text-brand-blue" size={48} />
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="animate-spin text-brand-blue" size={32} />
         </div>
       );
     }
 
     const subProfiles = userData?.subProfiles || {};
-    const bookingCount = userData?.bookingCount || 0;
-    const tokenBalance = userData?.tokenBalance || 0;
 
     switch (activeTab) {
-      // ACTIVE MODULES: Bookings, Social Feed, Profile
       case 'feed':
-      case 'social':
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <SocialFeed user={user} userData={userData} subProfiles={subProfiles} openPublicProfile={(uid: string, name: string) => setViewingProfile({ uid, name })} />
-          </Suspense>
-        );
-      case 'bookings':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <BookingSystem
+            <SocialFeed
               user={user}
               userData={userData}
               subProfiles={subProfiles}
-              openPublicProfile={(uid: string, name: string) => setViewingProfile({ uid, name })}
+              openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })}
             />
-          </Suspense>
-        );
-      case 'profile':
-        return (
-          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <ProfileManager user={user} userData={userData} subProfiles={subProfiles} handleLogout={handleLogout} onRoleSwitch={handleRoleSwitch} />
           </Suspense>
         );
       case 'dashboard':
@@ -221,10 +205,14 @@ export default function MainLayout({
               user={user}
               userData={userData}
               subProfiles={subProfiles}
-              setActiveTab={setActiveTab}
-              bookingCount={0}
-              tokenBalance={0}
+              openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })}
             />
+          </Suspense>
+        );
+      case 'profile':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <ProfileManager user={user} userData={userData} />
           </Suspense>
         );
       case 'studio-manager':
@@ -274,6 +262,19 @@ export default function MainLayout({
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
             <BusinessCenter user={user} userData={userData} />
+          </Suspense>
+        );
+      case 'creator-studio':
+      case 'studio-dashboard':
+      case 'bookings':
+        return (
+          <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
+            <CreatorStudioPage
+              user={user}
+              userData={userData}
+              openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })}
+              setPendingChatTarget={setPendingChatTarget}
+            />
           </Suspense>
         );
       case 'legal':

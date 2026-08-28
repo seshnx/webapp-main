@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check, Repeat2, Edit3, FileEdit, ExternalLink, DollarSign } from 'lucide-react';
+import { MessageCircle, Share2, MoreHorizontal, User, Bookmark, Smile, UserPlus, Link2, Flag, Trash2, Check, Repeat2, Edit3, FileEdit, ExternalLink, DollarSign, Building2, Sparkles } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import type { Id } from '../../../convex/_generated/dataModel';
@@ -414,12 +414,17 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                         />
                     </div>
                     <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                             <h4
-                                className="font-bold dark:text-white text-sm hover:underline decoration-brand-blue cursor-pointer truncate"
+                                className="font-bold dark:text-white text-sm hover:underline decoration-brand-blue cursor-pointer truncate flex items-center gap-1"
                                 onClick={() => post.userId && openPublicProfile?.(post.userId)}
                             >
-                                {post.displayName || '[Deleted User]'}
+                                <span>{post.displayName || '[Deleted User]'}</span>
+                                {(post.isPriorityBoosted || (post as any).isVerified) && (
+                                    <span title="Verified Priority Creator" className="text-brand-blue inline-flex">
+                                        <Sparkles size={13} />
+                                    </span>
+                                )}
                             </h4>
                             {/* Follow button in header for non-own posts */}
                             {!isOwnPost && onToggleFollow && !isFollowingAuthor && (
@@ -431,7 +436,7 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                 </button>
                             )}
                         </div>
-                        <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <div className="text-xs text-gray-500 flex items-center gap-1 flex-wrap">
                             <span className="truncate">{post.role}</span>
                             <span>•</span>
                             <span className="shrink-0 flex items-center gap-1">
@@ -443,6 +448,25 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                     <span className="text-[10px] text-gray-400 font-normal italic">(edited)</span>
                                 )}
                             </span>
+                        </div>
+
+                        {/* Tagged Studio & Boost Badges */}
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            {(post.customFields?.taggedStudio || (post as any).taggedStudio) && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 px-2 py-0.5 rounded-full">
+                                    <Building2 size={11} className="text-purple-500" />
+                                    <span>
+                                        Recorded at {post.customFields?.taggedStudio?.name || (post as any).taggedStudio?.name || post.customFields?.taggedStudio || (post as any).taggedStudio}
+                                    </span>
+                                </span>
+                            )}
+
+                            {(post.customFields?.isBoosted || (post as any).isBoosted) && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-black text-brand-blue bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800/40 px-2 py-0.5 rounded-full">
+                                    <Sparkles size={10} className="text-brand-blue" />
+                                    <span>Priority Studio Reach • 📍 {post.customFields?.boostRadiusMiles || (post as any).boostRadiusMiles || 25} mi</span>
+                                </span>
+                            )}
                         </div>
                     </div>
                 </div>

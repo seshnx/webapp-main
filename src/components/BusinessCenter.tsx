@@ -49,6 +49,9 @@ export default function BusinessCenter({ user, userData }: BusinessCenterProps) 
     // Get active tab from URL path
     const getTabFromPath = (path: string): string => {
         const parts = path.split('/').filter(Boolean);
+        if (parts[0] === 'studio-manager') {
+            return 'studio';
+        }
         if (parts[0] === 'business-center' && parts[1]) {
             // Return the first tab segment, ignore sub-tabs (like tech/requests)
             return parts[1];
@@ -103,11 +106,11 @@ export default function BusinessCenter({ user, userData }: BusinessCenterProps) 
         },
         {
             id: 'studio',
-            label: 'Studio Ops',
-            icon: Home,
+            label: 'Studio Manager',
+            icon: Building2,
             iconSize: 18,
             available: isStudio,
-            description: 'Manage rooms, rates & amenities'
+            description: 'Manage physical rooms, floorplans, gear & operations'
         },
         {
             id: 'distribution',

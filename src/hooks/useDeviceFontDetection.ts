@@ -77,7 +77,7 @@ export function useDeviceFontDetection(userId?: string | null): DeviceFontDetect
 
     // Apply immediately to DOM & localStorage
     applySettingsToDom(updatedSettings);
-    document.documentElement.style.fontSize = '15px';
+    document.documentElement.style.fontSize = '12px';
     localStorage.setItem('fontSize', 'medium');
     localStorage.setItem(STORAGE_KEY, 'true');
 

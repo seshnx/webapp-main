@@ -70,10 +70,10 @@ export function useSettings(settings: UserSettings | null | undefined, userData?
     if (settings.accessibility?.fontSize) {
       const root = document.documentElement;
       const fontSizes: Record<string, string> = {
-        small: '14px',
-        medium: '16px',
-        large: '18px',
-        xlarge: '20px',
+        small: '10px',
+        medium: '12px',
+        large: '14px',
+        xlarge: '16px',
       };
       root.style.fontSize = fontSizes[settings.accessibility.fontSize] || fontSizes.medium;
       localStorage.setItem('fontSize', settings.accessibility.fontSize);

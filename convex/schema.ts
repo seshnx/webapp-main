@@ -143,6 +143,11 @@ export default defineSchema({
     // Settings - accept any object to support complex settings structure
     settings: v.optional(v.any()),
 
+    // Priority & Visibility Boost fields
+    isPriorityBoosted: v.optional(v.boolean()),
+    boostTier: v.optional(v.string()), // "creator_priority" | "studio_local"
+    boostExpiresAt: v.optional(v.number()),
+
     // EDU-specific fields
     schoolId: v.optional(v.id("schools")),
     studentId: v.optional(v.string()),
@@ -309,6 +314,15 @@ export default defineSchema({
     equipment: v.optional(v.array(v.string())),
     software: v.optional(v.array(v.string())),
     customFields: v.optional(v.any()),
+
+    // Boost & Visibility expansion fields
+    isBoosted: v.optional(v.boolean()),
+    boostRadiusMiles: v.optional(v.number()),
+    boostCoordinates: v.optional(v.object({
+      lat: v.number(),
+      lng: v.number(),
+    })),
+    boostType: v.optional(v.string()), // "creator_priority" | "studio_local"
 
     // Amendments and edits
     amendments: v.optional(v.array(v.object({
@@ -1990,4 +2004,42 @@ export default defineSchema({
     .index("by_sender", ["senderId", "createdAt"])
     .index("by_receiver", ["receiverId", "createdAt"])
     .index("by_post", ["postId"]),
+
+  // Native Sponsored Feed Posts (For Free & Basic tiers)
+  sponsoredPosts: defineTable({
+    title: v.string(),
+    content: v.string(),
+    mediaUrl: v.optional(v.string()),
+    sponsorName: v.string(),
+    sponsorLogo: v.optional(v.string()),
+    sponsorUrl: v.string(),
+    ctaText: v.string(), // e.g. "Shop Deal ↗", "Learn More", "Claim 20% Off"
+    category: v.optional(v.string()),
+    targetTiers: v.array(v.string()), // ["free", "basic"]
+    status: v.string(), // "active" | "paused"
+    impressionsCount: v.number(),
+    clicksCount: v.number(),
+    startDate: v.number(),
+    endDate: v.optional(v.number()),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status", "createdAt"]),
+
+  // Marketplace Retailer Affiliate Deals (Sweetwater, Guitar Center, Reverb)
+  affiliateGearDeals: defineTable({
+    retailer: v.string(), // "Sweetwater" | "Guitar Center" | "Reverb"
+    title: v.string(),
+    brand: v.string(),
+    category: v.string(), // "Microphones", "Audio Interfaces", "Monitors", "Guitars"
+    price: v.number(),
+    originalPrice: v.optional(v.number()),
+    imageUrl: v.string(),
+    productUrl: v.string(),
+    affiliateCode: v.string(),
+    status: v.string(), // "active" | "paused"
+    clicksCount: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_status", ["status", "createdAt"])
+    .index("by_status_category", ["status", "category"]),
 });

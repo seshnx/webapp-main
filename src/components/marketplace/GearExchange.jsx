@@ -7,6 +7,8 @@ import InspectionEditor from '../tech/InspectionEditor';
 import { InspectionSvg } from '../tech/InspectionDiagrams';
 import SafeExchangeTransaction from './SafeExchangeTransaction';
 import ShippingVerification from './ShippingVerification';
+import AffiliateDealCard from './AffiliateDealCard';
+import { useActiveAffiliateDeals } from '../../hooks/useConvex';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -133,6 +135,9 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
     const [filter, setFilter] = useState('All');
     const [search, setSearch] = useState('');
     const [selectedItem, setSelectedItem] = useState(null);
+
+    // Active affiliate deals for gear exchange
+    const activeAffiliateDeals = useActiveAffiliateDeals(filter === 'All' ? undefined : filter) || [];
 
     // Safe Exchange State
     const [activeTransaction, setActiveTransaction] = useState(null);
@@ -506,61 +511,69 @@ export default function GearExchange({ user, userData, setActiveTab, openChat })
 
                     {/* Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {filteredListings.map(item => {
+                        {filteredListings.map((item, index) => {
                             const highValue = isHighValueItem(item.price);
+                            const shouldInjectDeal = activeAffiliateDeals.length > 0 && (index + 1) % 4 === 0;
+                            const dealToDisplay = shouldInjectDeal ? activeAffiliateDeals[Math.floor(index / 4) % activeAffiliateDeals.length] : null;
+
                             return (
-                                <div key={item.id} onClick={() => setSelectedItem(item)} className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden hover:shadow-xl transition cursor-pointer group flex flex-col">
-                                    <div className="aspect-square bg-gray-100 dark:bg-black/40 relative flex items-center justify-center overflow-hidden">
-                                        {item.images?.[0] ? (
-                                            <img src={item.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
-                                        ) : (
-                                            <Camera size={32} className="text-gray-400"/>
-                                        )}
-                                        <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-md">
-                                            ${item.price}
-                                        </div>
-                                        {highValue && (
-                                            <div className="absolute top-2 left-2 bg-orange-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                                                <Shield size={10}/> Safe Exchange
+                                <React.Fragment key={item.id}>
+                                    <div onClick={() => setSelectedItem(item)} className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden hover:shadow-xl transition cursor-pointer group flex flex-col">
+                                        <div className="aspect-square bg-gray-100 dark:bg-black/40 relative flex items-center justify-center overflow-hidden">
+                                            {item.images?.[0] ? (
+                                                <img src={item.images[0]} className="w-full h-full object-cover group-hover:scale-105 transition duration-500"/>
+                                            ) : (
+                                                <Camera size={32} className="text-gray-400"/>
+                                            )}
+                                            <div className="absolute top-2 right-2 bg-black/60 text-white text-xs font-bold px-2 py-1 rounded backdrop-blur-md">
+                                                ${item.price}
                                             </div>
-                                        )}
-                                        {item.conditionReport && (
-                                            <div className="absolute bottom-2 left-2 bg-green-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                                                <CheckCircle size={10}/> Inspected
-                                            </div>
-                                        )}
-                                        {item.acceptsOffers && (
-                                            <div className="absolute bottom-2 right-2 bg-blue-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
-                                                <MessageCircle size={10}/> Offers
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="p-4 flex-1 flex flex-col">
-                                        <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">{item.brand}</div>
-                                        <h4 className="font-bold dark:text-white text-sm mb-1 line-clamp-1">{item.title}</h4>
-                                        <div className="text-xs text-gray-500 mb-2">{item.condition} Condition</div>
-                                        
-                                        {/* Seller Rating */}
-                                        {item.sellerRating && (
-                                            <div className="mb-2">
-                                                <SellerRating rating={item.sellerRating} reviewCount={item.sellerSalesCount} size="sm" />
-                                            </div>
-                                        )}
-                                        
-                                        <div className="mt-auto pt-3 border-t dark:border-gray-700 flex justify-between items-center text-xs text-gray-400">
-                                            <span className="flex items-center gap-1">
-                                                {highValue ? (
-                                                    <><MapPin size={10}/> Local Pickup</>
-                                                ) : (
-                                                    <><Truck size={10}/> {item.location || 'Ships'}</>
-                                                )}
-                                            </span>
-                                            {item.sellerVerified && (
-                                                <BadgeCheck size={14} className="text-blue-500" />
+                                            {highValue && (
+                                                <div className="absolute top-2 left-2 bg-orange-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                                                    <Shield size={10}/> Safe Exchange
+                                                </div>
+                                            )}
+                                            {item.conditionReport && (
+                                                <div className="absolute bottom-2 left-2 bg-green-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                                                    <CheckCircle size={10}/> Inspected
+                                                </div>
+                                            )}
+                                            {item.acceptsOffers && (
+                                                <div className="absolute bottom-2 right-2 bg-blue-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1">
+                                                    <MessageCircle size={10}/> Offers
+                                                </div>
                                             )}
                                         </div>
+                                        <div className="p-4 flex-1 flex flex-col">
+                                            <div className="text-[10px] font-bold text-gray-400 uppercase mb-1">{item.brand}</div>
+                                            <h4 className="font-bold dark:text-white text-sm mb-1 line-clamp-1">{item.title}</h4>
+                                            <div className="text-xs text-gray-500 mb-2">{item.condition} Condition</div>
+                                            
+                                            {/* Seller Rating */}
+                                            {item.sellerRating && (
+                                                <div className="mb-2">
+                                                    <SellerRating rating={item.sellerRating} reviewCount={item.sellerSalesCount} size="sm" />
+                                                </div>
+                                            )}
+                                            
+                                            <div className="mt-auto pt-3 border-t dark:border-gray-700 flex justify-between items-center text-xs text-gray-400">
+                                                <span className="flex items-center gap-1">
+                                                    {highValue ? (
+                                                        <><MapPin size={10}/> Local Pickup</>
+                                                    ) : (
+                                                        <><Truck size={10}/> {item.location || 'Ships'}</>
+                                                    )}
+                                                </span>
+                                                {item.sellerVerified && (
+                                                    <BadgeCheck size={14} className="text-blue-500" />
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
+                                    {dealToDisplay && (
+                                        <AffiliateDealCard deal={dealToDisplay} />
+                                    )}
+                                </React.Fragment>
                             );
                         })}
                     </div>

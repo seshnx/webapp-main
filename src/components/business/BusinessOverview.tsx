@@ -6,7 +6,8 @@ import LabelOverviewCard from './LabelOverviewCard';
 import StudioOverviewCard from './StudioOverviewCard';
 import DistributionOverviewCard from './DistributionOverviewCard';
 import TechOverviewCard from './TechOverviewCard';
-import { Briefcase, Settings2 } from 'lucide-react';
+import BoostVisibilityModal from '../social/BoostVisibilityModal';
+import { Briefcase, Settings2, Sparkles, ArrowRight } from 'lucide-react';
 
 /**
  * Metrics data structure
@@ -50,6 +51,7 @@ export interface BusinessOverviewProps {
 export default function BusinessOverview({ user, userData, setActiveTab }: BusinessOverviewProps) {
     const [metrics, setMetrics] = useState<MetricsData>({});
     const [loading, setLoading] = useState<boolean>(true);
+    const [showBoostModal, setShowBoostModal] = useState<boolean>(false);
 
     // Determine which features the user has access to
     const isStudio = userData?.accountTypes?.includes('Studio');
@@ -128,13 +130,22 @@ export default function BusinessOverview({ user, userData, setActiveTab }: Busin
     return (
         <div className="space-y-6 animate-in fade-in">
             {/* Welcome Header */}
-            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl p-8 text-white relative overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-800 rounded-2xl p-8 text-white relative overflow-hidden flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
                 <div className="relative z-10">
                     <h1 className="text-3xl font-bold mb-2">Business Center</h1>
-                    <p className="text-indigo-100 max-w-xl">
+                    <p className="text-indigo-100 max-w-xl text-xs sm:text-sm">
                         Manage your studio operations, distribute music, and grow your roster — all in one place.
                     </p>
+                </div>
+                <div className="relative z-10 shrink-0">
+                    <button
+                        onClick={() => setShowBoostModal(true)}
+                        className="px-4 py-2.5 rounded-xl bg-white text-indigo-900 font-bold text-xs shadow-lg hover:bg-indigo-50 transition flex items-center gap-2"
+                    >
+                        <Sparkles size={15} className="text-purple-600" />
+                        <span>Boost Studio Reach 📍</span>
+                    </button>
                 </div>
             </div>
 
@@ -195,6 +206,16 @@ export default function BusinessOverview({ user, userData, setActiveTab }: Busin
                         Update your profile to add "Studio", "Talent", "Label", or "Agent" account types.
                     </p>
                 </div>
+            )}
+
+            {/* Boost Visibility Modal */}
+            {showBoostModal && (
+                <BoostVisibilityModal
+                    isOpen={showBoostModal}
+                    onClose={() => setShowBoostModal(false)}
+                    user={user}
+                    userData={userData}
+                />
             )}
         </div>
     );

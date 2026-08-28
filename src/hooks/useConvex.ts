@@ -26,6 +26,13 @@ export function useHomeFeed(userId: string, limit = 20) {
 }
 
 /**
+ * Get studio posts feed
+ */
+export function useStudioPosts(limit = 20) {
+  return useQuery(api.social.getStudioPosts, { limit });
+}
+
+/**
  * Get posts by author
  */
 export function usePostsByAuthor(clerkId: string, limit = 20) {
@@ -557,6 +564,13 @@ export function useDeclineTalentBooking() {
  */
 export function useCancelTalentBooking() {
   return useMutation(api.bookings.cancelBooking);
+}
+
+/**
+ * Complete a talent booking
+ */
+export function useCompleteTalentBooking() {
+  return useMutation(api.bookings.completeBooking);
 }
 
 // =====================================================
@@ -1347,5 +1361,37 @@ export function useSendTip() {
 
 export function useReceivedTips(clerkId: string) {
   return useQuery(api.tips.getReceivedTips, { clerkId });
+}
+
+// =====================================================
+// SPONSORED ADS & AFFILIATE DEALS
+// =====================================================
+
+export function useActiveSponsoredPosts(userTier?: string) {
+  return useQuery(api.ads.getActiveSponsoredPosts, { userTier });
+}
+
+export function useActiveAffiliateDeals(category?: string) {
+  return useQuery(api.ads.getActiveAffiliateDeals, { category });
+}
+
+export function useTrackAdImpression() {
+  return useMutation(api.ads.trackAdImpression);
+}
+
+export function useTrackAdClick() {
+  return useMutation(api.ads.trackAdClick);
+}
+
+// =====================================================
+// VISIBILITY & PRIORITY BOOST
+// =====================================================
+
+export function useSubscribeToPriorityVisibility() {
+  return useMutation(api.ads.subscribeToPriorityVisibility);
+}
+
+export function useBoostPost() {
+  return useMutation(api.ads.boostPost);
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { Loader2, RefreshCw, Users, Compass, UserPlus, Search, Film, BarChart3, Radio, Bookmark, TrendingUp, Sparkles, Calendar, Settings, ShieldCheck, Eye, Flame, ChevronRight } from 'lucide-react';
+import { Loader2, RefreshCw, Users, Compass, UserPlus, Search, Film, BarChart3, Radio, Bookmark, TrendingUp, Sparkles, Calendar, Settings, ShieldCheck, Eye, Flame, ChevronRight, Building2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PostCard from './social/PostCard';
 import CreatePostWidget from './social/CreatePostWidget';
@@ -8,13 +8,15 @@ import Discover from './social/Discover';
 import StoriesBar from './social/StoriesBar';
 import LiveSpacesBar from './social/LiveSpacesBar';
 import ReelsFeed from './social/ReelsFeed';
-import CreatorStudio from './social/CreatorStudio';
 import CommunitiesSection from './social/CommunitiesSection';
 import { useFollowSystem } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useFeed, useHomeFeed, useCreatePost, useUserByClerkId } from '@/hooks/useConvex';
+import { useFeed, useHomeFeed, useStudioPosts, useCreatePost, useUserByClerkId, useActiveSponsoredPosts } from '@/hooks/useConvex';
+import { shouldShowAds } from '../utils/tierPermissions';
+import SponsoredPostCard from './social/SponsoredPostCard';
+import BoostVisibilityModal from './social/BoostVisibilityModal';
 import type { UserData } from '../types';
 
 // =====================================================
@@ -129,13 +131,21 @@ export default function SocialFeed({
   // Get current user from Convex
   const convexUser = useUserByClerkId(userId || '');
 
+  // Ad eligibility and active campaigns
+  const isAdEligible = shouldShowAds(userData);
+  const activeAds = useActiveSponsoredPosts(userData?.subscriptionTier || 'free') || [];
+  const [showBoostModal, setShowBoostModal] = useState<boolean>(false);
+
   // Get posts based on feed mode
   const feedPosts = useFeed(20); // For You mode
   const homeFeedPosts = useHomeFeed(userId || '', 20); // Following mode (personalized)
+  const studioPosts = useStudioPosts(20); // Studio feed mode
 
   // Select appropriate data source based on feed mode
   const rawPosts = feedMode === FEED_MODES.FOLLOWING
     ? homeFeedPosts
+    : feedMode === FEED_MODES.STUDIO
+    ? studioPosts
     : feedPosts;
 
   // Detect media type from URL extension
@@ -328,6 +338,10 @@ export default function SocialFeed({
         mediaAttachments: mediaAttachments.length > 0 ? mediaAttachments : undefined,
         visibility: 'public',
         category: activeRole,
+        customFields: {
+          ...((postPayload as any).taggedStudio ? { taggedStudio: (postPayload as any).taggedStudio } : {}),
+          ...((postPayload as any).isBoosted ? { isBoosted: true, boostRadiusMiles: (postPayload as any).boostRadiusMiles } : {}),
+        },
       });
     } catch (e) {
       console.error("Failed to post:", e);
@@ -474,79 +488,81 @@ export default function SocialFeed({
             onPost={handlePost}
           />
 
-          {/* Feed Mode Toggle */}
-          <div className="flex items-center gap-1.5 mb-4 bg-white dark:bg-dark-card p-1.5 rounded-xl border dark:border-gray-700 shadow-sm overflow-x-auto no-scrollbar">
-            <button
-              onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
-              className={`flex-1 min-w-[85px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                feedMode === FEED_MODES.FOR_YOU
-                  ? 'bg-brand-blue text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <Compass size={15} />
-              <span>{t('forYou')}</span>
-            </button>
+          {/* Sticky Feed Mode Toggle Bar with Seamless Top Coverage & Fade */}
+          <div className="sticky -top-4 z-30 pt-4 pb-3 -mt-2 -mx-3 sm:-mx-4 px-3 sm:px-4 bg-gray-50/95 dark:bg-[#1a1d21]/95 backdrop-blur-xl transition-all">
+            <div className="grid grid-cols-6 gap-1 sm:gap-1.5 bg-white/90 dark:bg-[#1e2128]/90 backdrop-blur-2xl p-1 sm:p-1.5 rounded-2xl border border-gray-200/80 dark:border-white/[0.08] shadow-lg shadow-black/5 dark:shadow-black/20 w-full">
+              <button
+                onClick={() => setFeedMode(FEED_MODES.FOR_YOU)}
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 w-full min-w-0 ${
+                  feedMode === FEED_MODES.FOR_YOU
+                    ? 'bg-gradient-to-r from-blue-600 to-brand-blue text-white shadow-md shadow-blue-500/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-white/[0.05]'
+                }`}
+              >
+                <Compass size={14} className="shrink-0" />
+                <span className="whitespace-nowrap">{t('forYou')}</span>
+              </button>
 
-            <button
-              onClick={() => setFeedMode(FEED_MODES.FOLLOWING)}
-              className={`flex-1 min-w-[90px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                feedMode === FEED_MODES.FOLLOWING
-                  ? 'bg-brand-blue text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <Users size={15} />
-              <span>{t('following')}</span>
-            </button>
+              <button
+                onClick={() => setFeedMode(FEED_MODES.FOLLOWING)}
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 w-full min-w-0 ${
+                  feedMode === FEED_MODES.FOLLOWING
+                    ? 'bg-gradient-to-r from-blue-600 to-brand-blue text-white shadow-md shadow-blue-500/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-white/[0.05]'
+                }`}
+              >
+                <Users size={14} className="shrink-0" />
+                <span className="whitespace-nowrap">{t('following')}</span>
+              </button>
 
-            <button
-              onClick={() => setFeedMode(FEED_MODES.REELS)}
-              className={`flex-1 min-w-[80px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                feedMode === FEED_MODES.REELS
-                  ? 'bg-brand-blue text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <Film size={15} />
-              <span>Shorts</span>
-            </button>
+              <button
+                onClick={() => setFeedMode(FEED_MODES.REELS)}
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 w-full min-w-0 ${
+                  feedMode === FEED_MODES.REELS
+                    ? 'bg-gradient-to-r from-blue-600 to-brand-blue text-white shadow-md shadow-blue-500/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-white/[0.05]'
+                }`}
+              >
+                <Film size={14} className="shrink-0" />
+                <span className="whitespace-nowrap">Shorts</span>
+              </button>
 
-            <button
-              onClick={() => setFeedMode(FEED_MODES.COMMUNITIES)}
-              className={`flex-1 min-w-[85px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                feedMode === FEED_MODES.COMMUNITIES
-                  ? 'bg-brand-blue text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <Users size={15} />
-              <span>Circles</span>
-            </button>
+              <button
+                onClick={() => setFeedMode(FEED_MODES.COMMUNITIES)}
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 w-full min-w-0 ${
+                  feedMode === FEED_MODES.COMMUNITIES
+                    ? 'bg-gradient-to-r from-blue-600 to-brand-blue text-white shadow-md shadow-blue-500/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-white/[0.05]'
+                }`}
+              >
+                <Users size={14} className="shrink-0" />
+                <span className="whitespace-nowrap">Circles</span>
+              </button>
 
-            <button
-              onClick={() => setFeedMode(FEED_MODES.STUDIO)}
-              className={`flex-1 min-w-[85px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                feedMode === FEED_MODES.STUDIO
-                  ? 'bg-brand-blue text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <BarChart3 size={15} />
-              <span>Studio</span>
-            </button>
+              <button
+                onClick={() => setFeedMode(FEED_MODES.STUDIO)}
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 w-full min-w-0 ${
+                  feedMode === FEED_MODES.STUDIO
+                    ? 'bg-gradient-to-r from-purple-600 to-brand-blue text-white shadow-md shadow-purple-500/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-white/[0.05]'
+                }`}
+              >
+                <Building2 size={14} className="shrink-0" />
+                <span className="whitespace-nowrap">Studios</span>
+              </button>
 
-            <button
-              onClick={() => setFeedMode(FEED_MODES.DISCOVER)}
-              className={`flex-1 min-w-[85px] flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
-                feedMode === FEED_MODES.DISCOVER
-                  ? 'bg-brand-blue text-white shadow-md'
-                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-              }`}
-            >
-              <Search size={15} />
-              <span>{t('discover')}</span>
-            </button>
+              <button
+                onClick={() => setFeedMode(FEED_MODES.DISCOVER)}
+                className={`flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 w-full min-w-0 ${
+                  feedMode === FEED_MODES.DISCOVER
+                    ? 'bg-gradient-to-r from-blue-600 to-brand-blue text-white shadow-md shadow-blue-500/20'
+                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-white/[0.05]'
+                }`}
+              >
+                <Search size={14} className="shrink-0" />
+                <span className="whitespace-nowrap">{t('discover')}</span>
+              </button>
+            </div>
           </div>
 
           {/* Feed Content Selection */}
@@ -564,11 +580,6 @@ export default function SocialFeed({
             />
           ) : feedMode === FEED_MODES.COMMUNITIES ? (
             <CommunitiesSection />
-          ) : feedMode === FEED_MODES.STUDIO ? (
-            <CreatorStudio
-              user={user}
-              userData={userData}
-            />
           ) : loading ? (
             renderSkeleton()
           ) : (
@@ -639,23 +650,32 @@ export default function SocialFeed({
                 className="space-y-4"
               >
                 <AnimatePresence mode='popLayout'>
-                  {posts.map(post => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      currentUser={user}
-                      currentUserData={userData}
-                      subProfiles={subProfiles}
-                      openPublicProfile={openPublicProfile || (() => {})}
-                      onReport={() => setReportTarget(post)}
-                      onDelete={(postId) => {
-                        console.log('Delete post:', postId);
-                      }}
-                      isFollowingAuthor={isFollowing(post.userId)}
-                      onToggleFollow={() => { toggleFollow(post.userId); }}
-                      autoPlayVideos={autoPlayVideos}
-                    />
-                  ))}
+                  {posts.map((post, index) => {
+                    const shouldInjectAd = isAdEligible && activeAds.length > 0 && (index + 1) % 6 === 0;
+                    const adToDisplay = shouldInjectAd ? activeAds[Math.floor(index / 6) % activeAds.length] : null;
+
+                    return (
+                      <React.Fragment key={post.id}>
+                        <PostCard
+                          post={post}
+                          currentUser={user}
+                          currentUserData={userData}
+                          subProfiles={subProfiles}
+                          openPublicProfile={openPublicProfile || (() => {})}
+                          onReport={() => setReportTarget(post)}
+                          onDelete={(postId) => {
+                            console.log('Delete post:', postId);
+                          }}
+                          isFollowingAuthor={isFollowing(post.userId)}
+                          onToggleFollow={() => { toggleFollow(post.userId); }}
+                          autoPlayVideos={autoPlayVideos}
+                        />
+                        {adToDisplay && (
+                          <SponsoredPostCard ad={adToDisplay as any} />
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
                 </AnimatePresence>
 
                 {posts.length === 0 && feedMode === FEED_MODES.FOR_YOU && (
@@ -666,6 +686,20 @@ export default function SocialFeed({
                   >
                     <RefreshCw className="mx-auto mb-2 opacity-50" size={32} />
                     <p>{t('noPosts')}. {t('beFirst')}</p>
+                  </motion.div>
+                )}
+
+                {posts.length === 0 && feedMode === FEED_MODES.STUDIO && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    className="text-center py-12 text-gray-500 bg-white dark:bg-dark-card rounded-2xl border dark:border-gray-700 p-8 shadow-sm"
+                  >
+                    <Building2 className="mx-auto mb-3 text-purple-500 opacity-60" size={40} />
+                    <h3 className="font-bold text-sm dark:text-white mb-1">No Studio Posts Yet</h3>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 max-w-sm mx-auto">
+                      Posts published by recording studios or creators who tag a studio will appear here in the Studios Feed.
+                    </p>
                   </motion.div>
                 )}
 
@@ -694,8 +728,23 @@ export default function SocialFeed({
         {/* RIGHT COLUMN: Trending Topics & News Sidebar          */}
         {/* ===================================================== */}
         <div className="hidden lg:block lg:col-span-3 space-y-4">
-          {/* Live Audio Spaces Bar */}
-          <LiveSpacesBar user={user} />
+          {/* Boost Visibility Action Card */}
+          <div className="bg-gradient-to-br from-purple-950/40 via-blue-950/30 to-gray-900/50 p-4 rounded-2xl border border-purple-500/30 shadow-md">
+            <div className="flex items-center gap-1.5 text-purple-400 font-bold text-xs mb-1">
+              <Sparkles size={14} /> Priority Visibility
+            </div>
+            <h4 className="font-black text-xs text-white">Want to reach 3x more artists?</h4>
+            <p className="text-[11px] text-gray-300 mt-1">
+              Get the verified creator checkmark and feed ranking priority on your music drops.
+            </p>
+            <button
+              onClick={() => setShowBoostModal(true)}
+              className="mt-3 w-full py-1.5 rounded-xl bg-gradient-to-r from-brand-blue to-purple-600 hover:opacity-95 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1"
+            >
+              <span>Increase Visibility</span>
+              <ChevronRight size={14} />
+            </button>
+          </div>
 
           {/* Trending Music Topics */}
           <div className="bg-white dark:bg-dark-card rounded-2xl p-4 border dark:border-gray-700 shadow-sm">
@@ -732,6 +781,16 @@ export default function SocialFeed({
             summary: reportTarget.text ? reportTarget.text.substring(0, 50) : 'Media Post'
           }}
           onClose={() => setReportTarget(null)}
+        />
+      )}
+
+      {/* Boost Visibility Modal */}
+      {showBoostModal && (
+        <BoostVisibilityModal
+          isOpen={showBoostModal}
+          onClose={() => setShowBoostModal(false)}
+          user={user}
+          userData={userData}
         />
       )}
     </div>
