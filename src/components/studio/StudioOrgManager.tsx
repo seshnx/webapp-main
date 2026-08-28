@@ -4,6 +4,7 @@ import {
   Building2, Check, ChevronDown, Loader2, Users, Shield,
   AlertTriangle, RefreshCw, Mail, UserPlus
 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 /**
  * StudioOrgManager - Custom organization management UI
@@ -43,7 +44,6 @@ export default function StudioOrgManager({ studioId }: { studioId?: string }) {
   const [creatingOrg, setCreatingOrg] = useState(false);
 
   const handleCreateOrg = async () => {
-    if (!studioId) return;
     setCreatingOrg(true);
     try {
       const token = await clerk.session?.getToken();
@@ -57,14 +57,19 @@ export default function StudioOrgManager({ studioId }: { studioId?: string }) {
           studioId,
           slug: clerk.user?.username || 'studio-' + Date.now().toString().slice(-6),
           ownerClerkId: clerk.user?.id,
-          studioName: clerk.user?.fullName || 'Studio Org',
+          studioName: clerk.user?.fullName || 'Studio Organization',
         })
       });
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (res.ok && data.organizationId) {
+        toast.success('Clerk Organization created!');
         await setActive?.({ organization: data.organizationId });
+      } else {
+        toast.error(data.message || data.error || 'Failed to create organization');
+        console.error('Create org failed:', data);
       }
-    } catch (e) {
+    } catch (e: any) {
+      toast.error(e.message || 'Failed to create org');
       console.error('Failed to create org:', e);
     } finally {
       setCreatingOrg(false);

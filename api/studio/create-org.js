@@ -1,5 +1,5 @@
 /**
- * Create Clerk Organization for Studio (Vercel Serverless Compatible)
+ * Create Clerk Organization for Studio (Vercel Serverless Compatible & Resilient)
  *
  * Called when a studio owner sets up or links a Clerk Organization
  * for billing, role-based access, and membership management.
@@ -107,19 +107,19 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { studioId, slug, ownerClerkId, studioName } = req.body;
+    const { studioId, slug, ownerClerkId, studioName } = req.body || {};
 
-    if (!studioId || !ownerClerkId || !studioName) {
-      return res.status(400).json({ error: 'Missing required fields: studioId, ownerClerkId, studioName' });
+    if (!ownerClerkId) {
+      return res.status(400).json({ error: 'Missing required field: ownerClerkId' });
     }
 
     const convexUrl = process.env.CONVEX_URL || process.env.VITE_CONVEX_URL;
     if (!convexUrl) {
-      console.error('❌ CONVEX_URL is not configured');
+      console.error('❌ CONVEX_URL is not configured in server environment');
       return res.status(500).json({ error: 'Server configuration error: Convex URL missing' });
     }
 
-    // Verify the caller is authenticated and owns this studio
+    // Verify authentication header
     const sessionToken = req.headers['authorization']?.replace('Bearer ', '');
     if (!sessionToken) {
       return res.status(401).json({ error: 'Missing authorization header' });
@@ -127,7 +127,7 @@ export default async function handler(req, res) {
 
     const clerkSecret = process.env.CLERK_SECRET_KEY;
     if (!clerkSecret) {
-      console.error('❌ CLERK_SECRET_KEY is not configured');
+      console.error('❌ CLERK_SECRET_KEY is not configured in server environment');
       return res.status(500).json({ error: 'Server configuration error: Clerk secret key missing' });
     }
 
@@ -135,7 +135,7 @@ export default async function handler(req, res) {
       secretKey: clerkSecret,
     });
 
-    // Verify the caller's identity via JWT token or session ID
+    // Verify caller identity via JWT or session
     let verifiedUserId = null;
     try {
       const verifiedToken = await clerkClient.verifyToken(sessionToken);
@@ -145,57 +145,105 @@ export default async function handler(req, res) {
         const session = await clerkClient.sessions.getSession(sessionToken);
         verifiedUserId = session?.userId;
       } catch (sessErr) {
-        console.error('❌ Token verification error:', jwtErr.message);
-        return res.status(401).json({ error: 'Invalid or expired session' });
+        console.error('❌ Token verification failed:', jwtErr.message);
+        return res.status(401).json({ error: 'Invalid or expired session token', details: jwtErr.message });
       }
     }
 
     if (!verifiedUserId || verifiedUserId !== ownerClerkId) {
-      return res.status(403).json({ error: 'Not authorized to create org for this studio' });
+      return res.status(403).json({ error: 'Not authorized: caller identity does not match owner' });
     }
 
-    // Verify studio exists in Convex
-    const studio = await fetchQuery(convexUrl, anyApi.studios.getStudioById, { studioId });
+    // Resolve caller's Convex user record
+    let caller = null;
+    try {
+      caller = await fetchQuery(convexUrl, anyApi.users.getUserByClerkId, { clerkId: ownerClerkId });
+    } catch (userErr) {
+      console.error('❌ Failed to look up user in Convex:', userErr);
+    }
+
+    if (!caller) {
+      return res.status(404).json({ error: 'User account not found in Convex database' });
+    }
+
+    // Resolve studio document
+    let studio = null;
+    if (studioId) {
+      try {
+        studio = await fetchQuery(convexUrl, anyApi.studios.getStudioById, { studioId });
+      } catch (idErr) {
+        console.warn('⚠️ getStudioById failed, trying fallback by owner:', idErr.message);
+      }
+    }
+
     if (!studio) {
-      return res.status(404).json({ error: 'Studio not found' });
+      try {
+        studio = await fetchQuery(convexUrl, anyApi.studios.getStudioByOwner, { ownerId: caller._id });
+      } catch (ownerErr) {
+        console.error('❌ getStudioByOwner failed:', ownerErr.message);
+      }
     }
 
-    // Resolve caller's Convex user
-    const caller = await fetchQuery(convexUrl, anyApi.users.getUserByClerkId, { clerkId: ownerClerkId });
-    if (!caller || caller._id !== studio.ownerId) {
-      return res.status(403).json({ error: 'Only the studio owner can create an organization' });
+    if (!studio) {
+      return res.status(404).json({ error: 'Studio not found for this user' });
     }
 
-    // If studio already has an org, return it
+    // If studio already has an org linked, return it immediately
     if (studio.clerkOrgId) {
       return res.status(200).json({
         organizationId: studio.clerkOrgId,
-        message: 'Organization already exists',
+        message: 'Organization already linked',
       });
     }
 
-    // Clean and compact slug for Clerk requirements (lowercase, letters, numbers, hyphens, min 2 chars)
-    const cleanSlug = generateSlug(slug || studio.slug || studioName);
+    // Determine studio display name and compacted slug
+    const finalStudioName = studioName || studio.name || caller.displayName || 'Studio';
+    const baseSlug = generateSlug(slug || studio.slug || finalStudioName);
 
-    // Create Clerk Organization
-    const org = await clerkClient.organizations.createOrganization({
-      name: studioName,
-      slug: cleanSlug,
-      createdBy: ownerClerkId,
-      privateMetadata: {
-        studioId: studioId,
-        type: 'studio',
-      },
-    });
+    // Create Clerk Organization with slug conflict retry
+    let org = null;
+    let attemptSlug = baseSlug;
 
-    console.log(`✅ Created Clerk org ${org.id} for studio ${studioId} (${cleanSlug})`);
+    try {
+      org = await clerkClient.organizations.createOrganization({
+        name: finalStudioName,
+        slug: attemptSlug,
+        createdBy: ownerClerkId,
+        privateMetadata: {
+          studioId: studio._id,
+          type: 'studio',
+        },
+      });
+    } catch (createErr) {
+      // If slug exists, retry with random suffix
+      if (createErr.errors?.[0]?.code === 'form_identifier_exists' || createErr.status === 409 || createErr.status === 422) {
+        attemptSlug = `${baseSlug.slice(0, 32)}-${Math.random().toString(36).substring(2, 6)}`;
+        org = await clerkClient.organizations.createOrganization({
+          name: finalStudioName,
+          slug: attemptSlug,
+          createdBy: ownerClerkId,
+          privateMetadata: {
+            studioId: studio._id,
+            type: 'studio',
+          },
+        });
+      } else {
+        throw createErr;
+      }
+    }
 
-    // Link org back to Convex studio record
-    await fetchMutation(convexUrl, anyApi.studios.linkClerkOrg, {
-      clerkId: ownerClerkId,
-      studioId: studioId,
-      clerkOrgId: org.id,
-    });
+    console.log(`✅ Created Clerk org ${org.id} (${org.slug}) for studio ${studio._id}`);
+
+    // Link org to Convex studio record
+    try {
+      await fetchMutation(convexUrl, anyApi.studios.linkClerkOrg, {
+        clerkId: ownerClerkId,
+        studioId: studio._id,
+        clerkOrgId: org.id,
+      });
+    } catch (linkErr) {
+      console.error('⚠️ Failed to link Clerk org in Convex mutation:', linkErr);
+    }
 
     return res.status(200).json({
       organizationId: org.id,
@@ -204,16 +252,13 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
-    console.error('❌ Create org error:', error);
+    console.error('❌ Create org unexpected error:', error);
 
-    // Handle slug-already-taken specifically
-    if (error.errors?.[0]?.code === 'form_identifier_exists') {
-      return res.status(409).json({ error: 'Organization slug already taken', details: error.errors });
-    }
-
+    const errorMessage = error.errors?.[0]?.message || error.message || 'Internal server error';
     return res.status(500).json({
       error: 'Failed to create organization',
-      message: error.message || 'Internal server error',
+      message: errorMessage,
+      details: error.errors || undefined,
     });
   }
 }
