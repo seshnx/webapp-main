@@ -146,7 +146,7 @@ export function useLiveSpaceAudio({
     };
   }, [selectedAudioInput, studioAudioMode]);
 
-  // Attach or replace audio track in a peer connection with transceiver direction sync
+  // Attach or replace audio track in a peer connection with transceiver direction sync and explicit renegotiation
   const syncLocalTrackToPeer = useCallback(
     async (pc: RTCPeerConnection, stream: MediaStream | null, targetClerkId: string) => {
       const audioTrack = stream ? stream.getAudioTracks()[0] : null;
@@ -155,6 +155,8 @@ export function useLiveSpaceAudio({
         `Syncing track with peer ${targetClerkId}: isSpeaker=${isSpeaker}, hasTrack=${!!audioTrack}, trackEnabled=${audioTrack?.enabled}`
       );
 
+      let needsRenegotiation = false;
+
       // Find existing audio transceiver
       let audioTransceiver = pc
         .getTransceivers()
@@ -162,28 +164,53 @@ export function useLiveSpaceAudio({
 
       if (isSpeaker && audioTrack) {
         if (audioTransceiver) {
-          logAudio('TrackSync', `Updating audio transceiver for ${targetClerkId} to sendrecv`);
           if (audioTransceiver.direction !== 'sendrecv') {
+            logAudio('TrackSync', `Updating audio transceiver for ${targetClerkId} to sendrecv`);
             audioTransceiver.direction = 'sendrecv';
+            needsRenegotiation = true;
           }
           if (audioTransceiver.sender.track !== audioTrack) {
+            logAudio('TrackSync', `Replacing track on transceiver for ${targetClerkId}`);
             await audioTransceiver.sender.replaceTrack(audioTrack).catch((err) => {
               console.warn('[LiveAudio] replaceTrack error:', err);
             });
+            needsRenegotiation = true;
           }
         } else {
           logAudio('TrackSync', `Adding new audio track for ${targetClerkId}`);
           try {
             pc.addTrack(audioTrack, stream!);
+            needsRenegotiation = true;
           } catch (err) {
             console.warn('[LiveAudio] addTrack error:', err);
+          }
+        }
+
+        // If newly promoted speaker needs to renegotiate and connection is stable, create and send offer immediately
+        if (needsRenegotiation && pc.signalingState === 'stable') {
+          try {
+            logAudio('Negotiation', `Explicitly creating offer for ${targetClerkId} after speaker elevation`);
+            isMakingOffer.current.set(targetClerkId, true);
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            await sendSignalMutation({
+              roomId,
+              senderClerkId: currentClerkId,
+              targetClerkId,
+              type: 'offer',
+              payload: JSON.stringify(offer),
+            });
+          } catch (err) {
+            console.warn(`[LiveAudio] Explicit renegotiation error with ${targetClerkId}:`, err);
+          } finally {
+            isMakingOffer.current.set(targetClerkId, false);
           }
         }
       } else {
         // Listener mode: set to recvonly
         if (audioTransceiver) {
-          logAudio('TrackSync', `Setting audio transceiver for ${targetClerkId} to recvonly`);
           if (audioTransceiver.direction !== 'recvonly') {
+            logAudio('TrackSync', `Setting audio transceiver for ${targetClerkId} to recvonly`);
             audioTransceiver.direction = 'recvonly';
           }
           if (audioTransceiver.sender.track) {
@@ -192,7 +219,7 @@ export function useLiveSpaceAudio({
         }
       }
     },
-    [isSpeaker]
+    [isSpeaker, currentClerkId, roomId, sendSignalMutation]
   );
 
   // Helper to create or get PeerConnection with Perfect Negotiation
@@ -230,19 +257,22 @@ export function useLiveSpaceAudio({
       // Perfect Negotiation: On Negotiation Needed
       pc.onnegotiationneeded = async () => {
         try {
+          if (pc!.signalingState !== 'stable') {
+            logAudio('Negotiation', `Skipping onnegotiationneeded (signalingState is ${pc!.signalingState}) for ${targetClerkId}`);
+            return;
+          }
           logAudio('Negotiation', `onnegotiationneeded triggered for ${targetClerkId}`);
           isMakingOffer.current.set(targetClerkId, true);
-          await pc!.setLocalDescription();
-          if (pc!.localDescription) {
-            logAudio('Negotiation', `Sending offer to ${targetClerkId}`);
-            await sendSignalMutation({
-              roomId,
-              senderClerkId: currentClerkId,
-              targetClerkId,
-              type: 'offer',
-              payload: JSON.stringify(pc!.localDescription),
-            });
-          }
+          const offer = await pc!.createOffer();
+          await pc!.setLocalDescription(offer);
+          logAudio('Negotiation', `Sending offer to ${targetClerkId}`);
+          await sendSignalMutation({
+            roomId,
+            senderClerkId: currentClerkId,
+            targetClerkId,
+            type: 'offer',
+            payload: JSON.stringify(offer),
+          });
         } catch (err) {
           console.warn(`[LiveAudio] Negotiation error with ${targetClerkId}:`, err);
         } finally {
@@ -275,8 +305,12 @@ export function useLiveSpaceAudio({
       pc.ontrack = (event) => {
         logAudio(
           'RemoteTrack',
-          `ontrack received from ${targetClerkId}: trackId=${event.track.id}, kind=${event.track.kind}, enabled=${event.track.enabled}`
+          `ontrack received from ${targetClerkId}: trackId=${event.track.id}, kind=${event.track.kind}, enabled=${event.track.enabled}, muted=${event.track.muted}`
         );
+
+        event.track.onunmute = () => {
+          logAudio('RemoteTrack', `Remote audio track from ${targetClerkId} UNMUTED (RTP packets flowing)!`);
+        };
 
         const remoteStream = event.streams[0] || new MediaStream([event.track]);
         let audioEl = remoteAudioElements.current.get(targetClerkId);
@@ -593,18 +627,35 @@ export function useLiveSpaceAudio({
           }
           candidateQueues.current.delete(senderId);
 
-          // Create & send answer
-          await pc.setLocalDescription();
-          if (pc.localDescription) {
-            logAudio('Negotiation', `Sending answer to ${senderId}`);
-            await sendSignalMutation({
-              roomId,
-              senderClerkId: currentClerkId,
-              targetClerkId: senderId,
-              type: 'answer',
-              payload: JSON.stringify(pc.localDescription),
-            });
+          // Ensure our local stream track is attached and transceiver direction is correct before answering
+          if (localAudioStream && isSpeaker) {
+            const audioTrack = localAudioStream.getAudioTracks()[0];
+            const trans = pc
+              .getTransceivers()
+              .find((t) => t.receiver.track.kind === 'audio' || t.sender.track?.kind === 'audio');
+            if (trans) {
+              if (trans.direction !== 'sendrecv') trans.direction = 'sendrecv';
+              if (audioTrack && trans.sender.track !== audioTrack) {
+                await trans.sender.replaceTrack(audioTrack).catch(() => {});
+              }
+            } else if (audioTrack) {
+              try {
+                pc.addTrack(audioTrack, localAudioStream);
+              } catch (e) {}
+            }
           }
+
+          // Create & send answer
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          logAudio('Negotiation', `Sending answer to ${senderId}`);
+          await sendSignalMutation({
+            roomId,
+            senderClerkId: currentClerkId,
+            targetClerkId: senderId,
+            type: 'answer',
+            payload: JSON.stringify(answer),
+          });
         } else if (sig.type === 'answer') {
           const answer = JSON.parse(sig.payload);
           logAudio('Negotiation', `Processing answer from ${senderId}. SignalingState=${pc.signalingState}`);
