@@ -1,14 +1,105 @@
 /**
- * Create Clerk Organization for Studio
+ * Create Clerk Organization for Studio (Vercel Serverless Compatible)
  *
  * Called when a studio owner sets up or links a Clerk Organization
  * for billing, role-based access, and membership management.
- *
- * Uses @clerk/backend to create the org server-side.
  */
 
 import { createClerkClient } from '@clerk/backend';
-import { fetchQuery, fetchMutation } from 'convex/server';
+import { fetchQuery, fetchMutation, anyApi } from 'convex/server';
+
+const SLUG_WORD_COMPACTIONS = {
+  recording: 'rec',
+  recordings: 'recs',
+  records: 'recs',
+  record: 'rec',
+  production: 'prod',
+  productions: 'prods',
+  producer: 'prod',
+  producers: 'prods',
+  mastering: 'mast',
+  engineering: 'eng',
+  engineer: 'eng',
+  engineers: 'eng',
+  entertainment: 'ent',
+  management: 'mgmt',
+  manager: 'mgr',
+  acoustic: 'acoust',
+  acoustics: 'acoust',
+  creative: 'cr',
+  collective: 'cltv',
+  collaboration: 'collab',
+  collaborations: 'collabs',
+  music: 'mus',
+  musical: 'mus',
+  audio: 'aud',
+  sound: 'snd',
+  sounds: 'snds',
+  session: 'sesh',
+  sessions: 'seshs',
+  digital: 'digi',
+  media: 'med',
+  international: 'intl',
+  national: 'natl',
+  broadcast: 'bcast',
+  broadcasting: 'bcast',
+  publishing: 'pub',
+  publishers: 'pubs',
+  publisher: 'pub',
+  laboratory: 'lab',
+  laboratories: 'labs',
+  workshop: 'wrkshp',
+  workshops: 'wrkshp',
+  center: 'ctr',
+  centre: 'ctr',
+  house: 'hse',
+  station: 'stn',
+  street: 'st',
+  boulevard: 'blvd',
+  avenue: 'ave',
+  apartment: 'apt',
+  suite: 'ste',
+  building: 'bldg',
+  company: 'co',
+  corporation: 'corp',
+  incorporated: 'inc',
+  limited: 'ltd',
+  group: 'grp',
+  association: 'assoc',
+  department: 'dept',
+  network: 'net',
+  networks: 'nets',
+};
+
+function compactSlugWords(raw) {
+  const tokens = String(raw || '')
+    .toLowerCase()
+    .split(/[\s\-_]+/)
+    .filter(Boolean);
+
+  const compactedTokens = tokens.map((token) => {
+    const cleanWord = token.replace(/[^a-z0-9]/g, '');
+    return SLUG_WORD_COMPACTIONS[cleanWord] || cleanWord;
+  }).filter(Boolean);
+
+  return compactedTokens.join('-');
+}
+
+function generateSlug(name) {
+  if (!name) return 'studio-' + Math.random().toString(36).substring(2, 6);
+  let slug = compactSlugWords(name);
+  slug = slug.replace(/[^a-z0-9]+/g, '-');
+  slug = slug.replace(/^-+|-+$/g, '');
+  slug = slug.replace(/-+/g, '-');
+  if (slug.length > 40) {
+    slug = slug.substring(0, 40).replace(/-+$/, '');
+  }
+  slug = slug.replace(/^-/, '').replace(/-$/, '');
+  if (slug.length < 3) {
+    slug = 'studio-' + Math.random().toString(36).substring(2, 6);
+  }
+  return slug;
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -63,16 +154,14 @@ export default async function handler(req, res) {
       return res.status(403).json({ error: 'Not authorized to create org for this studio' });
     }
 
-    const { api } = await import('../../convex/_generated/api.js');
-
-    // Verify studio exists
-    const studio = await fetchQuery(convexUrl, api.studios.getStudioById, { studioId });
+    // Verify studio exists in Convex
+    const studio = await fetchQuery(convexUrl, anyApi.studios.getStudioById, { studioId });
     if (!studio) {
       return res.status(404).json({ error: 'Studio not found' });
     }
 
     // Resolve caller's Convex user
-    const caller = await fetchQuery(convexUrl, api.users.getUserByClerkId, { clerkId: ownerClerkId });
+    const caller = await fetchQuery(convexUrl, anyApi.users.getUserByClerkId, { clerkId: ownerClerkId });
     if (!caller || caller._id !== studio.ownerId) {
       return res.status(403).json({ error: 'Only the studio owner can create an organization' });
     }
@@ -84,8 +173,6 @@ export default async function handler(req, res) {
         message: 'Organization already exists',
       });
     }
-
-    const { generateSlug } = await import('../../convex/utils/slugs.js');
 
     // Clean and compact slug for Clerk requirements (lowercase, letters, numbers, hyphens, min 2 chars)
     const cleanSlug = generateSlug(slug || studio.slug || studioName);
@@ -104,7 +191,7 @@ export default async function handler(req, res) {
     console.log(`✅ Created Clerk org ${org.id} for studio ${studioId} (${cleanSlug})`);
 
     // Link org back to Convex studio record
-    await fetchMutation(convexUrl, api.studios.linkClerkOrg, {
+    await fetchMutation(convexUrl, anyApi.studios.linkClerkOrg, {
       clerkId: ownerClerkId,
       studioId: studioId,
       clerkOrgId: org.id,

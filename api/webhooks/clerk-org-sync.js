@@ -11,7 +11,7 @@
  */
 
 import { Webhook } from 'svix';
-import { fetchMutation, fetchAction } from 'convex/server';
+import { fetchMutation, anyApi } from 'convex/server';
 
 const CONVEX_URL = process.env.CONVEX_URL || process.env.VITE_CONVEX_URL;
 
@@ -104,8 +104,7 @@ async function handleMemberAdded(data) {
   if (role === 'org:admin') staffRole = 'Manager';
 
   try {
-    const { api } = await import('../../convex/_generated/api.js');
-    const result = await fetchMutation(CONVEX_URL, api.studios.syncOrgMemberToStaff, {
+    const result = await fetchMutation(CONVEX_URL, anyApi.studios.syncOrgMemberToStaff, {
       clerkOrgId,
       clerkUserId,
       role: staffRole,
@@ -133,8 +132,7 @@ async function handleMemberRemoved(data) {
   const clerkUserId = public_user_data.user_id;
 
   try {
-    const { api } = await import('../../convex/_generated/api.js');
-    const result = await fetchMutation(CONVEX_URL, api.studios.removeOrgMemberFromStaff, {
+    const result = await fetchMutation(CONVEX_URL, anyApi.studios.removeOrgMemberFromStaff, {
       clerkOrgId,
       clerkUserId,
     });
@@ -158,8 +156,7 @@ async function handleOrgUpdated(data) {
   }
 
   try {
-    const { api } = await import('../../convex/_generated/api.js');
-    const result = await fetchMutation(CONVEX_URL, api.studios.syncOrgUpdates, {
+    const result = await fetchMutation(CONVEX_URL, anyApi.studios.syncOrgUpdates, {
       clerkOrgId: id,
       name: name || undefined,
       slug: slug || undefined,
