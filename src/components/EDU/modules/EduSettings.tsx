@@ -3,7 +3,7 @@ import {
     School, Camera, Save, Globe, Mail, GraduationCap,
     Settings, ToggleLeft, ToggleRight, MapPin
 } from 'lucide-react';
-import { useImageUpload } from '../../../hooks/useImageUpload';
+import { useImageUpload } from '../../../hooks/useUpload';
 
 /**
  * School form data interface
@@ -23,6 +23,9 @@ interface SchoolFormData {
     enabled_features?: Record<string, boolean>;
     cohortMode?: string;
     cohort_mode?: string;
+    maxStudents?: number;
+    max_students?: number;
+    departments?: string[];
     gradingScale?: string;
     grading_scale?: string;
     geofencing?: boolean;
@@ -34,18 +37,16 @@ interface SchoolFormData {
  * EduSettings props
  */
 export interface EduSettingsProps {
-    schoolId?: string;
+    schoolId: string;
     initialData?: SchoolFormData;
-    logAction?: (action: string, details: string) => Promise<void> | void;
-    refreshMeta?: (data: Partial<SchoolFormData>) => void;
+    logAction?: (action: string, details?: string) => Promise<void>;
+    refreshMeta?: (data: SchoolFormData) => void;
+    supabase?: any;
 }
 
-export default function EduSettings({ schoolId, initialData, logAction, refreshMeta }: EduSettingsProps) {
-    // TODO: Migrate to Neon/Convex - Supabase legacy code
-    // @ts-ignore - supabase is global for legacy support
-    const supabase = (window as any).supabase;
-
+export default function EduSettings({ schoolId, initialData, logAction, refreshMeta, supabase }: EduSettingsProps) {
     const [formData, setFormData] = useState<SchoolFormData>(initialData || {});
+    const [saving, setSaving] = useState(false);
     const { uploadImage, uploading } = useImageUpload();
 
     // Sync state if initialData loads late
@@ -55,24 +56,30 @@ export default function EduSettings({ schoolId, initialData, logAction, refreshM
 
     // --- ACTIONS ---
 
-    const handleUpdate = async () => {
-        if (!supabase || !schoolId) return;
+    const handleSave = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!schoolId || !supabase) return;
 
+        setSaving(true);
         try {
-            const updateData = {
+            const payload = {
                 name: formData.name,
-                primary_color: formData.primaryColor,
-                website: formData.website || null,
-                contact_email: formData.contactEmail || null,
-                address: formData.address || null,
-                description: formData.description || null,
-                enabled_features: formData.enabledFeatures || {},
+                logo_url: formData.logoURL || formData.logo_url,
+                primary_color: formData.primaryColor || formData.primary_color,
+                website: formData.website,
+                contact_email: formData.contactEmail || formData.contact_email,
+                address: formData.address,
+                description: formData.description,
+                enabled_features: formData.enabledFeatures || formData.enabled_features,
+                cohort_mode: formData.cohortMode || formData.cohort_mode,
+                max_students: formData.maxStudents ? parseInt(formData.maxStudents.toString()) : null,
+                departments: formData.departments || [],
                 updated_at: new Date().toISOString()
             };
 
             const { error } = await supabase
                 .from('schools')
-                .update(updateData)
+                .update(payload)
                 .eq('id', schoolId);
 
             if (error) throw error;
@@ -83,6 +90,8 @@ export default function EduSettings({ schoolId, initialData, logAction, refreshM
         } catch (e) {
             console.error("Update failed:", e);
             alert("Failed to update school settings.");
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -91,7 +100,8 @@ export default function EduSettings({ schoolId, initialData, logAction, refreshM
         if (!file || !schoolId || !supabase) return;
 
         try {
-            const url = await uploadImage(file, `schools/${schoolId}/images/logo`);
+            const res = await uploadImage(file, `schools/${schoolId}/images/logo`);
+            const url = res?.url;
             if (url) {
                 await supabase
                     .from('schools')
@@ -101,6 +111,8 @@ export default function EduSettings({ schoolId, initialData, logAction, refreshM
                 setFormData(prev => ({ ...prev, logoURL: url, logo_url: url }));
                 if (refreshMeta) refreshMeta({ ...formData, logoURL: url });
                 if (logAction) await logAction('Update Logo', 'Uploaded new school logo');
+            } else {
+                alert("Failed to upload logo.");
             }
         } catch (err) {
             console.error("Logo upload failed", err);

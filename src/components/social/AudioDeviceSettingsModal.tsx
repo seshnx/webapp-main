@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -48,6 +48,15 @@ export default function AudioDeviceSettingsModal({
   const [isTestingSound, setIsTestingSound] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || typeof document === 'undefined') return null;
 
   const handleTestSound = () => {
@@ -64,23 +73,27 @@ export default function AudioDeviceSettingsModal({
 
   return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4">
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-[100000] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 cursor-pointer"
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col text-white max-h-[90vh]"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col text-white max-h-[90vh] cursor-default"
         >
           {/* Header */}
           <div className="flex items-center justify-between p-5 border-b border-gray-800/80 bg-gray-900/50">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-purple-500/20 text-purple-400 flex items-center justify-center border border-purple-500/30">
+              <div className="w-10 h-10 rounded-2xl bg-brand-blue/20 text-brand-blue flex items-center justify-center border border-brand-blue/30">
                 <Sliders size={20} />
               </div>
               <div>
                 <h3 className="font-black text-base text-white flex items-center gap-2">
                   Audio & Interface Settings
-                  <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full border border-purple-500/30">
+                  <span className="text-[10px] font-bold bg-brand-blue/20 text-blue-300 px-2 py-0.5 rounded-full border border-brand-blue/30">
                     PRO AUDIO
                   </span>
                 </h3>
@@ -104,13 +117,13 @@ export default function AudioDeviceSettingsModal({
             {/* 1. Pro Studio Audio Mode Toggle */}
             <div className={`p-4 rounded-2xl border transition ${
               studioAudioMode
-                ? 'bg-purple-950/30 border-purple-500/40'
+                ? 'bg-blue-950/30 border-brand-blue/40'
                 : 'bg-gray-800/40 border-gray-800'
             }`}>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1">
                   <div className="flex items-center gap-2 mb-1">
-                    <Music size={16} className={studioAudioMode ? 'text-purple-400' : 'text-gray-400'} />
+                    <Music size={16} className={studioAudioMode ? 'text-brand-blue' : 'text-gray-400'} />
                     <span className="font-bold text-sm text-white">
                       Studio High-Fidelity Mode (Raw Audio)
                     </span>
@@ -129,7 +142,7 @@ export default function AudioDeviceSettingsModal({
                   type="button"
                   onClick={toggleStudioAudioMode}
                   className={`w-12 h-6.5 rounded-full p-0.5 transition-colors duration-200 ease-in-out shrink-0 flex items-center ${
-                    studioAudioMode ? 'bg-purple-600' : 'bg-gray-700'
+                    studioAudioMode ? 'bg-brand-blue' : 'bg-gray-700'
                   }`}
                 >
                   <div
@@ -145,13 +158,13 @@ export default function AudioDeviceSettingsModal({
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                  <Mic size={14} className="text-purple-400" />
+                  <Mic size={14} className="text-brand-blue" />
                   Audio Input Device (Microphone / Interface)
                 </label>
                 <button
                   onClick={handleRefresh}
                   disabled={isRefreshing}
-                  className="text-[11px] text-purple-400 hover:text-purple-300 flex items-center gap-1 transition disabled:opacity-50"
+                  className="text-[11px] text-brand-blue hover:underline flex items-center gap-1 transition disabled:opacity-50 font-semibold"
                   title="Rescan connected audio devices"
                 >
                   <RefreshCw size={12} className={isRefreshing ? 'animate-spin' : ''} />
@@ -162,7 +175,7 @@ export default function AudioDeviceSettingsModal({
               <select
                 value={selectedAudioInput}
                 onChange={(e) => changeAudioInput(e.target.value)}
-                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500 transition"
+                className="w-full bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-brand-blue transition"
               >
                 <option value="default">Default System Audio Input</option>
                 {audioInputs.map((device, idx) => (
@@ -176,7 +189,7 @@ export default function AudioDeviceSettingsModal({
               <div className="space-y-1.5 pt-1">
                 <div className="flex items-center justify-between text-[11px] text-gray-400">
                   <span>Input Level & Signal</span>
-                  <span className="font-mono text-purple-400 font-bold">{speakingVolume}%</span>
+                  <span className="font-mono text-brand-blue font-bold">{speakingVolume}%</span>
                 </div>
                 <div className="h-3 bg-gray-800 rounded-full p-0.5 flex gap-0.5 overflow-hidden border border-gray-700/60">
                   {Array.from({ length: 24 }).map((_, i) => {
@@ -214,7 +227,7 @@ export default function AudioDeviceSettingsModal({
                   step="0.05"
                   value={inputGain}
                   onChange={(e) => setInputGain(parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                  className="w-full h-1.5 bg-gray-800 rounded-lg appearance-none cursor-pointer accent-brand-blue"
                 />
               </div>
 
@@ -231,7 +244,7 @@ export default function AudioDeviceSettingsModal({
                   type="button"
                   onClick={() => setIsMonitoring(!isMonitoring)}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                    isMonitoring ? 'bg-purple-600 text-white' : 'bg-gray-800 text-gray-400'
+                    isMonitoring ? 'bg-brand-blue text-white' : 'bg-gray-800 text-gray-400'
                   }`}
                 >
                   {isMonitoring ? 'ON' : 'OFF'}
@@ -242,7 +255,7 @@ export default function AudioDeviceSettingsModal({
             {/* 3. Audio Output Device (Monitors / Headphones) */}
             <div className="space-y-3 pt-4 border-t border-gray-800">
               <label className="text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                <Volume2 size={14} className="text-purple-400" />
+                <Volume2 size={14} className="text-brand-blue" />
                 Audio Output Device (Speakers / Monitors)
               </label>
 
@@ -250,7 +263,7 @@ export default function AudioDeviceSettingsModal({
                 <select
                   value={selectedAudioOutput}
                   onChange={(e) => changeAudioOutput(e.target.value)}
-                  className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-purple-500 transition"
+                  className="flex-1 bg-gray-800 border border-gray-700 rounded-xl px-3 py-2.5 text-xs text-white outline-none focus:border-brand-blue transition"
                 >
                   <option value="default">Default System Audio Output</option>
                   {audioOutputs.map((device, idx) => (
@@ -263,7 +276,7 @@ export default function AudioDeviceSettingsModal({
                 <button
                   onClick={handleTestSound}
                   disabled={isTestingSound}
-                  className="px-3.5 py-2.5 bg-gray-800 hover:bg-gray-700 text-purple-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 border border-gray-700"
+                  className="px-3.5 py-2.5 bg-gray-800 hover:bg-gray-700 text-blue-300 hover:text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 border border-gray-700"
                   title="Play audio test cue"
                 >
                   <Play size={13} className={isTestingSound ? 'text-emerald-400 animate-ping' : ''} />
@@ -277,7 +290,7 @@ export default function AudioDeviceSettingsModal({
           <div className="p-4 border-t border-gray-800 bg-gray-900/80 flex items-center justify-end gap-2">
             <button
               onClick={onClose}
-              className="w-full sm:w-auto px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 text-white font-bold text-xs rounded-xl shadow-lg transition"
+              className="w-full sm:w-auto px-6 py-2.5 bg-brand-blue hover:bg-blue-600 text-white font-bold text-xs rounded-xl shadow-lg transition"
             >
               Done & Return to Space
             </button>

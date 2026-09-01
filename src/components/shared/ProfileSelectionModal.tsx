@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Check, User as UserIcon } from 'lucide-react';
 import UserAvatar from './UserAvatar';
 import type { UserData } from '../../types';
@@ -116,9 +116,23 @@ export default function ProfileSelectionModal({
     onCancel();
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleClose]);
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4">
-      <div className="bg-white dark:bg-[#2c2e36] w-full max-w-md rounded-xl shadow-2xl animate-in zoom-in-95 border dark:border-gray-700">
+    <div
+      onClick={handleClose}
+      className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 cursor-pointer"
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-[#2c2e36] w-full max-w-md rounded-xl shadow-2xl animate-in zoom-in-95 border dark:border-gray-700 cursor-default"
+      >
         {/* Header */}
         <div className="flex justify-between items-center p-4 border-b dark:border-gray-700">
           <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Camera, DollarSign, X, CheckCircle, AlertTriangle, Loader2, MapPin, Wrench, Shield, Lock, Truck, CreditCard, Info, ToggleLeft, ToggleRight, Package, Star, MessageCircle, Send, Clock, ThumbsUp, ThumbsDown, BadgeCheck, ShoppingCart, ArrowRight, Home, BoxIcon, Receipt, ChevronRight, WrenchIcon } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import { useGearListings, useGearOrders, useGearOffers, useSafeExchangeTransactions, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import { EQUIP_CATEGORIES, HIGH_VALUE_THRESHOLD, SAFE_EXCHANGE_STATUS, SAFE_EXCHANGE_REQUIREMENT, FULFILLMENT_METHOD, SHIPPING_VERIFICATION_STATUS } from '../../config/constants';
 import InspectionEditor from '../tech/InspectionEditor';
@@ -630,13 +630,17 @@ function CreateListingForm({ user, userData, onCancel, onSuccess }) {
     const [images, setImages] = useState([]);
     const [conditionReport, setConditionReport] = useState(null);
     const [submitting, setSubmitting] = useState(false);
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
 
     const handleImageUpload = async (e) => {
         const file = e.target.files[0];
         if (!file) return;
         const res = await uploadMedia(file, `gear/${user.uid}`);
-        if (res?.url) setImages([...images, res.url]);
+        if (res?.url) {
+            setImages([...images, res.url]);
+        } else {
+            toast.error("Failed to upload image. Please check your storage settings.");
+        }
     };
 
     const handleSubmit = async () => {

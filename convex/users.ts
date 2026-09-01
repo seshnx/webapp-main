@@ -1,4 +1,5 @@
 import { query, mutation } from "./_generated/server";
+import { api } from "./_generated/api";
 import { v } from "convex/values";
 
 // =====================================================
@@ -610,8 +611,39 @@ export const updateProfile = mutation({
     if (args.username !== undefined) updateData.username = args.username;
     if (args.bio !== undefined) updateData.bio = args.bio;
     if (args.headline !== undefined) updateData.headline = args.headline;
-    if (args.avatarUrl !== undefined) updateData.avatarUrl = args.avatarUrl;
-    if (args.bannerUrl !== undefined) updateData.bannerUrl = args.bannerUrl;
+
+    // Avatar replacement with 2-item history retention for admin/TOS review
+    if (args.avatarUrl !== undefined && args.avatarUrl !== user.avatarUrl) {
+      updateData.avatarUrl = args.avatarUrl;
+      if (user.avatarUrl) {
+        const prevHistory: string[] = (user as any).avatarHistory || [];
+        const combined = [user.avatarUrl, ...prevHistory.filter((u: string) => u !== user.avatarUrl)];
+        // Keep the last 2 previous avatars
+        updateData.avatarHistory = combined.slice(0, 2);
+        // Delete images older than the last 2 from R2
+        const toDelete = combined.slice(2);
+        for (const oldUrl of toDelete) {
+          await ctx.scheduler.runAfter(0, api.storage.deleteFileByUrl, { url: oldUrl });
+        }
+      }
+    }
+
+    // Banner replacement with 2-item history retention for admin/TOS review
+    if (args.bannerUrl !== undefined && args.bannerUrl !== user.bannerUrl) {
+      updateData.bannerUrl = args.bannerUrl;
+      if (user.bannerUrl) {
+        const prevHistory: string[] = (user as any).bannerHistory || [];
+        const combined = [user.bannerUrl, ...prevHistory.filter((u: string) => u !== user.bannerUrl)];
+        // Keep the last 2 previous banners
+        updateData.bannerHistory = combined.slice(0, 2);
+        // Delete images older than the last 2 from R2
+        const toDelete = combined.slice(2);
+        for (const oldUrl of toDelete) {
+          await ctx.scheduler.runAfter(0, api.storage.deleteFileByUrl, { url: oldUrl });
+        }
+      }
+    }
+
     if (args.location !== undefined) updateData.location = args.location;
     if (args.address !== undefined) updateData.address = args.address;
     if (args.zipCode !== undefined) updateData.zipCode = args.zipCode;
@@ -862,10 +894,11 @@ export const createSubProfile = mutation({
   args: {
     clerkId: v.string(), // Changed from userId to clerkId for easier frontend use
     role: v.string(),
-    // NEW: Display name preferences
+    // NEW: Display name & Avatar preferences
     displayNamePreference: v.optional(v.string()), // "legal" | "username" | "custom"
     customDisplayName: v.optional(v.string()),
     displayName: v.optional(v.string()), // Now optional - will be computed
+    avatarPreference: v.optional(v.string()), // "global" | "custom"
     photoUrl: v.optional(v.string()),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -966,6 +999,7 @@ export const createSubProfile = mutation({
       displayNamePreference: preference,
       customDisplayName: args.customDisplayName,
       displayName: computedDisplayName,
+      avatarPreference: args.avatarPreference,
       photoUrl: args.photoUrl,
       bio: args.bio,
       location: args.location,
@@ -1043,10 +1077,11 @@ export const createSubProfile = mutation({
 export const updateSubProfile = mutation({
   args: {
     subProfileId: v.id("subProfiles"),
-    // NEW: Display name preferences
+    // NEW: Display name & Avatar preferences
     displayNamePreference: v.optional(v.string()), // "legal" | "username" | "custom"
     customDisplayName: v.optional(v.string()),
     displayName: v.optional(v.string()),
+    avatarPreference: v.optional(v.string()), // "global" | "custom"
     photoUrl: v.optional(v.string()),
     bio: v.optional(v.string()),
     location: v.optional(v.string()),
@@ -1137,12 +1172,18 @@ export const updateSubProfile = mutation({
       ? args.customDisplayName
       : existingProfile.customDisplayName;
 
-    // Store display preferences
+    // Store display & avatar preferences
     if (args.displayNamePreference !== undefined) {
       updateData.displayNamePreference = args.displayNamePreference;
     }
     if (args.customDisplayName !== undefined) {
       updateData.customDisplayName = args.customDisplayName;
+    }
+    if (args.avatarPreference !== undefined) {
+      updateData.avatarPreference = args.avatarPreference;
+    }
+    if (args.photoUrl !== undefined) {
+      updateData.photoUrl = args.photoUrl;
     }
 
     // Recompute display name if preferences changed or displayName explicitly set

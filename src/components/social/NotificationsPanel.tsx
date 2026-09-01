@@ -14,10 +14,19 @@ import {
     Calendar,
     DollarSign,
     Clock,
-    Loader2
+    Loader2,
+    Upload,
+    CheckCircle2,
+    AlertCircle,
+    Video,
+    Music,
+    Image as ImageIcon,
+    FileText
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import UserAvatar from '../shared/UserAvatar';
+import { useUploadManager } from '../../contexts/UploadManagerContext';
+import { formatFileSize } from '../../config/storage';
 import toast from 'react-hot-toast';
 
 /**
@@ -335,6 +344,8 @@ export default function NotificationsPanel({
     onBookingAction,
     onClose
 }: NotificationsPanelProps) {
+    const { tasks, cancelUpload } = useUploadManager();
+
     return (
         <div className="absolute right-0 top-full mt-3 w-80 sm:w-96 bg-white dark:bg-[#2c2e36] border dark:border-gray-700 rounded-xl shadow-2xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
             {/* Header */}
@@ -358,6 +369,103 @@ export default function NotificationsPanel({
                     </button>
                 )}
             </div>
+
+            {/* Active & Recent Uploads Section */}
+            {tasks.length > 0 && (
+                <div className="p-2.5 border-b dark:border-gray-700 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
+                    <div className="flex items-center justify-between px-1">
+                        <span className="text-[10px] font-bold text-brand-blue uppercase tracking-wider flex items-center gap-1.5">
+                            <Upload size={12} className="animate-bounce" />
+                            Upload Activity
+                        </span>
+                    </div>
+
+                    {tasks.map((task) => {
+                        const Icon =
+                            task.type === 'video' ? Video :
+                            task.type === 'audio' ? Music :
+                            task.type === 'image' ? ImageIcon : FileText;
+
+                        return (
+                            <div
+                                key={task.id}
+                                className="p-2.5 rounded-xl bg-white dark:bg-gray-800/90 border border-blue-100 dark:border-blue-900/40 shadow-xs flex flex-col gap-1.5"
+                            >
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <div className="w-7 h-7 rounded-lg bg-gray-100 dark:bg-gray-700 flex items-center justify-center shrink-0 overflow-hidden">
+                                            {task.previewUrl ? (
+                                                <img src={task.previewUrl} alt={task.name} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <Icon size={14} className="text-brand-blue" />
+                                            )}
+                                        </div>
+
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-semibold text-gray-900 dark:text-white truncate max-w-[180px] sm:max-w-[210px]">
+                                                {task.name}
+                                            </p>
+                                            <p className="text-[10px] text-gray-400">
+                                                {formatFileSize(task.size)} •{' '}
+                                                {task.status === 'uploading' && `Uploading (${task.progress}%)`}
+                                                {task.status === 'processing' && (
+                                                    <span className="text-brand-blue font-medium animate-pulse">
+                                                        Processing in background...
+                                                    </span>
+                                                )}
+                                                {task.status === 'completed' && (
+                                                    <span className="text-emerald-500 font-medium">Completed</span>
+                                                )}
+                                                {task.status === 'error' && (
+                                                    <span className="text-red-500 font-medium">{task.error || 'Failed'}</span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-1">
+                                        {task.status === 'uploading' && (
+                                            <button
+                                                type="button"
+                                                onClick={() => cancelUpload(task.id)}
+                                                className="p-1 text-gray-400 hover:text-red-500 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition"
+                                                title="Cancel upload"
+                                            >
+                                                <X size={13} />
+                                            </button>
+                                        )}
+                                        {task.status === 'processing' && (
+                                            <Loader2 size={14} className="animate-spin text-brand-blue" />
+                                        )}
+                                        {task.status === 'completed' && (
+                                            <CheckCircle2 size={16} className="text-emerald-500" />
+                                        )}
+                                        {task.status === 'error' && (
+                                            <AlertCircle size={16} className="text-red-500" />
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Progress Bar */}
+                                {(task.status === 'uploading' || task.status === 'processing') && (
+                                    <div className="w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                                        <motion.div
+                                            className={`h-full ${
+                                                task.status === 'processing'
+                                                    ? 'bg-gradient-to-r from-purple-500 to-brand-blue animate-pulse'
+                                                    : 'bg-brand-blue'
+                                            }`}
+                                            initial={{ width: 0 }}
+                                            animate={{ width: `${task.progress}%` }}
+                                            transition={{ duration: 0.2 }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             {/* Notifications list */}
             <div className="max-h-[400px] overflow-y-auto custom-scrollbar">

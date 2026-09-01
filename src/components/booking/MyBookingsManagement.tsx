@@ -3,7 +3,12 @@ import {
     Calendar, Clock, History, Filter, Loader2,
     Search, LayoutGrid, List, RefreshCw, ChevronRight
 } from 'lucide-react';
-import { useBookingsByClient, useTalentBookings, useTalentBookingMutations } from '../../services/bookingService';
+import {
+    useBookingsByClient,
+    useClientTalentBookings,
+    useTalentBookings,
+    useTalentBookingMutations
+} from '../../services/bookingService';
 import UserAvatar from '../shared/UserAvatar';
 import UnifiedCalendar from '../shared/UnifiedCalendar';
 import toast from 'react-hot-toast';
@@ -29,16 +34,17 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
   const [bookingRole, setBookingRole] = useState<'client' | 'talent'>('client');
 
   // Data State - use Convex real-time bookings
-  const userId = userData?.cllerkId || userData?.id || user?.id;
-  const clientBookingsQuery = useBookingsByClient(userId || null);
-  const talentBookingsQuery = useTalentBookings(userId || null);
-  
+  const userId = userData?.clerkId || userData?.id || user?.id || user?.uid;
+  const studioClientBookings = useBookingsByClient(userId || undefined);
+  const talentClientBookings = useClientTalentBookings(userId || undefined);
+  const talentIncomingBookings = useTalentBookings(userId || undefined);
+
   const { acceptBooking, rejectBooking } = useTalentBookingMutations();
 
-  const rawBookings = bookingRole === 'client' ? clientBookingsQuery?.data : talentBookingsQuery?.data;
-  const loading = (bookingRole === 'client' ? clientBookingsQuery?.isLoading : talentBookingsQuery?.isLoading) || 
-                  (bookingRole === 'client' ? clientBookingsQuery?.isPending : talentBookingsQuery?.isPending);
-  
+  const isClientLoading = studioClientBookings === undefined || talentClientBookings === undefined;
+  const isTalentLoading = talentIncomingBookings === undefined;
+  const loading = bookingRole === 'client' ? isClientLoading : isTalentLoading;
+
   const [searchTerm, setSearchTerm] = useState('');
 
   // Sub-tab configuration for List View
@@ -49,16 +55,45 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
     { id: 'history' as SubTab, label: 'All History', icon: Filter, description: 'Full booking history' }
   ];
 
-  // Parse bookings data from Convex
+  // Parse and normalize bookings data from Convex
   const bookings = React.useMemo(() => {
-    return (rawBookings || []).map(booking => ({
-      ...booking,
-      date: booking.date && booking.date !== 'Flexible' ? new Date(booking.date) : null,
-      clientName: bookingRole === 'client' 
-          ? (booking.target_name || booking.talentName || 'Talent/Studio')
-          : (booking.sender_name || booking.clientName || 'Client')
-    }));
-  }, [rawBookings]);
+    if (bookingRole === 'client') {
+      const studioList = (studioClientBookings || []).map((b: any) => ({
+        ...b,
+        id: b._id || b.id,
+        date: b.date && b.date !== 'Flexible' ? new Date(b.date) : null,
+        clientName: b.studioName || b.clientName || 'Recording Studio',
+        service_type: b.serviceType || 'Studio Session',
+        start_time: b.startTime || b.time || '12:00',
+        duration_hours: b.duration || 1,
+        source: 'studio'
+      }));
+
+      const talentList = (talentClientBookings || []).map((b: any) => ({
+        ...b,
+        id: b._id || b.id,
+        date: b.date && b.date !== 'Flexible' ? new Date(b.date) : null,
+        clientName: b.talentName || 'Creative Talent',
+        service_type: b.serviceType || 'Session',
+        start_time: b.time || '12:00',
+        duration_hours: b.duration || 1,
+        source: 'talent'
+      }));
+
+      return [...studioList, ...talentList].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } else {
+      return (talentIncomingBookings || []).map((b: any) => ({
+        ...b,
+        id: b._id || b.id,
+        date: b.date && b.date !== 'Flexible' ? new Date(b.date) : null,
+        clientName: b.clientName || 'Client',
+        service_type: b.serviceType || 'Direct Booking Request',
+        start_time: b.time || '12:00',
+        duration_hours: b.duration || 1,
+        source: 'talent'
+      })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    }
+  }, [bookingRole, studioClientBookings, talentClientBookings, talentIncomingBookings]);
 
   // Filtering Logic
   const getFilteredBookings = () => {
@@ -69,13 +104,13 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
     if (viewMode === 'list') {
       switch (activeSubTab) {
         case 'current':
-          filtered = filtered.filter(b => ['Pending', 'Confirmed', 'In Progress'].includes(b.status));
+          filtered = filtered.filter(b => ['Pending', 'Confirmed', 'Accepted', 'In Progress', 'InProgress'].includes(b.status));
           break;
         case 'upcoming':
-          filtered = filtered.filter(b => b.date && b.date > now && b.status === 'Confirmed');
+          filtered = filtered.filter(b => b.date && b.date > now && ['Confirmed', 'Accepted'].includes(b.status));
           break;
         case 'past':
-          filtered = filtered.filter(b => ['Completed', 'Cancelled', 'Declined'].includes(b.status));
+          filtered = filtered.filter(b => ['Completed', 'Cancelled', 'Declined', 'Rejected'].includes(b.status));
           break;
       }
     }
@@ -83,7 +118,7 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
     // Search filtering (Applies to both views)
     if (searchTerm) {
       const term = searchTerm.toLowerCase();
-      filtered = filtered.filter(b => 
+      filtered = filtered.filter(b =>
         (b.clientName || '').toLowerCase().includes(term) ||
         (b.service_type || b.type || '').toLowerCase().includes(term)
       );
@@ -98,9 +133,9 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
   const getCount = (tabId: SubTab) => {
     const now = new Date();
     switch (tabId) {
-      case 'current': return bookings.filter(b => ['Pending', 'Confirmed', 'In Progress'].includes(b.status)).length;
-      case 'upcoming': return bookings.filter(b => b.date && b.date > now && b.status === 'Confirmed').length;
-      case 'past': return bookings.filter(b => ['Completed', 'Cancelled', 'Declined'].includes(b.status)).length;
+      case 'current': return bookings.filter(b => ['Pending', 'Confirmed', 'Accepted', 'In Progress', 'InProgress'].includes(b.status)).length;
+      case 'upcoming': return bookings.filter(b => b.date && b.date > now && ['Confirmed', 'Accepted'].includes(b.status)).length;
+      case 'past': return bookings.filter(b => ['Completed', 'Cancelled', 'Declined', 'Rejected'].includes(b.status)).length;
       default: return bookings.length;
     }
   };
@@ -191,7 +226,7 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
           }`}
         >
           Incoming Requests
-          {talentBookingsQuery?.data?.filter((b: any) => b.status === 'Pending').length > 0 && (
+          {(talentIncomingBookings || []).filter((b: any) => b.status === 'Pending').length > 0 && (
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
           )}
         </button>
@@ -212,7 +247,7 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
             onViewChange={setCalendarView}
             bookings={filteredBookings}
             onBookingClick={(booking) => {
-              const targetId = booking.sender_id || booking.target_id;
+              const targetId = booking.sender_id || booking.target_id || booking.clientId || booking.talentId;
               if (targetId) openPublicProfile(targetId, booking.clientName);
             }}
             showControls={true}

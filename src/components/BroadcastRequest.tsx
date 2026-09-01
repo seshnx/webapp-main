@@ -233,7 +233,11 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }: 
                     <div className="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-lg text-brand-blue"><MapPin size={24} /></div>
                     <div><h3 className="text-2xl font-bold dark:text-white">Broadcast Builder</h3><p className="text-sm text-gray-500">Reach professionals in your area.</p></div>
                 </div>
-                <button onClick={onBack} className="text-sm font-medium text-gray-500 hover:text-brand-blue transition">Cancel & Exit</button>
+                {onBack && (
+                    <button onClick={onBack} className="text-sm font-semibold text-gray-500 hover:text-brand-blue transition flex items-center gap-1">
+                        ← Back to Broadcasts
+                    </button>
+                )}
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">

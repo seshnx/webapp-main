@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Search, Disc, Sliders, Download, CheckCircle, Zap, Plus, X, Upload, Loader2, Music, Flag, Info } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import { useMarketplaceItems, useUserLibrary, useItemOwnership, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import StarFieldVisualizer from '../shared/StarFieldVisualizer';
 import ReportModal from '../ReportModal';
@@ -268,7 +268,7 @@ function SellItemModal({ user, userData, onClose }: SellItemModalProps) {
     const [form, setForm] = useState<SellItemFormState>({ title: '', price: '', type: 'Presets', tags: '', description: '' });
     const [audioFile, setAudioFile] = useState<File | null>(null);
     const [status, setStatus] = useState<string>('');
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
     const { createMarketplaceItem } = useMarketplaceMutations();
 
     const handleSubmit = async (): Promise<void> => {

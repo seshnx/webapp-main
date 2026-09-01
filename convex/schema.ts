@@ -32,7 +32,9 @@ export default defineSchema({
     bio: v.optional(v.string()),
     headline: v.optional(v.string()),
     avatarUrl: v.optional(v.string()),
+    avatarHistory: v.optional(v.array(v.string())), // Last 2 previous avatars for TOS/admin review
     bannerUrl: v.optional(v.string()),
+    bannerHistory: v.optional(v.array(v.string())), // Last 2 previous banners for TOS/admin review
     location: v.optional(v.string()),
     address: v.optional(v.string()),
     zipCode: v.optional(v.string()),
@@ -173,9 +175,10 @@ export default defineSchema({
     userId: v.id("users"),
     role: v.string(), // Talent, Studio, Label, etc.
 
-    // NEW: Display name preferences
+    // NEW: Display name & Avatar preferences
     displayNamePreference: v.optional(v.string()), // "legal" | "username" | "custom"
     customDisplayName: v.optional(v.string()),
+    avatarPreference: v.optional(v.string()), // "global" | "custom"
 
     displayName: v.string(),
     photoUrl: v.optional(v.string()),

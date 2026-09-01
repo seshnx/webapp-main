@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LogIn, Sparkles, X, Heart, MessageCircle, DollarSign, Shield } from 'lucide-react';
@@ -48,17 +48,29 @@ export default function AuthPromptModal({
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100002] bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-[100002] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="bg-gray-900 border border-gray-800 rounded-3xl p-6 max-w-md w-full shadow-2xl text-white relative overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-gray-900 border border-gray-800 rounded-3xl p-6 max-w-md w-full shadow-2xl text-white relative overflow-hidden cursor-default"
         >
           {/* Ambient Glows */}
-          <div className="absolute top-0 right-0 w-36 h-36 bg-purple-600/15 rounded-full blur-3xl -z-10 pointer-events-none" />
+          <div className="absolute top-0 right-0 w-36 h-36 bg-blue-600/15 rounded-full blur-3xl -z-10 pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-36 h-36 bg-brand-blue/15 rounded-full blur-3xl -z-10 pointer-events-none" />
 
           {/* Close button */}
@@ -72,11 +84,11 @@ export default function AuthPromptModal({
 
           {/* Icon Header */}
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-purple-600/25">
+            <div className="w-12 h-12 rounded-2xl bg-brand-blue flex items-center justify-center text-white shadow-lg shadow-blue-500/25">
               <Sparkles size={24} />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="text-[10px] font-bold text-brand-blue bg-blue-500/10 px-2 py-0.5 rounded-full uppercase tracking-wider">
                 SeshNx Creator Community
               </span>
               <h3 className="text-base font-bold text-white mt-0.5">
@@ -111,7 +123,7 @@ export default function AuthPromptModal({
           <div className="space-y-2">
             <button
               onClick={handleSignIn}
-              className="w-full py-3 px-4 bg-gradient-to-r from-brand-blue via-purple-600 to-pink-600 hover:opacity-95 text-white font-bold text-xs rounded-xl shadow-lg shadow-purple-600/25 flex items-center justify-center gap-2 transition"
+              className="w-full py-3 px-4 bg-brand-blue hover:bg-blue-600 text-white font-bold text-xs rounded-xl shadow-lg shadow-blue-500/25 flex items-center justify-center gap-2 transition"
             >
               <LogIn size={16} />
               <span>Sign In / Create Account</span>

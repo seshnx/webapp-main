@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Wrench, CheckCircle, MessageSquare, Image as ImageIcon, Send, FileText, LucideIcon } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import InspectionEditor from './InspectionEditor';
 
 // =====================================================
@@ -66,7 +66,7 @@ export default function RepairTracker({ bookingId, currentUser }: RepairTrackerP
   const [newLog, setNewLog] = useState<string>('');
   const [isPrivateLog, setIsPrivateLog] = useState<boolean>(false);
   const [activeInspection, setActiveInspection] = useState<'Pre' | 'Post' | null>(null);
-  const { uploadMedia, uploading } = useMediaUpload();
+  const { uploadMedia, uploading } = useUpload();
   const [logImage, setLogImage] = useState<File | null>(null);
 
   useEffect(() => {

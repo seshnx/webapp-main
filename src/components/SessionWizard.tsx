@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Calendar, Clock, MapPin, AlertCircle, ChevronRight, Loader2 } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import LocationPicker from './shared/LocationPicker';
-// Distance calculation is handled by inline calcDist function
 import StudioMap from './shared/StudioMap';
 
 // Inline Geo Utility if not imported
@@ -44,8 +45,10 @@ interface StudioData {
     name?: string;
     rate?: number;
     location?: Location;
+    address?: string;
     distance?: number;
     equipmentList?: string[];
+    photos?: string[];
     [key: string]: any;
 }
 
@@ -61,8 +64,7 @@ export interface SessionWizardProps {
 
 export default function SessionWizard({ userData, sessionParams, setSessionParams, onNext }: SessionWizardProps) {
     const [step, setStep] = useState<number>(1);
-    const [loadingStudios, setLoadingStudios] = useState<boolean>(false);
-    const [availableStudios, setAvailableStudios] = useState<StudioData[]>([]);
+    const convexStudios = useQuery(api.sbookings.getStudios, {});
 
     // Ensure sessionParams has default values
     const safeSessionParams: SessionParams = sessionParams || {
@@ -73,54 +75,48 @@ export default function SessionWizard({ userData, sessionParams, setSessionParam
         location: null
     };
 
+    // Calculate real studios within user selected radius
+    const availableStudios: StudioData[] = useMemo(() => {
+        if (!convexStudios) return [];
+        return convexStudios
+            .map((studio: any) => {
+                const lat = studio.coordinates?.lat || studio.lat;
+                const lng = studio.coordinates?.lng || studio.lng;
+                const dist = (safeSessionParams.location && lat && lng)
+                    ? calcDist(safeSessionParams.location.lat, safeSessionParams.location.lng, lat, lng)
+                    : undefined;
+
+                return {
+                    id: studio._id,
+                    name: studio.name,
+                    rate: studio.hourlyRate || studio.minHourlyRate || 50,
+                    location: (lat && lng) ? { lat, lng } : undefined,
+                    address: studio.location || [studio.city, studio.state].filter(Boolean).join(', ') || 'Studio Location',
+                    distance: dist,
+                    equipmentList: studio.amenities || [],
+                    photos: studio.photos || studio.studioPhotos || [],
+                };
+            })
+            .filter((s: StudioData) => {
+                if (!safeSessionParams.location) return true;
+                if (s.distance === undefined) return true;
+                return s.distance <= (safeSessionParams.radius || 25);
+            })
+            .sort((a: StudioData, b: StudioData) => (a.distance ?? 999) - (b.distance ?? 999));
+    }, [convexStudios, safeSessionParams.location, safeSessionParams.radius]);
+
     // --- STEP 1: LOGISTICS ---
     const handleLogisticsSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         setStep(2);
-        fetchStudios();
-    };
-
-    // --- STEP 2: STUDIO FETCHING ---
-    const fetchStudios = async () => {
-        setLoadingStudios(true);
-        try {
-            // Fetch all studios with Studio account type
-            const response = await fetch('/api/studio-ops/studios?accountType=Studio');
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to fetch studios');
-            }
-
-            // Client-side filtering for distance
-            if (!safeSessionParams.location) {
-                setAvailableStudios([]);
-                return;
-            }
-
-            const filtered = (result.data || []).filter((studio: StudioData) => {
-                if (!studio.location || !safeSessionParams.location) return false;
-                const dist = calcDist(
-                    safeSessionParams.location.lat, safeSessionParams.location.lng,
-                    studio.location.lat, studio.location.lng
-                );
-                return dist <= (safeSessionParams.radius || 25);
-            }).map((s: StudioData) => ({
-                ...s,
-                distance: calcDist(safeSessionParams.location!.lat, safeSessionParams.location!.lng, s.location!.lat, s.location!.lng)
-            })).sort((a: StudioData, b: StudioData) => (a.distance || 0) - (b.distance || 0));
-
-            setAvailableStudios(filtered);
-        } catch (e) {
-            console.error("Studio fetch error:", e);
-        }
-        setLoadingStudios(false);
     };
 
     const selectStudio = (studio: StudioData) => {
         setSessionParams({ ...(sessionParams || safeSessionParams), venue: studio });
         onNext(); // Move to Talent Search/Summary
     };
+
+    const loadingStudios = convexStudios === undefined;
 
     // --- RENDER ---
     return (

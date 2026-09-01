@@ -28,10 +28,10 @@ interface ErrorFallbackProps {
 // SENTRY INITIALIZATION
 // =====================================================
 
-// Initialize Sentry if DSN is provided
+// Initialize Sentry in production if DSN is provided
 const sentryDsn = import.meta.env.VITE_SENTRY_DSN;
 
-if (sentryDsn) {
+if (sentryDsn && import.meta.env.PROD) {
   Sentry.init({
     dsn: sentryDsn,
     environment: import.meta.env.MODE || 'development',

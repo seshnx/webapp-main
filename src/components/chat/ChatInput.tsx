@@ -18,9 +18,10 @@ import {
     Trash2,
     Play,
     Pause,
-    Square
+    Square,
+    Upload
 } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import { motion, AnimatePresence } from 'framer-motion';
 import EmojiPicker from './media/EmojiPicker';
 import GifPicker from './media/GifPicker';
@@ -98,7 +99,7 @@ export default function ChatInput({
     const gifPickerRef = useRef<HTMLButtonElement>(null);
     const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const audioPreviewRef = useRef<HTMLAudioElement>(null);
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
 
     // Set input when editing
     useEffect(() => {
@@ -331,6 +332,24 @@ export default function ChatInput({
         });
     };
 
+    // --- CLIPBOARD PASTE ---
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) {
+                    e.preventDefault();
+                    handleFileSelect(file);
+                    break;
+                }
+            }
+        }
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if ((!input.trim() && !attachment) || uploading) return;
@@ -381,14 +400,32 @@ export default function ChatInput({
 
     return (
         <div
-            className={`p-3 bg-white dark:bg-[#2c2e36] border-t dark:border-gray-700 shrink-0 transition-colors ${
-                dragActive ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-400' : ''
+            className={`p-3 bg-white dark:bg-[#2c2e36] border-t dark:border-gray-700 shrink-0 transition-colors relative ${
+                dragActive ? 'bg-blue-50/70 dark:bg-blue-900/20 border-brand-blue ring-2 ring-brand-blue/20' : ''
             }`}
             onDragEnter={handleDrag}
             onDragLeave={handleDrag}
             onDragOver={handleDrag}
             onDrop={handleDrop}
+            onPaste={handlePaste}
         >
+            {/* Visual Drag and Drop Overlay for PC */}
+            <AnimatePresence>
+                {dragActive && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                        className="absolute inset-0 z-30 rounded-xl bg-brand-blue/15 dark:bg-brand-blue/25 backdrop-blur-sm border-2 border-dashed border-brand-blue flex items-center justify-center p-4 text-center pointer-events-none"
+                    >
+                        <div className="flex items-center gap-2 text-brand-blue font-bold text-sm">
+                            <Upload size={18} className="animate-bounce" />
+                            <span>Drop file to attach to chat</span>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Typing Indicator */}
             <AnimatePresence>
                 {typingUsers.length > 0 && (
@@ -650,6 +687,7 @@ export default function ChatInput({
                         }
                         value={input}
                         onChange={handleTyping}
+                        onPaste={handlePaste}
                         onKeyDown={e => {
                             if(e.key === 'Enter' && !e.shiftKey) {
                                 e.preventDefault();

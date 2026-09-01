@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { useAuth, useUser, useClerk } from '@clerk/react';
 import { QueryClientProvider } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { Toaster } from 'react-hot-toast';
 import { useUserSync } from './hooks/useUserSync';
 import { useStudioSubdomain } from './hooks/useStudioSubdomain';
 import { LanguageProvider } from './contexts/LanguageContext';
+import { UploadManagerProvider } from './contexts/UploadManagerContext';
 import { queryClient } from './config/queryClient';
 
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
@@ -33,10 +34,18 @@ export default function App(): JSX.Element {
   });
 
   // Extract shared post ID from URL (/post/:id or /p/:id)
-  const sharedPostId = (() => {
+  const [dismissedSharedPostId, setDismissedSharedPostId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDismissedSharedPostId(null);
+  }, [location.pathname]);
+
+  const sharedPostId = useMemo(() => {
     const match = location.pathname.match(/^\/(?:post|p)\/([^/?#]+)/);
-    return match ? match[1] : null;
-  })();
+    const pid = match ? match[1] : null;
+    if (!pid || pid === dismissedSharedPostId) return null;
+    return pid;
+  }, [location.pathname, dismissedSharedPostId]);
 
   const toggleTheme = useCallback(() => {
     setDarkMode(prev => {
@@ -104,23 +113,25 @@ export default function App(): JSX.Element {
     return (
       <QueryClientProvider client={queryClient}>
         <LanguageProvider userData={userData}>
-          <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
-            <Toaster position="bottom-right" />
-            <Suspense fallback={
-              <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
-                <Loader2 className="animate-spin text-brand-blue" size={48} />
-              </div>
-            }>
-              <AppRoutes
-                user={user}
-                userData={userData as any}
-                darkMode={darkMode}
-                toggleTheme={toggleTheme}
-                handleLogout={handleLogout}
-                loading={false}
-              />
-            </Suspense>
-          </div>
+          <UploadManagerProvider>
+            <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
+              <Toaster position="bottom-right" />
+              <Suspense fallback={
+                <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#1a1d21]">
+                  <Loader2 className="animate-spin text-brand-blue" size={48} />
+                </div>
+              }>
+                <AppRoutes
+                  user={user}
+                  userData={userData as any}
+                  darkMode={darkMode}
+                  toggleTheme={toggleTheme}
+                  handleLogout={handleLogout}
+                  loading={false}
+                />
+              </Suspense>
+            </div>
+          </UploadManagerProvider>
         </LanguageProvider>
       </QueryClientProvider>
     );
@@ -161,7 +172,10 @@ export default function App(): JSX.Element {
               postId={sharedPostId}
               onClose={() => {
                 sessionStorage.removeItem('seshnx_pending_post_modal');
-                navigate('/', { replace: true });
+                if (sharedPostId) setDismissedSharedPostId(sharedPostId);
+                if (location.pathname.startsWith('/post/') || location.pathname.startsWith('/p/')) {
+                  navigate('/', { replace: true });
+                }
               }}
             />
           </Suspense>
@@ -252,32 +266,34 @@ export default function App(): JSX.Element {
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider userData={userData}>
-        <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
-          <Toaster position="bottom-right" />
-          <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
-            {location.pathname === '/settings' ? (
-              <main className="p-6">
-                <AppRoutes
+        <UploadManagerProvider>
+          <div className="min-h-screen bg-gray-50 dark:bg-[#1a1d21]">
+            <Toaster position="bottom-right" />
+            <Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-brand-blue" size={48} /></div>}>
+              {location.pathname === '/settings' ? (
+                <main className="p-6">
+                  <AppRoutes
+                    user={user}
+                    userData={userData as any}
+                    darkMode={darkMode}
+                    toggleTheme={toggleTheme}
+                    handleLogout={handleLogout}
+                    loading={userData === undefined}
+                  />
+                </main>
+              ) : (
+                <MainLayout
                   user={user}
-                  userData={userData as any}
+                  userData={userData}
                   darkMode={darkMode}
                   toggleTheme={toggleTheme}
                   handleLogout={handleLogout}
-                  loading={userData === undefined}
+                  loading={userData === undefined} // Pass loading state to MainLayout
                 />
-              </main>
-            ) : (
-              <MainLayout
-                user={user}
-                userData={userData}
-                darkMode={darkMode}
-                toggleTheme={toggleTheme}
-                handleLogout={handleLogout}
-                loading={userData === undefined} // Pass loading state to MainLayout
-              />
-            )}
-          </Suspense>
-        </div>
+              )}
+            </Suspense>
+          </div>
+        </UploadManagerProvider>
       </LanguageProvider>
     </QueryClientProvider>
   );

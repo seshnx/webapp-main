@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Radio, X, Mic, Sparkles, Volume2, ShieldCheck, Loader2 } from 'lucide-react';
@@ -37,6 +37,15 @@ export default function CreateLiveSpaceModal({
   const [error, setError] = useState<string | null>(null);
 
   const createRoomMutation = useCreateLiveRoom();
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
   if (!isOpen || typeof document === 'undefined') return null;
 
@@ -79,21 +88,25 @@ export default function CreateLiveSpaceModal({
 
   return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm cursor-pointer"
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="relative w-full max-w-lg bg-gray-900 border border-purple-500/20 text-white rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-7"
+          onClick={(e) => e.stopPropagation()}
+          className="relative w-full max-w-lg bg-gray-900 border border-brand-blue/30 text-white rounded-3xl shadow-2xl overflow-hidden p-6 sm:p-7 cursor-default"
         >
           {/* Glowing Background Accents */}
-          <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+          <div className="absolute top-0 right-0 w-48 h-48 bg-brand-blue/15 rounded-full blur-3xl -z-10 pointer-events-none" />
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-blue-600/10 rounded-full blur-3xl -z-10 pointer-events-none" />
 
           {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b border-gray-800">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-gradient-to-tr from-red-500 to-purple-600 rounded-xl text-white shadow-lg shadow-red-500/20">
+              <div className="p-2 bg-brand-blue rounded-xl text-white shadow-lg shadow-brand-blue/20">
                 <Radio size={20} className="animate-pulse" />
               </div>
               <div>
@@ -134,7 +147,7 @@ export default function CreateLiveSpaceModal({
                 onChange={(e) => setTitle(e.target.value)}
                 maxLength={90}
                 required
-                className="w-full bg-gray-950/80 border border-gray-800 focus:border-purple-500 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition"
+                className="w-full bg-gray-950/80 border border-gray-800 focus:border-brand-blue rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-500 outline-none transition"
               />
             </div>
 
@@ -151,7 +164,7 @@ export default function CreateLiveSpaceModal({
                     onClick={() => setCategory(cat.id)}
                     className={`px-3 py-2 rounded-xl text-xs font-medium text-left transition border ${
                       category === cat.id
-                        ? 'bg-purple-600/20 border-purple-500 text-white shadow-sm'
+                        ? 'bg-brand-blue/20 border-brand-blue text-brand-blue font-bold shadow-sm'
                         : 'bg-gray-950/40 border-gray-800 text-gray-400 hover:bg-gray-800/60'
                     }`}
                   >
@@ -172,14 +185,14 @@ export default function CreateLiveSpaceModal({
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
                 maxLength={200}
-                className="w-full bg-gray-950/80 border border-gray-800 focus:border-purple-500 rounded-xl px-4 py-2 text-xs text-white placeholder-gray-500 outline-none resize-none transition"
+                className="w-full bg-gray-950/80 border border-gray-800 focus:border-brand-blue rounded-xl px-4 py-2 text-xs text-white placeholder-gray-500 outline-none resize-none transition"
               />
             </div>
 
             {/* Permissions & Controls */}
             <div className="pt-2 border-t border-gray-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Volume2 size={16} className="text-purple-400" />
+                <Volume2 size={16} className="text-brand-blue" />
                 <span className="text-xs text-gray-300 font-medium">
                   Allow Audience Hand-Raising
                 </span>
@@ -188,7 +201,7 @@ export default function CreateLiveSpaceModal({
                 type="checkbox"
                 checked={allowHandRaising}
                 onChange={(e) => setAllowHandRaising(e.target.checked)}
-                className="w-4 h-4 rounded accent-purple-600 bg-gray-900 border-gray-700 cursor-pointer"
+                className="w-4 h-4 rounded accent-brand-blue bg-gray-900 border-gray-700 cursor-pointer"
               />
             </div>
 
@@ -197,7 +210,7 @@ export default function CreateLiveSpaceModal({
               <button
                 type="submit"
                 disabled={isSubmitting || !title.trim()}
-                className="w-full py-3 px-4 bg-gradient-to-r from-red-500 via-purple-600 to-blue-600 hover:opacity-90 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-lg shadow-purple-600/25 flex items-center justify-center gap-2 transition"
+                className="w-full py-3 px-4 bg-brand-blue hover:bg-blue-600 disabled:opacity-50 text-white font-bold text-sm rounded-xl shadow-lg shadow-brand-blue/25 flex items-center justify-center gap-2 transition"
               >
                 {isSubmitting ? (
                   <>

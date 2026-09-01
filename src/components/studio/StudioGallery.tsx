@@ -3,7 +3,7 @@ import {
     Image, Upload, Trash2, Star,
     Loader2, X, Plus, Eye, Move
 } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import toast from 'react-hot-toast';
 
 /**
@@ -37,7 +37,7 @@ export default function StudioGallery({ user, userData, onUpdate }: StudioGaller
     const [uploadProgress, setUploadProgress] = useState<number>(0);
     const [selectedPhoto, setSelectedPhoto] = useState<StudioPhoto | null>(null);
     const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
     const userId = user?.id || user?.uid;
 
     const savePhotos = useCallback(async (updatedPhotos: StudioPhoto[]): Promise<boolean> => {

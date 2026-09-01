@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X, CalendarCheck, Clock, MapPin, DollarSign,
   Music, MessageSquare, Loader2, CheckCircle, User, AlertTriangle
@@ -151,11 +151,25 @@ export default function TalentBookingModal({
 
   const labelClass = 'block text-xs font-semibold text-white/60 uppercase tracking-wider mb-1.5';
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   // Success screen
   if (submitted) {
     return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-        <div className="bg-[#1e2028] rounded-2xl shadow-2xl p-10 max-w-sm w-full text-center border border-white/10">
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm cursor-pointer"
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="bg-[#1e2028] rounded-2xl shadow-2xl p-10 max-w-sm w-full text-center border border-white/10 cursor-default"
+        >
           <div className="w-20 h-20 rounded-full bg-[#3D84ED] flex items-center justify-center mx-auto mb-6 shadow-lg shadow-blue-500/20">
             <CheckCircle className="w-10 h-10 text-white" />
           </div>
@@ -176,9 +190,12 @@ export default function TalentBookingModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
+    <div
+      onClick={onClose}
+      className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
+    >
       <div
-        className="bg-[#1e2028] rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-white/10"
+        className="bg-[#1e2028] rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-white/10 cursor-default"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

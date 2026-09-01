@@ -2,12 +2,13 @@ import React, { useState, useRef, useEffect, MouseEvent, FormEvent } from 'react
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical } from 'lucide-react';
+import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical, Upload, CheckCircle2 } from 'lucide-react';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
 import UserAvatar, { UserAvatarProps } from './shared/UserAvatar';
 import NotificationsPanel, { NotificationBadge } from './social/NotificationsPanel';
 import { useNotifications } from '../hooks/useNotifications';
+import { useUploadManager } from '../contexts/UploadManagerContext';
 import { getDisplayRole } from '../config/constants';
 import { useLanguage } from '../contexts/LanguageContext';
 import { BreadcrumbNav } from './ui/breadcrumb';
@@ -140,6 +141,7 @@ export default function Navbar({
   const { t } = useLanguage();
 
   const updateRoleMutation = useMutation(api.users.updateAccountTypes);
+  const { activeCount, overallProgress, justFinished } = useUploadManager();
 
   // Use the new notifications system
   const {
@@ -626,13 +628,58 @@ export default function Navbar({
 
           <div className="relative" ref={notifRef}>
               <button
-                  className={`relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition ${showNotifs ? 'bg-gray-100 dark:bg-gray-800 text-brand-blue' : ''}`}
+                  className={`relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 transition flex items-center justify-center ${
+                      showNotifs ? 'bg-gray-100 dark:bg-gray-800 text-brand-blue' : ''
+                  } ${justFinished ? 'ring-2 ring-emerald-500/50 bg-emerald-50 dark:bg-emerald-950/30' : ''}`}
                   onClick={() => setShowNotifs(!showNotifs)}
                   aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
                   aria-expanded={showNotifs}
+                  title={
+                      activeCount > 0
+                          ? `Uploading in background (${overallProgress}%)`
+                          : justFinished
+                          ? 'Upload completed!'
+                          : 'Notifications'
+                  }
               >
-                  <Bell size={20} aria-hidden="true" />
-                  <NotificationBadge count={unreadCount} />
+                  {/* Upload Progress Circular Ring */}
+                  {activeCount > 0 && (
+                      <svg className="absolute -inset-0.5 w-9 h-9 -rotate-90 pointer-events-none" viewBox="0 0 36 36">
+                          <circle
+                              className="text-gray-200 dark:text-gray-700"
+                              strokeWidth="2.5"
+                              stroke="currentColor"
+                              fill="transparent"
+                              r="15"
+                              cx="18"
+                              cy="18"
+                          />
+                          <circle
+                              className="text-brand-blue transition-all duration-300 ease-out"
+                              strokeWidth="2.5"
+                              strokeDasharray={94.2}
+                              strokeDashoffset={94.2 - (94.2 * Math.min(overallProgress, 100)) / 100}
+                              strokeLinecap="round"
+                              stroke="currentColor"
+                              fill="transparent"
+                              r="15"
+                              cx="18"
+                              cy="18"
+                          />
+                      </svg>
+                  )}
+
+                  {/* Icon Switch: Active Upload -> Flashing Checkmark -> Regular Bell */}
+                  {activeCount > 0 ? (
+                      <Upload size={18} className="text-brand-blue animate-pulse" aria-hidden="true" />
+                  ) : justFinished ? (
+                      <CheckCircle2 size={20} className="text-emerald-500 animate-in zoom-in duration-300" aria-hidden="true" />
+                  ) : (
+                      <>
+                          <Bell size={20} aria-hidden="true" />
+                          <NotificationBadge count={unreadCount} />
+                      </>
+                  )}
               </button>
 
               {showNotifs && (
@@ -650,9 +697,11 @@ export default function Navbar({
               )}
           </div>
 
-          {/* FIX: Use UserAvatar */}
+          {/* Centralized UserAvatar */}
           <UserAvatar
-              src={userData?.photoURL}
+              user={user}
+              userData={userData}
+              subProfile={subProfiles?.[activeRole]}
               name={currentDisplayName}
               size="sm"
               className="border-2 border-transparent hover:border-brand-blue transition"

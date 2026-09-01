@@ -23,18 +23,26 @@ export const createBooking = mutation({
   },
   handler: async (ctx, args) => {
     // Resolve talent user
-    const talent = await ctx.db
+    let talent = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.talentClerkId))
       .first();
 
+    if (!talent && ctx.db.normalizeId("users", args.talentClerkId)) {
+      talent = await ctx.db.get(ctx.db.normalizeId("users", args.talentClerkId)!);
+    }
+
     if (!talent) throw new Error("Talent not found");
 
     // Resolve client user
-    const client = await ctx.db
+    let client = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clientClerkId))
       .first();
+
+    if (!client && ctx.db.normalizeId("users", args.clientClerkId)) {
+      client = await ctx.db.get(ctx.db.normalizeId("users", args.clientClerkId)!);
+    }
 
     if (!client) throw new Error("Client not found");
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Plus, Play } from 'lucide-react';
 import { motion } from 'framer-motion';
 import UserAvatar from '../shared/UserAvatar';
+import { getUserAvatarUrl } from '../../utils/avatar';
 import StoryViewerModal from './StoryViewerModal';
 import CreateStoryModal from './CreateStoryModal';
 import { useActiveStories } from '../../hooks/useConvex';
@@ -37,7 +38,7 @@ export default function StoriesBar({ user, userData, subProfiles = {}, onOpenPro
 
   const currentUserId = user?.id || user?.uid;
   const currentUserName = userData?.displayName || user?.firstName || 'You';
-  const currentUserPhoto = userData?.photoURL || user?.imageUrl;
+  const currentUserPhoto = getUserAvatarUrl(undefined, userData, user) || null;
 
   const rawDbStories = useActiveStories() || [];
 
@@ -107,7 +108,7 @@ export default function StoriesBar({ user, userData, subProfiles = {}, onOpenPro
         {/* Create Story Button */}
         <div className="flex flex-col items-center flex-shrink-0 cursor-pointer group" onClick={() => setIsCreateOpen(true)}>
           <div className="relative w-16 h-16 rounded-full p-0.5 border-2 border-dashed border-brand-blue/60 group-hover:border-brand-blue transition-colors flex items-center justify-center bg-blue-50 dark:bg-blue-900/20">
-            <UserAvatar src={currentUserPhoto} name={currentUserName} size="md" />
+            <UserAvatar user={user} userData={userData} name={currentUserName} size="md" />
             <div className="absolute bottom-0 right-0 bg-brand-blue text-white p-1 rounded-full shadow-md transform translate-x-1 translate-y-1">
               <Plus size={14} className="stroke-[3]" />
             </div>

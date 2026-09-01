@@ -80,11 +80,11 @@ export default function QuickDashboard({
           {/* Header Bar matching Dashboard.tsx styling */}
           <div className="flex items-center justify-between pb-4 border-b dark:border-gray-800">
             <div className="flex items-center gap-3">
-              <UserAvatar src={photoUrl} name={displayName} size="md" />
+              <UserAvatar user={user} userData={userData} name={displayName} size="md" />
               <div>
                 <h3 className="font-bold text-base dark:text-white flex items-center gap-2">
                   {displayName}
-                  <span className="bg-gradient-to-r from-brand-blue to-purple-600 text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm">
+                  <span className="bg-brand-blue text-white text-[10px] font-black px-2.5 py-0.5 rounded-full shadow-sm">
                     {activeRole}
                   </span>
                 </h3>
@@ -159,7 +159,7 @@ export default function QuickDashboard({
                   title="Total Reach"
                   value={userData?.stats?.followersCount || userData?.followersCount || 0}
                   icon={<Users size={18} />}
-                  gradient="bg-gradient-to-br from-purple-600 to-pink-600"
+                  gradient="bg-gradient-to-br from-blue-600 to-cyan-700"
                   onClick={() => {
                     onNavigateTab('feed', '/feed');
                     onClose();
@@ -214,18 +214,18 @@ export default function QuickDashboard({
                       onNavigateTab('feed', '/feed');
                       onClose();
                     }}
-                    className="flex items-center justify-between p-3.5 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-950/40 dark:to-pink-950/40 rounded-2xl border border-purple-100 dark:border-purple-800/40 hover:scale-[1.01] transition text-left group"
+                    className="flex items-center justify-between p-3.5 bg-gradient-to-r from-cyan-50 to-blue-50 dark:from-cyan-950/30 dark:to-blue-950/30 rounded-2xl border border-cyan-100 dark:border-cyan-800/40 hover:scale-[1.01] transition text-left group"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="p-2.5 bg-purple-600 text-white rounded-xl shadow-sm">
+                      <div className="p-2.5 bg-cyan-600 text-white rounded-xl shadow-sm">
                         <MessageSquare size={18} />
                       </div>
                       <div>
-                        <h5 className="font-bold text-xs dark:text-white group-hover:text-purple-500 transition">Social Feed & Creator Hub</h5>
+                        <h5 className="font-bold text-xs dark:text-white group-hover:text-brand-blue transition">Social Feed & Creator Hub</h5>
                         <span className="text-[11px] text-gray-500 dark:text-gray-400">Stories, shorts, audio rooms & creator circles</span>
                       </div>
                     </div>
-                    <ArrowUpRight size={16} className="text-purple-500" />
+                    <ArrowUpRight size={16} className="text-brand-blue" />
                   </button>
 
                   <button

@@ -3,7 +3,7 @@ import {
   ChevronRight, ChevronLeft, Upload, Music, Image as ImageIcon,
   CheckCircle, AlertCircle, Loader2, Info, X, Calendar, LucideIcon
 } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import { DDEX_GENRES, DISTRIBUTION_STORES, RELEASE_TYPES } from '../../config/constants';
 import type { UserData } from '../../types';
 
@@ -136,7 +136,7 @@ const Step1Metadata = ({ data, setData }: StepProps): JSX.Element => (
 );
 
 const Step2Artwork = ({ data, setData, user }: StepProps): JSX.Element => {
-  const { uploadMedia: uploadImage, uploading } = useMediaUpload();
+  const { uploadMedia: uploadImage, uploading } = useUpload();
   const [preview, setPreview] = useState<string | null>(data.artworkUrl || null);
   const [validationMsg, setValidationMsg] = useState<string>('');
 
@@ -146,8 +146,10 @@ const Step2Artwork = ({ data, setData, user }: StepProps): JSX.Element => {
 
     // Client-side Validation (3000px check)
     const img = new Image();
-    img.src = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    img.src = objectUrl;
     img.onload = async () => {
+      URL.revokeObjectURL(objectUrl);
       if (img.width < 3000 || img.height < 3000) {
         setValidationMsg("Error: Image must be at least 3000 x 3000 pixels.");
         return;
@@ -163,7 +165,13 @@ const Step2Artwork = ({ data, setData, user }: StepProps): JSX.Element => {
       if (res?.url) {
         setPreview(res.url);
         setData({ ...data, artworkUrl: res.url });
+      } else {
+        setValidationMsg("Error: Failed to upload artwork to storage.");
       }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      setValidationMsg("Error: Could not read image file.");
     };
   };
 
@@ -206,7 +214,7 @@ const Step2Artwork = ({ data, setData, user }: StepProps): JSX.Element => {
 };
 
 const Step3Tracks = ({ data, setData, user }: StepProps): JSX.Element => {
-  const { uploadMedia, uploading } = useMediaUpload();
+  const { uploadMedia, uploading } = useUpload();
 
   const addTrack = async (file: File): Promise<void> => {
     if (!file.name.toLowerCase().endsWith('.wav')) {

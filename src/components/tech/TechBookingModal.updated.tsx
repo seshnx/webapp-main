@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { X, Wrench, Calendar, DollarSign, Loader2, Video } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { X, Wrench, Calendar, DollarSign, Loader2, Video, CheckCircle } from 'lucide-react';
+import { useUpload } from '../../hooks/useUpload';
 import { SERVICE_CATALOGUE } from '../../config/constants';
-import { createBooking } from '../../services/bookingService';
+import { useCreateBooking } from '../../hooks/useBookings';
 import * as Sentry from '@sentry/react';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import type { UserData } from '../../types';
@@ -24,6 +24,7 @@ interface TechBookingForm {
  */
 interface TargetUser {
     id?: string;
+    _id?: string;
     firstName?: string;
     lastName?: string;
     name?: string;
@@ -42,7 +43,7 @@ export interface TechBookingModalProps {
 
 /**
  * TechBookingModal - Modal for submitting technician service requests
- * Uses hybrid Neon + MongoDB booking system
+ * Integrated with Neon database via useCreateBooking hook
  */
 export default function TechBookingModal({ user, userData, target, onClose }: TechBookingModalProps) {
     const [submitting, setSubmitting] = useState<boolean>(false);
@@ -55,7 +56,8 @@ export default function TechBookingModal({ user, userData, target, onClose }: Te
         budgetCap: ''
     });
     const [attachments, setAttachments] = useState<any[]>([]);
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
+    const { createBooking } = useCreateBooking();
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

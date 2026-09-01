@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, DollarSign, Users, Trash2, Zap, CheckCircle, Loader2 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 import toast from 'react-hot-toast';
 
 /**
@@ -12,7 +14,6 @@ import toast from 'react-hot-toast';
  */
 const sessionSchema = z.object({
     sessionName: z.string().min(3, "Session name must be at least 3 chars"),
-    // Removed strict date/time validation to allow empty/flexible
     date: z.string().optional(),
     time: z.string().optional(),
     duration: z.number().min(1).max(24),
@@ -23,6 +24,7 @@ const sessionSchema = z.object({
  */
 interface CartItem {
     id: string;
+    clerkId?: string;
     firstName: string;
     lastName: string;
     rate?: number;
@@ -82,6 +84,7 @@ export default function SessionBuilderModal({
     onComplete
 }: SessionBuilderModalProps) {
     const [loading, setLoading] = useState<boolean>(false);
+    const createBooking = useMutation(api.bookings.createBooking);
 
     const {
         register,
@@ -126,69 +129,27 @@ export default function SessionBuilderModal({
         const toastId = toast.loading('Initializing Session...');
 
         try {
-            // Handle payment if total > 0
-            let paymentIntentId: string | null = null;
+            const clientClerkId = userData?.clerkId || userData?.id || user?.id || user?.uid;
 
-            if (finalTotal > 0) {
-                try {
-                    const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
-                    const response = await fetch(`${apiUrl}/stripe/create-split-payment`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            totalAmount: finalTotal,
-                            description: `Session: ${data.sessionName}`,
-                            transfers: lineItems.map(item => ({
-                                recipientId: item.id,
-                                amount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
-                                role: item.accountTypes?.[0] || 'Creative'
-                            }))
-                        }),
-                    });
-
-                    if (!response.ok) {
-                        console.warn("Payment initialization failed, continuing without payment");
-                        // Continue without payment - session can still be created
-                    } else {
-                        const paymentResult = await response.json();
-                        if (paymentResult?.paymentIntentId) {
-                            paymentIntentId = paymentResult.paymentIntentId;
-                        }
-                    }
-                } catch (paymentErr) {
-                    console.warn("Payment setup error, continuing without payment:", paymentErr);
-                    // Continue without payment - allow session creation
-                }
-            }
-
-            const userId = userData?.id || user?.id || user?.uid;
-            const groupId = `session_${Date.now()}`;
-            const endTime = data.time ? new Date(`2000-01-01T${data.time}`).getTime() + (data.duration * 60 * 60 * 1000) : null;
-            const endTimeString = endTime ? new Date(endTime).toTimeString().slice(0, 5) : null;
-
-            // Create bookings for each item in the cart
+            // Create bookings in Convex for each item in the cart
             const bookingPromises = lineItems.map(item => {
-                return fetch('/api/studio-ops/bookings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        studioId: item.id,
-                        senderId: userId,
-                        type: item.accountTypes?.[0] || 'Session',
-                        date: data.date || 'Flexible',
-                        startTime: data.time || 'Flexible',
-                        endTime: endTimeString || 'Flexible',
-                        offerAmount: item.itemTotal * (shouldDiscount ? 0.9 : 1.0),
-                        notes: `Group Session: ${data.sessionName}`
-                    })
+                const talentClerkId = item.clerkId || item.id;
+                const offer = item.itemTotal * (shouldDiscount ? 0.9 : 1.0);
+                return createBooking({
+                    talentClerkId,
+                    clientClerkId,
+                    serviceType: `[${item.accountTypes?.[0] || 'Session'}] ${data.sessionName}`,
+                    date: data.date || undefined,
+                    time: data.time || undefined,
+                    duration: data.duration,
+                    offerAmount: offer > 0 ? offer : undefined,
+                    message: `Group Session: ${data.sessionName}`,
                 });
             });
 
             await Promise.all(bookingPromises);
 
-            toast.success(`Session Created!`, { id: toastId });
+            toast.success(`Session Created & Requests Sent!`, { id: toastId });
             onComplete();
 
         } catch (error: any) {
@@ -204,11 +165,23 @@ export default function SessionBuilderModal({
         error ? "border-red-500 bg-red-50 dark:bg-red-900/10" : "border-gray-200 dark:border-gray-600"
     );
 
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
+
     return (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[80] p-4 animate-in fade-in">
+        <div
+            onClick={onClose}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[80] p-4 animate-in fade-in cursor-pointer"
+        >
             <form
                 onSubmit={handleSubmit(onSubmit)}
-                className="bg-white dark:bg-[#2c2e36] w-full max-w-2xl rounded-2xl shadow-2xl border dark:border-gray-700 flex flex-col max-h-[90vh]"
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white dark:bg-[#2c2e36] w-full max-w-2xl rounded-2xl shadow-2xl border dark:border-gray-700 flex flex-col max-h-[90vh] cursor-default"
             >
                 <div className="p-6 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#23262f] rounded-t-2xl">
                     <div>

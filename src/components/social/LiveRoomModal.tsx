@@ -261,7 +261,7 @@ export default function LiveRoomModal({
       <motion.div
         initial={{ y: 50, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        className="fixed bottom-24 right-4 sm:bottom-6 sm:right-24 z-[99990] bg-gray-900/95 backdrop-blur-xl border border-purple-500/30 text-white rounded-2xl p-3 shadow-2xl flex items-center gap-3 w-80 sm:w-96"
+        className="fixed bottom-24 right-4 sm:bottom-6 sm:right-24 z-[99990] bg-gray-900/95 backdrop-blur-xl border border-brand-blue/30 text-white rounded-2xl p-3 shadow-2xl flex items-center gap-3 w-80 sm:w-96"
       >
         <div className="relative">
           <UserAvatar src={room?.hostPhoto} name={room?.hostName || 'Host'} size="sm" />
@@ -327,10 +327,10 @@ export default function LiveRoomModal({
           initial={{ scale: 0.95, y: 20 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95, y: 20 }}
-          className="w-full max-w-4xl h-[92vh] sm:h-[88vh] bg-gradient-to-b from-gray-900 via-gray-950 to-gray-950 text-white rounded-3xl p-4 sm:p-6 shadow-2xl border border-purple-500/20 flex flex-col justify-between relative overflow-hidden"
+          className="w-full max-w-4xl h-[92vh] sm:h-[88vh] bg-gradient-to-b from-gray-900 via-gray-950 to-gray-950 text-white rounded-3xl p-4 sm:p-6 shadow-2xl border border-brand-blue/20 flex flex-col justify-between relative overflow-hidden"
         >
           {/* Subtle Ambient Glows */}
-          <div className="absolute top-0 right-1/4 w-72 h-72 bg-purple-600/10 rounded-full blur-3xl -z-10 pointer-events-none" />
+          <div className="absolute top-0 right-1/4 w-72 h-72 bg-brand-blue/10 rounded-full blur-3xl -z-10 pointer-events-none" />
           <div className="absolute bottom-0 left-1/4 w-72 h-72 bg-blue-600/10 rounded-full blur-3xl -z-10 pointer-events-none" />
 
           {/* Top Header */}
@@ -340,11 +340,11 @@ export default function LiveRoomModal({
                 <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" /> LIVE SPACE
                 </span>
-                <span className="text-[10px] font-semibold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md">
+                <span className="text-[10px] font-semibold text-brand-blue bg-brand-blue/10 px-2 py-0.5 rounded-md">
                   {room?.category || 'Audio Session'}
                 </span>
                 <span className="text-xs text-gray-400 flex items-center gap-1">
-                  <Users size={12} className="text-purple-400" /> {participants.length} in space
+                  <Users size={12} className="text-brand-blue" /> {participants.length} in space
                 </span>
               </div>
               <h3 className="font-bold text-base sm:text-lg text-white truncate">{room?.title}</h3>
@@ -402,7 +402,7 @@ export default function LiveRoomModal({
                           className={`relative p-1 rounded-full transition-all duration-200 ${
                             isSpkSpeaking
                               ? 'ring-4 ring-emerald-500 shadow-lg shadow-emerald-500/30'
-                              : 'ring-2 ring-purple-500/40'
+                              : 'ring-2 ring-brand-blue/40'
                           }`}
                         >
                           <UserAvatar src={spk.avatarUrl} name={spk.name} size="lg" />

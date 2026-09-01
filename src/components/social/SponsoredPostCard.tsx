@@ -43,7 +43,7 @@ export default function SponsoredPostCard({ ad }: SponsoredPostCardProps) {
   };
 
   return (
-    <div className="bg-white/95 dark:bg-dark-card/95 backdrop-blur-md rounded-3xl p-5 border border-purple-500/20 dark:border-purple-500/30 shadow-md shadow-purple-950/5 relative overflow-hidden transition hover:border-purple-500/40">
+    <div className="bg-white/95 dark:bg-dark-card/95 backdrop-blur-md rounded-3xl p-5 border border-brand-blue/30 dark:border-brand-blue/30 shadow-md shadow-blue-950/5 relative overflow-hidden transition hover:border-brand-blue/50">
       {/* Top Header */}
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-3">
@@ -63,7 +63,7 @@ export default function SponsoredPostCard({ ad }: SponsoredPostCardProps) {
               <h4 className="font-bold text-sm text-gray-900 dark:text-white">
                 {ad.sponsorName}
               </h4>
-              <span className="bg-gradient-to-r from-purple-600/20 to-blue-600/20 text-purple-600 dark:text-purple-300 text-[10px] font-black px-2 py-0.5 rounded-full border border-purple-500/30 flex items-center gap-1">
+              <span className="bg-brand-blue/15 text-brand-blue text-[10px] font-black px-2 py-0.5 rounded-full border border-brand-blue/30 flex items-center gap-1">
                 <Sparkles size={10} /> Sponsored
               </span>
             </div>
@@ -73,7 +73,7 @@ export default function SponsoredPostCard({ ad }: SponsoredPostCardProps) {
 
         <button
           onClick={handleCtaClick}
-          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-brand-blue to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition flex items-center gap-1.5 shrink-0"
+          className="px-3.5 py-1.5 rounded-xl bg-brand-blue hover:bg-blue-600 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition flex items-center gap-1.5 shrink-0"
         >
           <span>{ad.ctaText || 'Learn More'}</span>
           <ExternalLink size={12} />

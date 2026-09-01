@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sparkles, ShieldCheck, MapPin, Zap, Check, ArrowRight, RadioTower, Award } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSubscribeToPriorityVisibility } from '../../hooks/useConvex';
@@ -46,17 +46,29 @@ export default function BoostVisibilityModal({
     }
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+      <div
+        onClick={onClose}
+        className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md cursor-pointer"
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 10 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
-          className="bg-white dark:bg-dark-card rounded-3xl p-6 sm:p-8 border border-purple-500/30 shadow-2xl max-w-xl w-full relative overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-white dark:bg-dark-card rounded-3xl p-6 sm:p-8 border border-brand-blue/30 shadow-2xl max-w-xl w-full relative overflow-hidden cursor-default"
         >
           {/* Background Glow */}
-          <div className="absolute -top-20 -right-20 w-60 h-60 bg-gradient-to-br from-brand-blue/20 to-purple-600/20 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-20 -right-20 w-60 h-60 bg-gradient-to-br from-brand-blue/20 to-blue-600/10 rounded-full blur-3xl pointer-events-none" />
 
           {/* Close Button */}
           <button
@@ -68,8 +80,8 @@ export default function BoostVisibilityModal({
 
           {/* Header */}
           <div className="text-center max-w-md mx-auto mb-6">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gradient-to-r from-brand-blue/10 to-purple-600/10 border border-purple-500/30 text-purple-600 dark:text-purple-400 text-xs font-black mb-2">
-              <Sparkles size={13} /> REACH 3X MORE CREATORS
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-brand-blue/10 border border-brand-blue/30 text-brand-blue text-xs font-black mb-2">
+              <Sparkles size={13} /> REACH MORE CREATORS
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-gray-900 dark:text-white">
               Increase Your Visibility
@@ -127,22 +139,22 @@ export default function BoostVisibilityModal({
               onClick={() => setSelectedPlan('studio')}
               className={`p-4 rounded-2xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
                 selectedPlan === 'studio'
-                  ? 'border-purple-600 bg-purple-50/50 dark:bg-purple-950/20 shadow-md shadow-purple-500/10'
+                  ? 'border-brand-dark-accent bg-blue-50/50 dark:bg-blue-950/20 shadow-md shadow-brand-dark-accent/10'
                   : 'border-gray-200 dark:border-gray-700/80 bg-gray-50/50 dark:bg-gray-800/40 hover:border-gray-300'
               }`}
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <div className="p-2 rounded-xl bg-purple-600 text-white">
+                  <div className="p-2 rounded-xl bg-brand-dark-accent text-white">
                     <RadioTower size={18} />
                   </div>
-                  <span className="text-xs font-black text-purple-600 dark:text-purple-400">
+                  <span className="text-xs font-black text-brand-dark-accent">
                     $29.99/mo
                   </span>
                 </div>
                 <h4 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1">
                   <span>Studio Geo-Boost</span>
-                  <span className="text-[10px] text-purple-500 font-black">📍</span>
+                  <span className="text-[10px] text-brand-blue font-black">📍</span>
                 </h4>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
                   For recording facilities booking local vocal and mix sessions.
@@ -151,15 +163,15 @@ export default function BoostVisibilityModal({
 
               <div className="space-y-1.5 mt-4 pt-3 border-t dark:border-gray-700/60 text-[11px] text-gray-600 dark:text-gray-300 font-medium">
                 <div className="flex items-center gap-1.5">
-                  <Check size={12} className="text-purple-500 shrink-0" />
+                  <Check size={12} className="text-emerald-500 shrink-0" />
                   <span>50-Mile Local Feed Broadcast</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Check size={12} className="text-purple-500 shrink-0" />
+                  <Check size={12} className="text-emerald-500 shrink-0" />
                   <span>"Book Studio" Action Button</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Check size={12} className="text-purple-500 shrink-0" />
+                  <Check size={12} className="text-emerald-500 shrink-0" />
                   <span>Local Distance Tags (e.g. 8 mi)</span>
                 </div>
               </div>
@@ -171,7 +183,7 @@ export default function BoostVisibilityModal({
             <button
               onClick={handleActivate}
               disabled={isSubmitting}
-              className="w-full py-3 rounded-2xl bg-gradient-to-r from-brand-blue via-purple-600 to-indigo-600 hover:opacity-95 text-white font-bold text-xs shadow-lg shadow-purple-500/25 transition flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-2xl bg-brand-blue hover:bg-blue-600 text-white font-bold text-xs shadow-lg shadow-brand-blue/25 transition flex items-center justify-center gap-2"
             >
               <span>
                 {isSubmitting

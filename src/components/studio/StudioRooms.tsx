@@ -9,7 +9,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import FloorplanEditor from './FloorplanEditor';
 import Panorama360Viewer from './Panorama360Viewer';
-import { useImageUpload } from '../../hooks/useImageUpload';
+import { useImageUpload } from '../../hooks/useUpload';
 import { Image as ImageIcon, Upload, X } from 'lucide-react';
 
 /**
@@ -549,7 +549,8 @@ function RoomEditor({ room, setRoom, onSave, onCancel, saving, isNew, roomAmenit
         const toastId = toast.loading('Uploading 360° image...');
 
         try {
-            const url = await uploadImage(file, path);
+            const res = await uploadImage(file, path);
+            const url = res?.url;
             if (url) {
                 setRoom({ ...room, panorama360Url: url });
                 toast.success('360° image uploaded successfully!', { id: toastId });

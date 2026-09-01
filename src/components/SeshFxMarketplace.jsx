@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Disc, Sliders, Download, ShoppingCart, CheckCircle, Zap, Plus, X, Upload, Loader2, FileAudio, Image as ImageIcon, Play, Pause, Volume2, Info, Music, Tag } from 'lucide-react';
-import { useMediaUpload } from '../hooks/useMediaUpload';
+import { useUpload } from '../hooks/useUpload';
 import StarFieldVisualizer from './shared/StarFieldVisualizer';
 
 export default function SeshFxMarketplace({ user, userData, tokenBalance, refreshWallet }) {
@@ -256,7 +256,7 @@ function SellItemModal({ user, userData, onClose }) {
     const [form, setForm] = useState({ title: '', price: '', type: 'Presets', tags: '', description: '' });
     const [audioFile, setAudioFile] = useState(null);
     const [status, setStatus] = useState('');
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
 
     const handleSubmit = async () => {
         if(!form.title || !form.price || !audioFile) {

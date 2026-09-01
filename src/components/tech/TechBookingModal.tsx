@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Wrench, Calendar, DollarSign, Loader2, Video } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import { SERVICE_CATALOGUE } from '../../config/constants';
 import EquipmentAutocomplete from '../shared/EquipmentAutocomplete';
 import type { UserData } from '../../types';
@@ -53,7 +53,7 @@ export default function TechBookingModal({ user, userData, target, onClose }: Te
         budgetCap: ''
     });
     const [attachments, setAttachments] = useState<any[]>([]);
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

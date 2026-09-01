@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Camera, Save, X, AlertCircle, Upload, LucideIcon } from 'lucide-react';
 import { InspectionSvg, DIAGRAM_TYPES, DiagramMarker } from './InspectionDiagrams';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 
 /**
  * Inspection data interface
@@ -33,7 +33,7 @@ export default function InspectionEditor({ initialData, onSave, onCancel, type }
     const [photos, setPhotos] = useState<{ url: string }[]>(initialData?.photos || []);
     const [activeMarker, setActiveMarker] = useState<DiagramMarker | null>(null);
     const [markerLabel, setMarkerLabel] = useState<string>('');
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
 
     const handleDiagramClick = (x: number, y: number) => {
         const newMarker: DiagramMarker = { x, y, view, id: Date.now(), label: '' };

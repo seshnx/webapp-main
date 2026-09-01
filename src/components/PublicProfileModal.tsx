@@ -199,10 +199,9 @@ export default function PublicProfileModal({
 
         setBannerUploading(true);
         try {
-            // Upload to R2 (using PROFILE_PHOTOS folder for banners)
-            const uploadResult = await uploadImage(file, STORAGE_FOLDERS.PROFILE_PHOTOS);
+            // Upload to R2 using PROFILE_BANNERS folder
+            const uploadResult = await uploadImage(file, STORAGE_FOLDERS.PROFILE_BANNERS);
             if (uploadResult?.url) {
-                // Update Profile using Neon
                 await updateProfileMutation({
                     clerkId: userId,
                     bannerUrl: uploadResult.url,
@@ -210,6 +209,8 @@ export default function PublicProfileModal({
 
                 // Optimistic update
                 setProfile(prev => prev ? { ...prev, bannerURL: uploadResult.url, banner_url: uploadResult.url } : null);
+            } else {
+                alert("Failed to upload banner. Please check your storage or connection settings.");
             }
         } catch (err) {
             console.error("Banner upload failed:", err);
@@ -217,6 +218,14 @@ export default function PublicProfileModal({
         }
         setBannerUploading(false);
     };
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
     if (!userId) return null;
 
@@ -232,9 +241,12 @@ export default function PublicProfileModal({
     );
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div
+            onClick={onClose}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200 cursor-pointer"
+        >
             <div
-                className="bg-white dark:bg-[#1f2128] w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-gray-200 dark:border-gray-700"
+                className="bg-white dark:bg-[#1f2128] w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-gray-200 dark:border-gray-700 cursor-default"
                 onClick={(e) => e.stopPropagation()}
             >
 

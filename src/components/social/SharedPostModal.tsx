@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -74,7 +74,7 @@ const renderText = (text: string | undefined) => {
   if (!text) return null;
   return text.split(/(\s+)/).map((part, i) => {
     if (part.match(/^#\w+/)) return <span key={i} className="text-brand-blue font-bold">{part}</span>;
-    if (part.match(/^@\w+/)) return <span key={i} className="text-purple-400 font-bold">{part}</span>;
+    if (part.match(/^@\w+/)) return <span key={i} className="text-brand-blue font-bold">{part}</span>;
     return part;
   });
 };
@@ -227,26 +227,46 @@ export default function SharedPostModal({
     });
   };
 
-  const handleCloseModal = () => {
+  const [isOpen, setIsOpen] = useState(true);
+
+  // Sync isOpen if postId changes
+  useEffect(() => {
+    setIsOpen(true);
+  }, [postId]);
+
+  const handleCloseModal = useCallback(() => {
+    setIsOpen(false);
     sessionStorage.removeItem('seshnx_pending_post_modal');
     onClose();
-  };
+  }, [onClose]);
 
-  if (typeof document === 'undefined') return null;
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') handleCloseModal();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleCloseModal]);
+
+  if (!isOpen || typeof document === 'undefined') return null;
 
   return createPortal(
     <AnimatePresence>
-      <div className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto">
+      <div
+        onClick={handleCloseModal}
+        className="fixed inset-0 z-[99999] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 md:p-6 overflow-y-auto cursor-pointer"
+      >
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
-          className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col text-white my-auto max-h-[92vh] relative"
+          onClick={(e) => e.stopPropagation()}
+          className="bg-gray-900 border border-gray-800 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col text-white my-auto max-h-[92vh] relative cursor-default"
         >
           {/* Top Bar */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800 bg-gray-900/60 sticky top-0 z-20 backdrop-blur-md">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-purple-500 animate-pulse" />
+              <span className="w-2.5 h-2.5 rounded-full bg-brand-blue animate-pulse" />
               <h3 className="font-bold text-sm text-white flex items-center gap-2">
                 Shared Post
                 <span className="text-[10px] font-semibold text-gray-400 bg-gray-800 px-2 py-0.5 rounded-full border border-gray-700">
@@ -354,7 +374,7 @@ export default function SharedPostModal({
           <div className="p-5 overflow-y-auto space-y-5 custom-scrollbar flex-1">
             {post === undefined ? (
               <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
-                <Loader2 size={32} className="animate-spin text-purple-500" />
+                <Loader2 size={32} className="animate-spin text-brand-blue" />
                 <span className="text-xs font-semibold">Loading post...</span>
               </div>
             ) : post === null ? (
@@ -390,7 +410,7 @@ export default function SharedPostModal({
                           {post.displayName || post.authorName || 'Creator'}
                         </span>
                         {post.role && (
-                          <span className="text-[10px] font-bold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-2 py-0.2 rounded-full">
+                          <span className="text-[10px] font-bold bg-brand-blue/20 text-blue-300 border border-brand-blue/30 px-2 py-0.2 rounded-full">
                             {post.role}
                           </span>
                         )}
@@ -424,7 +444,7 @@ export default function SharedPostModal({
                 {((post as any)?.category || (post as any)?.hashtags?.length > 0) && (
                   <div className="flex flex-wrap items-center gap-1.5 pt-1">
                     {(post as any)?.category && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-brand-blue/15 text-blue-300 border border-brand-blue/30">
                         {(post as any).category}
                       </span>
                     )}
@@ -521,7 +541,7 @@ export default function SharedPostModal({
                                   {(post as any).originalPost.displayName || (post as any).originalPost.authorName || 'Creator'}
                                 </span>
                                 {(post as any).originalPost.role && (
-                                  <span className="text-[10px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.2 rounded-md">
+                                  <span className="text-[10px] font-semibold bg-brand-blue/20 text-blue-300 border border-brand-blue/30 px-1.5 py-0.2 rounded-md">
                                     {(post as any).originalPost.role}
                                   </span>
                                 )}
@@ -672,11 +692,11 @@ export default function SharedPostModal({
                     onClick={handleToggleSave}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition ${
                       isSavedQuery
-                        ? 'bg-purple-500/20 text-purple-300 font-bold'
+                        ? 'bg-brand-blue/20 text-blue-300 font-bold'
                         : 'bg-gray-800/80 hover:bg-gray-700 text-gray-300'
                     }`}
                   >
-                    <Bookmark size={15} className={isSavedQuery ? 'fill-purple-400 text-purple-400' : ''} />
+                    <Bookmark size={15} className={isSavedQuery ? 'fill-brand-blue text-brand-blue' : ''} />
                     <span className="hidden sm:inline">{isSavedQuery ? 'Saved' : 'Save'}</span>
                   </button>
                 </div>
@@ -684,7 +704,7 @@ export default function SharedPostModal({
                 {/* Comment Section */}
                 <div className="pt-4 border-t border-gray-800 space-y-4">
                   <h4 className="font-bold text-xs text-gray-400 flex items-center gap-2">
-                    <MessageCircle size={14} className="text-purple-400" />
+                    <MessageCircle size={14} className="text-brand-blue" />
                     Comments
                   </h4>
 

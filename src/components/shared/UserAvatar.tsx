@@ -1,7 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { useUser } from '@clerk/react';
+import { getUserAvatarUrl, getUserDisplayName } from '../../utils/avatar';
+
+// Re-export utility functions
+export { getUserAvatarUrl, getUserDisplayName } from '../../utils/avatar';
 
 /**
  * Avatar size variants
@@ -17,8 +22,14 @@ export type AvatarStatus = 'online' | 'offline';
  * User avatar component props
  */
 export interface UserAvatarProps {
-  /** Image source URL */
+  /** Image source URL (takes precedence if provided) */
   src?: string | null;
+  /** Convex user data object */
+  userData?: any;
+  /** Clerk user object */
+  user?: any;
+  /** Active subprofile record */
+  subProfile?: any;
   /** User's display name (used for initials and alt text) */
   name?: string | null;
   /** Avatar size */
@@ -26,7 +37,7 @@ export interface UserAvatarProps {
   /** Additional CSS classes */
   className?: string;
   /** Click handler (makes avatar interactive) */
-  onClick?: () => void;
+  onClick?: (e?: React.MouseEvent) => void;
   /** Online status indicator */
   status?: AvatarStatus;
   /** Show group icon instead of initials */
@@ -47,7 +58,7 @@ const getInitials = (name: string | null | undefined): string => {
 };
 
 /**
- * Generate a consistent color based on the name
+ * Generate a consistent color gradient based on the name
  */
 const getAvatarColor = (name: string | null | undefined): string => {
   if (!name) return 'from-brand-blue to-purple-600';
@@ -68,30 +79,17 @@ const getAvatarColor = (name: string | null | undefined): string => {
 /**
  * User Avatar Component
  *
- * Displays a user avatar with fallback to initials, group icon, or default user icon.
- * Supports different sizes, status indicators, and click interactions.
- *
- * @param props - Avatar props
- * @returns Avatar component
- *
- * @example
- * // Basic usage
- * <UserAvatar name="John Doe" src="/avatar.jpg" />
- *
- * @example
- * // With status indicator
- * <UserAvatar name="Jane Smith" status="online" />
- *
- * @example
- * // Group avatar
- * <UserAvatar isGroup={true} name="Band Members" />
- *
- * @example
- * // Clickable avatar
- * <UserAvatar name="User" onClick={() => navigate('/profile')} />
+ * Centralized avatar component that automatically handles image resolution across:
+ * - Clerk OAuth (Google, Apple, etc. user.imageUrl)
+ * - Convex database records (userData.avatarUrl, userData.photoURL)
+ * - Active role subprofiles (subProfile.photo_url)
+ * - Direct image URLs with automatic fallback to colorful initials or icons.
  */
 export default function UserAvatar({
   src,
+  userData,
+  user,
+  subProfile,
   name,
   size = 'md',
   className,
@@ -101,6 +99,33 @@ export default function UserAvatar({
   square = false
 }: UserAvatarProps): React.ReactElement {
   const [imgError, setImgError] = useState<boolean>(false);
+
+  // Safely attempt to read Clerk user context for automatic fallback
+  let clerkUser: any = null;
+  try {
+    const clerkContext = useUser();
+    clerkUser = clerkContext?.user;
+  } catch {
+    // Graceful fallback if rendered outside ClerkProvider
+  }
+
+  // Resolve best image URL
+  const resolvedSrc = getUserAvatarUrl(
+    src,
+    userData,
+    user || clerkUser,
+    subProfile
+  );
+
+  // Resolve best display name
+  const resolvedName =
+    name ||
+    getUserDisplayName(userData, user || clerkUser, subProfile);
+
+  // Reset img error state if resolved URL changes
+  useEffect(() => {
+    setImgError(false);
+  }, [resolvedSrc]);
 
   const sizeClasses: Record<AvatarSize, string> = {
     xs: "h-6 w-6 text-[10px]",
@@ -122,9 +147,9 @@ export default function UserAvatar({
     )
   );
 
-  const showFallback = !src || imgError;
-  const initials = getInitials(name);
-  const avatarColor = getAvatarColor(name);
+  const showFallback = !resolvedSrc || imgError;
+  const initials = getInitials(resolvedName);
+  const avatarColor = getAvatarColor(resolvedName);
 
   return (
     <div
@@ -132,12 +157,12 @@ export default function UserAvatar({
       onClick={onClick}
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
-      aria-label={name ? `${name}'s avatar` : 'User avatar'}
+      aria-label={resolvedName ? `${resolvedName}'s avatar` : 'User avatar'}
     >
       {!showFallback ? (
         <img
-          src={src}
-          alt={name || "Avatar"}
+          src={resolvedSrc}
+          alt={resolvedName || "Avatar"}
           className="h-full w-full object-cover"
           onError={() => setImgError(true)}
           loading="lazy"

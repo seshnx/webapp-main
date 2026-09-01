@@ -144,14 +144,20 @@ export default function MainLayout({
   const [viewingProfile, setViewingProfile] = useState<any>(null);
   const [pendingChatTarget, setPendingChatTarget] = useState<any>(null);
   const [talentBooking, setTalentBooking] = useState<{ talentClerkId: string; profile: any } | null>(null);
+  const [dismissedPostId, setDismissedPostId] = useState<string | null>(null);
+
+  // Reset dismissed post when location path changes to a different post
+  useEffect(() => {
+    setDismissedPostId(null);
+  }, [location.pathname]);
 
   // Detect shared post from path (/post/:id or /p/:id) or post-login pending state
   const sharedPostId = useMemo(() => {
     const match = location.pathname.match(/^\/(?:post|p)\/([^/?#]+)/);
-    if (match) return match[1];
-    const pending = sessionStorage.getItem('seshnx_pending_post_modal');
-    return pending || null;
-  }, [location.pathname]);
+    const pid = match ? match[1] : sessionStorage.getItem('seshnx_pending_post_modal');
+    if (!pid || pid === dismissedPostId) return null;
+    return pid;
+  }, [location.pathname, dismissedPostId]);
 
   // Sync tab state with URL
   useEffect(() => {
@@ -171,7 +177,13 @@ export default function MainLayout({
     }
   }, [user?.id, userData?.accountTypes, updateRole]);
 
-  const navbarUser = useMemo(() => ({ id: user?.id }), [user?.id]);
+  const navbarUser = useMemo(() => ({
+    id: user?.id,
+    imageUrl: user?.imageUrl,
+    fullName: user?.fullName,
+    username: user?.username,
+    primaryEmailAddress: user?.primaryEmailAddress,
+  }), [user?.id, user?.imageUrl, user?.fullName, user?.username, user?.primaryEmailAddress]);
 
   const renderContent = () => {
     // Non-blocking loading state
@@ -212,7 +224,12 @@ export default function MainLayout({
       case 'profile':
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <ProfileManager user={user} userData={userData} />
+            <ProfileManager
+              user={user}
+              userData={userData}
+              subProfiles={subProfiles}
+              openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })}
+            />
           </Suspense>
         );
       case 'studio-manager':
@@ -391,6 +408,9 @@ export default function MainLayout({
               currentUserData={userData}
               onClose={() => {
                 sessionStorage.removeItem('seshnx_pending_post_modal');
+                if (sharedPostId) {
+                  setDismissedPostId(sharedPostId);
+                }
                 if (location.pathname.startsWith('/post/') || location.pathname.startsWith('/p/')) {
                   navigate('/feed', { replace: true });
                 }

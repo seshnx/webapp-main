@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Calendar, Clock, Trash2, Edit3, Send, X, FileText } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -31,14 +31,26 @@ export default function ScheduledPostsModal({ onClose, onPublishNow }: Scheduled
     localStorage.setItem('seshnx_scheduled_posts', JSON.stringify(updated));
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+      className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
     >
-      <div className="w-full max-w-lg bg-white dark:bg-dark-card rounded-3xl p-6 shadow-2xl border dark:border-gray-700">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg bg-white dark:bg-dark-card rounded-3xl p-6 shadow-2xl border dark:border-gray-700 cursor-default"
+      >
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold dark:text-white flex items-center gap-2">
             <Calendar className="text-brand-blue" size={20} />

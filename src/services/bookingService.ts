@@ -163,12 +163,22 @@ export async function cancelBooking(
 // =====================================================
 
 /**
- * Hook for bookings by client
+ * Hook for bookings by client (studio reservations)
  */
 export function useBookingsByClient(clerkId: string | undefined, status?: string) {
   return useQuery(
     api.sbookings.getBookingsByClient,
     clerkId ? { clientClerkId: clerkId, status, limit: 50 } : "skip"
+  );
+}
+
+/**
+ * Hook for client talent bookings (direct bookings made by client to creatives)
+ */
+export function useClientTalentBookings(clientClerkId: string | undefined, status?: string) {
+  return useQuery(
+    api.bookings.getClientBookings,
+    clientClerkId ? { clientClerkId, status, limit: 50 } : "skip"
   );
 }
 
@@ -277,12 +287,18 @@ export function useBookingMutations() {
  * Hook for Talent/Direct booking mutations
  */
 export function useTalentBookingMutations() {
+  const createBooking = useMutation(api.bookings.createBooking);
   const acceptBooking = useMutation(api.bookings.acceptBooking);
   const rejectBooking = useMutation(api.bookings.rejectBooking);
+  const cancelBooking = useMutation(api.bookings.cancelBooking);
+  const completeBooking = useMutation(api.bookings.completeBooking);
 
   return {
+    createBooking,
     acceptBooking,
     rejectBooking,
+    cancelBooking,
+    completeBooking,
   };
 }
 
@@ -399,6 +415,8 @@ export function useRoomMutations() {
 export default {
   // Queries (use these in components)
   useBookingsByClient,
+  useClientTalentBookings,
+  useTalentBookings,
   useUpcomingBookings,
   useBookingsByDate,
   useBookingsByDateRange,
@@ -412,6 +430,7 @@ export default {
 
   // Mutations (use these in components)
   useBookingMutations,
+  useTalentBookingMutations,
   useBookingPaymentMutations,
   useStudioMutations,
   useRoomMutations,

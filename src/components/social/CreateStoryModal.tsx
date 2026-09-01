@@ -36,11 +36,19 @@ export default function CreateStoryModal({ user, userData, onClose, onAddStory }
     setIsUploading(true);
 
     try {
-      let finalUrl = previewUrl || '';
-      if (file) {
-        const res = await uploadMedia(file);
-        if (res?.url) finalUrl = res.url;
+      if (!file) {
+        setIsUploading(false);
+        return;
       }
+
+      const res = await uploadMedia(file);
+      if (!res?.url) {
+        alert("Failed to upload media. Please check your connection or storage settings and try again.");
+        setIsUploading(false);
+        return;
+      }
+
+      const finalUrl = res.url;
 
       const clerkId = user?.id || user?.uid;
       if (clerkId && finalUrl) {
@@ -61,6 +69,7 @@ export default function CreateStoryModal({ user, userData, onClose, onAddStory }
       onClose();
     } catch (e) {
       console.error("Failed to upload story:", e);
+      alert("Failed to upload story. Please try again.");
     } finally {
       setIsUploading(false);
     }

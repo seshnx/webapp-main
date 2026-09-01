@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Zap, ChevronDown, Loader2, Video, X } from 'lucide-react';
 import { SERVICE_CATALOGUE } from '../../config/constants';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import type { UserData } from '../../types';
 
 /**
@@ -34,7 +34,7 @@ export default function TechBroadcastBuilder({ user, userData, onSuccess, onCanc
     const [details, setDetails] = useState<string>('');
     const [submitting, setSubmitting] = useState<boolean>(false);
     const [media, setMedia] = useState<MediaData | null>(null);
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
 
     const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];

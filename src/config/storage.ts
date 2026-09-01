@@ -54,24 +54,36 @@ export function isStorageConfigured(): boolean {
 }
 
 /**
- * Generate a unique storage key for a file.
+ * Generate a unique storage key for a file formatted under user-media/{username}/{folder}/{filename}.
  *
- * @param folder - Storage folder (e.g. 'profile-photos')
+ * @param folder - Storage folder (e.g. 'post-media', 'profile-photos')
  * @param file - File to generate key for
  * @param customFileName - Optional custom filename override
- * @returns Full object key (e.g. 'post-media/1714123456_abc_photo.jpg')
+ * @param username - Optional username or identifier
+ * @returns Full object key (e.g. 'user-media/username/post-media/1714123456_abc_photo.jpg')
  */
 export function generateStorageKey(
-  folder: StorageFolder,
+  folder: StorageFolder | string,
   file: File | Blob,
-  customFileName?: string
+  customFileName?: string,
+  username?: string
 ): string {
   const timestamp = Date.now();
   const randomString = Math.random().toString(36).substring(2, 8);
-  const fileName = (file as File).name || "file";
-  const extension = fileName.split(".").pop() || "bin";
-  const name = customFileName || `${folder}-${timestamp}-${randomString}.${extension}`;
-  return `${folder}/${name}`;
+  const rawFileName = (file as File).name || "file";
+  const sanitizedName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const name = customFileName || `${timestamp}_${randomString}_${sanitizedName}`;
+  const cleanFolder = folder.replace(/^\/+/, "");
+
+  if (cleanFolder.startsWith("user-media/")) {
+    return `${cleanFolder}/${name}`;
+  }
+
+  const userSlug = username
+    ? username.replace(/[^a-zA-Z0-9_-]/g, "_").toLowerCase()
+    : "anonymous";
+
+  return `user-media/${userSlug}/${cleanFolder}/${name}`;
 }
 
 /**
@@ -120,7 +132,8 @@ export function getFolderForMediaType(mediaType: string): StorageFolder {
 export function uploadToPresignedUrl(
   file: File | Blob,
   presignedUrl: string,
-  onProgress?: (progress: number) => void
+  onProgress?: (progress: number) => void,
+  headers?: Record<string, string>
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
@@ -148,6 +161,15 @@ export function uploadToPresignedUrl(
       "Content-Type",
       (file as File).type || "application/octet-stream"
     );
+
+    if (headers) {
+      for (const [headerKey, headerVal] of Object.entries(headers)) {
+        if (headerVal) {
+          xhr.setRequestHeader(headerKey, headerVal);
+        }
+      }
+    }
+
     xhr.send(file);
   });
 }
@@ -193,6 +215,152 @@ export function getOptimizedImageUrl(
 
   const path = url.replace(`${R2_PUBLIC_URL}/`, "");
   return `${R2_PUBLIC_URL}/cdn-cgi/image/${params.join(",")}/${path}`;
+}
+
+// =====================================================
+// CLIENT-SIDE IMAGE COMPRESSION
+// =====================================================
+
+export interface ImageCompressionOptions {
+  maxWidth?: number;
+  maxHeight?: number;
+  quality?: number;
+  format?: "image/webp" | "image/jpeg" | "image/png";
+  skipIfSmallerThanMB?: number;
+}
+
+/**
+ * Preconfigured compression profiles for different upload contexts
+ */
+export const COMPRESSION_PRESETS = {
+  /** Heavy compression for profile pictures, avatars, and studio logos */
+  AVATAR: {
+    maxWidth: 512,
+    maxHeight: 512,
+    quality: 0.80,
+    format: "image/webp" as const,
+    skipIfSmallerThanMB: 0.04, // Optimize anything above 40KB
+  },
+  /** Standard compression for social posts, galleries, feeds */
+  STANDARD: {
+    maxWidth: 2048,
+    maxHeight: 2048,
+    quality: 0.85,
+    format: "image/webp" as const,
+    skipIfSmallerThanMB: 0.25,
+  },
+  /** High resolution for release artwork / album covers */
+  HIGH_RES: {
+    maxWidth: 3000,
+    maxHeight: 3000,
+    quality: 0.92,
+    format: "image/jpeg" as const,
+    skipIfSmallerThanMB: 0.5,
+  },
+};
+
+/**
+ * Compress an image file client-side before upload using HTMLCanvasElement.
+ * Bypasses SVGs and animated GIFs to preserve vector clarity and animations.
+ *
+ * @param file - Source image File
+ * @param options - Compression settings (max dimensions, quality, format)
+ * @returns Compressed File or original if compression is not beneficial/applicable
+ */
+export async function compressImage(
+  file: File,
+  options: ImageCompressionOptions = {}
+): Promise<File> {
+  // Preserve SVGs, GIFs, and non-image files
+  if (
+    file.type === "image/svg+xml" ||
+    file.type === "image/gif" ||
+    !file.type.startsWith("image/")
+  ) {
+    return file;
+  }
+
+  const {
+    maxWidth = 2048,
+    maxHeight = 2048,
+    quality = 0.85,
+    format = "image/webp",
+    skipIfSmallerThanMB = 0.25, // Skip if already under 250KB
+  } = options;
+
+  if (file.size <= skipIfSmallerThanMB * 1024 * 1024) {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+
+      img.onload = () => {
+        let width = img.width;
+        let height = img.height;
+
+        // Proportional scale down
+        if (width > maxWidth || height > maxHeight) {
+          if (width / height > maxWidth / maxHeight) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          } else {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          return resolve(file);
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return resolve(file);
+
+            // If compressed blob is unexpectedly larger, keep original
+            if (blob.size >= file.size) {
+              return resolve(file);
+            }
+
+            const extension =
+              format === "image/webp"
+                ? ".webp"
+                : format === "image/jpeg"
+                ? ".jpg"
+                : ".png";
+            const baseName =
+              file.name.substring(0, file.name.lastIndexOf(".")) || file.name;
+
+            const compressedFile = new File([blob], `${baseName}${extension}`, {
+              type: format,
+              lastModified: Date.now(),
+            });
+
+            resolve(compressedFile);
+          },
+          format,
+          quality
+        );
+      };
+
+      img.onerror = () => resolve(file);
+    };
+
+    reader.onerror = () => resolve(file);
+  });
 }
 
 // =====================================================

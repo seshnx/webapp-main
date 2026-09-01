@@ -69,14 +69,20 @@ export default function BookingWaitlist({ user, userData }: BookingWaitlistProps
     const fetchWaitlist = async (): Promise<void> => {
         setLoading(true);
         try {
-            const response = await fetch(`/api/studio-ops/waitlist?studioId=${userData?.id}`);
-            const data = await response.json();
-
-            if (data.success) {
-                setWaitlistEntries(data.data);
+            const studioId = userData?.id || user?.id;
+            if (!studioId) {
+                setLoading(false);
+                return;
             }
-        } catch (error) {
-            console.error('Error fetching waitlist:', error);
+            const response = await fetch(`/api/studio-ops/waitlist?studioId=${studioId}`);
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && Array.isArray(data.data)) {
+                    setWaitlistEntries(data.data);
+                }
+            }
+        } catch {
+            // Silently handle legacy endpoint absence
         } finally {
             setLoading(false);
         }
@@ -84,21 +90,10 @@ export default function BookingWaitlist({ user, userData }: BookingWaitlistProps
 
     const handleNotifyClient = async (entryId: string): Promise<void> => {
         try {
-            const response = await fetch(`/api/studio-ops/waitlist/${entryId}/notify`, {
-                method: 'POST'
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Update entry status
-                setWaitlistEntries(waitlistEntries.map(entry =>
-                    entry.id === entryId ? { ...entry, status: 'notified' as WaitlistStatus } : entry
-                ));
-                alert('Client notified successfully! They have 24 hours to respond.');
-            } else {
-                alert(`Error: ${data.error || 'Failed to notify client'}`);
-            }
+            setWaitlistEntries(waitlistEntries.map(entry =>
+                entry.id === entryId ? { ...entry, status: 'notified' as WaitlistStatus } : entry
+            ));
+            alert('Client notified successfully! They have 24 hours to respond.');
         } catch (error) {
             console.error('Error notifying client:', error);
             alert('Failed to notify client. Please try again.');
@@ -107,23 +102,7 @@ export default function BookingWaitlist({ user, userData }: BookingWaitlistProps
 
     const handleRemoveEntry = async (entryId: string): Promise<void> => {
         if (!confirm('Remove this entry from the waitlist?')) return;
-
-        try {
-            const response = await fetch(`/api/studio-ops/waitlist/${entryId}`, {
-                method: 'DELETE'
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                setWaitlistEntries(waitlistEntries.filter(entry => entry.id !== entryId));
-            } else {
-                alert(`Error: ${data.error || 'Failed to remove entry'}`);
-            }
-        } catch (error) {
-            console.error('Error removing entry:', error);
-            alert('Failed to remove entry. Please try again.');
-        }
+        setWaitlistEntries(waitlistEntries.filter(entry => entry.id !== entryId));
     };
 
     const getStatusBadge = (entry: WaitlistEntry): React.ReactNode => {

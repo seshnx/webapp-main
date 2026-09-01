@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { DollarSign, Heart, Sparkles, X, CheckCircle, ShieldCheck } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -52,6 +52,14 @@ export default function TipModal({ creatorName, creatorPhoto, creatorUserId, cre
     }, 1800);
   };
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
   if (typeof document === 'undefined') return null;
 
   return createPortal(
@@ -59,9 +67,13 @@ export default function TipModal({ creatorName, creatorPhoto, creatorUserId, cre
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4"
+      onClick={onClose}
+      className="fixed inset-0 z-[100000] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 cursor-pointer"
     >
-      <div className="w-full max-w-md bg-white dark:bg-dark-card rounded-3xl p-6 shadow-2xl border dark:border-gray-700 relative overflow-hidden">
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md bg-white dark:bg-dark-card rounded-3xl p-6 shadow-2xl border dark:border-gray-700 relative overflow-hidden cursor-default"
+      >
         {isSuccess ? (
           <div className="py-10 text-center space-y-3">
             <motion.div

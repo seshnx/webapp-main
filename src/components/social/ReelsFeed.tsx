@@ -31,7 +31,8 @@ export default function ReelsFeed({ user, userData, onOpenProfile }: ReelsFeedPr
   const [activeCommentReelId, setActiveCommentReelId] = useState<string | null>(null);
   const [tipReel, setTipReel] = useState<ReelItem | null>(null);
 
-  const { data: dbPosts = [] } = useFeed(50);
+  const feedPosts = useFeed(50);
+  const dbPosts = feedPosts || [];
 
   // Extract real video posts from Convex database
   const realVideoPosts: ReelItem[] = (dbPosts || [])

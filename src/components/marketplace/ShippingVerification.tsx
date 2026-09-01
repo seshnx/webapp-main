@@ -6,7 +6,7 @@ import {
     Image as ImageIcon, Check, XCircle, ExternalLink, Copy
 } from 'lucide-react';
 import { SHIPPING_VERIFICATION_STATUS, SHIPPING_VERIFICATION_STEPS } from '../../config/constants';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 import { useSafeExchangeTransaction, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import UserAvatar from '../shared/UserAvatar';
 import type { UserData } from '../../types';
@@ -125,7 +125,7 @@ export default function ShippingVerification({
     const [carrier, setCarrier] = useState<string>('');
     const [notes, setNotes] = useState<string>('');
 
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);

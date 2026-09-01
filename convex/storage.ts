@@ -52,27 +52,33 @@ function getS3Client(): S3Client {
   return s3Client;
 }
 
+const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
+
 /**
  * Generate a presigned PUT URL for client-side direct upload to R2.
- * The URL expires after 1 hour.
+ * The URL expires after 2 hours and sets 1-year immutable CDN cache-control headers.
  *
- * Returns { uploadUrl, fileUrl, key } — the client PUTs the file to
- * uploadUrl, then stores fileUrl as the public-facing URL.
+ * Returns { uploadUrl, fileUrl, key, cacheControl } — the client PUTs the file to
+ * uploadUrl with matching headers, then stores fileUrl as the public-facing URL.
  */
 export const generateUploadUrl = action({
   args: {
     key: v.string(),
     contentType: v.string(),
+    cacheControl: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
     const client = getS3Client();
     if (!r2BucketName) throw new Error("R2_BUCKET_NAME not set");
     if (!r2PublicUrl) throw new Error("R2_PUBLIC_URL not set");
 
+    const cacheControl = args.cacheControl || DEFAULT_CACHE_CONTROL;
+
     const command = new PutObjectCommand({
       Bucket: r2BucketName,
       Key: args.key,
       ContentType: args.contentType,
+      CacheControl: cacheControl,
     });
 
     const uploadUrl = await getSignedUrl(client, command, {
@@ -80,7 +86,7 @@ export const generateUploadUrl = action({
     });
     const fileUrl = `${r2PublicUrl}/${args.key}`;
 
-    return { uploadUrl, fileUrl, key: args.key };
+    return { uploadUrl, fileUrl, key: args.key, cacheControl };
   },
 });
 
@@ -100,5 +106,33 @@ export const deleteFile = action({
 
     await client.send(command);
     return { success: true };
+  },
+});
+
+/**
+ * Delete an object from R2 by its public URL.
+ */
+export const deleteFileByUrl = action({
+  args: { url: v.string() },
+  handler: async (_ctx, args) => {
+    if (!r2PublicUrl || !args.url.startsWith(r2PublicUrl)) {
+      return { success: false, reason: "Not an R2 URL" };
+    }
+    const key = args.url.replace(`${r2PublicUrl}/`, "");
+    const client = getS3Client();
+    if (!r2BucketName) throw new Error("R2_BUCKET_NAME not set");
+
+    try {
+      const command = new DeleteObjectCommand({
+        Bucket: r2BucketName,
+        Key: key,
+      });
+
+      await client.send(command);
+      return { success: true, key };
+    } catch (e: any) {
+      console.error(`Failed to delete file from R2 (${key}):`, e);
+      return { success: false, error: e.message };
+    }
   },
 });

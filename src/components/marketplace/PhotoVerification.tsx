@@ -5,7 +5,7 @@ import {
     ZoomIn, ChevronLeft, ChevronRight, Maximize2, Image as ImageIcon,
     CheckCircle, XCircle, HelpCircle
 } from 'lucide-react';
-import { useMediaUpload } from '../../hooks/useMediaUpload';
+import { useUpload } from '../../hooks/useUpload';
 
 /**
  * Photo verification mode
@@ -102,7 +102,7 @@ export default function PhotoVerification({
     const videoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const streamRef = useRef<MediaStream | null>(null);
-    const { uploadMedia, uploading } = useMediaUpload();
+    const { uploadMedia, uploading } = useUpload();
 
     // Start camera stream
     const startCamera = useCallback(async () => {

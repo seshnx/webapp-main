@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Send, Trash2 } from 'lucide-react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
@@ -52,10 +52,8 @@ const CommentSection = React.memo(function CommentSection({
     blockedUsers = [],
     onCountChange
 }: CommentSectionProps) {
-    // ... (rest of the component)
     // Real-time comments from Convex
     const convexComments = useQuery(api.social.getComments, { postId: post.id as Id<"posts"> });
-    const [comments, setComments] = useState<CommentData[]>([]);
     const [text, setText] = useState<string>('');
     const [loading, setLoading] = useState<boolean>(false);
 
@@ -65,11 +63,14 @@ const CommentSection = React.memo(function CommentSection({
 
     const prevCountRef = useRef<number>(-1);
 
-    // Sync Convex comments to local state (with blocking filter)
-    useEffect(() => {
-        if (convexComments) {
-            // Map Convex comments to our CommentData format
-            const mapped = convexComments.map((c: any) => ({
+    // Derive mapped & filtered comments synchronously without triggering setState loops
+    const blockedKey = (blockedUsers || []).join(',');
+    const comments: CommentData[] = useMemo(() => {
+        if (!convexComments) return [];
+        const blockedSet = new Set(blockedUsers || []);
+        return convexComments
+            .filter((c: any) => !blockedSet.has(c.userId))
+            .map((c: any) => ({
                 id: c.commentId,
                 user_id: c.userId,
                 text: c.content,
@@ -77,18 +78,15 @@ const CommentSection = React.memo(function CommentSection({
                 userPhoto: c.authorPhoto,
                 timestamp: new Date(c.createdAt).toISOString(),
             }));
+    }, [convexComments, blockedKey]);
 
-            // Filter out blocked users
-            const filtered = mapped.filter((c) => !blockedUsers?.includes(c.user_id));
-            setComments(filtered);
-            
-            // Only notify if count actually changed to prevent loops
-            if (onCountChange && filtered.length !== prevCountRef.current) {
-                prevCountRef.current = filtered.length;
-                onCountChange(filtered.length);
-            }
+    // Only notify parent when count changes
+    useEffect(() => {
+        if (onCountChange && comments.length !== prevCountRef.current) {
+            prevCountRef.current = comments.length;
+            onCountChange(comments.length);
         }
-    }, [convexComments, blockedUsers, onCountChange]);
+    }, [comments.length, onCountChange]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();

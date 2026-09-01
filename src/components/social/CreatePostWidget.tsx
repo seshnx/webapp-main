@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { Send, Image as ImageIcon, Music, Video, X, Sliders, Paperclip, Loader2, Calendar, Building2, Search } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Send, Image as ImageIcon, Music, Video, X, Sliders, Paperclip, Loader2, Calendar, Building2, Search, Upload, Sparkles } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../../convex/_generated/api';
 import { useUpload } from '../../hooks/useUpload';
 import { POPULAR_PLUGINS_LIST } from '../../config/constants';
 import { MultiSelect } from '../shared/Inputs';
+import UserAvatar from '../shared/UserAvatar';
 import { motion, AnimatePresence } from 'framer-motion';
 import ScheduledPostsModal, { ScheduledPostItem } from './ScheduledPostsModal';
 
@@ -50,6 +51,7 @@ export interface CreatePostWidgetProps {
 export default function CreatePostWidget({ user, userData, subProfiles = {}, onPost }: CreatePostWidgetProps) {
     const [text, setText] = useState<string>('');
     const [media, setMedia] = useState<MediaAttachment[]>([]); // Array of {file, type, previewUrl}
+    const [dragActive, setDragActive] = useState<boolean>(false);
     const [taggedStudio, setTaggedStudio] = useState<{ id?: string; name: string } | null>(null);
     const [showStudioPicker, setShowStudioPicker] = useState<boolean>(false);
     const [studioSearch, setStudioSearch] = useState<string>('');
@@ -82,17 +84,83 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
 
     const { uploadMedia } = useUpload('post-media');
 
+    // Batch add files with automatic MIME detection
+    const addFiles = (files: File[] | FileList) => {
+        const newItems: MediaAttachment[] = [];
+        Array.from(files).forEach((file) => {
+            let type: 'image' | 'video' | 'audio' = 'image';
+            if (file.type.startsWith('video/')) type = 'video';
+            else if (file.type.startsWith('audio/')) type = 'audio';
+            else if (file.type.startsWith('image/')) type = 'image';
+            else return;
+
+            const previewUrl = URL.createObjectURL(file);
+            newItems.push({ file, type, previewUrl });
+        });
+
+        if (newItems.length > 0) {
+            setMedia((prev) => [...prev, ...newItems]);
+            setIsFocused(true);
+        }
+    };
+
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, type: 'image' | 'video' | 'audio') => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            // Create preview URL
             const previewUrl = URL.createObjectURL(file);
-            setMedia([...media, { file, type, previewUrl }]);
+            setMedia((prev) => [...prev, { file, type, previewUrl }]);
+            setIsFocused(true);
+        }
+    };
+
+    // Drag and drop handlers
+    const handleDrag = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type === 'dragenter' || e.type === 'dragover') {
+            setDragActive(true);
+        } else if (e.type === 'dragleave') {
+            setDragActive(false);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDragActive(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            addFiles(e.dataTransfer.files);
+        }
+    };
+
+    // Clipboard paste handler
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+
+        const pastedFiles: File[] = [];
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) {
+                    pastedFiles.push(file);
+                }
+            }
+        }
+
+        if (pastedFiles.length > 0) {
+            e.preventDefault();
+            addFiles(pastedFiles);
         }
     };
 
     const removeMedia = (index: number) => {
-        setMedia(media.filter((_, i) => i !== index));
+        setMedia((prev) => {
+            const item = prev[index];
+            if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            return prev.filter((_, i) => i !== index);
+        });
     };
 
     const handleSubmit = async () => {
@@ -120,18 +188,23 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
             // Upload all media assets one by one to track progress
             const uploadedMedia: Array<{ url: string; type: string; name?: string }> = [];
             for (const m of media) {
-                // Vercel Blob automatically handles storage organization
                 const result = await uploadMedia(m.file);
 
-                // CRITICAL FIX: Ensure we enforce the type selected by the user (m.type)
                 if (result) {
                     uploadedMedia.push({
-                        url: result.url, // Vercel Blob returns { url } object
+                        url: result.url,
                         type: m.type, // Override with explicit type (audio, video, image)
                         name: m.file.name
                     });
                 }
                 updateProgress();
+            }
+
+            // If user attached media but all uploads failed, abort submission
+            if (media.length > 0 && uploadedMedia.length === 0) {
+                alert("Failed to upload media attachments. Please check your storage / CORS configuration and try again.");
+                setIsPosting(false);
+                return;
             }
 
             let presetUrl: string | null = null;
@@ -143,7 +216,7 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
 
             const postPayload = {
                 text,
-                attachments: uploadedMedia.filter(m => m !== null), // Clean failed uploads
+                attachments: uploadedMedia,
                 taggedStudio: taggedStudio || null,
                 isBoosted: isBoosted || false,
                 boostRadiusMiles: isBoosted ? boostRadius : undefined,
@@ -204,8 +277,33 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
     return (
         <div
             ref={containerRef}
-            className="bg-white dark:bg-dark-card p-3 sm:p-4 rounded-2xl border border-gray-100 dark:border-gray-800 shadow-sm mb-6 transition-all duration-300 focus-within:ring-2 focus-within:ring-brand-blue/20 focus-within:border-brand-blue/40 relative"
+            onDragEnter={handleDrag}
+            onDragOver={handleDrag}
+            onDragLeave={handleDrag}
+            onDrop={handleDrop}
+            onPaste={handlePaste}
+            className={`bg-white dark:bg-dark-card p-3 sm:p-4 rounded-2xl border shadow-sm mb-6 transition-all duration-300 focus-within:ring-2 focus-within:ring-brand-blue/20 focus-within:border-brand-blue/40 relative ${
+                dragActive ? 'border-brand-blue ring-2 ring-brand-blue/20 bg-blue-50/50 dark:bg-blue-900/10' : 'border-gray-100 dark:border-gray-800'
+            }`}
         >
+            {/* Visual Drag and Drop Overlay for PC */}
+            <AnimatePresence>
+                {dragActive && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.98 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.98 }}
+                        className="absolute inset-0 z-30 rounded-2xl bg-brand-blue/15 dark:bg-brand-blue/25 backdrop-blur-sm border-2 border-dashed border-brand-blue flex flex-col items-center justify-center p-6 text-center pointer-events-none"
+                    >
+                        <div className="p-3 bg-brand-blue text-white rounded-full mb-2 shadow-lg animate-bounce">
+                            <Upload size={24} />
+                        </div>
+                        <p className="font-bold text-gray-900 dark:text-white text-sm sm:text-base">Drop media here to attach to post</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-300 mt-0.5">Supports images, video clips, and audio files</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
             {/* Upload Progress Overlay */}
             <AnimatePresence>
                 {isPosting && uploadProgress.total > 0 && (
@@ -253,13 +351,14 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
 
             <div className="flex gap-3 items-start">
                 <div className="relative shrink-0">
-                    <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden shrink-0">
-                        {activeProfile?.photo_url || userData?.photoURL ? (
-                            <img src={activeProfile?.photo_url || userData?.photoURL} className="h-full w-full object-cover" alt="User avatar" />
-                        ) : (
-                            <div className="h-full w-full bg-brand-blue" />
-                        )}
-                    </div>
+                    <UserAvatar
+                        user={user}
+                        userData={userData}
+                        subProfile={activeProfile}
+                        name={activeProfile?.display_name || userData?.displayName || user?.fullName}
+                        size="md"
+                        className="h-9 w-9 sm:h-10 sm:w-10"
+                    />
                     {/* Profile Badge */}
                     {activeRole && activeRole !== 'Fan' && (
                         <div className="absolute -bottom-1 -right-1 bg-brand-blue text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full border-2 border-white dark:border-[#2c2e36]">
@@ -292,9 +391,10 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                             <textarea
                                 autoFocus
                                 className="w-full bg-transparent outline-none text-gray-900 dark:text-white placeholder-gray-500 min-h-[75px] sm:min-h-[85px] text-xs sm:text-sm resize-none"
-                                placeholder="What's creating sound today? (#tags @mentions)"
+                                placeholder="What's creating sound today? (#tags @mentions or paste screenshots)"
                                 value={text}
                                 onChange={e => setText(e.target.value)}
+                                onPaste={handlePaste}
                                 onFocus={() => setIsFocused(true)}
                                 disabled={isPosting}
                             />

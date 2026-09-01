@@ -54,7 +54,7 @@ import UserAvatar from '../shared/UserAvatar';
 import toast from 'react-hot-toast';
 import BroadcastList from '../BroadcastList';
 import BroadcastRequest from '../BroadcastRequest';
-import SessionBuilderModal from '../SessionBuilderModal';
+import SessionWizard from '../SessionWizard';
 import BoostVisibilityModal from '../social/BoostVisibilityModal';
 
 interface CreatorStudioPageProps {
@@ -102,9 +102,13 @@ export default function CreatorStudioPage({
   const [bookingStatusFilter, setBookingStatusFilter] = useState<string>('all');
   const [bookingSearchQuery, setBookingSearchQuery] = useState<string>('');
   const [showRevenueBreakdown, setShowRevenueBreakdown] = useState<boolean>(false);
-  const [showSessionBuilder, setShowSessionBuilder] = useState<boolean>(false);
-  const [showBroadcastModal, setShowBroadcastModal] = useState<boolean>(false);
   const [showBoostModal, setShowBoostModal] = useState<boolean>(false);
+
+  // Sub-view page states (opened inline on page instead of modal dialogs)
+  const [broadcastSubView, setBroadcastSubView] = useState<'list' | 'create'>('list');
+  const [bookingSubView, setBookingSubView] = useState<'manage' | 'builder'>('manage');
+  const [sessionParams, setSessionParams] = useState<any>(null);
+
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [blockedDates, setBlockedDates] = useState<string[]>([]);
 
@@ -224,6 +228,16 @@ export default function CreatorStudioPage({
     }
   };
 
+  const handleOpenSessionBuilder = () => {
+    setActiveTab('bookings');
+    setBookingSubView('builder');
+  };
+
+  const handleOpenBroadcastCreate = () => {
+    setActiveTab('broadcasts');
+    setBroadcastSubView('create');
+  };
+
   const activeBookingsList = bookingPerspective === 'talent' ? talentBookings : clientBookings;
   const filteredBookings = activeBookingsList.filter((b: any) => {
     if (bookingStatusFilter !== 'all' && b.status?.toLowerCase() !== bookingStatusFilter.toLowerCase()) {
@@ -253,19 +267,19 @@ export default function CreatorStudioPage({
   return (
     <div className="max-w-7xl mx-auto pb-16 space-y-6">
       {/* Top Banner Header with Dynamic Role Indicator */}
-      <div className="bg-gradient-to-r from-blue-950/40 via-purple-950/40 to-gray-900/60 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-purple-500/20 shadow-xl shadow-purple-950/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
+      <div className="bg-gradient-to-r from-blue-950/40 via-indigo-950/40 to-gray-900/60 backdrop-blur-xl p-6 sm:p-8 rounded-3xl border border-brand-blue/20 shadow-xl shadow-blue-950/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
         <div className="absolute top-0 right-0 w-80 h-80 bg-brand-blue/10 rounded-full blur-3xl -z-10" />
 
         <div className="flex items-center gap-4">
           <div className="relative">
-            <div className="ring-4 ring-purple-500/30 rounded-full overflow-hidden">
+            <div className="ring-4 ring-brand-blue/30 rounded-full overflow-hidden">
               <UserAvatar
                 src={userData?.photoURL || user?.imageUrl}
                 name={userData?.displayName || 'Creator'}
                 size="lg"
               />
             </div>
-            <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-brand-blue to-purple-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-white/20">
+            <div className="absolute -bottom-1 -right-1 bg-brand-blue text-white text-[10px] font-black px-2 py-0.5 rounded-full border border-white/20">
               {userData?.activeProfileRole || userData?.activeRole || 'Creator'}
             </div>
           </div>
@@ -281,17 +295,17 @@ export default function CreatorStudioPage({
           </div>
         </div>
 
-        {/* Quick Session Builder & Broadcast Trigger Buttons */}
+        {/* Quick Page Triggers */}
         <div className="flex items-center gap-2 self-stretch sm:self-auto flex-wrap">
           <button
-            onClick={() => setShowSessionBuilder(true)}
+            onClick={handleOpenSessionBuilder}
             className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-brand-blue text-white text-xs font-bold hover:bg-blue-600 transition flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20"
           >
             <Plus size={14} /> + New Custom Session
           </button>
           <button
-            onClick={() => setShowBroadcastModal(true)}
-            className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition flex items-center justify-center gap-1.5 shadow-md shadow-purple-500/20"
+            onClick={handleOpenBroadcastCreate}
+            className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-brand-dark-accent text-white text-xs font-bold hover:bg-blue-700 transition flex items-center justify-center gap-1.5 shadow-md shadow-brand-dark-accent/20"
           >
             <RadioTower size={14} /> Post Gig Broadcast
           </button>
@@ -308,10 +322,14 @@ export default function CreatorStudioPage({
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (tab.id === 'broadcasts') setBroadcastSubView('list');
+                  if (tab.id === 'bookings') setBookingSubView('manage');
+                }}
                 className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
                   isActive
-                    ? 'bg-gradient-to-r from-brand-blue to-purple-600 text-white shadow-md shadow-blue-500/20'
+                    ? 'bg-brand-blue text-white shadow-md shadow-blue-500/20'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800'
                 }`}
               >
@@ -333,7 +351,11 @@ export default function CreatorStudioPage({
           <div className="relative">
             <select
               value={currentTab}
-              onChange={(e) => setActiveTab(e.target.value as StudioTab)}
+              onChange={(e) => {
+                setActiveTab(e.target.value as StudioTab);
+                if (e.target.value === 'broadcasts') setBroadcastSubView('list');
+                if (e.target.value === 'bookings') setBookingSubView('manage');
+              }}
               className="w-full bg-gray-100 dark:bg-gray-800 border dark:border-gray-700 text-gray-900 dark:text-white font-bold text-xs rounded-xl px-4 py-2.5 appearance-none outline-none focus:ring-2 focus:ring-brand-blue"
             >
               {tabItems.map((tab) => (
@@ -376,7 +398,7 @@ export default function CreatorStudioPage({
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-purple-500/10 border border-amber-500/30 dark:border-amber-500/20 shadow-md"
+              className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-blue-500/10 border border-amber-500/30 dark:border-amber-500/20 shadow-md"
             >
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
@@ -408,7 +430,10 @@ export default function CreatorStudioPage({
                     <XCircle size={13} /> Decline
                   </button>
                   <button
-                    onClick={() => setActiveTab('bookings')}
+                    onClick={() => {
+                      setActiveTab('bookings');
+                      setBookingSubView('manage');
+                    }}
                     className="text-xs font-bold text-brand-blue hover:underline px-2 py-1"
                   >
                     View All →
@@ -449,154 +474,87 @@ export default function CreatorStudioPage({
                 </div>
               </div>
               <div className="flex items-baseline justify-between gap-2">
-                <h3 className="text-2xl sm:text-3xl font-black dark:text-white">{talentBookings.length}</h3>
-                <span className="text-xs font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-full">
-                  {completedTalentBookings.length} Completed
-                </span>
+                <h3 className="text-2xl sm:text-3xl font-black dark:text-white">
+                  {talentBookings.filter((b: any) => b.status === 'Accepted' || b.status === 'Pending').length}
+                </h3>
+                <button
+                  onClick={() => {
+                    setActiveTab('bookings');
+                    setBookingSubView('manage');
+                  }}
+                  className="text-[11px] font-bold text-brand-blue hover:underline"
+                >
+                  View Bookings
+                </button>
               </div>
-              <p className="text-[11px] text-gray-400 mt-2 truncate">
+              <p className="text-[11px] text-gray-400 mt-2">
                 {pendingRequests.length} pending approval
               </p>
             </div>
 
             <div className="bg-white dark:bg-dark-card rounded-2xl p-5 border dark:border-gray-700 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Total Interactions</span>
-                <div className="p-2.5 rounded-xl bg-pink-500/10 text-pink-500">
-                  <Heart size={18} />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Follower Base</span>
+                <div className="p-2.5 rounded-xl bg-indigo-500/10 text-indigo-500">
+                  <Users size={18} />
                 </div>
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <h3 className="text-2xl sm:text-3xl font-black dark:text-white">{totalInteractions}</h3>
-                <span className="text-xs font-bold text-pink-500 bg-pink-50 dark:bg-pink-900/20 px-2 py-0.5 rounded-full">
-                  {postsCount} Posts
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-2 truncate">
-                {totalLikes} Likes • {totalComments} Comments
-              </p>
+              <h3 className="text-2xl sm:text-3xl font-black dark:text-white">{followerCount}</h3>
+              <p className="text-[11px] text-gray-400 mt-2">Active audience network</p>
             </div>
 
             <div className="bg-white dark:bg-dark-card rounded-2xl p-5 border dark:border-gray-700 shadow-sm">
               <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Audience Reach</span>
-                <div className="p-2.5 rounded-xl bg-purple-500/10 text-purple-500">
-                  <Users size={18} />
+                <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Content Reach</span>
+                <div className="p-2.5 rounded-xl bg-brand-blue/10 text-brand-blue">
+                  <Sparkles size={18} />
                 </div>
               </div>
-              <div className="flex items-baseline justify-between gap-2">
-                <h3 className="text-2xl sm:text-3xl font-black dark:text-white">{followerCount}</h3>
-                <span className="text-xs font-bold text-purple-500 bg-purple-50 dark:bg-purple-900/20 px-2 py-0.5 rounded-full">
-                  Subscribers
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-400 mt-2 truncate">Followers & Collaborators</p>
+              <h3 className="text-2xl sm:text-3xl font-black dark:text-white">{totalInteractions}</h3>
+              <p className="text-[11px] text-gray-400 mt-2">{postsCount} posts published</p>
             </div>
           </div>
 
-          {/* Growth Trend Visualizer & Content Manager */}
+          {/* Activity Section */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              {/* Histogram */}
-              <div className="bg-white dark:bg-dark-card rounded-3xl p-6 border dark:border-gray-700 shadow-sm">
-                <div className="flex items-center justify-between gap-3 mb-6">
-                  <div>
-                    <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
-                      <TrendingUp size={18} className="text-brand-blue" />
-                      Session & Impression Activity
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Weekly volume of client session hours, track plays, and bookings
-                    </p>
-                  </div>
-                </div>
-
-                <div className="h-56 flex items-end gap-2.5 pt-6 pb-2 px-2 border-b dark:border-gray-700/80">
-                  {[40, 55, 70, 50, 90, 80, 110, 95, 130, 115, 145, 160].map((h, i) => (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-2 h-full justify-end group cursor-pointer">
-                      <div
-                        className="w-full bg-gradient-to-t from-brand-blue via-purple-500 to-indigo-400 rounded-t-lg group-hover:brightness-125 transition-all relative"
-                        style={{ height: `${(h / 160) * 100}%` }}
-                      >
-                        <div className="opacity-0 group-hover:opacity-100 transition absolute -top-7 left-1/2 -translate-x-1/2 bg-black text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow whitespace-nowrap pointer-events-none z-10">
-                          {h * 15} hrs
-                        </div>
-                      </div>
-                      <span className="text-[10px] text-gray-400 font-medium">W{i + 1}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between text-xs text-gray-500 pt-3">
-                  <span>Past 12 Weeks Historical Tracking</span>
-                  <span className="font-semibold text-emerald-500 flex items-center gap-1">
-                    <ArrowUpRight size={14} /> +32.1% Growth
-                  </span>
+            <div className="lg:col-span-2 bg-white dark:bg-dark-card rounded-3xl p-6 border dark:border-gray-700 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-bold text-base dark:text-white flex items-center gap-2">
+                    <TrendingUp size={18} className="text-brand-blue" />
+                    Performance & Interactions
+                  </h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Summary of interactions across posts and sessions</p>
                 </div>
               </div>
 
-              {/* Published Content Performance */}
-              <div className="bg-white dark:bg-dark-card rounded-3xl p-6 border dark:border-gray-700 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2">
-                      <Layers size={18} className="text-purple-500" />
-                      Content Performance & Stem Releases
-                    </h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      Recent posts and studio audio updates
-                    </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-2">
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border dark:border-gray-700">
+                  <div className="flex items-center gap-2 text-rose-500 text-xs font-bold mb-1">
+                    <Heart size={14} /> Total Likes
                   </div>
-                  <span className="text-xs font-bold text-gray-400">{authorPosts.length} posts</span>
+                  <div className="text-2xl font-black dark:text-white">{totalLikes}</div>
                 </div>
 
-                {authorPosts.length === 0 ? (
-                  <div className="text-center py-8 text-xs text-gray-400">
-                    <Music size={24} className="mx-auto mb-2 opacity-50" />
-                    <p>No posts published yet</p>
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border dark:border-gray-700">
+                  <div className="flex items-center gap-2 text-blue-500 text-xs font-bold mb-1">
+                    <MessageCircle size={14} /> Comments
                   </div>
-                ) : (
-                  <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-                    {authorPosts.map((post: any) => (
-                      <div
-                        key={post._id || post.id}
-                        className="p-3.5 rounded-2xl bg-gray-50/70 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700/60 flex items-center justify-between gap-3"
-                      >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <div className="w-9 h-9 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600 shrink-0">
-                            <Music size={16} />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h4 className="font-bold text-xs sm:text-sm dark:text-white truncate">
-                              {post.content || post.text || 'Audio Track'}
-                            </h4>
-                            <div className="text-[11px] text-gray-400 mt-0.5">
-                              {new Date(post.createdAt || Date.now()).toLocaleDateString()}
-                              {post.customFields?.taggedStudio && (
-                                <span> • 🎙️ {post.customFields.taggedStudio.name || post.customFields.taggedStudio}</span>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs font-semibold text-gray-500">
-                          <span className="flex items-center gap-1 text-pink-500">
-                            <Heart size={12} /> {post.engagement?.likesCount || 0}
-                          </span>
-                          <span className="flex items-center gap-1 text-blue-500">
-                            <MessageCircle size={12} /> {post.engagement?.commentsCount || 0}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="text-2xl font-black dark:text-white">{totalComments}</div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-gray-50 dark:bg-gray-800/50 border dark:border-gray-700 col-span-2 sm:col-span-1">
+                  <div className="flex items-center gap-2 text-emerald-500 text-xs font-bold mb-1">
+                    <DollarSign size={14} /> Tips Received
                   </div>
-                )}
+                  <div className="text-2xl font-black dark:text-white">${totalTipsAmount.toFixed(2)}</div>
+                </div>
               </div>
             </div>
 
-            {/* Right Column: Top Supporters & Fast Tools */}
-            <div className="space-y-6">
-              {/* Top Supporters */}
-              <div className="bg-white dark:bg-dark-card rounded-3xl p-6 border dark:border-gray-700 shadow-sm">
+            {/* Top Supporters */}
+            <div className="bg-white dark:bg-dark-card rounded-3xl p-6 border dark:border-gray-700 shadow-sm space-y-4">
+              <div>
                 <h3 className="font-bold text-sm sm:text-base dark:text-white flex items-center gap-2 mb-1">
                   <Award size={18} className="text-amber-500" />
                   Top Supporters & Tippers
@@ -633,54 +591,54 @@ export default function CreatorStudioPage({
                   </div>
                 )}
               </div>
-
-              {/* Quick Actions */}
-              <div className="bg-gradient-to-br from-purple-950/30 via-gray-900/40 to-blue-950/30 p-6 rounded-3xl border border-purple-800/30 shadow-lg space-y-3">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
-                  <Sparkles size={16} /> Fast Studio Actions
-                </h4>
-                <button
-                  onClick={() => setShowBoostModal(true)}
-                  className="w-full p-3 rounded-2xl bg-gradient-to-r from-brand-blue to-purple-600 hover:opacity-95 text-xs font-bold text-white flex items-center justify-between transition shadow-md shadow-purple-500/20"
-                >
-                  <div className="flex items-center gap-2">
-                    <Sparkles size={16} className="text-white" />
-                    <span>Boost Visibility & Get Verified</span>
-                  </div>
-                  <ChevronRight size={14} className="text-white/80" />
-                </button>
-                <button
-                  onClick={() => setActiveTab('bookings')}
-                  className="w-full p-3 rounded-2xl bg-white/10 hover:bg-white/15 dark:bg-gray-800/60 border border-white/10 text-xs font-bold text-white flex items-center justify-between transition"
-                >
-                  <div className="flex items-center gap-2">
-                    <CalendarDays size={16} className="text-brand-blue" />
-                    <span>Manage Upcoming Sessions</span>
-                  </div>
-                  <ChevronRight size={14} className="text-gray-400" />
-                </button>
-                <button
-                  onClick={() => setActiveTab('rates')}
-                  className="w-full p-3 rounded-2xl bg-white/10 hover:bg-white/15 dark:bg-gray-800/60 border border-white/10 text-xs font-bold text-white flex items-center justify-between transition"
-                >
-                  <div className="flex items-center gap-2">
-                    <Sliders size={16} className="text-purple-400" />
-                    <span>Adjust Rates & Buffer Times</span>
-                  </div>
-                  <ChevronRight size={14} className="text-gray-400" />
-                </button>
-                <button
-                  onClick={() => navigate('/feed')}
-                  className="w-full p-3 rounded-2xl bg-white/10 hover:bg-white/15 dark:bg-gray-800/60 border border-white/10 text-xs font-bold text-white flex items-center justify-between transition"
-                >
-                  <div className="flex items-center gap-2">
-                    <Radio size={16} className="text-red-400" />
-                    <span>Host Live Audio Space</span>
-                  </div>
-                  <ChevronRight size={14} className="text-gray-400" />
-                </button>
-              </div>
             </div>
+          </div>
+
+          {/* Quick Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button
+              onClick={() => setShowBoostModal(true)}
+              className="p-4 rounded-3xl bg-brand-blue text-white flex items-center justify-between transition shadow-md shadow-blue-500/20"
+            >
+              <div className="flex items-center gap-3">
+                <Sparkles size={18} />
+                <span className="text-xs font-bold">Boost Visibility</span>
+              </div>
+              <ChevronRight size={16} className="text-white/80" />
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('bookings');
+                setBookingSubView('manage');
+              }}
+              className="p-4 rounded-3xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-700 dark:text-gray-300 flex items-center justify-between transition"
+            >
+              <div className="flex items-center gap-3">
+                <CalendarDays size={18} className="text-brand-blue" />
+                <span className="text-xs font-bold">Manage Sessions</span>
+              </div>
+              <ChevronRight size={16} />
+            </button>
+            <button
+              onClick={() => setActiveTab('rates')}
+              className="p-4 rounded-3xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-700 dark:text-gray-300 flex items-center justify-between transition"
+            >
+              <div className="flex items-center gap-3">
+                <Sliders size={18} className="text-brand-blue" />
+                <span className="text-xs font-bold">Adjust Rates</span>
+              </div>
+              <ChevronRight size={16} />
+            </button>
+            <button
+              onClick={() => navigate('/feed')}
+              className="p-4 rounded-3xl bg-white dark:bg-gray-800 border dark:border-gray-700 text-gray-700 dark:text-gray-300 flex items-center justify-between transition"
+            >
+              <div className="flex items-center gap-3">
+                <Radio size={18} className="text-red-400" />
+                <span className="text-xs font-bold">Host Live</span>
+              </div>
+              <ChevronRight size={16} />
+            </button>
           </div>
         </div>
       )}
@@ -690,199 +648,242 @@ export default function CreatorStudioPage({
       {/* ========================================================================= */}
       {currentTab === 'bookings' && (
         <div className="space-y-6">
-          {/* Sub-Toggle: Client Sessions vs My Bookings */}
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-dark-card p-4 rounded-3xl border dark:border-gray-700 shadow-sm">
-            <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl">
-              <button
-                onClick={() => setBookingPerspective('talent')}
-                className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition ${
-                  bookingPerspective === 'talent'
-                    ? 'bg-white dark:bg-dark-card text-brand-blue shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                Client Sessions (Booked with Me)
-                {pendingRequests.length > 0 && (
-                  <span className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">
-                    {pendingRequests.length}
-                  </span>
-                )}
-              </button>
-
-              <button
-                onClick={() => setBookingPerspective('client')}
-                className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition ${
-                  bookingPerspective === 'client'
-                    ? 'bg-white dark:bg-dark-card text-brand-blue shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
-                }`}
-              >
-                My Bookings (Hired Others)
-              </button>
-            </div>
-
-            {/* Filter Pills & Search */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative flex-1 sm:w-48">
-                <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Search client or service..."
-                  value={bookingSearchQuery}
-                  onChange={(e) => setBookingSearchQuery(e.target.value)}
-                  className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 text-xs outline-none focus:ring-2 focus:ring-brand-blue"
-                />
+          {bookingSubView === 'builder' ? (
+            /* Inline Session Builder Page View */
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <div className="flex items-center justify-between bg-white dark:bg-dark-card p-5 rounded-3xl border dark:border-gray-700 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-900/30 text-brand-blue">
+                    <CalendarDays size={22} />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-base dark:text-white">Custom Session Builder</h2>
+                    <p className="text-xs text-gray-400">Discover studios, choose dates, and assemble your creative roster</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setBookingSubView('manage')}
+                  className="px-4 py-2 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition"
+                >
+                  ← Back to Schedule
+                </button>
               </div>
 
-              <select
-                value={bookingStatusFilter}
-                onChange={(e) => setBookingStatusFilter(e.target.value)}
-                className="bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 text-xs font-bold rounded-xl px-3 py-1.5 outline-none"
-              >
-                <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="accepted">Confirmed</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Bookings List & Cards */}
-          {filteredBookings.length === 0 ? (
-            <div className="bg-white dark:bg-dark-card rounded-3xl p-12 text-center border dark:border-gray-700">
-              <CalendarDays size={40} className="mx-auto mb-3 text-purple-500 opacity-60" />
-              <h3 className="font-bold text-base dark:text-white mb-1">
-                {bookingPerspective === 'talent' ? 'No Client Sessions Found' : 'No Outgoing Bookings Found'}
-              </h3>
-              <p className="text-xs text-gray-400 max-w-sm mx-auto mb-4">
-                {bookingPerspective === 'talent'
-                  ? 'When clients book audio engineering, production, or studio sessions with you, they will appear here.'
-                  : 'You have not booked any recording sessions or talent yet.'}
-              </p>
-              <button
-                onClick={() => setShowSessionBuilder(true)}
-                className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition"
-              >
-                + Build New Session
-              </button>
+              <SessionWizard
+                userData={userData}
+                sessionParams={sessionParams}
+                setSessionParams={setSessionParams}
+                onNext={() => {
+                  setBookingSubView('manage');
+                  toast.success('Session setup ready! View details in your bookings.');
+                }}
+              />
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredBookings.map((b: any) => {
-                const otherPartyName = (bookingPerspective === 'talent' ? b.clientName : b.talentName) || 'User';
-                const otherPartyPhoto = bookingPerspective === 'talent' ? b.clientPhoto : b.talentPhoto;
-                const otherPartyClerkId = bookingPerspective === 'talent' ? b.clientClerkId : b.talentClerkId;
-                const isPending = b.status?.toLowerCase() === 'pending';
-                const isConfirmed = b.status?.toLowerCase() === 'accepted' || b.status?.toLowerCase() === 'confirmed';
-                const isCompleted = b.status?.toLowerCase() === 'completed';
-
-                return (
-                  <motion.div
-                    key={b._id || b.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-white dark:bg-dark-card rounded-3xl p-5 border dark:border-gray-700 shadow-sm hover:border-purple-500/40 transition flex flex-col justify-between gap-4"
+            /* Standard Schedule & Bookings Management View */
+            <div className="space-y-6">
+              {/* Sub-Toggle: Client Sessions vs My Bookings */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 bg-white dark:bg-dark-card p-4 rounded-3xl border dark:border-gray-700 shadow-sm">
+                <div className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 p-1.5 rounded-2xl">
+                  <button
+                    onClick={() => setBookingPerspective('talent')}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition ${
+                      bookingPerspective === 'talent'
+                        ? 'bg-white dark:bg-dark-card text-brand-blue shadow-sm'
+                        : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                    }`}
                   >
-                    <div>
-                      <div className="flex items-start justify-between gap-3 mb-3">
-                        <div className="flex items-center gap-3">
-                          <UserAvatar src={otherPartyPhoto} name={otherPartyName} size="md" />
-                          <div>
-                            <h4 className="font-bold text-sm dark:text-white flex items-center gap-1.5">
-                              <span>{otherPartyName}</span>
-                              <span className="text-[10px] text-gray-400 font-normal">
-                                ({bookingPerspective === 'talent' ? 'Client' : 'Talent'})
-                              </span>
-                            </h4>
-                            <span className="text-xs text-brand-blue font-semibold">
-                              {b.serviceType || 'Studio Session'}
+                    Client Sessions (Booked with Me)
+                    {pendingRequests.length > 0 && (
+                      <span className="ml-1.5 bg-amber-500 text-white text-[10px] px-1.5 py-0.2 rounded-full">
+                        {pendingRequests.length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setBookingPerspective('client')}
+                    className={`flex-1 sm:flex-initial px-4 py-2 rounded-xl text-xs font-bold transition ${
+                      bookingPerspective === 'client'
+                        ? 'bg-white dark:bg-dark-card text-brand-blue shadow-sm'
+                        : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                  >
+                    My Bookings (Hired Others)
+                  </button>
+                </div>
+
+                {/* Filter Pills & Search */}
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="relative flex-1 sm:w-48">
+                    <Search size={14} className="absolute left-3 top-2.5 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search client or service..."
+                      value={bookingSearchQuery}
+                      onChange={(e) => setBookingSearchQuery(e.target.value)}
+                      className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 text-xs outline-none focus:ring-2 focus:ring-brand-blue"
+                    />
+                  </div>
+
+                  <select
+                    value={bookingStatusFilter}
+                    onChange={(e) => setBookingStatusFilter(e.target.value)}
+                    className="bg-gray-50 dark:bg-gray-800 border dark:border-gray-700 text-xs font-bold rounded-xl px-3 py-1.5 outline-none"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="pending">Pending</option>
+                    <option value="accepted">Confirmed</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+
+                  <button
+                    onClick={handleOpenSessionBuilder}
+                    className="px-3.5 py-1.5 bg-brand-blue text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition flex items-center gap-1"
+                  >
+                    <Plus size={13} /> New Session
+                  </button>
+                </div>
+              </div>
+
+              {/* Bookings List & Cards */}
+              {filteredBookings.length === 0 ? (
+                <div className="bg-white dark:bg-dark-card rounded-3xl p-12 text-center border dark:border-gray-700">
+                  <CalendarDays size={40} className="mx-auto mb-3 text-brand-blue opacity-60" />
+                  <h3 className="font-bold text-base dark:text-white mb-1">
+                    {bookingPerspective === 'talent' ? 'No Client Sessions Found' : 'No Outgoing Bookings Found'}
+                  </h3>
+                  <p className="text-xs text-gray-400 max-w-sm mx-auto mb-4">
+                    {bookingPerspective === 'talent'
+                      ? 'When clients book audio engineering, production, or studio sessions with you, they will appear here.'
+                      : 'You have not booked any recording sessions or talent yet.'}
+                  </p>
+                  <button
+                    onClick={handleOpenSessionBuilder}
+                    className="px-4 py-2 bg-brand-blue text-white rounded-xl text-xs font-bold hover:bg-blue-600 transition"
+                  >
+                    + Build New Session
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {filteredBookings.map((b: any) => {
+                    const otherPartyName = (bookingPerspective === 'talent' ? b.clientName : b.talentName) || 'User';
+                    const otherPartyPhoto = bookingPerspective === 'talent' ? b.clientPhoto : b.talentPhoto;
+                    const otherPartyClerkId = bookingPerspective === 'talent' ? b.clientClerkId : b.talentClerkId;
+                    const isPending = b.status?.toLowerCase() === 'pending';
+                    const isConfirmed = b.status?.toLowerCase() === 'accepted' || b.status?.toLowerCase() === 'confirmed';
+                    const isCompleted = b.status?.toLowerCase() === 'completed';
+
+                    return (
+                      <motion.div
+                        key={b._id || b.id}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="bg-white dark:bg-dark-card rounded-3xl p-5 border dark:border-gray-700 shadow-sm hover:border-brand-blue/40 transition flex flex-col justify-between gap-4"
+                      >
+                        <div>
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div className="flex items-center gap-3">
+                              <UserAvatar src={otherPartyPhoto} name={otherPartyName} size="md" />
+                              <div>
+                                <h4 className="font-bold text-sm dark:text-white flex items-center gap-1.5">
+                                  <span>{otherPartyName}</span>
+                                  <span className="text-[10px] text-gray-400 font-normal">
+                                    ({bookingPerspective === 'talent' ? 'Client' : 'Talent'})
+                                  </span>
+                                </h4>
+                                <span className="text-xs text-brand-blue font-semibold">
+                                  {b.serviceType || 'Studio Session'}
+                                </span>
+                              </div>
+                            </div>
+
+                            <span
+                              className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
+                                isPending
+                                  ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600'
+                                  : isConfirmed
+                                  ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'
+                                  : isCompleted
+                                  ? 'bg-blue-100 dark:bg-blue-900/30 text-brand-blue'
+                                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
+                              }`}
+                            >
+                              {b.status || 'Pending'}
                             </span>
                           </div>
+
+                          {/* Details Strip */}
+                          <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-800/60 p-3 rounded-2xl text-xs text-gray-600 dark:text-gray-300">
+                            <div className="flex items-center gap-1.5">
+                              <Calendar size={13} className="text-brand-blue" />
+                              <span>{b.date || 'Flexible Date'}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <Clock size={13} className="text-blue-500" />
+                              <span>{b.time || '12:00 PM'} ({b.duration || 2}h)</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <DollarSign size={13} className="text-emerald-500" />
+                              <span className="font-bold">${b.offerAmount || b.offer_amount || 0}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                              <ShieldCheck size={13} className="text-brand-dark-accent" />
+                              <span className="capitalize">{b.paymentStatus || 'Pending'}</span>
+                            </div>
+                          </div>
+
+                          {b.message && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 italic line-clamp-2">
+                              "{b.message}"
+                            </p>
+                          )}
                         </div>
 
-                        <span
-                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full ${
-                            isPending
-                              ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600'
-                              : isConfirmed
-                              ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'
-                              : isCompleted
-                              ? 'bg-blue-100 dark:bg-blue-900/30 text-brand-blue'
-                              : 'bg-gray-100 dark:bg-gray-800 text-gray-500'
-                          }`}
-                        >
-                          {b.status || 'Pending'}
-                        </span>
-                      </div>
-
-                      {/* Details Strip */}
-                      <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-gray-800/60 p-3 rounded-2xl text-xs text-gray-600 dark:text-gray-300">
-                        <div className="flex items-center gap-1.5">
-                          <Calendar size={13} className="text-purple-500" />
-                          <span>{b.date || 'Flexible Date'}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <Clock size={13} className="text-blue-500" />
-                          <span>{b.time || '12:00 PM'} ({b.duration || 2}h)</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <DollarSign size={13} className="text-emerald-500" />
-                          <span className="font-bold">${b.offerAmount || b.offer_amount || 0}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <ShieldCheck size={13} className="text-indigo-500" />
-                          <span className="capitalize">{b.paymentStatus || 'Pending'}</span>
-                        </div>
-                      </div>
-
-                      {b.message && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-3 italic line-clamp-2">
-                          "{b.message}"
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Action Bar */}
-                    <div className="flex items-center justify-between gap-2 pt-3 border-t dark:border-gray-800">
-                      <button
-                        onClick={() => handleContactClient({ uid: otherPartyClerkId, name: otherPartyName })}
-                        className="px-3 py-1.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 hover:bg-purple-100 text-purple-600 dark:text-purple-300 text-xs font-bold flex items-center gap-1.5 transition"
-                      >
-                        <MessageCircle size={13} /> Message
-                      </button>
-
-                      <div className="flex items-center gap-1.5">
-                        {bookingPerspective === 'talent' && isPending && (
-                          <>
-                            <button
-                              onClick={() => handleAcceptBooking(b._id)}
-                              className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
-                            >
-                              Confirm
-                            </button>
-                            <button
-                              onClick={() => handleDeclineBooking(b._id)}
-                              className="px-3 py-1.5 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-red-500 hover:text-white transition"
-                            >
-                              Decline
-                            </button>
-                          </>
-                        )}
-
-                        {bookingPerspective === 'talent' && isConfirmed && (
+                        {/* Action Bar */}
+                        <div className="flex items-center justify-between gap-2 pt-3 border-t dark:border-gray-800">
                           <button
-                            onClick={() => handleCompleteBooking(b._id)}
-                            className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
+                            onClick={() => handleContactClient({ uid: otherPartyClerkId, name: otherPartyName })}
+                            className="px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 text-brand-blue dark:text-blue-300 text-xs font-bold flex items-center gap-1.5 transition"
                           >
-                            Mark Completed
+                            <MessageCircle size={13} /> Message
                           </button>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
+
+                          <div className="flex items-center gap-1.5">
+                            {bookingPerspective === 'talent' && isPending && (
+                              <>
+                                <button
+                                  onClick={() => handleAcceptBooking(b._id)}
+                                  className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition"
+                                >
+                                  Confirm
+                                </button>
+                                <button
+                                  onClick={() => handleDeclineBooking(b._id)}
+                                  className="px-3 py-1.5 rounded-xl bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-bold hover:bg-red-500 hover:text-white transition"
+                                >
+                                  Decline
+                                </button>
+                              </>
+                            )}
+
+                            {bookingPerspective === 'talent' && isConfirmed && (
+                              <button
+                                onClick={() => handleCompleteBooking(b._id)}
+                                className="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-700 transition"
+                              >
+                                Mark Completed
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -893,29 +894,47 @@ export default function CreatorStudioPage({
       {/* ========================================================================= */}
       {currentTab === 'broadcasts' && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between bg-white dark:bg-dark-card p-5 rounded-3xl border dark:border-gray-700 shadow-sm">
-            <div>
-              <h2 className="font-bold text-base dark:text-white flex items-center gap-2">
-                <RadioTower size={20} className="text-purple-500" />
-                Community Broadcasts & Session Gigs
-              </h2>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Explore open producer, engineer, and artist gig requests or publish your own.
-              </p>
+          {broadcastSubView === 'create' ? (
+            /* Inline Broadcast Creation Page View */
+            <div className="space-y-4 animate-in fade-in duration-300">
+              <BroadcastRequest
+                user={user}
+                userData={userData}
+                onBack={() => setBroadcastSubView('list')}
+                onSuccess={() => {
+                  setBroadcastSubView('list');
+                  toast.success('Gig broadcast published to the community!');
+                }}
+              />
             </div>
-            <button
-              onClick={() => setShowBroadcastModal(true)}
-              className="px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition flex items-center gap-1.5"
-            >
-              <Plus size={14} /> + Post Gig
-            </button>
-          </div>
+          ) : (
+            /* Broadcast List Page View */
+            <div className="space-y-6">
+              <div className="flex items-center justify-between bg-white dark:bg-dark-card p-5 rounded-3xl border dark:border-gray-700 shadow-sm">
+                <div>
+                  <h2 className="font-bold text-base dark:text-white flex items-center gap-2">
+                    <RadioTower size={20} className="text-brand-blue" />
+                    Community Broadcasts & Session Gigs
+                  </h2>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Explore open producer, engineer, and artist gig requests or publish your own.
+                  </p>
+                </div>
+                <button
+                  onClick={handleOpenBroadcastCreate}
+                  className="px-4 py-2 rounded-xl bg-brand-blue text-white text-xs font-bold hover:bg-blue-600 transition flex items-center gap-1.5"
+                >
+                  <Plus size={14} /> + Post Gig
+                </button>
+              </div>
 
-          <BroadcastList
-            user={user}
-            userData={userData}
-            onBid={(id) => toast.success(`Opening bid composer for gig #${id}`)}
-          />
+              <BroadcastList
+                user={user}
+                userData={userData}
+                onBid={(id) => toast.success(`Opening bid composer for gig #${id}`)}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -1009,7 +1028,7 @@ export default function CreatorStudioPage({
           {/* Deposit Policies & Working Days */}
           <div className="bg-white dark:bg-dark-card rounded-3xl p-6 border dark:border-gray-700 shadow-sm space-y-5">
             <h3 className="font-bold text-base dark:text-white flex items-center gap-2">
-              <ShieldCheck size={20} className="text-purple-500" />
+              <ShieldCheck size={20} className="text-brand-blue" />
               Deposit Terms & Working Hours
             </h3>
             <p className="text-xs text-gray-400 -mt-2">
@@ -1061,7 +1080,7 @@ export default function CreatorStudioPage({
                         onClick={() => setWorkingDays((prev) => ({ ...prev, [day]: !prev[day] }))}
                         className={`py-2 rounded-xl text-xs font-bold transition flex flex-col items-center gap-1 ${
                           isActive
-                            ? 'bg-purple-600 text-white'
+                            ? 'bg-brand-blue text-white'
                             : 'bg-gray-100 dark:bg-gray-800 text-gray-400'
                         }`}
                       >
@@ -1076,7 +1095,7 @@ export default function CreatorStudioPage({
 
             <button
               onClick={() => toast.success('Deposit policies updated!')}
-              className="w-full py-2.5 rounded-xl bg-purple-600 text-white font-bold text-xs hover:bg-purple-700 transition"
+              className="w-full py-2.5 rounded-xl bg-brand-blue text-white font-bold text-xs hover:bg-blue-600 transition"
             >
               Save Policies
             </button>
@@ -1150,52 +1169,6 @@ export default function CreatorStudioPage({
           </div>
         )}
       </AnimatePresence>
-
-      {/* ========================================================================= */}
-      {/* SESSION BUILDER MODAL                                                     */}
-      {/* ========================================================================= */}
-      {showSessionBuilder && (
-        <SessionBuilderModal
-          isOpen={showSessionBuilder}
-          onClose={() => setShowSessionBuilder(false)}
-          cart={[]}
-          onRemoveFromCart={() => {}}
-          onSuccess={() => {
-            setShowSessionBuilder(false);
-            toast.success('Custom session created successfully!');
-          }}
-        />
-      )}
-
-      {/* ========================================================================= */}
-      {/* BROADCAST REQUEST MODAL                                                   */}
-      {/* ========================================================================= */}
-      {showBroadcastModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
-          <div className="bg-white dark:bg-dark-card rounded-3xl p-6 border dark:border-gray-700 shadow-2xl max-w-2xl w-full my-8">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-base dark:text-white flex items-center gap-2">
-                <RadioTower size={20} className="text-purple-500" /> Post a Community Gig Broadcast
-              </h3>
-              <button
-                onClick={() => setShowBroadcastModal(false)}
-                className="text-gray-400 hover:text-gray-200"
-              >
-                ✕
-              </button>
-            </div>
-            <BroadcastRequest
-              user={user}
-              userData={userData}
-              onBack={() => setShowBroadcastModal(false)}
-              onSuccess={() => {
-                setShowBroadcastModal(false);
-                toast.success('Gig broadcast published to the community!');
-              }}
-            />
-          </div>
-        </div>
-      )}
 
       {/* Boost Visibility Modal */}
       {showBoostModal && (
