@@ -18,9 +18,6 @@ export const getStripe = (): Promise<Stripe | null> | null => {
  * Gets the base API URL for Vercel serverless functions
  */
 const getApiUrl = (): string => {
-  if (import.meta.env.DEV) {
-    return 'http://localhost:3000/api';
-  }
   return '/api';
 };
 

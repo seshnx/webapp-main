@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   BarChart3,
   TrendingUp,
@@ -56,6 +56,7 @@ import BroadcastList from '../BroadcastList';
 import BroadcastRequest from '../BroadcastRequest';
 import SessionWizard from '../SessionWizard';
 import BoostVisibilityModal from '../social/BoostVisibilityModal';
+import AddToCalendarDropdown from '../shared/AddToCalendarDropdown';
 
 interface CreatorStudioPageProps {
   user: any;
@@ -74,11 +75,22 @@ export default function CreatorStudioPage({
 }: CreatorStudioPageProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Tab state synced with URL ?tab=...
-  const currentTab = (searchParams.get('tab') as StudioTab) || 'overview';
+  // Tab state synced with URL path (/creator-studio/:tab) or ?tab=...
+  const currentTab = useMemo<StudioTab>(() => {
+    const parts = location.pathname.split('/').filter(Boolean);
+    if (parts[0] === 'creator-studio' && parts[1]) {
+      const sub = parts[1] as StudioTab;
+      if (['overview', 'bookings', 'broadcasts', 'rates', 'wizard'].includes(sub)) {
+        return sub;
+      }
+    }
+    return (searchParams.get('tab') as StudioTab) || 'overview';
+  }, [location.pathname, searchParams]);
+
   const setActiveTab = (tab: StudioTab) => {
-    setSearchParams({ tab });
+    navigate(`/creator-studio/${tab}`);
   };
 
   const clerkId = user?.id || user?.uid || '';
@@ -222,10 +234,9 @@ export default function CreatorStudioPage({
   const handleContactClient = (targetUser: { uid: string; name: string }) => {
     if (setPendingChatTarget) {
       setPendingChatTarget(targetUser);
-      toast.success(`Opening message window for ${targetUser.name}...`);
-    } else {
-      navigate('/messages');
     }
+    toast.success(`Opening conversation with ${targetUser.name}...`);
+    navigate('/messages');
   };
 
   const handleOpenSessionBuilder = () => {
@@ -852,6 +863,10 @@ export default function CreatorStudioPage({
                           </button>
 
                           <div className="flex items-center gap-1.5">
+                            {(isConfirmed || isCompleted) && (
+                              <AddToCalendarDropdown booking={b} perspective={bookingPerspective} buttonSize="sm" />
+                            )}
+
                             {bookingPerspective === 'talent' && isPending && (
                               <>
                                 <button

@@ -9,19 +9,19 @@ const { execSync } = require('child_process');
 const fixes = [
   {
     name: 'NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY',
-    value: 'pk_test_cmVhbC1iYXJuYWNsZS0xNS5jbGVyay5hY2NvdW50cy5kZXYk'
+    value: process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || 'your_clerk_publishable_key'
   },
   {
     name: 'VITE_CLERK_PUBLISHABLE_KEY',
-    value: 'pk_test_cmVhbC1iYXJuYWNsZS0xNS5jbGVyay5hY2NvdW50cy5kZXYk'
+    value: process.env.VITE_CLERK_PUBLISHABLE_KEY || 'your_clerk_publishable_key'
   },
   {
     name: 'CLERK_SECRET_KEY',
-    value: 'sk_test_hUDsPeu4smcl0WBpBXyTF6eUoymXE1orOD8ZCpGjGA'
+    value: process.env.CLERK_SECRET_KEY || 'your_clerk_secret_key'
   },
   {
     name: 'CLERK_WEBHOOK_SECRET',
-    value: 'whsec_D0bG38yy75qz/8DokfWV7w2sfXGv+1eT'
+    value: process.env.CLERK_WEBHOOK_SECRET || 'your_clerk_webhook_secret'
   }
 ];
 

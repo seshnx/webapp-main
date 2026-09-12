@@ -232,7 +232,7 @@ const SidebarContent = ({
   navGroups, 
   activeTab, 
   handleNavigation, 
-  onLogout,
+  onLogout, 
   t 
 }: any) => (
   <>
@@ -309,5 +309,4 @@ const SidebarContent = ({
   </>
 );
 
-// Default export for backward compatibility
 export default Sidebar;

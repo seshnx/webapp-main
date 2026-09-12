@@ -1,4 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import {
     Image, Upload, Trash2, Star,
     Loader2, X, Plus, Eye, Move
@@ -26,35 +28,56 @@ interface StudioPhoto {
 export interface StudioGalleryProps {
     user?: any;
     userData?: any;
+    studio?: any;
     onUpdate?: (data: { studioPhotos: StudioPhoto[] }) => void;
 }
 
 /**
  * StudioGallery - Photo gallery management for studio
  */
-export default function StudioGallery({ user, userData, onUpdate }: StudioGalleryProps) {
-    const [photos, setPhotos] = useState<StudioPhoto[]>(userData?.studioPhotos || []);
+export default function StudioGallery({ user, userData, studio, onUpdate }: StudioGalleryProps) {
+    const updateStudioPhotosMutation = useMutation(api.studioManager.updateStudioPhotos);
+    const [photos, setPhotos] = useState<StudioPhoto[]>(() => {
+        if (studio?.studioPhotos && Array.isArray(studio.studioPhotos)) {
+            return studio.studioPhotos.map((url: string, index: number) => ({
+                id: `photo-${index}`,
+                url,
+                filename: `Photo ${index + 1}`,
+                isCover: index === 0,
+                uploadedAt: new Date().toISOString()
+            }));
+        }
+        return userData?.studioPhotos || [];
+    });
     const [uploadProgress, setUploadProgress] = useState<number>(0);
     const [selectedPhoto, setSelectedPhoto] = useState<StudioPhoto | null>(null);
     const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
     const { uploadMedia, uploading } = useUpload();
     const userId = user?.id || user?.uid;
 
+    useEffect(() => {
+        if (studio?.studioPhotos && Array.isArray(studio.studioPhotos) && studio.studioPhotos.length > 0) {
+            setPhotos(studio.studioPhotos.map((url: string, index: number) => ({
+                id: `photo-${index}`,
+                url,
+                filename: `Photo ${index + 1}`,
+                isCover: index === 0,
+                uploadedAt: new Date().toISOString()
+            })));
+        }
+    }, [studio?.studioPhotos]);
+
     const savePhotos = useCallback(async (updatedPhotos: StudioPhoto[]): Promise<boolean> => {
         try {
-            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studioPhotos: updatedPhotos })
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to save');
-            }
-
             setPhotos(updatedPhotos);
+            if (studio?._id) {
+                const callerClerkId = user?.id || userData?.clerkId;
+                await updateStudioPhotosMutation({
+                    clerkId: callerClerkId,
+                    studioId: studio._id,
+                    photos: updatedPhotos.map(p => p.url)
+                });
+            }
             if (onUpdate) onUpdate({ studioPhotos: updatedPhotos });
             return true;
         } catch (error) {
@@ -62,7 +85,7 @@ export default function StudioGallery({ user, userData, onUpdate }: StudioGaller
             toast.error('Failed to save photos');
             return false;
         }
-    }, [userId, onUpdate]);
+    }, [studio, user, userData, updateStudioPhotosMutation, onUpdate]);
 
     const handleUpload = useCallback(async (files: FileList | null) => {
         if (!files || files.length === 0) return;

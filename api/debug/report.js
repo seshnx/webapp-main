@@ -27,7 +27,7 @@ export default async function handler(req, res) {
         nodeEnv: process.env.NODE_ENV,
         isDev: process.env.NODE_ENV === 'development',
         isProd: process.env.NODE_ENV === 'production',
-        neonUrl: process.env.VITE_NEON_DATABASE_URL ? 'Set' : 'Missing',
+        neonUrl: (process.env.DATABASE_URL || process.env.NEON_DATABASE_URL) ? 'Set' : 'Missing',
         clerkKey: process.env.CLERK_SECRET_KEY ? 'Set' : 'Missing',
       },
       browser: {

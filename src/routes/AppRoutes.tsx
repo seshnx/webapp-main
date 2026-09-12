@@ -107,6 +107,7 @@ const StudioPublicProfile = retryLazyLoad(() => import('../components/studio/Stu
 const StudioNotFound = retryLazyLoad(() => import('../components/studio/StudioNotFound'));
 const PlansPage = retryLazyLoad(() => import('../components/PlansPage'));
 const StudioPricingPage = retryLazyLoad(() => import('../components/studio/StudioPricingPage'));
+const PitchDeck = retryLazyLoad(() => import('../components/pitch/PitchDeck'));
 
 // =====================================================
 // COMPONENTS
@@ -257,6 +258,36 @@ export default function AppRoutes({
         element={
           <Suspense fallback={<div className="flex items-center justify-center min-h-screen"><Loader2 className="animate-spin text-brand-blue" size={32} /></div>}>
             <StudioKiosk />
+          </Suspense>
+        }
+      />
+
+      {/* Public Pitch Deck Route - Accessible without authentication for live presentations, sync rooms & PDF export */}
+      <Route
+        path="/pitch"
+        element={
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-[#06070a]"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}>
+            <PitchDeck />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/pitch/:pitchId"
+        element={
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-[#06070a]"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}>
+            <PitchDeck />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/deck"
+        element={<Navigate to="/pitch" replace />}
+      />
+      <Route
+        path="/deck/:pitchId"
+        element={
+          <Suspense fallback={<div className="flex items-center justify-center min-h-screen bg-[#06070a]"><Loader2 className="animate-spin text-blue-500" size={32} /></div>}>
+            <PitchDeck />
           </Suspense>
         }
       />

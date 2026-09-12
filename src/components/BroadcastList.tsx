@@ -3,6 +3,8 @@ import { MapPin, Clock, DollarSign, User, ChevronRight, Zap, Filter, Trash2, X, 
 import BidModal from './BidModal';
 import TalentMap from './shared/TalentMap';
 import { fetchZipLocation } from '../utils/geocode';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
 
 /**
  * Helper function to calculate distance between two coordinates
@@ -109,52 +111,20 @@ export default function BroadcastList({ user, userData, onBid }: BroadcastListPr
         initLocation();
     }, [userData]);
 
+    const liveBroadcasts = useQuery(api.broadcasts.getActiveBroadcasts);
+
     useEffect(() => {
-        // TODO: Migrate to Neon/Convex - Supabase legacy code
-        const supabase = (window as any).supabase;
-        if (!supabase) return;
-
-        const loadBroadcasts = async () => {
-            try {
-                const { data, error } = await supabase
-                    .from('bookings')
-                    .select('*')
-                    .eq('type', 'Broadcast')
-                    .eq('status', 'Broadcasting')
-                    .order('created_at', { ascending: false });
-
-                if (error) throw error;
-                setBroadcasts((data || []).map((b: any) => ({
-                    id: b.id,
-                    ...b,
-                    senderId: b.sender_id,
-                    targetId: b.target_id,
-                    timestamp: b.created_at
-                })));
-            } catch (err) {
-                console.error('Error loading broadcasts:', err);
-            }
-        };
-
-        loadBroadcasts();
-
-        // Subscribe to changes
-        const channel = supabase
-            .channel('broadcasts')
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'bookings',
-                filter: 'type=eq.Broadcast'
-            }, () => {
-                loadBroadcasts();
-            })
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, []);
+        if (liveBroadcasts) {
+            setBroadcasts(liveBroadcasts.map((b: any) => ({
+                id: b._id,
+                ...b,
+                senderId: b.senderId,
+                targetId: b.targetId,
+                timestamp: b.createdAt,
+                created_at: new Date(b.createdAt).toISOString(),
+            })));
+        }
+    }, [liveBroadcasts]);
 
     // Clear all filters
     const clearFilters = () => {

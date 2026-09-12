@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import {
     Mic, Speaker, Monitor, Server, Plus, Search,
     Trash2, Edit2, Loader2, X,
@@ -135,71 +138,116 @@ interface EquipmentItem {
 export interface StudioEquipmentProps {
     user?: any;
     userData?: any;
+    studio?: any;
     onUpdate?: (data: { studioEquipment?: EquipmentItem[] }) => void;
 }
 
 /**
  * StudioEquipment - Full equipment inventory management
  */
-export default function StudioEquipment({ user, userData, onUpdate }: StudioEquipmentProps) {
-    const [equipment, setEquipment] = useState<EquipmentItem[]>(userData?.studioEquipment || []);
-    const [saving, setSaving] = useState<boolean>(false);
+export default function StudioEquipment({ user, userData, studio, onUpdate }: StudioEquipmentProps) {
+    const studioId = studio?._id;
+    const convexEquipment = useQuery(
+        api.studioManager.getEquipmentByStudio,
+        studioId ? { studioId, includeInactive: true } : "skip"
+    );
+
+    const createEquipment = useMutation(api.studioManager.createEquipment);
+    const updateEquipment = useMutation(api.studioManager.updateEquipment);
+    const deleteEquipment = useMutation(api.studioManager.deleteEquipment);
+
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [categoryFilter, setCategoryFilter] = useState<string>('all');
     const [showAddModal, setShowAddModal] = useState<boolean>(false);
     const [editingItem, setEditingItem] = useState<EquipmentItem | null>(null);
 
-    const handleSave = async (updatedEquipment: EquipmentItem[]) => {
-        setSaving(true);
-        const toastId = toast.loading('Saving equipment...');
-        const userId = userData?.id || user?.id || user?.uid;
+    // Map live Convex equipment to local model
+    const equipment: EquipmentItem[] = useMemo(() => {
+        if (!convexEquipment) return [];
+        return convexEquipment.map((e: any) => ({
+            id: e._id,
+            _id: e._id,
+            name: e.name,
+            brand: e.brand || '',
+            model: e.model || '',
+            category: e.category || 'other',
+            serial: e.serialNumber || '',
+            condition: e.condition || 'good',
+            value: e.currentValue ?? e.purchasePrice ?? '',
+            notes: e.notes || '',
+            status: e.status || 'Available',
+            addedAt: new Date(e.createdAt || Date.now()).toISOString(),
+        }));
+    }, [convexEquipment]);
 
+    const handleAddItem = async (newItem: EquipmentItem) => {
+        if (!studioId) {
+            toast.error('No studio found');
+            return;
+        }
+        const toastId = toast.loading('Adding equipment...');
         try {
-            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ studioEquipment: updatedEquipment })
+            const callerClerkId = user?.id || userData?.clerkId;
+            await createEquipment({
+                clerkId: callerClerkId,
+                studioId,
+                name: newItem.name,
+                brand: newItem.brand,
+                model: newItem.model,
+                category: newItem.category || 'other',
+                serialNumber: newItem.serial,
+                condition: newItem.condition,
+                purchasePrice: Number(newItem.value) || undefined,
+                currentValue: Number(newItem.value) || undefined,
+                notes: newItem.notes,
+                status: 'Available',
             });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to save');
-            }
-
-            setEquipment(updatedEquipment);
-            toast.success('Equipment saved!', { id: toastId });
-            if (onUpdate) onUpdate({ studioEquipment: updatedEquipment });
-        } catch (error) {
-            console.error('Save failed:', error);
-            toast.error('Failed to save', { id: toastId });
-        } finally {
-            setSaving(false);
+            toast.success('Equipment added to inventory!', { id: toastId });
+            setShowAddModal(false);
+        } catch (error: any) {
+            console.error('Add equipment error:', error);
+            toast.error(error.message || 'Failed to add equipment', { id: toastId });
         }
     };
 
-    const handleAddItem = async (newItem: EquipmentItem) => {
-        const itemWithId: EquipmentItem = {
-            ...newItem,
-            id: Date.now().toString(),
-            addedAt: new Date().toISOString()
-        };
-        await handleSave([...equipment, itemWithId]);
-        setShowAddModal(false);
-    };
-
     const handleUpdateItem = async (updatedItem: EquipmentItem) => {
-        const updatedEquipment = equipment.map(item =>
-            item.id === updatedItem.id ? updatedItem : item
-        );
-        await handleSave(updatedEquipment);
-        setEditingItem(null);
+        const toastId = toast.loading('Updating equipment...');
+        try {
+            const callerClerkId = user?.id || userData?.clerkId;
+            await updateEquipment({
+                clerkId: callerClerkId,
+                equipmentId: (updatedItem._id || updatedItem.id) as Id<"studioEquipment">,
+                name: updatedItem.name,
+                brand: updatedItem.brand,
+                model: updatedItem.model,
+                category: updatedItem.category,
+                serialNumber: updatedItem.serial,
+                condition: updatedItem.condition,
+                currentValue: Number(updatedItem.value) || undefined,
+                notes: updatedItem.notes,
+            });
+            toast.success('Equipment updated!', { id: toastId });
+            setEditingItem(null);
+        } catch (error: any) {
+            console.error('Update equipment error:', error);
+            toast.error(error.message || 'Failed to update equipment', { id: toastId });
+        }
     };
 
     const handleDeleteItem = async (itemId: string) => {
         if (!confirm('Remove this item from inventory?')) return;
-        const updatedEquipment = equipment.filter(item => item.id !== itemId);
-        await handleSave(updatedEquipment);
+        const toastId = toast.loading('Removing equipment...');
+        try {
+            const callerClerkId = user?.id || userData?.clerkId;
+            await deleteEquipment({
+                clerkId: callerClerkId,
+                equipmentId: itemId as Id<"studioEquipment">,
+            });
+            toast.success('Equipment removed from inventory', { id: toastId });
+        } catch (error: any) {
+            console.error('Delete equipment error:', error);
+            toast.error(error.message || 'Failed to delete equipment', { id: toastId });
+        }
     };
 
     // Filter equipment

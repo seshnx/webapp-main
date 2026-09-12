@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { checkRateLimit } from "./rateLimit";
 
 /**
  * Get messages for a given chat
@@ -7,17 +8,45 @@ import { v } from "convex/values";
 export const getMessages = query({
   args: {
     chatId: v.string(),
+    userId: v.optional(v.string()), // Optional caller Clerk ID for access control
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const limit = args.limit || 100;
+
+    // Caller membership verification
+    if (args.userId) {
+      const caller = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.userId!))
+        .first();
+
+      if (caller) {
+        const hasExistingChat = await ctx.db
+          .query("conversations")
+          .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+          .first();
+
+        const userConv = await ctx.db
+          .query("conversations")
+          .withIndex("by_chat_user", (q) =>
+            q.eq("chatId", args.chatId).eq("userId", caller._id)
+          )
+          .first();
+
+        if (hasExistingChat && !userConv) {
+          throw new Error("Unauthorized: You are not a participant in this conversation");
+        }
+      }
+    }
+
     const msgs = await ctx.db
       .query("messages")
       .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
-      .order("asc")
+      .order("desc")
       .take(limit);
 
-    return msgs;
+    return msgs.reverse();
   },
 });
 
@@ -41,6 +70,33 @@ export const sendMessage = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    // 1. Rate limit: max 45 messages per minute per sender
+    await checkRateLimit(ctx, {
+      key: `msg:${args.senderId}`,
+      limit: 45,
+      windowMs: 60 * 1000,
+    });
+
+    // 2. Resolve sender user
+    const senderUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.senderId))
+      .first();
+
+    if (!senderUser) {
+      throw new Error("Unauthorized: Sender user account not found");
+    }
+
+    // 3. Verify participation if conversation already exists
+    const existingConvs = await ctx.db
+      .query("conversations")
+      .withIndex("by_chat", (q) => q.eq("chatId", args.chatId))
+      .collect();
+
+    if (existingConvs.length > 0 && !existingConvs.some((c) => c.userId === senderUser._id)) {
+      throw new Error("Unauthorized: Sender is not a participant in this conversation");
+    }
+
     const now = Date.now();
     const messageId = await ctx.db.insert("messages", {
       chatId: args.chatId,

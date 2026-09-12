@@ -591,7 +591,60 @@ export const getClientsByStudio = query({
       filtered = filtered.filter((c) => !c.isBlacklisted);
     }
 
-    return filtered;
+    // Populate user details for linked users or return stored contact info
+    const populated = await Promise.all(
+      filtered.map(async (c) => {
+        let user = null;
+        if (c.userId) {
+          try {
+            user = await ctx.db.get(c.userId);
+          } catch {
+            // userId may be unresolvable
+          }
+        }
+        return {
+          ...c,
+          name: c.name || (user ? `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username || user.email : "Client"),
+          email: c.email || user?.email || "",
+          phone: c.phone || user?.phone || "",
+          company: c.company || null,
+          avatarUrl: user?.photoURL,
+        };
+      })
+    );
+
+    return populated;
+  },
+});
+
+/**
+ * Search registered platform users to add as clients
+ */
+export const searchPlatformUsers = query({
+  args: {
+    searchTerm: v.string(),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const term = args.searchTerm.trim().toLowerCase();
+    if (!term) return [];
+
+    const allUsers = await ctx.db.query("users").take(args.limit || 30);
+    return allUsers
+      .filter((u) => {
+        const name = `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase();
+        const username = (u.username || '').toLowerCase();
+        const email = (u.email || '').toLowerCase();
+        return name.includes(term) || username.includes(term) || email.includes(term);
+      })
+      .map((u) => ({
+        _id: u._id,
+        user_id: u._id,
+        display_name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username || u.email,
+        email: u.email,
+        username: u.username,
+        photo_url: u.photoURL,
+      }));
   },
 });
 
@@ -642,7 +695,11 @@ export const createClient = mutation({
   args: {
     clerkId: v.string(),
     studioId: v.id("studios"),
-    userId: v.id("users"),
+    userId: v.optional(v.id("users")),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    company: v.optional(v.string()),
     clientType: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     preferences: v.optional(v.object({
@@ -671,15 +728,17 @@ export const createClient = mutation({
       throw new Error("Not authorized to modify this studio");
     }
 
-    // Check if client already exists
-    const existingClient = await ctx.db
-      .query("studioClients")
-      .withIndex("by_user", (q) => q.eq("userId", args.userId))
-      .filter((q) => q.eq(q.field("studioId"), args.studioId))
-      .first();
+    // Check if client already exists (if linked to a user)
+    if (args.userId) {
+      const existingClient = await ctx.db
+        .query("studioClients")
+        .withIndex("by_user", (q) => q.eq("userId", args.userId!))
+        .filter((q) => q.eq(q.field("studioId"), args.studioId))
+        .first();
 
-    if (existingClient) {
-      throw new Error("Client already exists for this user");
+      if (existingClient && !existingClient.deletedAt) {
+        throw new Error("Client already exists for this user");
+      }
     }
 
     const now = Date.now();
@@ -687,7 +746,11 @@ export const createClient = mutation({
     const clientId = await ctx.db.insert("studioClients", {
       studioId: args.studioId,
       userId: args.userId,
-      clientType: args.clientType || "Regular",
+      name: args.name,
+      email: args.email,
+      phone: args.phone,
+      company: args.company,
+      clientType: args.clientType || "regular",
       tags: args.tags,
       totalBookings: 0,
       totalRevenue: 0,
@@ -710,6 +773,11 @@ export const updateClient = mutation({
   args: {
     clerkId: v.string(),
     clientId: v.id("studioClients"),
+    userId: v.optional(v.id("users")),
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    company: v.optional(v.string()),
     clientType: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     preferences: v.optional(v.object({
@@ -751,6 +819,11 @@ export const updateClient = mutation({
       updatedAt: Date.now(),
     };
 
+    if (args.userId !== undefined) updateData.userId = args.userId;
+    if (args.name !== undefined) updateData.name = args.name;
+    if (args.email !== undefined) updateData.email = args.email;
+    if (args.phone !== undefined) updateData.phone = args.phone;
+    if (args.company !== undefined) updateData.company = args.company;
     if (args.clientType !== undefined) updateData.clientType = args.clientType;
     if (args.tags !== undefined) updateData.tags = args.tags;
     if (args.preferences !== undefined) updateData.preferences = args.preferences;
@@ -764,6 +837,7 @@ export const updateClient = mutation({
     return args.clientId;
   },
 });
+
 
 /**
  * Update client metrics (called when bookings are made/completed)

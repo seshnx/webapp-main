@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Wrench, CheckCircle, MessageSquare, Image as ImageIcon, Send, FileText, LucideIcon } from 'lucide-react';
+import React, { useState } from 'react';
+import { Wrench, CheckCircle, Image as ImageIcon, Send, FileText, Loader2, AlertCircle } from 'lucide-react';
 import { useUpload } from '../../hooks/useUpload';
 import InspectionEditor from './InspectionEditor';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import toast from 'react-hot-toast';
 
 // =====================================================
 // TYPES & CONSTANTS
@@ -23,38 +26,14 @@ interface RepairStage {
   label: string;
 }
 
-interface RepairLog {
-  text: string;
-  timestamp: string;
-  author_id: string;
-  author_name: string;
-  is_private: boolean;
-  image_url?: string;
-}
-
-interface Booking {
-  id: string;
-  target_id: string;
-  sender_id: string;
-  equipment: string;
-  serviceType: string;
-  repair_status?: string;
-  repairStatus?: string;
-  repair_logs?: RepairLog[];
-  repairLogs?: RepairLog[];
-  preInspection?: any;
-  postInspection?: any;
-  [key: string]: any;
-}
-
 const REPAIR_STAGES: RepairStage[] = [
-  { id: 'Pending', label: 'Request Received' },
+  { id: 'open', label: 'Ticket Open' },
   { id: 'Diagnosing', label: 'Diagnosing Issue' },
   { id: 'PartsOrdered', label: 'Waiting for Parts' },
-  { id: 'Repairing', label: 'On The Bench' },
+  { id: 'in_progress', label: 'On The Bench' },
   { id: 'Testing', label: 'Quality Testing' },
   { id: 'Ready', label: 'Ready for Pickup' },
-  { id: 'Completed', label: 'Completed' }
+  { id: 'completed', label: 'Completed' }
 ];
 
 // =====================================================
@@ -62,79 +41,127 @@ const REPAIR_STAGES: RepairStage[] = [
 // =====================================================
 
 export default function RepairTracker({ bookingId, currentUser }: RepairTrackerProps): JSX.Element {
-  const [booking, setBooking] = useState<Booking | null>(null);
   const [newLog, setNewLog] = useState<string>('');
   const [isPrivateLog, setIsPrivateLog] = useState<boolean>(false);
   const [activeInspection, setActiveInspection] = useState<'Pre' | 'Post' | null>(null);
   const { uploadMedia, uploading } = useUpload();
   const [logImage, setLogImage] = useState<File | null>(null);
 
-  useEffect(() => {
-    if (!bookingId) return;
+  // Convex live query for the service request
+  const request = useQuery(api.techServices.getServiceRequestById, { requestId: bookingId as any });
+  const updateStatusMutation = useMutation(api.techServices.updateServiceRequestStatus);
+  const addLogMutation = useMutation(api.techServices.addRepairLog);
+  const saveInspectionMutation = useMutation(api.techServices.saveInspection);
 
-    // NOTE: This component uses legacy Supabase code and needs to be migrated to Neon
-    console.warn('RepairTracker needs Neon migration');
-
-    // TODO: Migrate to Neon database
-    // Would use getBooking(bookingId) from neonQueries
-    // For now, this is non-functional until migration is complete
-  }, [bookingId]);
-
-  const userId = currentUser?.id || currentUser?.uid;
-  const isTech = userId === booking?.target_id;
-  const isClient = userId === booking?.sender_id;
+  const userId = currentUser?.id || currentUser?.uid || '';
+  const isTech = userId && (userId === request?.assignedTechId);
+  const isRequester = userId && (userId === request?.requesterId);
 
   const handleStatusUpdate = async (newStatus: string): Promise<void> => {
-    if (!isTech) return;
+    if (!isTech || !request) return;
 
-    // TODO: Migrate to Neon database
-    // Would use updateBookingStatus(bookingId, { repair_status: newStatus }) from neonQueries
-    console.warn('RepairTracker status update needs Neon migration');
+    try {
+      await updateStatusMutation({
+        requestId: bookingId as any,
+        status: newStatus,
+        actorId: userId,
+      });
 
-    await addLogEntry(`Status updated to: ${REPAIR_STAGES.find(s => s.id === newStatus)?.label}`, false);
+      const stageLabel = REPAIR_STAGES.find(s => s.id === newStatus)?.label || newStatus;
+      await addLogMutation({
+        requestId: bookingId as any,
+        text: `Status updated to: ${stageLabel}`,
+        isPrivate: false,
+        actorId: userId,
+      });
+
+      toast.success(`Status updated to ${stageLabel}`);
+    } catch (e: any) {
+      console.error('Status update failed:', e);
+      toast.error(e?.message || 'Failed to update status');
+    }
   };
 
-  const addLogEntry = async (text: string, isPrivate = false, imageUrl = null): Promise<void> => {
-    // TODO: Migrate to Neon database
-    // Would use addRepairLogEntry(bookingId, { text, is_private: isPrivate, image_url: imageUrl }) from neonQueries
-    console.warn('RepairTracker log entry needs Neon migration');
+  const addLogEntry = async (text: string, isPrivate = false, imageUrl?: string): Promise<void> => {
+    if (!text.trim() || !userId) return;
 
-    setNewLog('');
-    setLogImage(null);
+    try {
+      await addLogMutation({
+        requestId: bookingId as any,
+        text: text.trim(),
+        isPrivate,
+        imageUrl,
+        actorId: userId,
+      });
+      setNewLog('');
+      setLogImage(null);
+      toast.success('Log entry added');
+    } catch (e: any) {
+      console.error('Failed to add log:', e);
+      toast.error(e?.message || 'Failed to add log entry');
+    }
   };
 
   const handleLogSubmit = async (): Promise<void> => {
-    if (!newLog) return;
-    let url = null;
+    if (!newLog.trim()) return;
+    let url: string | undefined = undefined;
     if (logImage) {
       const res = await uploadMedia(logImage, `repair_logs/${bookingId}`);
-      url = res?.url || null;
+      url = res?.url || undefined;
     }
     await addLogEntry(newLog, isPrivateLog, url);
   };
 
   const handleSaveInspection = async (data: any): Promise<void> => {
-    if (!activeInspection) return;
-
-    // TODO: Migrate to Neon database
-    // Would use updateInspection(bookingId, activeInspection, data) from neonQueries
-    console.warn('RepairTracker inspection save needs Neon migration');
+    if (!activeInspection || !userId) return;
 
     try {
-      await addLogEntry(`${activeInspection}-Inspection completed. ${data.markers?.length || 0} issues noted.`, false);
+      await saveInspectionMutation({
+        requestId: bookingId as any,
+        type: activeInspection,
+        data,
+        actorId: userId,
+      });
+
+      const count = data.markers?.length || 0;
+      await addLogMutation({
+        requestId: bookingId as any,
+        text: `${activeInspection}-Inspection completed. ${count} observation marker(s) noted.`,
+        isPrivate: false,
+        actorId: userId,
+      });
+
       setActiveInspection(null);
-    } catch (e) {
+      toast.success(`${activeInspection}-Inspection report saved`);
+    } catch (e: any) {
       console.error(e);
-      const error = e as Error;
-      alert("Failed to save inspection: " + (error.message || "Unknown error"));
+      toast.error("Failed to save inspection: " + (e.message || "Unknown error"));
     }
   };
 
-  if (!booking) return <div className="p-8 text-center">Loading...</div>;
-  const currentStageIndex = REPAIR_STAGES.findIndex(s => s.id === (booking.repair_status || booking.repairStatus || 'Pending'));
+  if (request === undefined) {
+    return (
+      <div className="p-12 text-center flex flex-col items-center justify-center space-y-3">
+        <Loader2 className="animate-spin text-orange-500 w-8 h-8" />
+        <p className="text-sm text-gray-500">Loading repair ticket data...</p>
+      </div>
+    );
+  }
+
+  if (request === null) {
+    return (
+      <div className="p-12 text-center flex flex-col items-center justify-center space-y-3">
+        <AlertCircle className="text-red-500 w-8 h-8" />
+        <h4 className="font-bold text-gray-800 dark:text-white">Ticket Not Found</h4>
+        <p className="text-xs text-gray-500">The requested service ticket could not be found or has been removed.</p>
+      </div>
+    );
+  }
+
+  const currentStageIndex = Math.max(0, REPAIR_STAGES.findIndex(s => s.id === request.status));
   const progressPercent = (currentStageIndex / (REPAIR_STAGES.length - 1)) * 100;
-  const repairLogs = booking.repair_logs || booking.repairLogs || [];
-  const visibleLogs = repairLogs.filter((l: RepairLog) => isTech || !((l as any).is_private || (l as any).isPrivate));
+  const repairLogs = request.repairLogs || [];
+  const visibleLogs = repairLogs.filter((l) => isTech || !l.isPrivate);
 
   if (activeInspection) {
     return (
@@ -142,7 +169,7 @@ export default function RepairTracker({ bookingId, currentUser }: RepairTrackerP
         <div className="w-full max-w-5xl h-full">
           <InspectionEditor
             type={activeInspection}
-            initialData={booking[activeInspection === 'Pre' ? 'preInspection' : 'postInspection']}
+            initialData={activeInspection === 'Pre' ? request.preInspection : request.postInspection}
             onSave={handleSaveInspection}
             onCancel={() => setActiveInspection(null)}
           />
@@ -153,35 +180,33 @@ export default function RepairTracker({ bookingId, currentUser }: RepairTrackerP
 
   return (
     <div className="space-y-6">
-      {/* Migration Notice */}
-      <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 p-4 rounded-xl text-sm text-yellow-800 dark:text-yellow-200">
-        <strong>Note:</strong> This component is currently being migrated from Supabase to Neon. Some features may not be available.
-      </div>
-
-      <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-sm">
+      <div className="bg-white dark:bg-[#2c2e36] p-6 rounded-2xl border dark:border-gray-700 shadow-xs">
         <div className="flex justify-between items-start mb-6">
           <div>
             <h2 className="text-xl font-bold dark:text-white flex items-center gap-2">
-              <Wrench className="text-orange-500"/> Repair Ticket #{booking.id.slice(-6)}
+              <Wrench className="text-orange-500"/> Repair Ticket #{request._id.slice(-6)}
             </h2>
-            <p className="text-sm text-gray-500">{booking.equipment} - {booking.serviceType}</p>
+            <p className="text-sm text-gray-500">
+              {request.equipmentBrand ? `${request.equipmentBrand} ${request.equipmentModel || ''}` : request.title} • {request.category}
+            </p>
           </div>
-          {isClient && (
+          {isRequester && (
             <button
               onClick={async () => {
-                await addLogEntry("Customer requested update.", true);
-                alert("Update requested.");
+                await addLogEntry("Customer requested status update from technician.", false);
               }}
-              className="bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-200"
+              className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 px-4 py-2 rounded-xl text-xs font-bold hover:bg-blue-200 transition"
             >
               Request Update
             </button>
           )}
         </div>
+
+        {/* Progress Pipeline */}
         <div className="relative mb-8 px-2">
           <div className="h-2 bg-gray-200 dark:bg-gray-700 rounded-full w-full absolute top-1/2 -translate-y-1/2 z-0"></div>
           <div
-            className="h-2 bg-green-500 rounded-full absolute top-1/2 -translate-y-1/2 z-0 transition-all duration-1000 ease-out"
+            className="h-2 bg-green-500 rounded-full absolute top-1/2 -translate-y-1/2 z-0 transition-all duration-700 ease-out"
             style={{ width: `${progressPercent}%` }}
           ></div>
           <div className="flex justify-between relative z-10">
@@ -190,8 +215,9 @@ export default function RepairTracker({ bookingId, currentUser }: RepairTrackerP
               return (
                 <div
                   key={stage.id}
-                  className="flex flex-col items-center group cursor-pointer"
+                  className={`flex flex-col items-center group ${isTech ? 'cursor-pointer' : 'cursor-default'}`}
                   onClick={() => isTech && handleStatusUpdate(stage.id)}
+                  title={isTech ? `Set status to ${stage.label}` : undefined}
                 >
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center border-4 transition-all ${
                     isCompleted
@@ -212,63 +238,66 @@ export default function RepairTracker({ bookingId, currentUser }: RepairTrackerP
             })}
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-4 mt-6">
+
+        {/* Intake & QC Inspection Cards */}
+        <div className="grid grid-cols-2 gap-4 mt-8">
           <div className={`p-4 rounded-xl border ${
-            booking.preInspection
+            request.preInspection
               ? 'bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800'
               : 'bg-white border-dashed border-gray-300 dark:bg-black/20 dark:border-gray-700'
           }`}>
             <div className="flex justify-between items-start mb-2">
-              <span className="text-xs font-bold uppercase text-gray-500">Intake</span>
-              {booking.preInspection && <CheckCircle size={16} className="text-green-500"/>}
+              <span className="text-xs font-bold uppercase text-gray-500">Bench Intake Diagnosis</span>
+              {request.preInspection && <CheckCircle size={16} className="text-green-500"/>}
             </div>
-            {booking.preInspection ? (
+            {request.preInspection ? (
               <div>
-                <div className="font-bold dark:text-white">Inspection Complete</div>
+                <div className="font-bold text-sm dark:text-white">Inspection Logged</div>
                 <button
                   onClick={() => setActiveInspection('Pre')}
                   className="text-xs text-blue-500 font-bold mt-2 hover:underline"
                 >
-                  View Report
+                  View Interactive Report
                 </button>
               </div>
             ) : (
               isTech ? (
                 <button
                   onClick={() => setActiveInspection('Pre')}
-                  className="w-full py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold hover:bg-blue-200"
+                  className="w-full py-2 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-200"
                 >
                   Start Pre-Inspection
                 </button>
               ) : (
-                <div className="text-xs text-gray-400 italic">Pending tech review...</div>
+                <div className="text-xs text-gray-400 italic">Pending technician review...</div>
               )
             )}
           </div>
+
           <div className={`p-4 rounded-xl border ${
-            booking.postInspection
+            request.postInspection
               ? 'bg-green-50 border-green-200 dark:bg-green-900/10 dark:border-green-800'
               : 'bg-white border-dashed border-gray-300 dark:bg-black/20 dark:border-gray-700'
           }`}>
             <div className="flex justify-between items-start mb-2">
-              <span className="text-xs font-bold uppercase text-gray-500">Final QC</span>
-              {booking.postInspection && <CheckCircle size={16} className="text-green-500"/>}
+              <span className="text-xs font-bold uppercase text-gray-500">Final QC Inspection</span>
+              {request.postInspection && <CheckCircle size={16} className="text-green-500"/>}
             </div>
-            {booking.postInspection ? (
+            {request.postInspection ? (
               <div>
-                <div className="font-bold dark:text-white">Ready for Pickup</div>
+                <div className="font-bold text-sm dark:text-white">QC Passed</div>
                 <button
                   onClick={() => setActiveInspection('Post')}
                   className="text-xs text-blue-500 font-bold mt-2 hover:underline"
                 >
-                  View Report
+                  View QC Report
                 </button>
               </div>
             ) : (
               isTech ? (
                 <button
                   onClick={() => setActiveInspection('Post')}
-                  className="w-full py-2 bg-gray-100 text-gray-700 rounded-lg text-xs font-bold hover:bg-gray-200"
+                  className="w-full py-2 bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 rounded-lg text-xs font-bold hover:bg-gray-200"
                 >
                   Start Post-Inspection
                 </button>
@@ -279,64 +308,80 @@ export default function RepairTracker({ bookingId, currentUser }: RepairTrackerP
           </div>
         </div>
       </div>
-      <div className="lg:col-span-2 space-y-4">
+
+      {/* Real-time Repair Logs */}
+      <div className="space-y-4">
         <h3 className="font-bold dark:text-white flex items-center gap-2">
-          <FileText size={18} className="text-gray-400"/> Repair Log
+          <FileText size={18} className="text-gray-400"/> Repair Log & Notes ({visibleLogs.length})
         </h3>
-        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-4 max-h-[400px] overflow-y-auto">
-          {visibleLogs.map((log: RepairLog, i: number) => {
-            const isPrivate = (log as any).is_private || (log as any).isPrivate;
-            const authorName = (log as any).author_name || (log as any).authorName;
-            const imageUrl = (log as any).image_url || (log as any).imageUrl;
-            return (
-              <div key={i} className={`mb-4 pl-4 border-l-2 ${
-                isPrivate ? 'border-yellow-500' : 'border-blue-500'
+        <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 p-5 max-h-[400px] overflow-y-auto">
+          {visibleLogs.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-6">No repair logs recorded yet.</p>
+          ) : (
+            visibleLogs.map((log, i) => (
+              <div key={log.id || i} className={`mb-4 pl-4 border-l-2 ${
+                log.isPrivate ? 'border-yellow-500' : 'border-blue-500'
               }`}>
                 <div className="flex justify-between items-start">
-                  <span className="text-xs font-bold dark:text-white">{authorName}</span>
-                  <span className="text-[10px] text-gray-500">{new Date(log.timestamp).toLocaleString()}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold dark:text-white">{log.authorName}</span>
+                    {log.isPrivate && (
+                      <span className="text-[10px] bg-yellow-100 dark:bg-yellow-950/40 text-yellow-800 dark:text-yellow-400 px-1.5 py-0.5 rounded font-bold">
+                        Internal Note
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-gray-400">{new Date(log.createdAt).toLocaleString()}</span>
                 </div>
                 <p className="text-sm text-gray-600 dark:text-gray-300 mt-1 whitespace-pre-wrap">{log.text}</p>
-                {imageUrl && <img src={imageUrl} className="mt-2 rounded-lg max-h-48 border dark:border-gray-600" alt="Log attachment"/>}
-                {isPrivate && <span className="text-[10px] bg-yellow-100 text-yellow-800 px-1 rounded ml-2">Internal Note</span>}
+                {log.imageUrl && (
+                  <img src={log.imageUrl} className="mt-2 rounded-xl max-h-48 border dark:border-gray-700" alt="Log attachment"/>
+                )}
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
-        {isTech && (
-          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border dark:border-gray-700">
+
+        {/* Technician Log Entry Box */}
+        {(isTech || isRequester) && (
+          <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-2xl border dark:border-gray-700">
             <textarea
-              className="w-full p-2 bg-white dark:bg-[#1f2128] border dark:border-gray-600 rounded-lg text-sm mb-2 outline-none focus:ring-2 focus:ring-orange-500 dark:text-white"
-              placeholder="Add update..."
+              className="w-full p-3 bg-white dark:bg-[#1f2128] border dark:border-gray-700 rounded-xl text-xs mb-3 outline-none focus:ring-2 focus:ring-orange-500 dark:text-white"
+              placeholder="Add status update or bench note..."
+              rows={2}
               value={newLog}
               onChange={e => setNewLog(e.target.value)}
             />
             <div className="flex justify-between items-center">
-              <div className="flex gap-2">
-                <label className="flex items-center gap-1 cursor-pointer text-gray-500 hover:text-brand-blue">
-                  <ImageIcon size={18}/>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-1 cursor-pointer text-gray-500 hover:text-orange-500 transition text-xs">
+                  <ImageIcon size={16}/>
+                  <span className="font-semibold">{logImage ? logImage.name.slice(0, 15) : 'Add Photo'}</span>
                   <input
                     type="file"
+                    accept="image/*"
                     className="hidden"
                     onChange={e => e.target.files?.[0] && setLogImage(e.target.files[0])}
                   />
                 </label>
-                <label className="flex items-center gap-1 cursor-pointer text-gray-500 hover:text-yellow-500">
-                  <input
-                    type="checkbox"
-                    checked={isPrivateLog}
-                    onChange={e => setIsPrivateLog(e.target.checked)}
-                    className="rounded text-yellow-500"
-                  />
-                  <span className="text-xs font-bold">Private</span>
-                </label>
+                {isTech && (
+                  <label className="flex items-center gap-1.5 cursor-pointer text-gray-500 hover:text-yellow-500 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={isPrivateLog}
+                      onChange={e => setIsPrivateLog(e.target.checked)}
+                      className="rounded text-yellow-500"
+                    />
+                    <span className="font-bold">Internal Note (Tech Only)</span>
+                  </label>
+                )}
               </div>
               <button
                 onClick={handleLogSubmit}
-                disabled={uploading}
-                className="bg-orange-600 text-white px-4 py-1.5 rounded-lg font-bold text-xs flex items-center gap-1"
+                disabled={uploading || !newLog.trim()}
+                className="bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white px-5 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-xs transition"
               >
-                {uploading ? '...' : <><Send size={14}/> Add Log</>}
+                {uploading ? <Loader2 size={14} className="animate-spin" /> : <><Send size={13}/> Post Update</>}
               </button>
             </div>
           </div>

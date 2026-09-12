@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { X, DollarSign, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
-import { createBooking } from '../services/bookingService';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import toast from 'react-hot-toast';
 import * as Sentry from '@sentry/react';
 import type { UserData } from '../types';
 
@@ -33,7 +35,6 @@ export interface BidModalProps {
 
 /**
  * BidModal - Modal for submitting bids on broadcast opportunities
- * Now fully functional with Neon + MongoDB hybrid storage
  */
 export default function BidModal({ user, userData, broadcast, onClose }: BidModalProps) {
     const [bidRate, setBidRate] = useState<number>(Math.floor(((broadcast.offer_amount || broadcast.offerAmount) || 0) / ((broadcast.duration || 1))));
@@ -41,29 +42,26 @@ export default function BidModal({ user, userData, broadcast, onClose }: BidModa
     const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
     const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
 
+    const submitBidMutation = useMutation(api.broadcasts.submitBroadcastBid);
+
     // Calculate total based on rate * duration
     const totalBid = bidRate * ((broadcast.duration || 1));
     const maxBudget = (broadcast.offer_amount || broadcast.offerAmount) || 0;
     const isOverBudget = totalBid > maxBudget;
 
     const handleSubmit = async () => {
-        if (!bidRate || !message) {
-            // Use toast notification instead of alert
-            const toast = (await import('react-hot-toast')).default;
+        if (!bidRate || !message.trim()) {
             toast.error('Please enter a rate and a message');
             return;
         }
 
         if (isOverBudget) {
-            const toast = (await import('react-hot-toast')).default;
             toast.error('Your bid exceeds the client\'s budget');
             return;
         }
 
-        // Validate user is logged in
-        const userId = user?.id || userData?.id;
+        const userId = user?.id || user?.uid || userData?.clerkId;
         if (!userId) {
-            const toast = (await import('react-hot-toast')).default;
             toast.error('Please log in to submit a bid');
             return;
         }
@@ -71,44 +69,25 @@ export default function BidModal({ user, userData, broadcast, onClose }: BidModa
         setIsSubmitting(true);
 
         try {
-            // Create booking using the hybrid booking service
-            const booking = await createBooking({
-                sender_id: userId,
-                sender_name: userData?.displayName || user?.displayName || 'User',
-                target_id: broadcast.sender_id || broadcast.senderId || '',
-                studio_owner_id: broadcast.sender_id || broadcast.senderId,
-                status: 'Pending',
-                service_type: broadcast.service_type || broadcast.serviceType || 'Session',
-                date: new Date().toISOString().split('T')[0], // Today's date
-                time: new Date().toTimeString().split(' ')[0], // Current time
-                duration: broadcast.duration || 1,
-                offer_amount: totalBid,
-                message: message,
+            await submitBidMutation({
+                broadcastId: broadcast.id as any,
+                bidderClerkId: userId,
+                offerAmount: totalBid,
+                message: message.trim(),
             });
 
-            // Success!
             setSubmitSuccess(true);
-
-            const toast = (await import('react-hot-toast')).default;
             toast.success('Bid submitted successfully!');
 
-            // Log for debugging
-            console.log('Booking created successfully:', booking);
-
-            // Close modal after a short delay
             setTimeout(() => {
                 onClose?.();
-                // Reset success state for next time
                 setTimeout(() => setSubmitSuccess(false), 500);
             }, 1500);
 
         } catch (error: any) {
             console.error('Bid submission failed:', error);
+            toast.error(error?.message || 'Failed to submit bid. Please try again.');
 
-            const toast = (await import('react-hot-toast')).default;
-            toast.error(error.message || 'Failed to submit bid. Please try again.');
-
-            // Send error to Sentry
             Sentry.captureException(error, {
                 tags: { component: 'BidModal', action: 'submit_bid' },
                 extra: {

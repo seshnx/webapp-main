@@ -31,7 +31,7 @@ export interface FollowersListModalProps {
     currentUser?: any;
     currentUserData?: any;
     isFollowing?: (targetUserId: string) => boolean;
-    toggleFollow?: (targetUserId: string, profileData?: any) => void | Promise<void>;
+    toggleFollow?: (targetUserId: string, profileData?: any) => void | Promise<any>;
     onClose?: () => void;
     openPublicProfile?: (userId: string) => void;
 }

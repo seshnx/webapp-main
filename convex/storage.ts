@@ -1,6 +1,6 @@
 "use node";
 
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import {
   S3Client,
@@ -13,7 +13,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 // CLOUDFLARE R2 STORAGE — CONVEX BACKEND
 // =====================================================
 // Generates presigned URLs for client-side direct uploads to R2
-// and handles file deletion.
+// and handles internal file deletion.
 //
 // Uses Convex actions with "use node" for AWS SDK compatibility.
 //
@@ -54,9 +54,22 @@ function getS3Client(): S3Client {
 
 const DEFAULT_CACHE_CONTROL = "public, max-age=31536000, immutable";
 
+// Blocked executable and script MIME types to prevent stored XSS or malware hosting
+const BLOCKED_MIME_TYPES = new Set([
+  "text/html",
+  "application/xhtml+xml",
+  "application/x-msdownload",
+  "application/x-sh",
+  "application/x-bat",
+  "application/javascript",
+  "text/javascript",
+  "application/hta",
+  "application/octet-stream;type=exe",
+]);
+
 /**
  * Generate a presigned PUT URL for client-side direct upload to R2.
- * The URL expires after 2 hours and sets 1-year immutable CDN cache-control headers.
+ * The URL expires after 15 minutes (900 seconds) and sets 1-year immutable CDN cache-control headers.
  *
  * Returns { uploadUrl, fileUrl, key, cacheControl } — the client PUTs the file to
  * uploadUrl with matching headers, then stores fileUrl as the public-facing URL.
@@ -68,6 +81,17 @@ export const generateUploadUrl = action({
     cacheControl: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
+    // 1. Path traversal and prefix validation
+    if (!args.key || args.key.includes("..") || args.key.startsWith("/")) {
+      throw new Error("Invalid storage key: directory traversal or leading slashes not allowed");
+    }
+
+    // 2. MIME type safety check
+    const normalizedMime = args.contentType.trim().toLowerCase();
+    if (BLOCKED_MIME_TYPES.has(normalizedMime)) {
+      throw new Error(`Upload rejected: Forbidden content type '${args.contentType}'`);
+    }
+
     const client = getS3Client();
     if (!r2BucketName) throw new Error("R2_BUCKET_NAME not set");
     if (!r2PublicUrl) throw new Error("R2_PUBLIC_URL not set");
@@ -81,8 +105,9 @@ export const generateUploadUrl = action({
       CacheControl: cacheControl,
     });
 
+    // 15-minute expiry (reduced from 2 hours for security best practice)
     const uploadUrl = await getSignedUrl(client, command, {
-      expiresIn: 7200,
+      expiresIn: 900,
     });
     const fileUrl = `${r2PublicUrl}/${args.key}`;
 
@@ -92,8 +117,9 @@ export const generateUploadUrl = action({
 
 /**
  * Delete an object from R2 by key.
+ * INTERNAL ACTION ONLY: Cannot be invoked by external clients directly.
  */
-export const deleteFile = action({
+export const deleteFile = internalAction({
   args: { key: v.string() },
   handler: async (_ctx, args) => {
     const client = getS3Client();
@@ -111,8 +137,9 @@ export const deleteFile = action({
 
 /**
  * Delete an object from R2 by its public URL.
+ * INTERNAL ACTION ONLY: Cannot be invoked by external clients directly.
  */
-export const deleteFileByUrl = action({
+export const deleteFileByUrl = internalAction({
   args: { url: v.string() },
   handler: async (_ctx, args) => {
     if (!r2PublicUrl || !args.url.startsWith(r2PublicUrl)) {

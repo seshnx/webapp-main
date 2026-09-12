@@ -170,12 +170,33 @@ export const updateStudio = mutation({
 });
 
 export const deleteStudio = mutation({
-  args: { studioId: v.id("studios") },
+  args: {
+    studioId: v.id("studios"),
+    clerkId: v.optional(v.string()),
+    secret: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const studio = await ctx.db.get(args.studioId);
 
     if (!studio) {
       throw new Error("Studio not found");
+    }
+
+    const expectedSecret = process.env.CONVEX_WEBHOOK_SECRET || process.env.CLERK_WEBHOOK_SECRET;
+    const isWebhook = args.secret && expectedSecret && args.secret === expectedSecret;
+
+    if (!isWebhook) {
+      if (!args.clerkId) {
+        throw new Error("Unauthorized: clerkId required to verify studio ownership");
+      }
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId!))
+        .first();
+
+      if (!user || studio.ownerId !== user._id) {
+        throw new Error("Unauthorized: You do not own this studio");
+      }
     }
 
     await ctx.db.patch(args.studioId, {
@@ -286,8 +307,25 @@ export const updateRoom = mutation({
 });
 
 export const deleteRoom = mutation({
-  args: { roomId: v.id("rooms") },
+  args: {
+    roomId: v.id("rooms"),
+    clerkId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    const room = await ctx.db.get(args.roomId);
+    if (!room) throw new Error("Room not found");
+
+    if (args.clerkId) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId!))
+        .first();
+      const studio = await ctx.db.get(room.studioId);
+      if (!user || !studio || studio.ownerId !== user._id) {
+        throw new Error("Unauthorized: You do not own the studio this room belongs to");
+      }
+    }
+
     await ctx.db.patch(args.roomId, { isActive: false });
     return { success: true };
   },
@@ -551,6 +589,25 @@ export const createBooking = mutation({
       updatedAt: now,
     });
 
+    // Notify the studio owner of the incoming booking request
+    const studio = await ctx.db.get(args.studioId);
+    if (studio && studio.ownerId) {
+      const clientName = user.displayName || user.profileName || `${user.firstName || ''} ${user.lastName || ''}`.trim() || "A client";
+      await ctx.db.insert("notifications", {
+        userId: studio.ownerId,
+        type: "booking_request",
+        title: "New Studio Booking Request",
+        message: `${clientName} requested a booking at ${studio.name || 'your studio'} for ${args.date || 'an upcoming date'}`,
+        actorId: user._id,
+        actorName: clientName,
+        actorPhoto: user.avatarUrl,
+        targetId: bookingId,
+        targetType: "booking",
+        read: false,
+        createdAt: now,
+      });
+    }
+
     return { success: true, bookingId, internalId: bookingId_internal };
   },
 });
@@ -619,6 +676,22 @@ export const updateBookingStatus = mutation({
 
     await ctx.db.patch(bookings[0]._id, updateData);
 
+    const studio = await ctx.db.get(bookings[0].studioId);
+    if (bookings[0].clientId) {
+      await ctx.db.insert("notifications", {
+        userId: bookings[0].clientId,
+        type: "booking_status_update",
+        title: `Booking ${args.status}`,
+        message: `Your booking at ${studio?.name || 'the studio'} status is now '${args.status}'.`,
+        actorId: studio?.ownerId || bookings[0].clientId,
+        actorName: studio?.name || "Studio",
+        targetId: args.bookingId,
+        targetType: "booking",
+        read: false,
+        createdAt: Date.now(),
+      });
+    }
+
     return { success: true };
   },
 });
@@ -653,6 +726,22 @@ export const confirmBooking = mutation({
     }
 
     await ctx.db.patch(bookings[0]._id, updateData);
+
+    const studio = await ctx.db.get(bookings[0].studioId);
+    if (bookings[0].clientId) {
+      await ctx.db.insert("notifications", {
+        userId: bookings[0].clientId,
+        type: "booking_confirmed",
+        title: "Booking Confirmed!",
+        message: `Your session at ${studio?.name || 'the studio'} has been confirmed!`,
+        actorId: studio?.ownerId || bookings[0].clientId,
+        actorName: studio?.name || "Studio",
+        targetId: args.bookingId,
+        targetType: "booking",
+        read: false,
+        createdAt: Date.now(),
+      });
+    }
 
     return { success: true };
   },
@@ -789,12 +878,21 @@ export const updatePaymentStatus = mutation({
   args: {
     paymentId: v.id("bookingPayments"),
     status: v.string(),
+    secret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId);
 
     if (!payment) {
       throw new Error("Payment not found");
+    }
+
+    // Only allow marking as 'Completed' or 'Refunded' if authorized by webhook or admin secret
+    if (args.status === "Completed" || args.status === "Refunded") {
+      const expectedSecret = process.env.CONVEX_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+      if (!expectedSecret || args.secret !== expectedSecret) {
+        throw new Error("Unauthorized: Marking payment as Completed requires webhook authorization");
+      }
     }
 
     const updateData: any = {
@@ -816,10 +914,19 @@ export const updateBookingPayment = mutation({
   args: {
     paymentId: v.id("bookingPayments"),
     status: v.string(),
+    secret: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const payment = await ctx.db.get(args.paymentId);
     if (!payment) throw new Error("Payment not found");
+
+    // Only allow marking as 'Completed' or 'Refunded' if authorized by webhook or admin secret
+    if (args.status === "Completed" || args.status === "Refunded") {
+      const expectedSecret = process.env.CONVEX_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+      if (!expectedSecret || args.secret !== expectedSecret) {
+        throw new Error("Unauthorized: Marking payment as Completed requires webhook authorization");
+      }
+    }
 
     const updateData: any = { status: args.status, updatedAt: Date.now() };
     if (args.status === "Completed") updateData.completedAt = Date.now();

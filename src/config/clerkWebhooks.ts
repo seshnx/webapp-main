@@ -15,7 +15,7 @@
  *
  * Environment Variables Required:
  * - CLERK_WEBHOOK_SECRET: Secret for verifying webhook signatures
- * - VITE_NEON_DATABASE_URL: Neon connection string
+ * - DATABASE_URL: Neon connection string
  */
 
 // Note: crypto is a Node.js module. For frontend use, use SubtleCrypto API

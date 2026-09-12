@@ -169,6 +169,43 @@ export default function SeshFxStore({ user, userData, tokenBalance }: SeshFxStor
 
     return (
         <div className="pb-32">
+            {/* Header & Stats Banner */}
+            <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl p-8 mb-8 text-white shadow-xl relative overflow-hidden">
+                <div className="relative z-10 flex flex-col md:flex-row justify-between items-end gap-6">
+                    <div>
+                        <div className="flex items-center gap-2 text-yellow-400 font-bold mb-2 uppercase tracking-widest text-xs">
+                            <Zap size={14} fill="currentColor"/> SeshFx Sound Lab
+                        </div>
+                        <h1 className="text-3xl sm:text-4xl font-extrabold mb-2">Discover Your Sound</h1>
+                        <p className="text-slate-400 max-w-lg text-sm">
+                            The premier destination for high-quality audio samples, custom synth presets, and stems from verified sound designers.
+                        </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-3 w-full md:w-auto">
+                        <div className="bg-white/10 backdrop-blur-md border border-white/10 px-5 py-3 rounded-2xl flex items-center gap-4 w-full md:w-auto justify-between md:justify-start">
+                            <div className="text-right">
+                                <div className="text-xs text-slate-300 font-medium">My Balance</div>
+                                <div className="text-2xl font-bold text-yellow-400 flex items-center gap-1">{tokenBalance || 0} <span className="text-sm text-white font-normal">TK</span></div>
+                            </div>
+                            <button 
+                                onClick={() => {
+                                    const paymentsBtn = document.querySelector('[data-nav="payments"]') as HTMLButtonElement | null;
+                                    if (paymentsBtn) paymentsBtn.click();
+                                }} 
+                                className="bg-yellow-500 text-black p-2 rounded-xl hover:bg-yellow-400 transition"
+                                title="Top Up Tokens"
+                            >
+                                <Plus size={18}/>
+                            </button>
+                        </div>
+                        <button onClick={() => setShowSellModal(true)} className="w-full md:w-auto bg-brand-blue hover:bg-blue-600 text-white px-6 py-2.5 rounded-xl font-bold shadow-lg flex items-center justify-center gap-2 transition">
+                            <Upload size={18} /> List Sound Pack
+                        </button>
+                    </div>
+                </div>
+                <div className="absolute top-0 right-0 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+            </div>
+
             {/* Filters Bar */}
             <div className="flex flex-col md:flex-row gap-4 mb-6">
                 <div className="flex gap-2 overflow-x-auto pb-2 md:pb-0 scrollbar-hide">

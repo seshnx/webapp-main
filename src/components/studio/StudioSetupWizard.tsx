@@ -266,23 +266,33 @@ export default function StudioSetupWizard({
             </div>
           )}
 
-          <button
-            onClick={handleRetryOrgLink}
-            disabled={creating}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-white font-medium transition bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-lg shadow-amber-500/25"
-          >
-            {creating ? (
-              <>
-                <Loader2 size={20} className="animate-spin" />
-                Linking Organization...
-              </>
-            ) : (
-              <>
-                <RefreshCw size={18} />
-                Link Organization
-              </>
-            )}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <button
+              onClick={handleRetryOrgLink}
+              disabled={creating}
+              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-white font-medium transition bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-lg shadow-amber-500/25 disabled:opacity-50"
+            >
+              {creating ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  Linking Organization...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={18} />
+                  Link Organization
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => onComplete?.()}
+              disabled={creating}
+              className="px-6 py-3 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-100 dark:hover:bg-gray-800 transition text-center"
+            >
+              Go to Dashboard
+            </button>
+          </div>
         </div>
       </div>
     );

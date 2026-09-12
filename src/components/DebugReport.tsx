@@ -18,8 +18,8 @@ interface ReportData {
         nodeEnv: string;
         isDev: boolean;
         isProd: boolean;
-        baseUrl: string;
-        anonKey: string;
+        convexUrl: string;
+        apiEndpoint: string;
     };
     browser: {
         userAgent: string;
@@ -44,10 +44,11 @@ interface ReportData {
         confirmedAt: string;
     };
     userData: any;
-    supabase: {
+    backend: {
+        provider: string;
+        convexUrl: string;
+        siteUrl: string;
         initialized: boolean;
-        authUrl: string;
-        authKey: string;
     };
     session: {
         exists: boolean;
@@ -81,8 +82,8 @@ export default function DebugReport({ user, userData }: DebugReportProps) {
                 nodeEnv: import.meta.env.MODE,
                 isDev: import.meta.env.DEV,
                 isProd: import.meta.env.PROD,
-                baseUrl: import.meta.env.VITE_SUPABASE_URL ? 'Set' : 'Missing',
-                anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY ? 'Set' : 'Missing',
+                convexUrl: import.meta.env.VITE_CONVEX_URL ? 'Set' : 'Missing',
+                apiEndpoint: import.meta.env.VITE_API_ENDPOINT ? 'Set' : 'Missing',
             },
             browser: {
                 userAgent: navigator.userAgent,
@@ -99,65 +100,34 @@ export default function DebugReport({ user, userData }: DebugReportProps) {
                 userExists: !!user,
                 userDataExists: !!userData,
                 userId: user?.id || 'N/A',
-                userEmail: user?.email || 'N/A',
-                userMetadata: user?.user_metadata || {},
-                appMetadata: user?.app_metadata || {},
-                createdAt: user?.created_at || 'N/A',
-                lastSignIn: user?.last_sign_in_at || 'N/A',
-                confirmedAt: user?.confirmed_at || 'N/A',
+                userEmail: user?.primaryEmailAddress?.emailAddress || user?.email || 'N/A',
+                userMetadata: user?.unsafeMetadata || user?.user_metadata || {},
+                appMetadata: user?.publicMetadata || user?.app_metadata || {},
+                createdAt: user?.createdAt ? String(user.createdAt) : 'N/A',
+                lastSignIn: user?.lastSignInAt ? String(user.lastSignInAt) : 'N/A',
+                confirmedAt: 'N/A',
             },
             userData: userData || null,
-            supabase: {
-                initialized: !!(window as any).supabase,
-                authUrl: (window as any).supabase?.supabaseUrl || 'N/A',
-                authKey: (window as any).supabase?.supabaseKey ? 'Set' : 'Missing',
+            backend: {
+                provider: 'Convex Realtime Database',
+                convexUrl: import.meta.env.VITE_CONVEX_URL || 'N/A',
+                siteUrl: import.meta.env.VITE_CONVEX_SITE_URL || 'N/A',
+                initialized: !!import.meta.env.VITE_CONVEX_URL,
             },
-            session: null,
-            profile: null,
+            session: user ? {
+                exists: true,
+                accessToken: 'Managed by Clerk',
+                refreshToken: 'Managed by Clerk',
+                expiresAt: 'Active',
+                error: null,
+            } : null,
+            profile: userData ? {
+                exists: true,
+                data: userData,
+                error: null,
+            } : null,
             errors: [],
         };
-
-        // Test Supabase connection
-        // TODO: Migrate to Neon/Convex - Supabase legacy code
-        try {
-            const supabase = (window as any).supabase;
-            if (supabase && user?.id) {
-                // Get current session
-                const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-                reportData.session = {
-                    exists: !!sessionData?.session,
-                    accessToken: sessionData?.session?.access_token ? 'Present' : 'Missing',
-                    refreshToken: sessionData?.session?.refresh_token ? 'Present' : 'Missing',
-                    expiresAt: sessionData?.session?.expires_at || 'N/A',
-                    error: sessionError?.message || null,
-                };
-
-                // Get profile from database
-                const { data: profileData, error: profileError } = await supabase
-                    .from('profiles')
-                    .select('*')
-                    .eq('id', user.id)
-                    .maybeSingle();
-
-                reportData.profile = {
-                    exists: !!profileData,
-                    data: profileData || null,
-                    error: profileError?.message || null,
-                };
-
-                // Test a simple query
-                const { error: testError } = await supabase
-                    .from('profiles')
-                    .select('id')
-                    .limit(1);
-
-                if (testError) {
-                    reportData.errors.push(`Database query test failed: ${testError.message}`);
-                }
-            }
-        } catch (err: any) {
-            reportData.errors.push(`Error during checks: ${err.message}`);
-        }
 
         setReport(reportData);
         setLoading(false);
@@ -272,12 +242,12 @@ export default function DebugReport({ user, userData }: DebugReportProps) {
                             <span className="dark:text-gray-300">Mode: {report.environment.nodeEnv}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <StatusIcon status={report.environment.baseUrl} />
-                            <span className="dark:text-gray-300">Supabase URL: {report.environment.baseUrl}</span>
+                            <StatusIcon status={report.environment.convexUrl} />
+                            <span className="dark:text-gray-300">Convex URL: {report.environment.convexUrl}</span>
                         </div>
                         <div className="flex items-center gap-2">
-                            <StatusIcon status={report.environment.anonKey} />
-                            <span className="dark:text-gray-300">Supabase Key: {report.environment.anonKey}</span>
+                            <StatusIcon status={report.environment.apiEndpoint} />
+                            <span className="dark:text-gray-300">API Endpoint: {report.environment.apiEndpoint}</span>
                         </div>
                     </div>
                 </div>

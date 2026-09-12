@@ -459,3 +459,19 @@ html[style*="font-size: 20px"] {
 .font-size-xlarge {
   font-size: 20px !important;
 }
+
+/* Global Print Styles for Pitch Deck & Presentation PDF Export */
+@media print {
+  html, body, #root, #root > div {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background-color: #1a1d21 !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+}

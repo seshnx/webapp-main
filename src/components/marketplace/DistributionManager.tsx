@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Disc, Globe, Edit2, Trash2, Music } from 'lucide-react';
+import { Plus, Disc, Globe, Edit2, Trash2, Music, DollarSign, BarChart3 } from 'lucide-react';
 import { useDistributionReleases, useMarketplaceMutations } from '../../hooks/useMarketplace';
 import ReleaseBuilder from '../distribution/ReleaseBuilder';
+import RoyaltyManager from '../distribution/RoyaltyManager';
+import AnalyticsDashboard from '../distribution/AnalyticsDashboard';
 import type { UserData } from '../../types';
 
 /**
@@ -67,6 +69,7 @@ export default function DistributionManager({ user, userData }: DistributionMana
 
     const [view, setView] = useState<'list' | 'create'>('list');
     const [editingRelease, setEditingRelease] = useState<DistributionRelease | null>(null);
+    const [activeSection, setActiveSection] = useState<'releases' | 'royalties' | 'analytics'>('releases');
 
     // Transform raw releases
     const releases: DistributionRelease[] = (rawReleases || []).map((r: any) => ({
@@ -121,16 +124,64 @@ export default function DistributionManager({ user, userData }: DistributionMana
                         Manage your catalog across Spotify, Apple Music, and 150+ stores.
                     </p>
                 </div>
+                {activeSection === 'releases' && (
+                    <button
+                        onClick={() => setView('create')}
+                        className="bg-brand-blue text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition flex items-center gap-2 shadow-lg hover:shadow-blue-500/20"
+                    >
+                        <Plus size={20} /> New Release
+                    </button>
+                )}
+            </div>
+
+            {/* Subtab Navigation */}
+            <div className="flex gap-2 p-1.5 bg-gray-100 dark:bg-gray-800 rounded-2xl w-fit">
                 <button
-                    onClick={() => setView('create')}
-                    className="bg-brand-blue text-white px-6 py-3 rounded-xl font-bold hover:bg-blue-600 transition flex items-center gap-2 shadow-lg hover:shadow-blue-500/20"
+                    onClick={() => setActiveSection('releases')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                        activeSection === 'releases'
+                            ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-xs'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
                 >
-                    <Plus size={20} /> New Release
+                    <Disc size={15} />
+                    <span>Catalog Releases ({releases.length})</span>
+                </button>
+                <button
+                    onClick={() => setActiveSection('royalties')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                        activeSection === 'royalties'
+                            ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-xs'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                >
+                    <DollarSign size={15} />
+                    <span>Royalty Statements</span>
+                </button>
+                <button
+                    onClick={() => setActiveSection('analytics')}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition ${
+                        activeSection === 'analytics'
+                            ? 'bg-white dark:bg-[#2c2e36] text-brand-blue shadow-xs'
+                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                    }`}
+                >
+                    <BarChart3 size={15} />
+                    <span>Streaming Analytics</span>
                 </button>
             </div>
 
-            {/* Release List */}
-            <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 overflow-hidden min-h-[400px]">
+            {/* Subtab Content */}
+            {activeSection === 'royalties' && (
+                <RoyaltyManager user={user} userData={userData} />
+            )}
+
+            {activeSection === 'analytics' && (
+                <AnalyticsDashboard user={user} />
+            )}
+
+            {activeSection === 'releases' && (
+                <div className="bg-white dark:bg-[#2c2e36] rounded-2xl border dark:border-gray-700 overflow-hidden min-h-[400px]">
                 {loading ? (
                     <div className="p-12 text-center text-gray-500">Loading catalog...</div>
                 ) : releases.length === 0 ? (
@@ -210,6 +261,7 @@ export default function DistributionManager({ user, userData }: DistributionMana
                     </div>
                 )}
             </div>
+            )}
         </div>
     );
 }

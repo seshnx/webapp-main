@@ -1,5 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Users, Plus, Search, Mail, Phone, Building, Calendar, Edit2, Trash2 } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
+import { Users, Plus, Search, Mail, Phone, Building, Calendar, Edit2, Trash2, Loader2, UserCheck } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { CLIENT_TYPES } from '../../config/constants';
 import ClientDetailsModal from './clients/ClientDetailsModal';
 
@@ -8,6 +12,7 @@ import ClientDetailsModal from './clients/ClientDetailsModal';
  */
 interface Client {
     id: string;
+    _id?: string;
     name: string;
     email?: string;
     phone?: string;
@@ -20,6 +25,8 @@ interface Client {
     first_booking_date?: string | null;
     last_booking_date?: string | null;
     created_at: string;
+    avatarUrl?: string;
+    userId?: string;
 }
 
 /**
@@ -28,29 +35,55 @@ interface Client {
 export interface StudioClientsProps {
     user?: any;
     userData?: any;
+    studio?: any;
 }
 
 /**
  * StudioClients - Client database and CRM management
- * Phase 1: Full CRUD functionality with search, filter, add, edit, delete
+ * Powered by reactive Convex studioClients table with full CRUD
  */
-export default function StudioClients({ user, userData }: StudioClientsProps) {
-    const [clients, setClients] = useState<Client[]>([]);
-    const [filteredClients, setFilteredClients] = useState<Client[]>([]);
-    const [loading, setLoading] = useState<boolean>(true);
+export default function StudioClients({ user, userData, studio }: StudioClientsProps) {
+    const studioId = studio?._id;
+    const convexClients = useQuery(
+        api.studioManager.getClientsByStudio,
+        studioId ? { studioId } : "skip"
+    );
+
+    const createClientMutation = useMutation(api.studioManager.createClient);
+    const updateClientMutation = useMutation(api.studioManager.updateClient);
+    const deleteClientMutation = useMutation(api.studioManager.deleteClient);
+
     const [searchTerm, setSearchTerm] = useState<string>('');
     const [filterType, setFilterType] = useState<string>('all');
     const [showClientModal, setShowClientModal] = useState<boolean>(false);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
     const [modalMode, setModalMode] = useState<'view' | 'edit' | 'add'>('view');
 
-    // Fetch clients on mount
-    useEffect(() => {
-        fetchClients();
-    }, []);
+    // Normalize Convex clients
+    const clients: Client[] = useMemo(() => {
+        if (!convexClients) return [];
+        return convexClients.map((c: any) => ({
+            id: c._id,
+            _id: c._id,
+            name: c.name || 'Unnamed Client',
+            email: c.email || '',
+            phone: c.phone || '',
+            company: c.company || null,
+            client_type: (c.clientType?.toLowerCase() === 'vip' ? 'vip' : c.clientType?.toLowerCase() === 'prospect' ? 'prospect' : 'regular') as 'vip' | 'regular' | 'prospect',
+            tags: c.tags || [],
+            notes: c.notes || '',
+            total_bookings: c.totalBookings || 0,
+            total_spent: c.totalRevenue || 0,
+            first_booking_date: c.firstBookingDate || null,
+            last_booking_date: c.lastBookingDate || null,
+            created_at: new Date(c.createdAt || Date.now()).toISOString(),
+            avatarUrl: c.avatarUrl,
+            userId: c.userId,
+        }));
+    }, [convexClients]);
 
     // Filter clients based on search and type
-    useEffect(() => {
+    const filteredClients = useMemo(() => {
         let filtered = clients;
 
         // Filter by type
@@ -68,72 +101,8 @@ export default function StudioClients({ user, userData }: StudioClientsProps) {
             );
         }
 
-        setFilteredClients(filtered);
+        return filtered;
     }, [clients, searchTerm, filterType]);
-
-    const fetchClients = async () => {
-        setLoading(true);
-        try {
-            // TODO: Replace with actual API call
-            // const response = await fetch(`/api/studio-ops/clients?studioId=${userData?.id}`);
-            // const data = await response.json();
-
-            // Mock data for now
-            const mockClients: Client[] = [
-                {
-                    id: '1',
-                    name: 'John Doe',
-                    email: 'john@example.com',
-                    phone: '555-0101',
-                    company: 'Doe Productions',
-                    client_type: 'vip',
-                    tags: ['recording', 'mixing'],
-                    notes: 'Regular weekly sessions',
-                    total_bookings: 24,
-                    total_spent: 12000,
-                    first_booking_date: '2024-01-15',
-                    last_booking_date: '2025-01-10',
-                    created_at: '2024-01-15T10:00:00Z'
-                },
-                {
-                    id: '2',
-                    name: 'Jane Smith',
-                    email: 'jane@example.com',
-                    phone: '555-0102',
-                    company: 'Smith Music LLC',
-                    client_type: 'regular',
-                    tags: ['recording'],
-                    notes: 'Prefers morning sessions',
-                    total_bookings: 8,
-                    total_spent: 3200,
-                    first_booking_date: '2024-06-01',
-                    last_booking_date: '2024-12-20',
-                    created_at: '2024-06-01T14:30:00Z'
-                },
-                {
-                    id: '3',
-                    name: 'Bob Johnson',
-                    email: 'bob@potential.com',
-                    phone: '555-0103',
-                    company: null,
-                    client_type: 'prospect',
-                    tags: ['inquiry'],
-                    notes: 'Interested in booking for February',
-                    total_bookings: 0,
-                    total_spent: 0,
-                    first_booking_date: null,
-                    last_booking_date: null,
-                    created_at: '2025-01-05T09:00:00Z'
-                }
-            ];
-
-            setClients(mockClients);
-        } catch (error) {
-            console.error('Error fetching clients:', error);
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleAddClient = () => {
         setSelectedClient(null);
@@ -147,43 +116,66 @@ export default function StudioClients({ user, userData }: StudioClientsProps) {
         setShowClientModal(true);
     };
 
-    const handleViewClient = (client: Client) => {
-        setSelectedClient(client);
-        setModalMode('view');
-        setShowClientModal(true);
-    };
-
     const handleDeleteClient = async (clientId: string) => {
         if (!confirm('Are you sure you want to delete this client?')) return;
-
+        const toastId = toast.loading('Deleting client...');
         try {
-            const response = await fetch(`/api/studio-ops/clients/${clientId}`, {
-                method: 'DELETE'
+            const callerClerkId = user?.id || userData?.clerkId;
+            await deleteClientMutation({
+                clerkId: callerClerkId,
+                clientId: clientId as Id<"studioClients">,
             });
-
-            if (response.ok) {
-                setClients(clients.filter(client => client.id !== clientId));
-            } else {
-                const data = await response.json();
-                alert(`Error: ${data.error || 'Failed to delete client'}`);
-            }
-        } catch (error) {
-            console.error('Error deleting client:', error);
-            // Fallback to mock deletion
-            setClients(clients.filter(client => client.id !== clientId));
+            toast.success('Client removed', { id: toastId });
+        } catch (error: any) {
+            console.error('Delete client error:', error);
+            toast.error(error.message || 'Failed to delete client', { id: toastId });
         }
     };
 
-    const handleClientUpdate = (updatedClient: Client) => {
-        if (modalMode === 'add') {
-            setClients([...clients, updatedClient]);
-        } else if (modalMode === 'edit') {
-            setClients(clients.map(client =>
-                client.id === updatedClient.id ? updatedClient : client
-            ));
+    const handleClientSave = async (formData: any) => {
+        if (!studioId) {
+            toast.error('No active studio found');
+            return;
         }
-        setShowClientModal(false);
-        setSelectedClient(null);
+
+        const toastId = toast.loading(modalMode === 'add' ? 'Adding client...' : 'Saving client...');
+        try {
+            const callerClerkId = user?.id || userData?.clerkId;
+
+            if (modalMode === 'add') {
+                await createClientMutation({
+                    clerkId: callerClerkId,
+                    studioId,
+                    userId: formData.client_id ? (formData.client_id as Id<"users">) : undefined,
+                    name: formData.name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    company: formData.company,
+                    clientType: formData.client_type || 'regular',
+                    notes: formData.notes,
+                });
+                toast.success('Client added successfully!', { id: toastId });
+            } else if (selectedClient) {
+                await updateClientMutation({
+                    clerkId: callerClerkId,
+                    clientId: (selectedClient._id || selectedClient.id) as Id<"studioClients">,
+                    userId: formData.client_id ? (formData.client_id as Id<"users">) : undefined,
+                    name: formData.name,
+                    email: formData.email,
+                    phone: formData.phone,
+                    company: formData.company,
+                    clientType: formData.client_type,
+                    notes: formData.notes,
+                });
+                toast.success('Client updated successfully!', { id: toastId });
+            }
+
+            setShowClientModal(false);
+            setSelectedClient(null);
+        } catch (error: any) {
+            console.error('Failed to save client:', error);
+            toast.error(error.message || 'Failed to save client', { id: toastId });
+        }
     };
 
     const getClientTypeColor = (type: string): string => {
@@ -206,6 +198,8 @@ export default function StudioClients({ user, userData }: StudioClientsProps) {
         totalRevenue: clients.reduce((sum, c) => sum + (c.total_spent || 0), 0)
     };
 
+    const isLoading = convexClients === undefined;
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -224,7 +218,7 @@ export default function StudioClients({ user, userData }: StudioClientsProps) {
                     </div>
                     <button
                         onClick={handleAddClient}
-                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                        className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors shadow-sm"
                     >
                         <Plus size={18} />
                         Add Client
@@ -233,82 +227,130 @@ export default function StudioClients({ user, userData }: StudioClientsProps) {
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">
-                        <div className="text-2xl font-bold dark:text-white">{stats.total}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Total Clients</div>
+                    <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                        <div className="text-sm text-gray-500 dark:text-gray-400">Total Clients</div>
+                        <div className="text-2xl font-bold dark:text-white mt-1">{stats.total}</div>
                     </div>
-                    <div className="bg-purple-50 dark:bg-purple-900/20 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.vip}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">VIP</div>
+                    <div className="bg-purple-50 dark:bg-purple-900/20 p-4 rounded-lg">
+                        <div className="text-sm text-purple-600 dark:text-purple-400">VIP Clients</div>
+                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">{stats.vip}</div>
                     </div>
-                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.regular}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Regular</div>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                        <div className="text-sm text-blue-600 dark:text-blue-400">Regular</div>
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{stats.regular}</div>
                     </div>
-                    <div className="bg-yellow-50 dark:bg-yellow-900/20 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">{stats.prospect}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Prospects</div>
+                    <div className="bg-amber-50 dark:bg-amber-900/20 p-4 rounded-lg">
+                        <div className="text-sm text-amber-600 dark:text-amber-400">Prospects</div>
+                        <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{stats.prospect}</div>
                     </div>
-                    <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
-                        <div className="text-2xl font-bold text-green-600 dark:text-green-400">{formatCurrency(stats.totalRevenue)}</div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Total Revenue</div>
+                    <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                        <div className="text-sm text-green-600 dark:text-green-400">Total Revenue</div>
+                        <div className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
+                            {formatCurrency(stats.totalRevenue)}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Search and Filter */}
+            {/* Filter and Search Bar */}
             <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-4">
                 <div className="flex flex-col md:flex-row gap-4">
-                    {/* Search */}
                     <div className="flex-1 relative">
-                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
                         <input
                             type="text"
-                            placeholder="Search clients by name, email, or company..."
+                            placeholder="Search by name, email, or company..."
                             value={searchTerm}
-                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchTerm(e.target.value)}
-                            className="w-full pl-10 pr-4 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2 border dark:border-gray-700 rounded-lg dark:bg-gray-800 dark:text-white"
                         />
                     </div>
-
-                    {/* Filter */}
-                    <select
-                        value={filterType}
-                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setFilterType(e.target.value)}
-                        className="px-4 py-2 border dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    >
-                        <option value="all">All Types</option>
-                        {CLIENT_TYPES.map(type => (
-                            <option key={type.id} value={type.id}>{type.label}</option>
+                    <div className="flex gap-2">
+                        {['all', 'vip', 'regular', 'prospect'].map(type => (
+                            <button
+                                key={type}
+                                onClick={() => setFilterType(type)}
+                                className={`px-4 py-2 rounded-lg font-medium transition-colors capitalize ${
+                                    filterType === type
+                                        ? 'bg-purple-600 text-white'
+                                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 hover:bg-gray-200'
+                                }`}
+                            >
+                                {type}
+                            </button>
                         ))}
-                    </select>
+                    </div>
                 </div>
             </div>
 
-            {/* Client List */}
+            {/* Clients List */}
             <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden">
-                {loading ? (
-                    <div className="p-8 text-center text-gray-600 dark:text-gray-400">
-                        Loading clients...
+                {isLoading ? (
+                    <div className="p-12 text-center flex flex-col items-center justify-center">
+                        <Loader2 className="animate-spin text-purple-600 mb-3" size={32} />
+                        <p className="text-gray-500 dark:text-gray-400">Loading studio clients...</p>
                     </div>
                 ) : filteredClients.length === 0 ? (
-                    <div className="p-8 text-center text-gray-600 dark:text-gray-400">
-                        {searchTerm || filterType !== 'all' ? 'No clients match your search' : 'No clients yet. Add your first client to get started.'}
+                    <div className="p-12 text-center">
+                        <div className="w-16 h-16 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Users size={32} className="text-purple-600 dark:text-purple-400" />
+                        </div>
+                        <h3 className="text-lg font-semibold dark:text-white mb-1">
+                            {searchTerm || filterType !== 'all' ? 'No matching clients found' : 'No clients in database yet'}
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto mb-6">
+                            {searchTerm || filterType !== 'all'
+                                ? 'Try adjusting your search criteria or filter to see more clients.'
+                                : 'Add your first studio client or search registered platform users to start tracking lifetime value and bookings.'}
+                        </p>
+                        <button
+                            onClick={handleAddClient}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg transition-colors"
+                        >
+                            <Plus size={18} />
+                            Add First Client
+                        </button>
                     </div>
                 ) : (
                     <div className="divide-y dark:divide-gray-700">
                         {filteredClients.map((client) => (
-                            <div key={client.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                            <div
+                                key={client.id}
+                                className="p-6 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                            >
                                 <div className="flex items-start justify-between">
                                     <div className="flex-1">
                                         <div className="flex items-center gap-3 mb-2">
-                                            <h3 className="text-lg font-semibold dark:text-white">{client.name}</h3>
-                                            <span className={`px-2 py-1 text-xs font-medium rounded-full bg-${getClientTypeColor(client.client_type)}-100 dark:bg-${getClientTypeColor(client.client_type)}-900/30 text-${getClientTypeColor(client.client_type)}-600 dark:text-${getClientTypeColor(client.client_type)}-400`}>
-                                                {CLIENT_TYPES.find(t => t.id === client.client_type)?.label || 'Unknown'}
-                                            </span>
+                                            <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-300 font-bold flex items-center justify-center overflow-hidden">
+                                                {client.avatarUrl ? (
+                                                    <img src={client.avatarUrl} alt={client.name} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    client.name.charAt(0).toUpperCase()
+                                                )}
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <h3 className="text-lg font-semibold dark:text-white">
+                                                        {client.name}
+                                                    </h3>
+                                                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium uppercase ${
+                                                        client.client_type === 'vip' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+                                                        client.client_type === 'prospect' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300' :
+                                                        'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                                                    }`}>
+                                                        {client.client_type}
+                                                    </span>
+                                                    {client.userId && (
+                                                        <span className="flex items-center gap-1 text-[11px] bg-green-100 dark:bg-green-950/40 text-green-700 dark:text-green-300 px-2 py-0.5 rounded-full" title="Platform Member">
+                                                            <UserCheck size={12} />
+                                                            Verified Member
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm text-gray-600 dark:text-gray-400">
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600 dark:text-gray-400 mt-3">
                                             {client.email && (
                                                 <div className="flex items-center gap-2">
                                                     <Mail size={14} />
@@ -377,8 +419,8 @@ export default function StudioClients({ user, userData }: StudioClientsProps) {
                         setShowClientModal(false);
                         setSelectedClient(null);
                     }}
-                    onUpdate={handleClientUpdate}
-                    studioId={userData?.id}
+                    onUpdate={handleClientSave}
+                    studioId={studioId}
                     mode={modalMode}
                 />
             )}

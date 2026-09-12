@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import {
     Clock, Calendar, Save, Loader2, Plus, Trash2,
     Moon, Sun, AlertCircle, X, Copy
@@ -84,39 +86,71 @@ const DEFAULT_HOURS: OperatingHours = {
 /**
  * StudioAvailability - Operating hours and blackout dates management
  */
-export default function StudioAvailability({ user, userData, onUpdate }: StudioAvailabilityProps) {
-    const [hours, setHours] = useState<OperatingHours>(userData?.operatingHours || DEFAULT_HOURS);
+export default function StudioAvailability({ user, userData, studio, onUpdate }: StudioAvailabilityProps) {
+    const studioId = studio?._id;
+    const updateStudioMutation = useMutation(api.studios.updateStudio);
+    const addBlockedDateMutation = useMutation(api.sbookings.addBlockedDate);
+    const removeBlockedDateMutation = useMutation(api.sbookings.removeBlockedDate);
+    const convexBlockedDates = useQuery(api.sbookings.getBlockedDates, studioId ? { studioId } : "skip");
+
+    const [hours, setHours] = useState<OperatingHours>(() => {
+        if (studio?.hours) {
+            try {
+                const parsed = typeof studio.hours === 'string' ? JSON.parse(studio.hours) : studio.hours;
+                if (parsed && typeof parsed === 'object') return parsed;
+            } catch {}
+        }
+        return userData?.operatingHours || DEFAULT_HOURS;
+    });
+
     const [blackoutDates, setBlackoutDates] = useState<BlackoutDate[]>(userData?.blackoutDates || []);
     const [saving, setSaving] = useState<boolean>(false);
     const [newBlackout, setNewBlackout] = useState<NewBlackoutForm>({ start: '', end: '', reason: '' });
     const [showAddBlackout, setShowAddBlackout] = useState<boolean>(false);
 
+    // Sync studio hours if updated
+    useEffect(() => {
+        if (studio?.hours) {
+            try {
+                const parsed = typeof studio.hours === 'string' ? JSON.parse(studio.hours) : studio.hours;
+                if (parsed && typeof parsed === 'object') {
+                    setHours(parsed);
+                }
+            } catch {}
+        }
+    }, [studio?.hours]);
+
+    // Sync blackout dates from Convex
+    useEffect(() => {
+        if (convexBlockedDates) {
+            setBlackoutDates(convexBlockedDates.map((b: any) => ({
+                id: b._id,
+                _id: b._id,
+                start: b.date,
+                end: b.date,
+                reason: b.reason || 'Blocked',
+            })));
+        }
+    }, [convexBlockedDates]);
+
     const handleSave = async (): Promise<void> => {
         setSaving(true);
         const toastId = toast.loading('Saving availability...');
-        const userId = userData?.id || user?.id || user?.uid;
 
         try {
-            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    operatingHours: hours,
-                    blackoutDates: blackoutDates
-                })
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to save');
+            if (studioId) {
+                const callerClerkId = user?.id || userData?.clerkId;
+                await updateStudioMutation({
+                    clerkId: callerClerkId,
+                    studioId,
+                    hours: JSON.stringify(hours),
+                });
             }
-
             toast.success('Availability saved!', { id: toastId });
             if (onUpdate) onUpdate({ operatingHours: hours, blackoutDates });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Save failed:', error);
-            toast.error('Failed to save', { id: toastId });
+            toast.error(error.message || 'Failed to save', { id: toastId });
         } finally {
             setSaving(false);
         }
@@ -150,26 +184,43 @@ export default function StudioAvailability({ user, userData, onUpdate }: StudioA
         toast.success('Copied to all weekdays');
     };
 
-    const addBlackoutDate = (): void => {
+    const addBlackoutDate = async (): Promise<void> => {
         if (!newBlackout.start) {
             toast.error('Start date is required');
             return;
         }
+        if (!studioId) {
+            toast.error('No active studio found');
+            return;
+        }
 
-        const blackout: BlackoutDate = {
-            id: Date.now().toString(),
-            start: newBlackout.start,
-            end: newBlackout.end || newBlackout.start,
-            reason: newBlackout.reason || 'Blocked'
-        };
-
-        setBlackoutDates([...blackoutDates, blackout]);
-        setNewBlackout({ start: '', end: '', reason: '' });
-        setShowAddBlackout(false);
+        const toastId = toast.loading('Adding blackout date...');
+        try {
+            await addBlockedDateMutation({
+                studioId,
+                date: newBlackout.start,
+                reason: newBlackout.reason || 'Closed / Maintenance',
+            });
+            toast.success('Blackout date added', { id: toastId });
+            setNewBlackout({ start: '', end: '', reason: '' });
+            setShowAddBlackout(false);
+        } catch (error: any) {
+            console.error('Add blackout error:', error);
+            toast.error(error.message || 'Failed to add blackout date', { id: toastId });
+        }
     };
 
-    const removeBlackoutDate = (id: string): void => {
-        setBlackoutDates(blackoutDates.filter(b => b.id !== id));
+    const removeBlackoutDate = async (id: string): Promise<void> => {
+        const toastId = toast.loading('Removing blackout date...');
+        try {
+            await removeBlockedDateMutation({
+                blockedDateId: id as any,
+            });
+            toast.success('Blackout date removed', { id: toastId });
+        } catch (error: any) {
+            console.error('Remove blackout error:', error);
+            toast.error(error.message || 'Failed to remove blackout date', { id: toastId });
+        }
     };
 
     const formatTime = (time: string): string => {

@@ -186,6 +186,7 @@ export const updateStudio = mutation({
     phoneLand: v.optional(v.string()),
     website: v.optional(v.string()),
     hours: v.optional(v.string()),
+    policies: v.optional(v.any()),
     amenities: v.optional(v.array(v.string())),
     hideAddress: v.optional(v.boolean()),
     kioskModeEnabled: v.optional(v.boolean()),
@@ -233,6 +234,7 @@ export const updateStudio = mutation({
     if (args.phoneLand !== undefined) updateData.phoneLand = args.phoneLand;
     if (args.website !== undefined) updateData.website = args.website;
     if (args.hours !== undefined) updateData.hours = args.hours;
+    if (args.policies !== undefined) updateData.policies = args.policies;
     if (args.amenities !== undefined) updateData.amenities = args.amenities;
     if (args.hideAddress !== undefined) updateData.hideAddress = args.hideAddress;
     if (args.kioskModeEnabled !== undefined)
@@ -274,6 +276,7 @@ export const updateStudioByOwner = mutation({
     phoneLand: v.optional(v.string()),
     website: v.optional(v.string()),
     hours: v.optional(v.string()),
+    policies: v.optional(v.any()),
     amenities: v.optional(v.array(v.string())),
     hideAddress: v.optional(v.boolean()),
     kioskModeEnabled: v.optional(v.boolean()),
@@ -348,6 +351,7 @@ export const updateStudioByOwner = mutation({
     if (args.phoneLand !== undefined) updateData.phoneLand = args.phoneLand;
     if (args.website !== undefined) updateData.website = args.website;
     if (args.hours !== undefined) updateData.hours = args.hours;
+    if (args.policies !== undefined) updateData.policies = args.policies;
     if (args.amenities !== undefined) updateData.amenities = args.amenities;
     if (args.hideAddress !== undefined) updateData.hideAddress = args.hideAddress;
     if (args.kioskModeEnabled !== undefined)
@@ -475,6 +479,7 @@ export const getStudioPublicProfile = query({
       phoneLand: studio.phoneLand,
       website: studio.website,
       hours: studio.hours,
+      policies: studio.policies,
       amenities: studio.amenities,
       hideAddress: studio.hideAddress,
       isActive: studio.isActive,

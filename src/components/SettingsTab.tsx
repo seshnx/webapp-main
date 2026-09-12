@@ -8,12 +8,13 @@ import {
     Image, Accessibility, Zap, Clock, Volume2, VolumeX, Monitor,
     Smartphone, Wifi, HardDrive, Languages, DollarSign, Video,
     FileText, Search, UserCheck, UserPlus, EyeOff, Hash, Save, Trash2, LucideIcon,
-    Radio, Play, Mic, Heart
+    Radio, Play, Mic, Heart, User, MoreHorizontal, Check
 } from 'lucide-react';
 import { useMutation, useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { ACCOUNT_TYPES } from '../config/constants';
 import { useUserSettings, applySettingsToDom } from '../hooks/useUserSettings';
+import { calculateDpiFontMetrics } from '../utils/dpiFontManager';
 import { useLanguage } from '../contexts/LanguageContext';
 import type { AccountType, UserData } from '../types';
 
@@ -143,6 +144,7 @@ interface SocialSettings {
     enableTipping?: boolean;
     showTopSupporters?: boolean;
     notifyOnTipReceived?: boolean;
+    tipButtonPlacement?: 'always_visible' | 'post_menu' | 'public_profile' | 'always_hidden';
 }
 
 // Content filtering settings
@@ -536,6 +538,7 @@ export default function SettingsTab({
                 enableTipping: true,
                 showTopSupporters: true,
                 notifyOnTipReceived: true,
+                tipButtonPlacement: 'public_profile',
             },
             contentFiltering: {
                 sensitivityFilter: 'medium',
@@ -1970,7 +1973,66 @@ export default function SettingsTab({
                             <h4 className="text-sm font-bold dark:text-white mb-4 flex items-center gap-2">
                                 <DollarSign size={16} className="text-emerald-500" /> Creator Tipping & Monetization
                             </h4>
-                            <div className="space-y-3">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                                        Tip Button Placement
+                                    </label>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                                        {[
+                                            {
+                                                id: 'public_profile',
+                                                title: 'User Public Profile (Default)',
+                                                desc: 'Top-left corner of creator public profile modal only.',
+                                                icon: User,
+                                            },
+                                            {
+                                                id: 'always_visible',
+                                                title: 'Always Visible',
+                                                desc: 'Action bar below every feed post for 1-click tipping.',
+                                                icon: DollarSign,
+                                            },
+                                            {
+                                                id: 'post_menu',
+                                                title: 'Post Menu',
+                                                desc: 'Inside the 3-dots dropdown menu on post cards.',
+                                                icon: MoreHorizontal,
+                                            },
+                                            {
+                                                id: 'always_hidden',
+                                                title: 'Always Hidden',
+                                                desc: 'Completely disable all tipping buttons across the app.',
+                                                icon: EyeOff,
+                                            },
+                                        ].map((opt) => {
+                                            const isSelected = (localSettings.social?.tipButtonPlacement || 'public_profile') === opt.id;
+                                            const Icon = opt.icon;
+                                            return (
+                                                <button
+                                                    key={opt.id}
+                                                    type="button"
+                                                    onClick={() => handleValueChange('social', 'tipButtonPlacement', opt.id)}
+                                                    className={`p-3 rounded-xl border text-left transition-all flex items-start gap-2.5 ${
+                                                        isSelected
+                                                            ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/20 text-gray-900 dark:text-white ring-1 ring-emerald-500'
+                                                            : 'border-gray-200 dark:border-gray-700 bg-gray-50/30 dark:bg-gray-800/30 hover:border-gray-300 dark:hover:border-gray-600 text-gray-700 dark:text-gray-300'
+                                                    }`}
+                                                >
+                                                    <div className={`p-1.5 rounded-lg shrink-0 ${isSelected ? 'bg-emerald-500 text-white' : 'bg-gray-200 dark:bg-gray-700 text-gray-500'}`}>
+                                                        <Icon size={14} />
+                                                    </div>
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-center justify-between">
+                                                            <div className="text-xs font-bold">{opt.title}</div>
+                                                            {isSelected && <Check size={12} className="text-emerald-500" />}
+                                                        </div>
+                                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">{opt.desc}</p>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
                                 <ToggleSwitch
                                     checked={localSettings.social?.enableTipping !== false}
                                     onChange={() => handleToggle('social', 'enableTipping')}
@@ -2248,13 +2310,32 @@ export default function SettingsTab({
                                 value={localSettings.accessibility?.fontSize || 'medium'}
                                 onChange={val => handleValueChange('accessibility', 'fontSize', val)}
                                 options={[
-                                    { value: 'small', label: 'Small' },
-                                    { value: 'medium', label: 'Medium' },
-                                    { value: 'large', label: 'Large' },
-                                    { value: 'xlarge', label: 'Extra Large' },
+                                    { value: 'small', label: 'Small (-2px)' },
+                                    { value: 'medium', label: 'Medium (Optimal DPI Base)' },
+                                    { value: 'large', label: 'Large (+2px)' },
+                                    { value: 'xlarge', label: 'Extra Large (+4px)' },
                                 ]}
                                 icon={FileText}
                             />
+                            {(() => {
+                                const dpi = calculateDpiFontMetrics(localSettings.accessibility?.fontSize || 'medium');
+                                return (
+                                    <div className="p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700/60 rounded-xl text-xs space-y-1.5">
+                                        <div className="flex items-center justify-between text-gray-700 dark:text-gray-300 font-medium">
+                                            <span className="flex items-center gap-1.5">
+                                                <Monitor size={13} className="text-brand-blue" />
+                                                {dpi.label}
+                                            </span>
+                                            <span className="bg-brand-blue/10 text-brand-blue font-bold px-2 py-0.5 rounded-md">
+                                                {dpi.computedFontSizePx}px effective
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-normal">
+                                            Screen DPI is dynamically detected. Base is {dpi.baseFontSizePx}px for your display density, with a {dpi.offsetPx >= 0 ? `+${dpi.offsetPx}px` : `${dpi.offsetPx}px`} adjustment from your font size setting.
+                                        </p>
+                                    </div>
+                                );
+                            })()}
                             <div className="pb-1">
                                 <button
                                     type="button"

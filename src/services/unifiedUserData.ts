@@ -460,15 +460,3 @@ export async function getUserFollowers(
   }
 }
 
-// Re-export MongoDB functions - STUBS
-export const followUser = async () => {};
-export const unfollowUser = async () => {};
-export const isFollowing = async () => false;
-export const mongoCreatePost = async () => {};
-export const mongoGetPosts = async () => [];
-export const mongoGetPostById = async () => null;
-export const toggleReaction = async () => {};
-export const savePost = async () => {};
-export const unsavePost = async () => {};
-export const getSavedPosts = async () => [];
-export const markAllNotificationsAsRead = async () => {};

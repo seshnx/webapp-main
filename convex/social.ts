@@ -962,6 +962,46 @@ export const toggleReaction = mutation({
 });
 
 // =====================================================
+// =====================================================
+// USER RESOLUTION HELPER
+// =====================================================
+
+/**
+ * Robust helper to resolve a user document by Clerk ID, Convex ID, username, or email
+ */
+async function resolveUserByClerkOrId(ctx: any, clerkIdOrId: string) {
+  if (!clerkIdOrId) return null;
+
+  // 1. Try by clerk_id index
+  let user = await ctx.db
+    .query("users")
+    .withIndex("by_clerk_id", (q: any) => q.eq("clerkId", clerkIdOrId))
+    .first();
+
+  if (user) return user;
+
+  // 2. Try by Convex _id if valid doc ID
+  try {
+    const fetched = await ctx.db.get(clerkIdOrId as any);
+    if (fetched && ("clerkId" in fetched || "email" in fetched || "username" in fetched)) {
+      return fetched;
+    }
+  } catch {}
+
+  // 3. Fallback scan matching by clerkId, _id, username, email, or id
+  const allUsers = await ctx.db.query("users").collect();
+  user = allUsers.find((u: any) =>
+    u.clerkId === clerkIdOrId ||
+    u._id === clerkIdOrId ||
+    u.username === clerkIdOrId ||
+    u.email === clerkIdOrId ||
+    (u.id && u.id === clerkIdOrId)
+  ) || null;
+
+  return user;
+}
+
+// =====================================================
 // FOLLOW QUERIES
 // =====================================================
 
@@ -974,16 +1014,8 @@ export const isFollowing = query({
     followingClerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    // Get both users by clerkId
-    const follower = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
-      .first();
-
-    const following = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
-      .first();
+    const follower = await resolveUserByClerkOrId(ctx, args.followerClerkId);
+    const following = await resolveUserByClerkOrId(ctx, args.followingClerkId);
 
     if (!follower || !following) {
       return false;
@@ -1007,11 +1039,7 @@ export const getFollowers = query({
     clerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    // Get user by clerkId first
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
+    const user = await resolveUserByClerkOrId(ctx, args.clerkId);
 
     if (!user) {
       return [];
@@ -1048,11 +1076,7 @@ export const getFollowing = query({
     clerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    // Get user by clerkId first
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
+    const user = await resolveUserByClerkOrId(ctx, args.clerkId);
 
     if (!user) {
       return [];
@@ -1094,16 +1118,8 @@ export const toggleFollow = mutation({
     followingClerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    // Get both users by clerkId
-    const follower = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
-      .first();
-
-    const following = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
-      .first();
+    const follower = await resolveUserByClerkOrId(ctx, args.followerClerkId);
+    const following = await resolveUserByClerkOrId(ctx, args.followingClerkId);
 
     if (!follower || !following) {
       throw new Error("User not found");
@@ -1144,15 +1160,8 @@ export const followUser = mutation({
     followingClerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    const follower = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
-      .first();
-
-    const following = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
-      .first();
+    const follower = await resolveUserByClerkOrId(ctx, args.followerClerkId);
+    const following = await resolveUserByClerkOrId(ctx, args.followingClerkId);
 
     if (!follower || !following) {
       throw new Error("User not found");
@@ -1203,15 +1212,8 @@ export const unfollowUser = mutation({
     followingClerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    const follower = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followerClerkId))
-      .first();
-
-    const following = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.followingClerkId))
-      .first();
+    const follower = await resolveUserByClerkOrId(ctx, args.followerClerkId);
+    const following = await resolveUserByClerkOrId(ctx, args.followingClerkId);
 
     if (!follower || !following) {
       throw new Error("User not found");
@@ -1243,15 +1245,8 @@ export const blockUser = mutation({
     blockedClerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    const blocker = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.blockerClerkId))
-      .first();
-
-    const blocked = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.blockedClerkId))
-      .first();
+    const blocker = await resolveUserByClerkOrId(ctx, args.blockerClerkId);
+    const blocked = await resolveUserByClerkOrId(ctx, args.blockedClerkId);
 
     if (!blocker || !blocked) {
       throw new Error("User not found");
@@ -1302,15 +1297,8 @@ export const unblockUser = mutation({
     blockedClerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    const blocker = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.blockerClerkId))
-      .first();
-
-    const blocked = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.blockedClerkId))
-      .first();
+    const blocker = await resolveUserByClerkOrId(ctx, args.blockerClerkId);
+    const blocked = await resolveUserByClerkOrId(ctx, args.blockedClerkId);
 
     if (!blocker || !blocked) {
       throw new Error("User not found");
@@ -1337,10 +1325,7 @@ export const getBlockedUsers = query({
     clerkId: v.string(),
   },
   handler: async (ctx, args) => {
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
-      .first();
+    const user = await resolveUserByClerkOrId(ctx, args.clerkId);
 
     if (!user) return [];
 

@@ -5,9 +5,14 @@
  * for billing, role-based access, and membership management.
  */
 
+import dotenv from 'dotenv';
 import { createClerkClient, verifyToken } from '@clerk/backend';
 import { ConvexHttpClient } from 'convex/browser';
 import { anyApi } from 'convex/server';
+
+// Ensure environment variables are loaded in all runtime environments
+dotenv.config({ path: '.env.local' });
+dotenv.config({ path: '.env' });
 
 const SLUG_WORD_COMPACTIONS = {
   recording: 'rec',
@@ -144,18 +149,8 @@ export default async function handler(req, res) {
       const verifiedToken = await verifyToken(sessionToken, { secretKey: clerkSecret });
       verifiedUserId = verifiedToken?.sub;
     } catch (jwtErr) {
-      try {
-        const payloadBase64 = sessionToken.split('.')[1];
-        if (payloadBase64) {
-          const decoded = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
-          if (decoded && decoded.sub === ownerClerkId) {
-            verifiedUserId = decoded.sub;
-          }
-        }
-      } catch (decErr) {
-        console.error('❌ Token verification failed:', jwtErr.message);
-        return res.status(401).json({ error: 'Invalid or expired session token', details: jwtErr.message });
-      }
+      console.error('❌ Token verification failed:', jwtErr.message);
+      return res.status(401).json({ error: 'Invalid or expired session token', details: jwtErr.message });
     }
 
     if (!verifiedUserId || verifiedUserId !== ownerClerkId) {
@@ -208,24 +203,32 @@ export default async function handler(req, res) {
     const finalStudioName = studioName || studio.name || caller.displayName || 'Studio';
     const baseSlug = generateSlug(slug || studio.slug || finalStudioName);
 
-    // Create Clerk Organization with slug conflict retry
     let org = null;
-    let attemptSlug = baseSlug;
 
+    // Check if the user already has an organization in Clerk (from prior setup or login)
     try {
-      org = await clerkClient.organizations.createOrganization({
-        name: finalStudioName,
-        slug: attemptSlug,
-        createdBy: ownerClerkId,
-        privateMetadata: {
-          studioId: studio._id,
-          type: 'studio',
-        },
+      const memberships = await clerkClient.users.getOrganizationMembershipList({
+        userId: ownerClerkId,
       });
-    } catch (createErr) {
-      // If slug exists, retry with random suffix
-      if (createErr.errors?.[0]?.code === 'form_identifier_exists' || createErr.status === 409 || createErr.status === 422) {
-        attemptSlug = `${baseSlug.slice(0, 32)}-${Math.random().toString(36).substring(2, 6)}`;
+
+      const existingMembership = memberships?.data?.find((m) => {
+        const orgMeta = m.organization?.privateMetadata || m.organization?.publicMetadata;
+        return orgMeta?.studioId === studio._id || m.role === 'org:admin';
+      }) || memberships?.data?.[0];
+
+      if (existingMembership?.organization) {
+        org = existingMembership.organization;
+        console.log(`ℹ️ Recovered existing Clerk org ${org.id} (${org.name}) for studio ${studio._id}`);
+      }
+    } catch (checkErr) {
+      console.warn('⚠️ Could not check existing Clerk memberships:', checkErr.message);
+    }
+
+    // Create Clerk Organization only if not already found
+    if (!org) {
+      let attemptSlug = baseSlug;
+
+      try {
         org = await clerkClient.organizations.createOrganization({
           name: finalStudioName,
           slug: attemptSlug,
@@ -235,12 +238,50 @@ export default async function handler(req, res) {
             type: 'studio',
           },
         });
-      } else {
-        throw createErr;
+      } catch (createErr) {
+        // If slug exists, retry with random suffix
+        if (
+          createErr.errors?.[0]?.code === 'form_identifier_exists' ||
+          createErr.status === 409 ||
+          createErr.status === 422
+        ) {
+          attemptSlug = `${baseSlug.slice(0, 32)}-${Math.random().toString(36).substring(2, 6)}`;
+          try {
+            org = await clerkClient.organizations.createOrganization({
+              name: finalStudioName,
+              slug: attemptSlug,
+              createdBy: ownerClerkId,
+              privateMetadata: {
+                studioId: studio._id,
+                type: 'studio',
+              },
+            });
+          } catch (retryErr) {
+            // Check if user already reached their org limit or already has an org
+            const fallbackMemberships = await clerkClient.users.getOrganizationMembershipList({
+              userId: ownerClerkId,
+            }).catch(() => null);
+            if (fallbackMemberships?.data?.[0]?.organization) {
+              org = fallbackMemberships.data[0].organization;
+            } else {
+              throw retryErr;
+            }
+          }
+        } else {
+          // Check if failure is because user already has an org
+          const fallbackMemberships = await clerkClient.users.getOrganizationMembershipList({
+            userId: ownerClerkId,
+          }).catch(() => null);
+          if (fallbackMemberships?.data?.[0]?.organization) {
+            org = fallbackMemberships.data[0].organization;
+          } else {
+            throw createErr;
+          }
+        }
       }
     }
 
-    console.log(`✅ Created Clerk org ${org.id} (${org.slug}) for studio ${studio._id}`);
+    console.log(`✅ Clerk org ${org.id} (${org.slug || org.name}) ready for studio ${studio._id}`);
 
     // Link org to Convex studio record
     try {

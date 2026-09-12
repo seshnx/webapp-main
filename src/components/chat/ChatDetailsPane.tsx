@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { X, User, Bell, Flag, Lock, Users, Briefcase, FileText, Clock, Video, Image as ImageIcon, Loader2, Images } from 'lucide-react';
 import StatCard from '../shared/StatCard';
 import MediaGallery from './media/MediaGallery';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import toast from 'react-hot-toast';
 
 /**
  * Shared media interface
@@ -9,15 +12,6 @@ import MediaGallery from './media/MediaGallery';
 interface SharedMedia {
     type: 'image' | 'video';
     url: string;
-}
-
-/**
- * Stats interface
- */
-interface ChatStats {
-    sessions: number;
-    rating: number | string;
-    responseTime: string;
 }
 
 /**
@@ -43,108 +37,40 @@ export interface ChatDetailsPaneProps {
 }
 
 export default function ChatDetailsPane({ activeChat, onClose, currentUser }: ChatDetailsPaneProps) {
-    // TODO: Migrate to Neon/Convex - Supabase legacy code
-    // @ts-ignore - supabase is global for legacy support
-    const supabase = (window as any).supabase;
-
     const [media, setMedia] = useState<SharedMedia[]>([]);
-    const [stats, setStats] = useState<ChatStats>({ sessions: 0, rating: 0, responseTime: 'N/A' });
-    const [loading, setLoading] = useState<boolean>(true);
     const [blocking, setBlocking] = useState<boolean>(false);
     const [showMediaGallery, setShowMediaGallery] = useState<boolean>(false);
 
     const isGroup = activeChat.type === 'group';
     const targetUid = activeChat.uid;
-    // FIX: Normalize name (activeChat might use 'n' or 'name')
     const chatName = activeChat.name || activeChat.n || 'Unknown';
 
-    useEffect(() => {
-        const loadData = async () => {
-            setLoading(true);
-            try {
-                // 1. FETCH SHARED MEDIA from RTDB?
-                // Note: The previous version looked in Firestore 'chats/{id}/messages'.
-                // Since we moved to RTDB for messages, we should conceptually query RTDB here or ignore for now.
-                // For simplicity, we will skip fetching media from RTDB in this iteration to avoid complex queries,
-                // or we can just leave the list empty until a dedicated media index is built.
-                setMedia([]);
-
-                // 2. FETCH USER STATS (Only for Direct Chats)
-                if (!isGroup && targetUid && supabase) {
-                    const currentUserId = currentUser?.id || currentUser?.uid;
-
-                    // Fetch profile
-                    const { data: profileData } = await supabase
-                        .from('profiles')
-                        .select('rating, response_time')
-                        .eq('id', targetUid)
-                        .single();
-
-                    // Count completed bookings
-                    const { count } = await supabase
-                        .from('bookings')
-                        .select('*', { count: 'exact', head: true })
-                        .eq('sender_id', currentUserId)
-                        .eq('target_id', targetUid)
-                        .eq('status', 'Completed');
-
-                    setStats({
-                        sessions: count || 0,
-                        rating: profileData?.rating || 'New',
-                        responseTime: profileData?.response_time || '~1hr'
-                    });
-                }
-            } catch (e) {
-                console.error("Failed to load details:", e);
-            }
-            setLoading(false);
-        };
-
-        if (activeChat?.id) {
-            loadData();
-        }
-    }, [activeChat.id, targetUid, isGroup, currentUser?.id || currentUser?.uid]);
+    // Query target user profile from Convex
+    const targetProfile = useQuery(
+        api.users.getUserByClerkId,
+        (!isGroup && targetUid) ? { clerkId: targetUid } : "skip"
+    );
+    const blockUserMutation = useMutation(api.social.blockUser);
 
     const handleBlockUser = async () => {
-        if (isGroup || !targetUid || !currentUser || !supabase) return;
+        if (isGroup || !targetUid || !currentUser) return;
         if (!confirm(`Are you sure you want to block ${chatName}?`)) return;
 
         setBlocking(true);
         try {
-            const userId = currentUser?.id || currentUser?.uid;
-
-            // Get current settings
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('settings')
-                .eq('id', userId)
-                .single();
-
-            const currentSettings = profile?.settings || {};
-            const blockedUsers = currentSettings.social?.blockedUsers || [];
-
-            if (!blockedUsers.includes(targetUid)) {
-                await supabase
-                    .from('profiles')
-                    .update({
-                        settings: {
-                            ...currentSettings,
-                            social: {
-                                ...currentSettings.social,
-                                blockedUsers: [...blockedUsers, targetUid]
-                            }
-                        }
-                    })
-                    .eq('id', userId);
-            }
-
-            alert("User blocked.");
+            const currentUserId = currentUser?.id || currentUser?.uid;
+            await blockUserMutation({
+                blockerClerkId: currentUserId,
+                blockedClerkId: targetUid,
+            });
+            toast.success("User blocked.");
             onClose();
-        } catch (e) {
+        } catch (e: any) {
             console.error("Block failed:", e);
-            alert("Failed to block user.");
+            toast.error(e?.message || "Failed to block user.");
+        } finally {
+            setBlocking(false);
         }
-        setBlocking(false);
     };
 
     const handleReportUser = () => {
@@ -188,13 +114,13 @@ export default function ChatDetailsPane({ activeChat, onClose, currentUser }: Ch
                 {!isGroup && (
                     <div className="p-4 border-b border-gray-700">
                         <h5 className="text-xs font-bold text-gray-500 uppercase mb-3 tracking-wider">Performance</h5>
-                        {loading ? (
+                        {targetProfile === undefined ? (
                             <div className="flex justify-center py-4"><Loader2 className="animate-spin text-brand-blue"/></div>
                         ) : (
                             <div className="grid grid-cols-3 gap-2">
-                                <StatCard title="Sessions" value={stats.sessions} icon={<Briefcase size={16} />} bg="bg-blue-50 dark:bg-blue-900/20" text="text-blue-600 dark:text-blue-400" />
-                                <StatCard title="Rating" value={stats.rating} icon={<Flag size={16} />} bg="bg-yellow-50 dark:bg-yellow-900/20" text="text-yellow-600 dark:text-yellow-400" />
-                                <StatCard title="Reply Time" value={stats.responseTime} icon={<Clock size={16} />} bg="bg-green-50 dark:bg-green-900/20" text="text-green-600 dark:text-green-400" />
+                                <StatCard title="Sessions" value={(targetProfile as any)?.completedJobs || 0} icon={<Briefcase size={16} />} bg="bg-blue-50 dark:bg-blue-900/20" text="text-blue-600 dark:text-blue-400" />
+                                <StatCard title="Rating" value={(targetProfile as any)?.rating || 'New'} icon={<Flag size={16} />} bg="bg-yellow-50 dark:bg-yellow-900/20" text="text-yellow-600 dark:text-yellow-400" />
+                                <StatCard title="Reply Time" value={(targetProfile as any)?.responseTime || '~1hr'} icon={<Clock size={16} />} bg="bg-green-50 dark:bg-green-900/20" text="text-green-600 dark:text-green-400" />
                             </div>
                         )}
                     </div>

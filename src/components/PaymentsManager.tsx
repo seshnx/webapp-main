@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import { useAuth } from '@clerk/react';
 import { Check, Plus, Zap, TrendingUp, DollarSign, Loader2, Shield, Star, Lock, ArrowRight, AlertCircle, LucideIcon } from 'lucide-react';
 import { SUBSCRIPTION_PLAN_KEYS } from '../config/constants';
 import { useDynamicConfig } from '../hooks/useDynamicConfig';
@@ -68,67 +71,39 @@ export default function PaymentsManager({ user, userData }: PaymentsManagerProps
     ['Talent', 'Producer', 'Engineer', 'Studio', 'Composer', 'Technician', 'Label', 'Agent'].includes(role)
   );
 
+  const userId = user?.id || user?.uid;
+  const { getToken } = useAuth();
+  const convexWallet = useQuery(api.wallets.getWallet, userId ? { clerkId: userId } : "skip");
+
   useEffect(() => {
-    if (!user?.id && !user?.uid) return;
-    const userId = user?.id || user?.uid;
-
-    const loadWallet = async (): Promise<void> => {
-      try {
-        const response = await fetch(`/api/user/wallets/${userId}`);
-        const result = await response.json();
-
-        if (!response.ok) {
-          console.error('Error loading wallet:', result.error);
-          // Set defaults on error
-          setWalletData({
-            balance: 0,
-            escrowBalance: 0,
-            payoutBalance: 0
-          });
-          return;
-        }
-
-        const balance = result.data?.balance || 0;
-        setWalletData({
-          balance,
-          escrowBalance: 0, // Not yet implemented in schema
-          payoutBalance: 0 // Not yet implemented in schema
-        });
-      } catch (err) {
-        console.error('Wallet load error:', err);
-        setWalletData({
-          balance: 0,
-          escrowBalance: 0,
-          payoutBalance: 0
-        });
-      }
-    };
-
-    loadWallet();
-
-    // Refresh wallet balance every 30 seconds
-    const interval = setInterval(loadWallet, 30000);
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [user?.id, user?.uid]);
+    if (convexWallet) {
+      setWalletData({
+        balance: convexWallet.balance || 0,
+        escrowBalance: convexWallet.escrowBalance || 0,
+        payoutBalance: convexWallet.payoutBalance || 0,
+      });
+    }
+  }, [convexWallet]);
 
   const handleCheckout = async (priceId: string, mode = 'payment'): Promise<void> => {
     setProcessing(true);
     try {
-      // Use Vercel API route for checkout
-      const apiUrl = import.meta.env.DEV ? 'http://localhost:3000/api' : '/api';
-      const response = await fetch(`${apiUrl}/stripe/create-checkout-session`, {
+      const token = await getToken().catch(() => null);
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch('/api/stripe/create-checkout-session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
           priceId: priceId,
           mode: mode,
           userId: user?.id || user?.uid,
-          packId: mode === 'payment' ? priceId : undefined, // Using priceId as packId for now
+          packId: mode === 'payment' ? priceId : undefined,
           successUrl: window.location.href,
           cancelUrl: window.location.href,
         }),

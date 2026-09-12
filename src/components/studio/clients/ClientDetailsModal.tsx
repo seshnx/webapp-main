@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useConvex } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { X, User, Mail, Phone, Building, Calendar, Edit3, Save, XCircle, Search, Plus, UserPlus, Users } from 'lucide-react';
 import { CLIENT_TYPES } from '../../../config/constants';
 
@@ -97,21 +99,18 @@ export default function ClientDetailsModal({ client, onClose, onUpdate, studioId
         }
     }, [client, isAddingNew]);
 
+    const convex = useConvex();
+
     const handleSearchPlatformUsers = async () => {
         if (!searchTerm.trim() || searching) return;
 
         setSearching(true);
         try {
-            const response = await fetch(
-                `/api/studio-ops/clients/search-users?search=${encodeURIComponent(searchTerm)}&studioId=${studioId}&limit=10`
-            );
-            const data = await response.json();
-
-            if (data.success) {
-                setSearchResults(data.data);
-            } else {
-                console.error('Search failed:', data.error);
-            }
+            const results = await convex.query(api.studioManager.searchPlatformUsers, {
+                searchTerm: searchTerm.trim(),
+                limit: 10
+            });
+            setSearchResults(results as PlatformUser[]);
         } catch (error) {
             console.error('Error searching users:', error);
         } finally {
@@ -132,35 +131,14 @@ export default function ClientDetailsModal({ client, onClose, onUpdate, studioId
     };
 
     const handleSave = async () => {
-        try {
-            const url = isAddingNew
-                ? '/api/studio-ops/clients'
-                : `/api/studio-ops/clients/${client?.id}`;
-
-            const method = isAddingNew ? 'POST' : 'PUT';
-
-            const response = await fetch(url, {
-                method,
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    ...formData,
-                    studioId,
-                    clientType: formData.client_type
-                })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                onUpdate(data.data);
-                onClose();
-            } else {
-                alert(`Error: ${data.error || 'Failed to save client'}`);
-            }
-        } catch (error) {
-            console.error('Error saving client:', error);
-            alert('Failed to save client. Please try again.');
+        if (!formData.name.trim()) {
+            alert('Client name is required');
+            return;
         }
+        onUpdate({
+            ...formData,
+            id: client?.id || (client as any)?._id,
+        } as any);
     };
 
     const formatCurrency = (amount: number | undefined): string => {

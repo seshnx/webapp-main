@@ -64,11 +64,13 @@ interface BookingFormData {
  * Props for TechBookingFlow component
  */
 export interface TechBookingFlowProps {
-  tech: TechnicianProfile;
+  tech?: TechnicianProfile;
+  technician?: TechnicianProfile;
   user?: any;
   userData?: UserData | null;
   onSuccess?: (request: ServiceRequest) => void;
   onCancel?: () => void;
+  onClose?: () => void;
 }
 
 /**
@@ -81,7 +83,10 @@ export interface TechBookingFlowProps {
  * - Form validation
  * - Summary review before submission
  */
-export default function TechBookingFlow({ tech, user, userData, onSuccess, onCancel }: TechBookingFlowProps) {
+export default function TechBookingFlow({ tech, technician, user, userData, onSuccess, onCancel, onClose }: TechBookingFlowProps) {
+  const currentTech = tech || technician;
+  const techId = currentTech?.user_id || currentTech?._id || currentTech?.id || 'default';
+  const handleDismiss = onCancel || onClose;
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<BookingFormData>({
     category: SERVICE_CATALOGUE[0].label,
@@ -100,7 +105,7 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
 
   // Auto-save draft to localStorage
   useEffect(() => {
-    const draft = localStorage.getItem(`techBookingDraft_${tech.user_id}`);
+    const draft = localStorage.getItem(`techBookingDraft_${techId}`);
     if (draft) {
       try {
         const savedData = JSON.parse(draft);
@@ -109,11 +114,11 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
         console.error('Failed to load draft:', e);
       }
     }
-  }, [tech.user_id]);
+  }, [techId]);
 
   useEffect(() => {
-    localStorage.setItem(`techBookingDraft_${tech.user_id}`, JSON.stringify(formData));
-  }, [formData, tech.user_id]);
+    localStorage.setItem(`techBookingDraft_${techId}`, JSON.stringify(formData));
+  }, [formData, techId]);
 
   const updateFormData = <K extends keyof BookingFormData>(key: K, value: BookingFormData[K]) => {
     setFormData(prev => ({ ...prev, [key]: value }));
@@ -165,7 +170,7 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
 
       const requestData = {
         requester_id: userId,
-        tech_id: tech.user_id,
+        tech_id: techId,
         title: `${formData.category} - ${formData.equipmentName}`,
         description: formData.additionalNotes || formData.issueDescription,
         service_category: formData.category,
@@ -182,11 +187,11 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
 
       // Create service request booking using Convex
       const request = await createBooking({
-        clientClerkId: user?.id as any,
-        studioId: tech.user_id as any,
+        clientClerkId: (user?.id || user?.uid) as any,
+        studioId: techId as any,
         serviceType: formData.category,
         date: formData.preferredDate || new Date().toISOString().split('T')[0],
-        notes: formData.issueDescription,
+        message: formData.issueDescription,
         status: 'Pending',
         metadata: {
           equipmentName: formData.equipmentName,
@@ -202,7 +207,7 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
       });
 
       // Clear draft on successful submission
-      localStorage.removeItem(`techBookingDraft_${tech.user_id}`);
+      localStorage.removeItem(`techBookingDraft_${techId}`);
 
       // Clear any form errors
       setErrors({});
@@ -653,9 +658,9 @@ export default function TechBookingFlow({ tech, user, userData, onSuccess, onCan
               Back
             </button>
           )}
-          {onCancel && (
+          {handleDismiss && (
             <button
-              onClick={onCancel}
+              onClick={handleDismiss}
               disabled={submitting}
               className="px-6 py-3 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 font-medium transition disabled:opacity-50"
             >

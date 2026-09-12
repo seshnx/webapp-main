@@ -17,7 +17,7 @@ export type FollowButtonVariant = 'default' | 'outline' | 'minimal';
  */
 export interface FollowButtonProps {
     isFollowing: boolean;
-    onToggle: () => void | Promise<void>;
+    onToggle: () => void | Promise<any>;
     size?: FollowButtonSize;
     variant?: FollowButtonVariant;
     disabled?: boolean;

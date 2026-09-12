@@ -3,6 +3,7 @@ import { Upload, FileText, CheckCircle, AlertCircle, Download, DollarSign, PieCh
 import { parseRoyaltyCSV, generateSampleCSV } from '../../utils/csvParser';
 
 export default function RoyaltyManager({ user, userData }) {
+    const supabase = typeof window !== 'undefined' ? window.supabase : null;
     const [reports, setReports] = useState([]);
     const [processing, setProcessing] = useState(false);
     const [uploadStatus, setUploadStatus] = useState(null); // { type: 'success'|'error', msg: '' }

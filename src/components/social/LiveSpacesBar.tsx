@@ -28,7 +28,7 @@ export default function LiveSpacesBar({ user, userSettings }: LiveSpacesBarProps
   };
 
   return (
-    <div className="mb-6 bg-gradient-to-r from-purple-950/30 via-gray-900/40 to-blue-950/30 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-purple-800/25 shadow-lg shadow-purple-950/10 transition-all duration-300">
+    <div className="mb-6 bg-gradient-to-r from-blue-950/30 via-gray-900/40 to-sky-950/30 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-sky-800/25 shadow-lg shadow-sky-950/10 transition-all duration-300">
       {/* Header Bar (Clickable to Toggle Collapse) */}
       <div className="flex items-center justify-between">
         <div
@@ -43,7 +43,7 @@ export default function LiveSpacesBar({ user, userSettings }: LiveSpacesBarProps
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 group-hover:text-purple-400 transition">
+              <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1.5 group-hover:text-sky-400 transition">
                 <Radio size={16} className={dbLiveRooms.length > 0 ? 'text-red-500' : 'text-gray-400'} />
                 Live Audio Spaces
               </h3>
@@ -73,7 +73,7 @@ export default function LiveSpacesBar({ user, userSettings }: LiveSpacesBarProps
             e.stopPropagation();
             setIsCreateModalOpen(true);
           }}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-purple-600 to-brand-blue text-white rounded-xl text-xs font-bold hover:opacity-90 transition shadow-md shadow-purple-600/20 shrink-0"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 bg-gradient-to-r from-sky-500 to-brand-blue text-white rounded-xl text-xs font-bold hover:opacity-90 transition shadow-md shadow-sky-600/20 shrink-0"
         >
           <Plus size={14} /> Start Space
         </button>
@@ -91,12 +91,12 @@ export default function LiveSpacesBar({ user, userSettings }: LiveSpacesBarProps
           >
             {dbLiveRooms.length === 0 ? (
               <div className="text-center py-6 px-4 bg-gray-900/30 rounded-xl border border-dashed border-gray-800 text-xs text-gray-400 flex flex-col items-center gap-1.5">
-                <div className="p-2.5 bg-gray-800/80 rounded-full text-purple-400 mb-1">
+                <div className="p-2.5 bg-gray-800/80 rounded-full text-sky-400 mb-1">
                   <Mic size={18} />
                 </div>
                 <p className="font-semibold text-gray-300">No live spaces active right now</p>
                 <p className="text-[11px] text-gray-500">
-                  Click <strong className="text-purple-400">Start Space</strong> above to host a live audio session!
+                  Click <strong className="text-sky-400">Start Space</strong> above to host a live audio session!
                 </p>
               </div>
             ) : (
@@ -106,10 +106,10 @@ export default function LiveSpacesBar({ user, userSettings }: LiveSpacesBarProps
                     key={room._id}
                     whileHover={{ scale: 1.015, y: -2 }}
                     whileTap={{ scale: 0.98 }}
-                    className="p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md rounded-2xl border border-purple-500/20 dark:border-purple-500/30 shadow-md hover:shadow-purple-500/10 cursor-pointer flex flex-col justify-between transition group relative overflow-hidden"
+                    className="p-4 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md rounded-2xl border border-sky-500/20 dark:border-sky-500/30 shadow-md hover:shadow-sky-500/10 cursor-pointer flex flex-col justify-between transition group relative overflow-hidden"
                     onClick={() => setActiveRoomId(room._id)}
                   >
-                    <div className="absolute top-0 right-0 w-24 h-24 bg-purple-500/10 rounded-full blur-2xl -z-10 group-hover:bg-purple-500/20 transition" />
+                    <div className="absolute top-0 right-0 w-24 h-24 bg-sky-500/10 rounded-full blur-2xl -z-10 group-hover:bg-sky-500/20 transition" />
 
                     <div>
                       {/* Status Badges */}
@@ -118,17 +118,17 @@ export default function LiveSpacesBar({ user, userSettings }: LiveSpacesBarProps
                           <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> LIVE
                         </span>
                         <span className="text-[11px] text-gray-500 dark:text-gray-400 font-medium flex items-center gap-1">
-                          <Users size={12} className="text-purple-400" /> {room.listenersCount || 1}
+                          <Users size={12} className="text-sky-400" /> {room.listenersCount || 1}
                         </span>
                       </div>
 
                       {/* Topic / Category Tag */}
-                      <span className="text-[10px] font-semibold text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded-md inline-block mb-1.5">
+                      <span className="text-[10px] font-semibold text-sky-400 bg-sky-500/10 px-2 py-0.5 rounded-md inline-block mb-1.5">
                         {room.category || 'General Audio'}
                       </span>
 
                       {/* Space Title */}
-                      <h4 className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white line-clamp-1 group-hover:text-purple-400 transition">
+                      <h4 className="font-bold text-xs sm:text-sm text-gray-900 dark:text-white line-clamp-1 group-hover:text-sky-400 transition">
                         {room.title}
                       </h4>
 
@@ -151,7 +151,7 @@ export default function LiveSpacesBar({ user, userSettings }: LiveSpacesBarProps
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 text-xs text-purple-400 font-semibold group-hover:translate-x-0.5 transition">
+                      <div className="flex items-center gap-1 text-xs text-sky-400 font-semibold group-hover:translate-x-0.5 transition">
                         <span>Join</span>
                         <Volume2 size={12} />
                       </div>

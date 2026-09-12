@@ -73,10 +73,10 @@ export default function Marketplace({ user, userData, tokenBalance }: Marketplac
                         <button
                             key={tab.id}
                             onClick={() => handleTabChange(tab.id)}
-                            className={`px-4 py-2 text-sm font-bold rounded-md transition-all ${
+                            className={`px-4 py-2 text-sm font-bold rounded-xl transition-all ${
                                 subTab === tab.id
-                                ? 'bg-brand-blue text-white shadow-md'
-                                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                                : 'text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-750'
                             }`}
                         >
                             {tab.label}

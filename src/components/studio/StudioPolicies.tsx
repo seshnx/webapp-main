@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import {
     FileText, Save, Loader2, DollarSign, Clock, AlertTriangle,
     Shield, ChevronDown, ChevronUp
@@ -63,45 +65,59 @@ interface StudioPolicies {
 export interface StudioPoliciesProps {
     user?: any;
     userData?: any;
+    studio?: any;
     onUpdate?: (data: { policies: Partial<StudioPolicies> }) => void;
 }
 
 /**
  * StudioPolicies - Booking rules, pricing policies, and house rules
  */
-export default function StudioPolicies({ user, userData, onUpdate }: StudioPoliciesProps) {
+export default function StudioPolicies({ user, userData, studio, onUpdate }: StudioPoliciesProps) {
+    const updateStudioMutation = useMutation(api.studios.updateStudio);
+    const studioPolicies = studio?.policies || userData?.policies;
+
     const [policies, setPolicies] = useState<StudioPolicies>({
         // Booking Rules
-        minBookingHours: userData?.policies?.minBookingHours ?? 2,
-        maxBookingHours: userData?.policies?.maxBookingHours ?? 12,
-        advanceBookingDays: userData?.policies?.advanceBookingDays ?? 14,
-        minAdvanceHours: userData?.policies?.minAdvanceHours ?? 24,
-        autoApprove: userData?.policies?.autoApprove ?? false,
+        minBookingHours: studioPolicies?.minBookingHours ?? 2,
+        maxBookingHours: studioPolicies?.maxBookingHours ?? 12,
+        advanceBookingDays: studioPolicies?.advanceBookingDays ?? 14,
+        minAdvanceHours: studioPolicies?.minAdvanceHours ?? 24,
+        autoApprove: studioPolicies?.autoApprove ?? false,
 
         // Cancellation Policy
-        cancellationPolicy: userData?.policies?.cancellationPolicy ?? 'moderate',
-        cancellationNoticeHours: userData?.policies?.cancellationNoticeHours ?? 48,
-        refundPercentage: userData?.policies?.refundPercentage ?? 50,
+        cancellationPolicy: studioPolicies?.cancellationPolicy ?? 'moderate',
+        cancellationNoticeHours: studioPolicies?.cancellationNoticeHours ?? 48,
+        refundPercentage: studioPolicies?.refundPercentage ?? 50,
 
         // Pricing
-        depositRequired: userData?.policies?.depositRequired ?? true,
-        depositPercentage: userData?.policies?.depositPercentage ?? 25,
-        peakHourMultiplier: userData?.policies?.peakHourMultiplier ?? 1.0,
-        peakHoursStart: userData?.policies?.peakHoursStart ?? '',
-        peakHoursEnd: userData?.policies?.peakHoursEnd ?? '',
-        weekendMultiplier: userData?.policies?.weekendMultiplier ?? 1.0,
+        depositRequired: studioPolicies?.depositRequired ?? true,
+        depositPercentage: studioPolicies?.depositPercentage ?? 25,
+        peakHourMultiplier: studioPolicies?.peakHourMultiplier ?? 1.0,
+        peakHoursStart: studioPolicies?.peakHoursStart ?? '',
+        peakHoursEnd: studioPolicies?.peakHoursEnd ?? '',
+        weekendMultiplier: studioPolicies?.weekendMultiplier ?? 1.0,
 
         // House Rules
-        houseRules: userData?.policies?.houseRules ?? '',
-        whatToExpect: userData?.policies?.whatToExpect ?? '',
-        whatToBring: userData?.policies?.whatToBring ?? '',
-        parkingInstructions: userData?.policies?.parkingInstructions ?? '',
+        houseRules: studioPolicies?.houseRules ?? '',
+        whatToExpect: studioPolicies?.whatToExpect ?? '',
+        whatToBring: studioPolicies?.whatToBring ?? '',
+        parkingInstructions: studioPolicies?.parkingInstructions ?? '',
 
         // Safety & Legal
-        requiresWaiver: userData?.policies?.requiresWaiver ?? false,
-        waiverText: userData?.policies?.waiverText ?? '',
-        ageRequirement: userData?.policies?.ageRequirement ?? 18,
+        requiresWaiver: studioPolicies?.requiresWaiver ?? false,
+        waiverText: studioPolicies?.waiverText ?? '',
+        ageRequirement: studioPolicies?.ageRequirement ?? 18,
     });
+
+    // Synchronize policies from Convex studio doc
+    useEffect(() => {
+        if (studio?.policies) {
+            setPolicies(prev => ({
+                ...prev,
+                ...studio.policies,
+            }));
+        }
+    }, [studio?.policies]);
 
     const [saving, setSaving] = useState<boolean>(false);
     const [expandedSection, setExpandedSection] = useState<string>('booking');
@@ -109,26 +125,21 @@ export default function StudioPolicies({ user, userData, onUpdate }: StudioPolic
     const handleSave = async (): Promise<void> => {
         setSaving(true);
         const toastId = toast.loading('Saving policies...');
-        const userId = userData?.id || user?.id || user?.uid;
 
         try {
-            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ policies })
-            });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to save');
+            if (studio?._id) {
+                const callerClerkId = user?.id || userData?.clerkId;
+                await updateStudioMutation({
+                    clerkId: callerClerkId,
+                    studioId: studio._id,
+                    policies,
+                });
             }
-
             toast.success('Policies saved!', { id: toastId });
             if (onUpdate) onUpdate({ policies });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Save failed:', error);
-            toast.error('Failed to save', { id: toastId });
+            toast.error(error.message || 'Failed to save', { id: toastId });
         } finally {
             setSaving(false);
         }

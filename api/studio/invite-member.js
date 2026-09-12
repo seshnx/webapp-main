@@ -41,18 +41,8 @@ export default async function handler(req, res) {
       const verified = await verifyToken(sessionToken, { secretKey: clerkSecret });
       verifiedUserId = verified?.sub;
     } catch (jwtErr) {
-      try {
-        const payloadBase64 = sessionToken.split('.')[1];
-        if (payloadBase64) {
-          const decoded = JSON.parse(Buffer.from(payloadBase64, 'base64').toString());
-          if (decoded && decoded.sub) {
-            verifiedUserId = decoded.sub;
-          }
-        }
-      } catch (sessErr) {
-        console.error('❌ Token verification error:', jwtErr.message);
-        return res.status(401).json({ error: 'Invalid or expired session' });
-      }
+      console.error('❌ Token verification error:', jwtErr.message);
+      return res.status(401).json({ error: 'Invalid or expired session' });
     }
 
     if (!verifiedUserId) {

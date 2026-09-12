@@ -1,12 +1,14 @@
-import React, { useState, useRef, useEffect, MouseEvent, FormEvent } from 'react';
+import React, { useState, useRef, useEffect, useMemo, MouseEvent, FormEvent } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
-import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical, Upload, CheckCircle2 } from 'lucide-react';
+import { Sun, Moon, Bell, Menu, MessageCircle, Calendar, ChevronDown, RefreshCw, GraduationCap, Layout, Search as SearchIcon, MoreVertical, Upload, CheckCircle2, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 import LogoWhite from '../assets/SeshNx-PNG cCropped white text.png';
 import LogoDark from '../assets/SeshNx-PNG cCropped.png';
 import UserAvatar, { UserAvatarProps } from './shared/UserAvatar';
 import NotificationsPanel, { NotificationBadge } from './social/NotificationsPanel';
+import SearchPanel from './social/SearchPanel';
 import { useNotifications } from '../hooks/useNotifications';
 import { useUploadManager } from '../contexts/UploadManagerContext';
 import { getDisplayRole } from '../config/constants';
@@ -131,11 +133,14 @@ export default function Navbar({
   const [showRoleMenu, setShowRoleMenu] = useState<boolean>(false);
   const [isSwitching, setIsSwitching] = useState<boolean>(false);
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [showMobileSearch, setShowMobileSearch] = useState<boolean>(false);
+  const [showSearchPanel, setShowSearchPanel] = useState<boolean>(false);
   const [showOverflowMenu, setShowOverflowMenu] = useState<boolean>(false);
   const [overflowItems, setOverflowItems] = useState<string[]>([]);
   const notifRef = useRef<HTMLDivElement>(null);
   const roleRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const overflowRef = useRef<HTMLDivElement>(null);
   const navContentRef = useRef<HTMLDivElement>(null);
   const { t } = useLanguage();
@@ -182,9 +187,21 @@ export default function Navbar({
   };
 
   const displayRole = getDisplayRoleLocal(activeRole);
-  const roles: AccountType[] = userData?.accountTypes || [];
+  const roles: AccountTypeExtended[] = useMemo(() => {
+    const set = new Set<AccountTypeExtended>(userData?.accountTypes || []);
+    if (userData?.subprofiles) {
+      Object.keys(userData.subprofiles).forEach(r => set.add(r as AccountTypeExtended));
+    }
+    if (subProfiles) {
+      Object.keys(subProfiles).forEach(r => set.add(r as AccountTypeExtended));
+    }
+    if (activeRole) {
+      set.add(activeRole);
+    }
+    return Array.from(set);
+  }, [userData?.accountTypes, userData?.subprofiles, subProfiles, activeRole]);
 
-  const eduRoles: AccountType[] = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin'];
+  const eduRoles: AccountTypeExtended[] = ['Student', 'EDUStaff', 'Intern', 'EDUAdmin'];
   const hasEduAccess = roles.some(r => eduRoles.includes(r));
   const isEduTab = activeTab.startsWith('edu');
 
@@ -192,13 +209,13 @@ export default function Navbar({
       if (!role || role === 'Fan' || role === 'User') {
           return userData?.displayName || userData?.effectiveDisplayName || userData?.firstName || 'User';
       }
-      // Check MongoDB subprofiles first, then fall back to legacy subProfiles prop
-      const mongoSub = userData?.subprofiles?.[role];
+      // Check user subprofiles first, then fall back to legacy subProfiles prop
+      const activeSub = userData?.subprofiles?.[role];
       const legacySub = subProfiles?.[role];
-      const sub = mongoSub || legacySub;
+      const sub = activeSub || legacySub;
 
-      // Use display_name from MongoDB subprofile, or displayName from legacy structure
-      const subDisplayName = mongoSub?.display_name || legacySub?.displayName;
+      // Use display_name from subprofile, or displayName from legacy structure
+      const subDisplayName = activeSub?.display_name || legacySub?.displayName;
 
       return subDisplayName || userData?.displayName || userData?.effectiveDisplayName || userData?.firstName || 'User';
   };
@@ -308,12 +325,22 @@ export default function Navbar({
       }
   };
 
-  // Global search submit: navigate to feed for now
-  const handleSearchSubmit = (e: FormEvent<HTMLFormElement>): void => {
-      e.preventDefault();
+  // Auto-focus mobile search input when mobile search bar appears
+  useEffect(() => {
+    if (showMobileSearch) {
+      setTimeout(() => {
+        mobileSearchInputRef.current?.focus();
+      }, 60);
+    }
+  }, [showMobileSearch]);
+
+  // Global search submit: open SearchPanel
+  const handleSearchSubmit = (e?: FormEvent<HTMLFormElement>): void => {
+      if (e) e.preventDefault();
+      if (!searchQuery.trim()) return;
       setShowNotifs(false);
-      setActiveTab('feed');
-      // Placeholder: tie into actual search when backend ready
+      setShowMobileSearch(false);
+      setShowSearchPanel(true);
   };
 
   // Keyboard shortcut Ctrl/Cmd + K to focus search
@@ -342,12 +369,12 @@ export default function Navbar({
 
       // Determine which items to hide based on available space
       const itemsToHide: string[] = [];
-      const rightSectionItems = ['eduToggle', 'roleSwitcher', 'themeToggle', 'notifications', 'avatar'];
 
-      if (totalWidth > navWidth - 100) { // 100px buffer
-        // Hide items in reverse order of priority
-        if (roles.length > 1) itemsToHide.push('roleSwitcher');
+      if (totalWidth > navWidth - 30) {
+        // Hide optional eduToggle before the essential RoleSwitcher
         if (hasEduAccess) itemsToHide.push('eduToggle');
+        // Only overflow roleSwitcher on ultra-narrow viewports where space is physically impossible
+        if (navWidth < 380 && roles.length > 1) itemsToHide.push('roleSwitcher');
       }
 
       setOverflowItems(itemsToHide);
@@ -436,7 +463,7 @@ export default function Navbar({
         </div>
 
         {/* Global Search - desktop only */}
-        <div className="hidden md:flex flex-1 flex-col items-center justify-center max-w-xl px-4 gap-1">
+        <div className="hidden md:flex flex-1 flex-col items-center justify-center max-w-xl px-4 gap-1 min-w-0">
           {/* Breadcrumb Navigation - can be toggled in settings */}
           {showBreadcrumbs && (
             <div className="w-full flex justify-start">
@@ -560,7 +587,7 @@ export default function Navbar({
           )}
 
           {roles.length > 1 && !overflowItems.includes('roleSwitcher') && (
-              <div className="relative hidden sm:flex items-center gap-3" ref={roleRef}>
+              <div className="relative flex items-center gap-1.5 sm:gap-3 shrink-0" ref={roleRef}>
                   <button
                       type="button"
                       onClick={(e) => {
@@ -568,24 +595,25 @@ export default function Navbar({
                           e.stopPropagation();
                           setShowRoleMenu(!showRoleMenu);
                       }}
-                      className="group flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold transition border border-gray-200 dark:border-gray-700"
+                      className="group flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200 text-xs font-bold transition border border-gray-200 dark:border-gray-700 shrink-0"
+                      title={`Active role: ${displayRole}. Click to switch role.`}
                   >
                       <RefreshCw size={12} className={`text-brand-blue shrink-0 transition-transform ${isSwitching ? 'rotate-180 duration-500' : ''}`}/>
-                      <span>{displayRole}</span>
+                      <span className="truncate max-w-[75px] xs:max-w-[95px] sm:max-w-none">{displayRole}</span>
                       <ChevronDown size={12} className={`shrink-0 transition-transform ${showRoleMenu ? 'rotate-180' : ''}`}/>
                   </button>
 
-                  <div className="flex flex-col leading-tight">
+                  <div className="hidden xl:flex flex-col leading-tight">
                       <span className="text-[10px] text-gray-500 font-medium">Posting as</span>
-                      <span className="text-xs font-bold dark:text-white truncate max-w-[150px]">{currentDisplayName}</span>
+                      <span className="text-xs font-bold dark:text-white truncate max-w-[120px]">{currentDisplayName}</span>
                   </div>
 
                   {showRoleMenu && (
-                      <div className="absolute left-0 top-full mt-2 w-56 bg-white dark:bg-[#2c2e36] border dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
+                      <div className="absolute right-0 sm:left-0 sm:right-auto top-full mt-2 w-56 bg-white dark:bg-[#2c2e36] border dark:border-gray-700 rounded-xl shadow-xl z-50 overflow-hidden animate-in fade-in slide-in-from-top-1 duration-200">
                           <div className="p-2 border-b dark:border-gray-700 bg-gray-50 dark:bg-[#23262f]">
                               <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider pl-2">Switch Profile Context</span>
                           </div>
-                          <div className="p-1">
+                          <div className="p-1 max-h-64 overflow-y-auto">
                               {roles.map(role => {
                                   const name = getDisplayName(role);
                                   return (
@@ -595,11 +623,11 @@ export default function Navbar({
                                           onClick={(e) => handleRoleSelect(role, e)}
                                           className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition flex items-center justify-between ${activeRole === role ? 'bg-blue-50 dark:bg-blue-900/20 text-brand-blue' : 'hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'}`}
                                       >
-                                          <div className="flex flex-col">
-                                              <span>{name}</span>
+                                          <div className="flex flex-col min-w-0">
+                                              <span className="truncate">{name}</span>
                                               <span className="text-[10px] opacity-70 font-normal uppercase">{role}</span>
                                           </div>
-                                          {activeRole === role && <div className="w-1.5 h-1.5 rounded-full bg-brand-blue"></div>}
+                                          {activeRole === role && <div className="w-1.5 h-1.5 rounded-full bg-brand-blue shrink-0 ml-2"></div>}
                                       </button>
                                   );
                               })}
@@ -616,6 +644,19 @@ export default function Navbar({
               <span className="text-[10px] font-bold text-orange-700 dark:text-orange-300">DEV BYPASS</span>
             </div>
           )}
+
+          {/* Mobile Search Button - Visible when desktop search bar disappears (< md) */}
+          <button
+            type="button"
+            onClick={() => setShowMobileSearch(prev => !prev)}
+            className={`p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 md:hidden transition flex items-center justify-center ${
+              showMobileSearch ? 'bg-blue-50 dark:bg-blue-900/30 text-brand-blue dark:text-blue-400' : ''
+            }`}
+            aria-label="Search"
+            title="Search"
+          >
+            <SearchIcon size={20} aria-hidden="true" />
+          </button>
 
           <button
             onClick={toggleTheme}
@@ -723,6 +764,64 @@ export default function Navbar({
           />
         )}
       </nav>
+
+      {/* Mobile Search Bar Drawer */}
+      <AnimatePresence>
+        {showMobileSearch && (
+          <motion.div
+            initial={{ opacity: 0, y: -8, height: 0 }}
+            animate={{ opacity: 1, y: 0, height: 'auto' }}
+            exit={{ opacity: 0, y: -8, height: 0 }}
+            transition={{ duration: 0.18 }}
+            className="md:hidden border-b border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-[#1e2128]/95 backdrop-blur-md px-4 py-2.5 shadow-md z-20 sticky top-16 w-full"
+          >
+            <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 w-full">
+              <div className="flex items-center gap-2 flex-1 bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full px-3.5 py-1.5 focus-within:ring-2 focus-within:ring-brand-blue/70">
+                <SearchIcon size={16} className="text-gray-400 shrink-0" />
+                <input
+                  ref={mobileSearchInputRef}
+                  value={searchQuery}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setSearchQuery(e.target.value)}
+                  placeholder={t('searchPlaceholder') || 'Search posts, users, hashtags...'}
+                  className="flex-1 bg-transparent text-sm text-gray-800 dark:text-gray-100 placeholder:text-gray-400 focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="text-xs font-semibold text-white bg-brand-blue hover:bg-blue-600 rounded-full px-3.5 py-1.5 transition-colors shadow-sm shrink-0"
+              >
+                Search
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMobileSearch(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 rounded-full shrink-0"
+                aria-label="Close search"
+              >
+                <X size={18} />
+              </button>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Full-featured Search Panel Modal for Posts, Users, & Hashtags */}
+      <SearchPanel
+        isOpen={showSearchPanel}
+        onClose={() => setShowSearchPanel(false)}
+        initialQuery={searchQuery}
+        currentUser={user}
+        currentUserData={userData}
+      />
     </>
   );
 }

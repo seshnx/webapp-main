@@ -102,7 +102,7 @@ export default function TipModal({ creatorName, creatorPhoto, creatorUserId, cre
             </div>
 
             {/* Creator Header */}
-            <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 rounded-2xl mb-5 border dark:border-gray-700">
+            <div className="flex items-center gap-3 p-3 bg-gradient-to-r from-blue-50 to-sky-50 dark:from-blue-950/30 dark:to-sky-950/30 rounded-2xl mb-5 border dark:border-gray-700">
               <UserAvatar src={creatorPhoto} name={creatorName} size="md" />
               <div>
                 <h4 className="font-bold text-sm dark:text-white">{creatorName}</h4>

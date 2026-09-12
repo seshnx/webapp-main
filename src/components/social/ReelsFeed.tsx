@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import UserAvatar from '../shared/UserAvatar';
 import CommentSection from './CommentSection';
 import TipModal from './TipModal';
-import { useTrendingPosts, useFeed } from '../../hooks/useConvex';
+import { useTrendingPosts, useFeed, useActiveSponsoredShorts } from '../../hooks/useConvex';
+import SponsoredReelCard from './SponsoredReelCard';
 
 interface ReelItem {
   id: string;
@@ -33,6 +34,7 @@ export default function ReelsFeed({ user, userData, onOpenProfile }: ReelsFeedPr
 
   const feedPosts = useFeed(50);
   const dbPosts = feedPosts || [];
+  const sponsoredShorts = useActiveSponsoredShorts(userData?.subscriptionTier || 'free') || [];
 
   // Extract real video posts from Convex database
   const realVideoPosts: ReelItem[] = (dbPosts || [])
@@ -54,26 +56,44 @@ export default function ReelsFeed({ user, userData, onOpenProfile }: ReelsFeedPr
 
   return (
     <div className="w-full max-w-md mx-auto space-y-6">
+      {/* If there are sponsored shorts, showcase them */}
+      {sponsoredShorts.length > 0 && (
+        <div className="space-y-6">
+          {sponsoredShorts.map((shortAd: any) => (
+            <SponsoredReelCard key={shortAd._id} ad={shortAd} />
+          ))}
+        </div>
+      )}
+
       {realVideoPosts.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-dark-card rounded-2xl border dark:border-gray-700 p-6">
+        <div className="text-center py-12 bg-white dark:bg-dark-card rounded-3xl border dark:border-gray-700 p-6 shadow-sm">
           <Film size={36} className="mx-auto mb-3 text-brand-blue opacity-50" />
-          <h4 className="font-bold text-base dark:text-white mb-1">No Video Shorts Yet</h4>
-          <p className="text-xs text-gray-500 max-w-xs mx-auto mb-4">
+          <h4 className="font-bold text-base dark:text-white mb-1">
+            {sponsoredShorts.length > 0 ? 'Community Creator Shorts' : 'No Video Shorts Yet'}
+          </h4>
+          <p className="text-xs text-gray-500 max-w-xs mx-auto mb-2">
             Be the first creator to share a video reel or session highlight with the community!
           </p>
         </div>
       ) : (
-        realVideoPosts.map(reel => (
-          <ReelCard
-            key={reel.id}
-            reel={reel}
-            user={user}
-            onToggleLike={() => {}}
-            onOpenComments={() => setActiveCommentReelId(reel.id)}
-            onOpenTip={() => setTipReel(reel)}
-            onOpenProfile={onOpenProfile}
-          />
-        ))
+        realVideoPosts.map((reel, index) => {
+          const shouldInjectShortAd = sponsoredShorts.length > 0 && (index + 1) % 3 === 0;
+          const adShort = shouldInjectShortAd ? sponsoredShorts[Math.floor(index / 3) % sponsoredShorts.length] : null;
+
+          return (
+            <React.Fragment key={reel.id}>
+              <ReelCard
+                reel={reel}
+                user={user}
+                onToggleLike={() => {}}
+                onOpenComments={() => setActiveCommentReelId(reel.id)}
+                onOpenTip={() => setTipReel(reel)}
+                onOpenProfile={onOpenProfile}
+              />
+              {adShort && <SponsoredReelCard ad={adShort as any} />}
+            </React.Fragment>
+          );
+        })
       )}
 
       {/* Comments Drawer / Sheet */}
@@ -180,7 +200,7 @@ function ReelCard({
           className="relative cursor-pointer"
           onClick={() => onOpenProfile?.(reel.authorId)}
         >
-          <div className="p-0.5 bg-gradient-to-tr from-brand-blue to-purple-500 rounded-full">
+          <div className="p-0.5 bg-gradient-to-tr from-brand-blue to-sky-400 rounded-full">
             <UserAvatar src={reel.authorAvatar} name={reel.authorName} size="md" />
           </div>
         </div>

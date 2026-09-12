@@ -5,6 +5,9 @@ import StudioMap from './shared/StudioMap';
 import LocationPicker from './shared/LocationPicker';
 import { fetchZipLocation } from '../utils/geocode';
 import EquipmentAutocomplete from './shared/EquipmentAutocomplete';
+import { useMutation } from 'convex/react';
+import { api } from '../../convex/_generated/api';
+import toast from 'react-hot-toast';
 
 /**
  * Location interface
@@ -13,6 +16,7 @@ interface Location {
     lat: number;
     lng: number;
     name: string;
+    cityState?: string;
 }
 
 /**
@@ -65,7 +69,7 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }: 
 
     const handleLocationUpdate = (loc: Location) => {
         if (loc.lat && loc.lng) {
-            setLocation({ lat: loc.lat, lng: loc.lng, name: loc.cityState || 'Selected Location' });
+            setLocation({ lat: loc.lat, lng: loc.lng, name: loc.name || loc.cityState || 'Selected Location' });
         }
     };
 
@@ -154,61 +158,41 @@ export default function BroadcastRequest({ user, userData, onBack, onSuccess }: 
     const instrumentRequiredActions = ['Play Instrument', 'Session Work'];
     const needsInstrument = role === 'Talent' && instrumentRequiredActions.includes(action);
 
+    const createBroadcastMutation = useMutation(api.broadcasts.createBroadcast);
+
     const sendBroadcast = async () => {
-        if (!title || !genre) return alert("Please complete the request sentence.");
-        if (needsInstrument && !instrument) return alert("Please select an instrument.");
+        if (!title || !genre) return toast.error("Please complete the request sentence.");
+        if (needsInstrument && !instrument) return toast.error("Please select an instrument.");
 
         const validNeeds = needs.filter(n => n.value.trim() !== '');
 
         let serviceString = `${role} - ${action}`;
         if (instrument) serviceString += ` ${instrument}`;
 
-        // TODO: Migrate to Neon/Convex - Supabase legacy code
-        const supabase = (window as any).supabase;
-        if (!supabase) {
-            alert("Database unavailable.");
+        const userId = user?.id || user?.uid || userData?.clerkId;
+        if (!userId) {
+            toast.error("Please sign in to send a broadcast.");
             return;
         }
 
         try {
-            const userId = user?.id || user?.uid;
-            const { error } = await supabase
-                .from('bookings')
-                .insert({
-                    sender_id: userId,
-                    sender_name: "Broadcast Request",
-                    target_id: "BROADCAST",
-                    target_name: title,
-                    role,
-                    action,
-                    instrument: instrument || null,
-                    genre,
-                    service_type: serviceString,
+            await createBroadcastMutation({
+                senderClerkId: userId,
+                serviceType: serviceString,
+                targetName: title,
+                offerAmount: budget ? parseInt(budget) : undefined,
+                date: date || 'Flexible',
+                time: time || 'Flexible',
+                requirements: validNeeds.map(n => `[${n.type}] ${n.value}`),
+                location: (location.lat && location.lng) ? { lat: location.lat, lng: location.lng } : undefined,
+                locationName: location.name,
+            });
 
-                    // New Fields
-                    date: date || 'Flexible',
-                    time: time || 'Flexible',
-                    offer_amount: budget ? parseInt(budget) : null,
-                    reference_links: references,
-                    experience_level: experienceLevel,
-                    payment_type: paymentType,
-
-                    requirements: validNeeds,
-                    message: validNeeds.map(n => `[${n.type}] ${n.value}`).join('\n'),
-                    range: currentRange,
-                    status: 'Broadcasting',
-                    type: 'Broadcast',
-                    location: { lat: location.lat, lng: location.lng },
-                    created_at: new Date().toISOString()
-                });
-
-            if (error) throw error;
-
-            alert(`Broadcast sent to ${role}s within ${currentRange} miles!`);
+            toast.success(`Broadcast sent to ${role}s!`);
             onSuccess?.();
-        } catch (e) {
-            console.error(e);
-            alert("Failed to send broadcast.");
+        } catch (e: any) {
+            console.error("Broadcast failed:", e);
+            toast.error("Failed to send broadcast: " + (e?.message || "Unknown error"));
         }
     };
 

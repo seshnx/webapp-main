@@ -33,7 +33,11 @@ export function useGearListings(options: { limit?: number; status?: string } = {
   });
 
   return useMemo(() => ({
-    data: items?.filter(item => !options.status || item.status === options.status) || [],
+    data: items?.filter(item => {
+      if (!options.status) return true;
+      if (options.status === 'active') return item.status === 'active' || item.status === 'available';
+      return item.status === options.status;
+    }) || [],
     loading: items === undefined,
     refresh: () => {}, // No-op - Convex auto-updates!
   }), [items, options.status]);
@@ -170,10 +174,11 @@ export function useMarketplaceItemMutations() {
     }
   }, [update]);
 
-  const deleteItem = useCallback(async (itemId: string) => {
+  const deleteItem = useCallback(async (itemId: string, sellerId?: string) => {
     try {
       await remove({
         itemId: itemId as any,
+        sellerId,
       });
     } catch (error) {
       console.error('Failed to delete item:', error);
@@ -361,11 +366,13 @@ export function useTransactionMutations() {
     }
   }, [cancel]);
 
-  const addTrackingNumberAction = useCallback(async (transactionId: string, trackingNumber: string) => {
+  const addTrackingNumberAction = useCallback(async (transactionId: string, trackingNumber: string, carrier?: string, trackingUrl?: string) => {
     try {
       await addTracking({
         transactionId: transactionId as any,
         trackingNumber,
+        carrier,
+        trackingUrl,
       });
     } catch (error) {
       console.error('Failed to add tracking number:', error);

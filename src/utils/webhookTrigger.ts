@@ -1,7 +1,7 @@
 /**
  * Webhook Trigger Utility
  * 
- * Triggers Convex sync webhooks when data changes in Neon/MongoDB
+ * Triggers Convex sync webhooks when database operations occur
  * Call these functions after database operations to sync to Convex
  */
 

@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Loader2, RefreshCw, Users, Compass, UserPlus, Search, Film, BarChart3, Radio, Bookmark, TrendingUp, Sparkles, Calendar, Settings, ShieldCheck, Eye, Flame, ChevronRight, Building2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import PostCard from './social/PostCard';
@@ -13,10 +14,12 @@ import { useFollowSystem } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import UserAvatar from './shared/UserAvatar';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useFeed, useHomeFeed, useStudioPosts, useCreatePost, useUserByClerkId, useActiveSponsoredPosts } from '@/hooks/useConvex';
-import { shouldShowAds } from '../utils/tierPermissions';
+import { useFeed, useHomeFeed, useStudioPosts, useCreatePost, useUserByClerkId, useActiveSponsoredPosts, useSeedPlaceholderAds } from '@/hooks/useConvex';
+import { shouldShowAds, getAdInterval } from '../utils/tierPermissions';
 import SponsoredPostCard from './social/SponsoredPostCard';
 import BoostVisibilityModal from './social/BoostVisibilityModal';
+import { useUserSettings } from '../hooks/useUserSettings';
+import toast from 'react-hot-toast';
 import type { UserData } from '../types';
 
 // =====================================================
@@ -102,8 +105,25 @@ export default function SocialFeed({
   subProfiles = {},
   openPublicProfile
 }: SocialFeedProps): JSX.Element {
+  const location = useLocation();
   const [reportTarget, setReportTarget] = useState<Post | null>(null);
-  const [feedMode, setFeedMode] = useState<FeedMode>(FEED_MODES.FOR_YOU);
+
+  // Initialize and sync feedMode with URL pathname
+  const [feedMode, setFeedMode] = useState<FeedMode>(() => {
+    if (location.pathname.includes('/shorts') || location.pathname.includes('/reels')) return FEED_MODES.REELS;
+    if (location.pathname.includes('/spaces') || location.pathname.includes('/circles')) return FEED_MODES.COMMUNITIES;
+    if (location.pathname.includes('/studio')) return FEED_MODES.STUDIO;
+    if (location.pathname.includes('/following')) return FEED_MODES.FOLLOWING;
+    return FEED_MODES.FOR_YOU;
+  });
+
+  useEffect(() => {
+    if (location.pathname.includes('/shorts') || location.pathname.includes('/reels')) setFeedMode(FEED_MODES.REELS);
+    else if (location.pathname.includes('/spaces') || location.pathname.includes('/circles')) setFeedMode(FEED_MODES.COMMUNITIES);
+    else if (location.pathname.includes('/studio')) setFeedMode(FEED_MODES.STUDIO);
+    else if (location.pathname.includes('/following')) setFeedMode(FEED_MODES.FOLLOWING);
+    else if (location.pathname === '/feed' || location.pathname === '/' || location.pathname === '/social') setFeedMode(FEED_MODES.FOR_YOU);
+  }, [location.pathname]);
   const [suggestedUsers, setSuggestedUsers] = useState<SuggestedUser[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState<boolean>(false);
 
@@ -113,9 +133,12 @@ export default function SocialFeed({
   const feedAlgorithm = settingsObj?.social?.feedAlgorithm || 'recommended';
   const autoPlayVideos = settingsObj?.social?.autoPlayVideos !== false;
   const showSuggestedAccounts = settingsObj?.social?.showSuggestedAccounts !== false;
+  const userId = user?.id || user?.uid;
+  const { settings: userSettings } = useUserSettings(userId);
+  const tipButtonPlacement: 'always_visible' | 'post_menu' | 'public_profile' | 'always_hidden' =
+    userSettings?.social?.tipButtonPlacement || 'public_profile';
 
   // Use the follow system hook
-  const userId = user?.id || user?.uid;
   const {
     following,
     stats,
@@ -134,7 +157,12 @@ export default function SocialFeed({
   // Ad eligibility and active campaigns
   const isAdEligible = shouldShowAds(userData);
   const activeAds = useActiveSponsoredPosts(userData?.subscriptionTier || 'free') || [];
+  const seedPlaceholderAds = useSeedPlaceholderAds();
   const [showBoostModal, setShowBoostModal] = useState<boolean>(false);
+
+  useEffect(() => {
+    seedPlaceholderAds().catch(() => {});
+  }, []);
 
   // Get posts based on feed mode
   const feedPosts = useFeed(20); // For You mode
@@ -240,31 +268,20 @@ export default function SocialFeed({
       const followingIdSet = new Set(followingIds);
       followingIdSet.add(currentUserId);
 
-      const uniqueUserIds = [...new Set(
-        recentPosts
-          .filter((post: any) => !followingIdSet.has(post.authorId))
-          .map((post: any) => post.authorId)
-      )].slice(0, 10);
-
-      // Fetch user data for each ID
-      const suggestedUsersData: SuggestedUser[] = [];
-      for (const uid of uniqueUserIds) {
-        try {
-          const userData = await fetch(`/api/users/${uid}`).then(r => r.json());
-          if (userData && userData.id) {
-            suggestedUsersData.push({
-              userId: userData.id,
-              displayName: userData.displayName || userData.username || 'User',
-              photoURL: userData.photoURL || null,
-              role: userData.accountTypes?.[0] || 'Fan'
-            });
-          }
-        } catch (e) {
-          console.error('Failed to fetch user:', e);
+      const suggestedUsersMap = new Map<string, SuggestedUser>();
+      for (const post of recentPosts) {
+        const uid = post.authorId || post.userId;
+        if (uid && !followingIdSet.has(uid) && !suggestedUsersMap.has(uid)) {
+          suggestedUsersMap.set(uid, {
+            userId: String(uid),
+            displayName: post.authorName || post.displayName || 'Creator',
+            photoURL: post.authorPhoto || null,
+            role: post.role || 'Creator'
+          });
         }
       }
 
-      setSuggestedUsers(suggestedUsersData.slice(0, 5));
+      setSuggestedUsers(Array.from(suggestedUsersMap.values()).slice(0, 5));
     } catch (error) {
       console.error('Error loading suggestions:', error);
     }
@@ -310,12 +327,12 @@ export default function SocialFeed({
       const clerkId = user.id || user.uid;
       const activeRole = userData?.activeProfileRole || userData?.accountTypes?.[0] || 'Fan';
 
-      // Get active profile data from MongoDB subprofiles first, then fall back to legacy subProfiles
-      const mongoSubprofile = userData?.subprofiles?.[activeRole];
+      // Get active profile data from subprofiles first, then fall back to legacy subProfiles
+      const activeSubprofile = userData?.subprofiles?.[activeRole];
       const legacySubprofile = subProfiles?.[activeRole];
-      const activeProfile = mongoSubprofile || legacySubprofile || {};
+      const activeProfile = activeSubprofile || legacySubprofile || {};
 
-      // Use display_name from MongoDB structure or displayName from legacy structure
+      // Use display_name from subprofile structure or displayName from legacy structure
       const displayName = activeProfile?.display_name ||
                          activeProfile?.displayName ||
                          userData?.displayName ||
@@ -543,7 +560,7 @@ export default function SocialFeed({
                 onClick={() => setFeedMode(FEED_MODES.STUDIO)}
                 className={`flex items-center justify-center gap-1 sm:gap-1.5 px-1.5 sm:px-2.5 py-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all duration-200 w-full min-w-0 ${
                   feedMode === FEED_MODES.STUDIO
-                    ? 'bg-gradient-to-r from-purple-600 to-brand-blue text-white shadow-md shadow-purple-500/20'
+                    ? 'bg-gradient-to-r from-blue-600 to-brand-blue text-white shadow-md shadow-blue-500/20'
                     : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100/70 dark:hover:bg-white/[0.05]'
                 }`}
               >
@@ -651,8 +668,9 @@ export default function SocialFeed({
               >
                 <AnimatePresence mode='popLayout'>
                   {posts.map((post, index) => {
-                    const shouldInjectAd = isAdEligible && activeAds.length > 0 && (index + 1) % 6 === 0;
-                    const adToDisplay = shouldInjectAd ? activeAds[Math.floor(index / 6) % activeAds.length] : null;
+                    const adInterval = getAdInterval(userData);
+                    const shouldInjectAd = isAdEligible && activeAds.length > 0 && (index + 1) % adInterval === 0;
+                    const adToDisplay = shouldInjectAd ? activeAds[Math.floor(index / adInterval) % activeAds.length] : null;
 
                     return (
                       <React.Fragment key={post.id}>
@@ -669,6 +687,7 @@ export default function SocialFeed({
                           isFollowingAuthor={isFollowing(post.userId)}
                           onToggleFollow={() => { toggleFollow(post.userId); }}
                           autoPlayVideos={autoPlayVideos}
+                          tipButtonPlacement={tipButtonPlacement}
                         />
                         {adToDisplay && (
                           <SponsoredPostCard ad={adToDisplay as any} />
@@ -678,13 +697,21 @@ export default function SocialFeed({
                   })}
                 </AnimatePresence>
 
+                {posts.length === 0 && activeAds.length > 0 && isAdEligible && (
+                  <div className="space-y-4">
+                    {activeAds.map((ad) => (
+                      <SponsoredPostCard key={ad._id} ad={ad as any} />
+                    ))}
+                  </div>
+                )}
+
                 {posts.length === 0 && feedMode === FEED_MODES.FOR_YOU && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     className="text-center py-10 text-gray-500"
                   >
-                    <RefreshCw className="mx-auto mb-2 opacity-50" size={32} />
+                    <RefreshCw className="mx-auto mb-2 opacity-50 text-brand-blue" size={32} />
                     <p>{t('noPosts')}. {t('beFirst')}</p>
                   </motion.div>
                 )}
@@ -729,8 +756,8 @@ export default function SocialFeed({
         {/* ===================================================== */}
         <div className="hidden lg:block lg:col-span-3 space-y-4">
           {/* Boost Visibility Action Card */}
-          <div className="bg-gradient-to-br from-purple-950/40 via-blue-950/30 to-gray-900/50 p-4 rounded-2xl border border-purple-500/30 shadow-md">
-            <div className="flex items-center gap-1.5 text-purple-400 font-bold text-xs mb-1">
+          <div className="bg-gradient-to-br from-blue-950/40 via-sky-950/30 to-gray-900/50 p-4 rounded-2xl border border-sky-500/30 shadow-md">
+            <div className="flex items-center gap-1.5 text-sky-400 font-bold text-xs mb-1">
               <Sparkles size={14} /> Priority Visibility
             </div>
             <h4 className="font-black text-xs text-white">Want to reach 3x more artists?</h4>
@@ -739,7 +766,7 @@ export default function SocialFeed({
             </p>
             <button
               onClick={() => setShowBoostModal(true)}
-              className="mt-3 w-full py-1.5 rounded-xl bg-gradient-to-r from-brand-blue to-purple-600 hover:opacity-95 text-white font-bold text-xs shadow-sm transition flex items-center justify-center gap-1"
+              className="mt-3 w-full py-2 rounded-xl bg-gradient-to-r from-brand-blue to-sky-500 hover:opacity-95 text-white font-bold text-xs shadow-md shadow-sky-600/20 transition flex items-center justify-center gap-1"
             >
               <span>Increase Visibility</span>
               <ChevronRight size={14} />
@@ -793,6 +820,7 @@ export default function SocialFeed({
           userData={userData}
         />
       )}
+
     </div>
   );
 }

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     Calendar, Clock, History, Filter, Loader2,
-    Search, LayoutGrid, List, RefreshCw, ChevronRight
+    Search, LayoutGrid, List, RefreshCw, ChevronRight, Star
 } from 'lucide-react';
 import {
     useBookingsByClient,
@@ -11,6 +11,8 @@ import {
 } from '../../services/bookingService';
 import UserAvatar from '../shared/UserAvatar';
 import UnifiedCalendar from '../shared/UnifiedCalendar';
+import AddToCalendarDropdown from '../shared/AddToCalendarDropdown';
+import ReviewModal from '../ReviewModal';
 import toast from 'react-hot-toast';
 
 interface MyBookingsManagementProps {
@@ -46,6 +48,7 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
   const loading = bookingRole === 'client' ? isClientLoading : isTalentLoading;
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [reviewTargetBooking, setReviewTargetBooking] = useState<any>(null);
 
   // Sub-tab configuration for List View
   const subTabs = [
@@ -306,11 +309,23 @@ export default function MyBookingsManagement({ user, userData, openPublicProfile
                   isTalentView={bookingRole === 'talent'}
                   onAccept={() => handleAccept(booking.id || booking._id)}
                   onDecline={() => handleDecline(booking.id || booking._id)}
+                  onReview={() => setReviewTargetBooking(booking)}
                 />
               ))}
             </div>
           )}
         </div>
+      )}
+
+      {/* Leave Review Modal */}
+      {reviewTargetBooking && (
+        <ReviewModal
+          user={user || { id: userId }}
+          targetId={reviewTargetBooking.sender_id || reviewTargetBooking.target_id || reviewTargetBooking.talentId || reviewTargetBooking.clientId || ''}
+          targetName={reviewTargetBooking.clientName || 'Creative'}
+          bookingId={reviewTargetBooking.id || reviewTargetBooking._id}
+          onClose={() => setReviewTargetBooking(null)}
+        />
       )}
     </div>
   );
@@ -324,13 +339,15 @@ function BookingCard({
   openPublicProfile,
   isTalentView,
   onAccept,
-  onDecline
+  onDecline,
+  onReview
 }: { 
   booking: any; 
   openPublicProfile: any;
   isTalentView?: boolean;
   onAccept?: () => void;
   onDecline?: () => void;
+  onReview?: () => void;
 }) {
   const statusColors: any = {
     'Pending': 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400',
@@ -383,6 +400,21 @@ function BookingCard({
           <span className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap ${statusColors[booking.status] || 'bg-gray-100 text-gray-600'}`}>
             {booking.status}
           </span>
+
+          {['Confirmed', 'Accepted', 'Completed', 'In Progress'].includes(booking.status) && (
+            <AddToCalendarDropdown booking={booking} perspective="client" buttonSize="sm" />
+          )}
+
+          {['Completed', 'completed'].includes(booking.status) && (
+            <button 
+              onClick={onReview}
+              className="px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60 text-xs font-bold flex items-center gap-1 hover:bg-amber-100 dark:hover:bg-amber-900/40 transition shadow-xs"
+              title="Leave a Review"
+            >
+              <Star size={13} className="fill-amber-400 text-amber-400" />
+              <span>Review</span>
+            </button>
+          )}
 
           <button 
             onClick={() => openPublicProfile(booking.sender_id || booking.target_id || booking.clientId || booking.talentId, booking.clientName)}

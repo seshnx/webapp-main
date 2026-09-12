@@ -1,62 +1,45 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, Inbox, Calendar, DollarSign,
-  History, UserCog, LucideIcon
+  BarChart3, Inbox, Calendar, DollarSign, History, UserCog,
+  Briefcase, Wrench, Clock, CheckCircle2, AlertCircle, ArrowUpRight,
+  MapPin, Star, Shield, Filter, Search, Plus, Sparkles
 } from 'lucide-react';
-import TechServiceRequests from './TechServiceRequests';
-import TechEarnings from './TechEarnings';
-import TechSchedule from './TechSchedule';
-import TechHistory from './TechHistory';
+import TechServiceBoard from '../tech/TechServiceBoard';
 import TechBusinessProfile from './TechBusinessProfile';
-// TODO: Replace with Convex queries
-// import { useQuery } from 'convex/react';
-// import { api } from '../../../convex/_generated/api';
-// Inline TechMetricsData type until Convex migration
-interface TechMetricsData { [key: string]: any; }
+import TechSchedule from './TechSchedule';
+import TechEarnings from './TechEarnings';
+import TechHistory from './TechHistory';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import UserAvatar from '../shared/UserAvatar';
+import toast from 'react-hot-toast';
+import { motion } from 'framer-motion';
 
-/**
- * Tech tab IDs
- */
-type TechTabId = 'overview' | 'requests' | 'schedule' | 'earnings' | 'history' | 'profile';
+type TechTabId = 'overview' | 'board' | 'orders' | 'schedule' | 'earnings' | 'history' | 'profile';
 
-/**
- * Tech tab configuration
- */
 interface TechTab {
   id: TechTabId;
   label: string;
-  icon: LucideIcon;
+  icon: any;
+  badge?: number;
 }
 
-/**
- * Props for TechManagement component
- */
 export interface TechManagementProps {
   user?: any;
   userData?: any;
 }
 
-/**
- * TechManagement - Main technician dashboard
- *
- * Provides access to:
- * - Overview metrics
- * - Service requests management
- * - Schedule calendar
- * - Earnings dashboard
- * - Job history
- * - Business profile settings
- */
 export default function TechManagement({ user, userData }: TechManagementProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const clerkId = user?.id || user?.uid || userData?.clerkId || '';
 
-  // Get active tab from URL path
   const getTechTabFromPath = (path: string): TechTabId => {
     const parts = path.split('/').filter(Boolean);
     if (parts[0] === 'business-center' && parts[1] === 'tech' && parts[2]) {
-      return parts[2] as TechTabId;
+      const sub = parts[2] as TechTabId;
+      if (['overview', 'board', 'orders', 'schedule', 'earnings', 'history', 'profile'].includes(sub)) return sub;
     }
     return 'overview';
   };
@@ -64,283 +47,336 @@ export default function TechManagement({ user, userData }: TechManagementProps) 
   const [activeTab, setActiveTab] = useState<TechTabId>(() => getTechTabFromPath(location.pathname));
   const isUpdatingFromLocation = useRef(false);
 
-  // Sync URL with active tab
   useEffect(() => {
-    console.log('[TechManagement] Effect 1: activeTab changed', { activeTab, location: location.pathname });
-
     if (isUpdatingFromLocation.current) {
-      console.log('[TechManagement] Effect 1: Skipping (updating from location)');
       isUpdatingFromLocation.current = false;
       return;
     }
 
     const currentPath = activeTab === 'overview' ? '/business-center/tech' : `/business-center/tech/${activeTab}`;
-    console.log('[TechManagement] Effect 1: Checking navigation', { currentPath, location: location.pathname, shouldNavigate: location.pathname !== currentPath });
-
     if (location.pathname !== currentPath) {
-      console.log('[TechManagement] Effect 1: Navigating to', currentPath);
       navigate(currentPath, { replace: true });
     }
   }, [activeTab, navigate]);
 
-  // Update tab when URL changes (location.pathname is the source of truth)
   useEffect(() => {
     const tabFromPath = getTechTabFromPath(location.pathname);
-    console.log('[TechManagement] Effect 2: Location changed', { location: location.pathname, tabFromPath, currentActiveTab: activeTab });
-
     if (tabFromPath !== activeTab) {
-      console.log('[TechManagement] Effect 2: Updating activeTab from location', tabFromPath);
       isUpdatingFromLocation.current = true;
       setActiveTab(tabFromPath);
     }
   }, [location.pathname]);
 
-  // Tech tabs configuration
+  // Query live metrics and assigned jobs
+  const metrics = useQuery(api.techServices.getTechMetrics, { techId: clerkId }) || {
+    openMarketTickets: 0,
+    activeJobsCount: 0,
+    completedJobsCount: 0,
+    totalEarned: 0,
+    rating: null,
+    responseRate: null,
+  };
+
+  const assignedJobs = useQuery(api.techServices.getMyAssignedJobs, { techId: clerkId }) || [];
+
   const tabs: TechTab[] = [
-    { id: 'overview', label: 'Overview', icon: BarChart3 },
-    { id: 'requests', label: 'Service Requests', icon: Inbox },
+    { id: 'overview', label: 'Operations Overview', icon: BarChart3 },
+    { id: 'board', label: 'Open Market Job Board', icon: Briefcase, badge: metrics.openMarketTickets },
+    { id: 'orders', label: 'Active Work Orders', icon: Wrench, badge: assignedJobs.length },
     { id: 'schedule', label: 'Schedule', icon: Calendar },
     { id: 'earnings', label: 'Earnings', icon: DollarSign },
-    { id: 'history', label: 'History', icon: History },
-    { id: 'profile', label: 'Business Profile', icon: UserCog },
+    { id: 'history', label: 'Work History', icon: History },
+    { id: 'profile', label: 'Technician Profile & Rates', icon: UserCog },
   ];
-
-  // Render content based on active tab
-  const renderContent = () => {
-    const userId = user?.id || user?.uid;
-
-    switch (activeTab) {
-      case 'requests':
-        return <TechServiceRequests userId={userId} />;
-      case 'schedule':
-        return <TechSchedule userId={userId} />;
-      case 'earnings':
-        return <TechEarnings userId={userId} />;
-      case 'history':
-        return <TechHistory userId={userId} />;
-      case 'profile':
-        return <TechBusinessProfile user={user} userData={userData} />;
-      case 'overview':
-      default:
-        return <TechOverview userId={userId} setActiveTab={setActiveTab} />;
-    }
-  };
 
   return (
     <div className="space-y-6">
-      {/* Tab Navigation */}
-      <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-1.5 flex flex-wrap gap-1 shadow-sm">
-        {tabs.map(tab => {
-          const IconComponent = tab.icon;
+      {/* Tab Navigation Strip */}
+      <div className="bg-white dark:bg-[#1f2128] rounded-2xl border border-gray-200 dark:border-gray-800 p-2 flex flex-wrap gap-2 shadow-xs">
+        {tabs.map((tab) => {
+          const Icon = tab.icon;
+          const isSelected = activeTab === tab.id;
+
           return (
             <button
               key={tab.id}
-              onClick={() => {
-                console.log('[TechManagement] Tab button clicked', { tabId: tab.id, currentActiveTab: activeTab });
-                setActiveTab(tab.id);
-              }}
-              className={`
-                flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all
-                ${activeTab === tab.id
-                  ? 'bg-brand-blue text-white shadow-md'
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                isSelected
+                  ? 'bg-orange-500 text-white shadow-xs'
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }
-              `}
+              }`}
             >
-              <IconComponent size={16} />
-              <span className="hidden sm:inline">{tab.label}</span>
+              <Icon size={16} />
+              <span>{tab.label}</span>
+              {tab.badge !== undefined && tab.badge > 0 && (
+                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-full ${
+                  isSelected ? 'bg-white/20 text-white' : 'bg-orange-100 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400'
+                }`}>
+                  {tab.badge}
+                </span>
+              )}
             </button>
           );
         })}
       </div>
 
-      {/* Tab Content */}
-      {renderContent()}
+      {/* Tab Views */}
+      {activeTab === 'overview' && (
+        <TechOverviewTab
+          metrics={metrics}
+          assignedJobs={assignedJobs}
+          setActiveTab={setActiveTab}
+        />
+      )}
+
+      {activeTab === 'board' && (
+        <TechServiceBoard user={user} userData={userData} />
+      )}
+
+      {activeTab === 'orders' && (
+        <TechWorkOrdersTab assignedJobs={assignedJobs} clerkId={clerkId} />
+      )}
+
+      {activeTab === 'schedule' && (
+        <TechSchedule userId={clerkId} />
+      )}
+
+      {activeTab === 'earnings' && (
+        <TechEarnings userId={clerkId} />
+      )}
+
+      {activeTab === 'history' && (
+        <TechHistory userId={clerkId} />
+      )}
+
+      {activeTab === 'profile' && (
+        <TechBusinessProfile user={user} userData={userData} />
+      )}
     </div>
   );
 }
 
-/**
- * TechOverview - Dashboard with metrics
- */
-interface TechOverviewProps {
-  userId?: string;
-  setActiveTab: (tab: TechTabId) => void;
+// =============================================================================
+// SUB-TAB: TECH OVERVIEW & METRICS
+// =============================================================================
+
+function TechOverviewTab({ metrics, assignedJobs, setActiveTab }: { metrics: any; assignedJobs: any[]; setActiveTab: (tab: TechTabId) => void }) {
+  return (
+    <div className="space-y-6">
+      {/* 4 Metric Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white dark:bg-[#1f2128] rounded-3xl border border-gray-200 dark:border-gray-800 p-5 space-y-1 shadow-xs">
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Open Market Tickets</span>
+          <div className="flex items-baseline justify-between pt-1">
+            <span className="text-3xl font-black dark:text-white text-orange-500">{metrics.openMarketTickets}</span>
+            <button
+              onClick={() => setActiveTab('board')}
+              className="text-xs text-orange-500 font-bold hover:underline flex items-center gap-0.5"
+            >
+              Browse <ArrowUpRight size={13} />
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">Available studio repair jobs</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#1f2128] rounded-3xl border border-gray-200 dark:border-gray-800 p-5 space-y-1 shadow-xs">
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Active Work Orders</span>
+          <div className="flex items-baseline justify-between pt-1">
+            <span className="text-3xl font-black dark:text-white text-brand-blue">{metrics.activeJobsCount}</span>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className="text-xs text-brand-blue font-bold hover:underline flex items-center gap-0.5"
+            >
+              View <ArrowUpRight size={13} />
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">In diagnostic / repair bench</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#1f2128] rounded-3xl border border-gray-200 dark:border-gray-800 p-5 space-y-1 shadow-xs">
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Completed Repairs</span>
+          <div className="flex items-baseline justify-between pt-1">
+            <span className="text-3xl font-black dark:text-white text-emerald-500">{metrics.completedJobsCount}</span>
+            <span className="text-xs text-gray-400">Lifetime</span>
+          </div>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">Total verified completions</p>
+        </div>
+
+        <div className="bg-white dark:bg-[#1f2128] rounded-3xl border border-gray-200 dark:border-gray-800 p-5 space-y-1 shadow-xs">
+          <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Customer Rating</span>
+          <div className="flex items-baseline justify-between pt-1">
+            <div className="flex items-center gap-1.5">
+              <Star size={20} className="text-amber-500 fill-amber-500" />
+              <span className="text-2xl font-black dark:text-white">{metrics.rating != null ? metrics.rating : '—'}</span>
+            </div>
+            {metrics.responseRate && <span className="text-xs font-bold text-emerald-500">{metrics.responseRate} resp.</span>}
+          </div>
+          <p className="text-[11px] text-gray-500 dark:text-gray-400">Verified client feedback</p>
+        </div>
+      </div>
+
+      {/* Action Banner */}
+      <div className="bg-white dark:bg-[#1f2128] rounded-3xl border border-gray-200 dark:border-gray-800 p-6 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xs">
+        <div className="flex items-center gap-3.5">
+          <div className="p-3 rounded-2xl bg-orange-100 dark:bg-orange-950/50 text-orange-600">
+            <Briefcase size={24} />
+          </div>
+          <div>
+            <h4 className="font-bold text-base dark:text-white">Looking for new studio contracts?</h4>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Browse open equipment repair requests across Texas and remote diagnostics.</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setActiveTab('board')}
+          className="px-5 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white font-bold text-xs shadow-xs transition shrink-0"
+        >
+          View Job Board
+        </button>
+      </div>
+    </div>
+  );
 }
 
-function TechOverview({ userId, setActiveTab }: TechOverviewProps) {
-  const [metrics, setMetrics] = useState<TechMetricsData | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+// =============================================================================
+// SUB-TAB: ACTIVE WORK ORDERS
+// =============================================================================
 
-  useEffect(() => {
-    const fetchMetrics = async () => {
-      if (!userId) {
-        setLoading(false);
-        return;
-      }
+function TechWorkOrdersTab({ assignedJobs, clerkId }: { assignedJobs: any[]; clerkId: string }) {
+  const updateStatus = useMutation(api.techServices.updateServiceRequestStatus);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
-      setLoading(true);
-      try {
-        // TODO: Replace with Convex query
-        // const data = await convexQuery(api.tech.getTechMetrics, { userId });
-        setMetrics(null);
-      } catch (error) {
-        console.error('Error fetching tech metrics:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchMetrics();
-  }, [userId]);
-
-  const formatCurrency = (value: number | undefined): string => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value || 0);
+  const handleMarkComplete = async (jobId: any) => {
+    try {
+      await updateStatus({
+        requestId: jobId,
+        status: 'completed',
+        actorId: clerkId,
+      });
+      toast.success('Work order marked as completed!');
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to update work order');
+    }
   };
 
-  const formatRating = (value: number | string | undefined): string => {
-    if (!value) return '0.0';
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(numValue)) return '0.0';
-    return numValue.toFixed(1);
-  };
+  const openCount = assignedJobs.filter(j => j.status === 'Open' || j.status === 'open' || j.status === 'assigned').length;
+  const inProgressCount = assignedJobs.filter(j => j.status === 'In Progress' || j.status === 'in_progress').length;
+  const completedCount = assignedJobs.filter(j => j.status === 'Completed' || j.status === 'completed').length;
+  const totalCount = assignedJobs.length;
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-blue"></div>
-      </div>
-    );
-  }
+  const filteredJobs = assignedJobs.filter(job => {
+    if (statusFilter === 'all') return true;
+    if (statusFilter === 'open') return job.status === 'Open' || job.status === 'open' || job.status === 'assigned';
+    if (statusFilter === 'in_progress') return job.status === 'In Progress' || job.status === 'in_progress';
+    if (statusFilter === 'completed') return job.status === 'Completed' || job.status === 'completed';
+    return true;
+  });
 
   return (
     <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-2xl p-8 text-white relative overflow-hidden">
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10"></div>
-        <div className="relative z-10">
-          <h1 className="text-3xl font-bold mb-2">Tech Management Dashboard</h1>
-          <p className="text-orange-100 max-w-xl">
-            Manage your service requests, track earnings, and grow your technical services business.
-          </p>
-        </div>
-      </div>
-
-      {/* Metrics Grid */}
+      {/* 4 Status Metric Cards extracted from TechServiceRequests */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-6 text-center">
-          <div className="inline-flex p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 mb-3">
-            <Inbox className="text-orange-600" size={28} />
-          </div>
-          <div className="text-3xl font-bold dark:text-white">{metrics?.open_requests || 0}</div>
-          <div className="text-sm text-gray-500 mt-1">Open Requests</div>
+        <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-2xl border border-blue-100 dark:border-blue-900/40">
+          <div className="text-2xl font-black text-blue-600 dark:text-blue-400">{openCount}</div>
+          <div className="text-xs font-semibold text-blue-600 dark:text-blue-400 mt-0.5">Assigned / Open</div>
         </div>
-
-        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-6 text-center">
-          <div className="inline-flex p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 mb-3">
-            <Calendar className="text-blue-600" size={28} />
-          </div>
-          <div className="text-3xl font-bold dark:text-white">{metrics?.active_jobs || 0}</div>
-          <div className="text-sm text-gray-500 mt-1">Active Jobs</div>
+        <div className="bg-amber-50 dark:bg-amber-950/30 p-4 rounded-2xl border border-amber-100 dark:border-amber-900/40">
+          <div className="text-2xl font-black text-amber-600 dark:text-amber-400">{inProgressCount}</div>
+          <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 mt-0.5">In Progress</div>
         </div>
-
-        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-6 text-center">
-          <div className="inline-flex p-3 rounded-xl bg-green-50 dark:bg-green-900/20 mb-3">
-            <DollarSign className="text-green-600" size={28} />
-          </div>
-          <div className="text-3xl font-bold dark:text-white">{formatCurrency(metrics?.pending_earnings)}</div>
-          <div className="text-sm text-gray-500 mt-1">Pending Earnings</div>
+        <div className="bg-emerald-50 dark:bg-emerald-950/30 p-4 rounded-2xl border border-emerald-100 dark:border-emerald-900/40">
+          <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{completedCount}</div>
+          <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-0.5">Completed</div>
         </div>
-
-        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-6 text-center">
-          <div className="inline-flex p-3 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 mb-3">
-            <BarChart3 className="text-yellow-600" size={28} />
-          </div>
-          <div className="text-3xl font-bold dark:text-white">
-            {formatRating(metrics?.average_rating)}
-          </div>
-          <div className="text-sm text-gray-500 mt-1">Average Rating</div>
+        <div className="bg-gray-50 dark:bg-gray-800/60 p-4 rounded-2xl border border-gray-200 dark:border-gray-700">
+          <div className="text-2xl font-black text-gray-700 dark:text-gray-200">{totalCount}</div>
+          <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mt-0.5">Total Assigned</div>
         </div>
       </div>
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-6">
-          <h3 className="font-bold dark:text-white mb-4">Earnings Summary</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Total Earned</span>
-              <span className="font-bold dark:text-white">{formatCurrency(metrics?.total_earnings)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Pending</span>
-              <span className="font-bold dark:text-white">{formatCurrency(metrics?.pending_earnings)}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Jobs Completed</span>
-              <span className="font-bold dark:text-white">{metrics?.completed_jobs || 0}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 p-6">
-          <h3 className="font-bold dark:text-white mb-4">Performance</h3>
-          <div className="space-y-3">
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Average Rating</span>
-              <span className="font-bold dark:text-white">
-                {metrics?.average_rating ? `${formatRating(metrics?.average_rating)} / 5.0` : 'Not rated'}
-              </span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Total Reviews</span>
-              <span className="font-bold dark:text-white">{metrics?.completed_jobs || 0}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-gray-600 dark:text-gray-400">Completion Rate</span>
-              <span className="font-bold text-green-600">100%</span>
-            </div>
-          </div>
+      {/* Filter Toolbar */}
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-bold dark:text-white">Active Work Orders ({filteredJobs.length})</h3>
+        <div className="flex items-center gap-2">
+          <Filter size={15} className="text-gray-400" />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="px-3 py-1.5 text-xs font-medium border border-gray-200 dark:border-gray-700 rounded-xl dark:bg-[#1f2128] dark:text-white outline-none"
+          >
+            <option value="all">All Statuses</option>
+            <option value="open">Assigned / Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+          </select>
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div>
-        <h3 className="font-bold dark:text-white mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={() => setActiveTab('schedule')}
-            className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm hover:shadow-md transition-all text-left group hover:border-brand-blue dark:hover:border-brand-blue"
-          >
-            <Calendar className="text-blue-500 mb-3" size={24} />
-            <h4 className="font-bold dark:text-white mb-1">View Schedule</h4>
-            <p className="text-sm text-gray-500 dark:text-gray-400">See your upcoming jobs and calendar</p>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('history')}
-            className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm hover:shadow-md transition-all text-left group hover:border-brand-blue dark:hover:border-brand-blue"
-          >
-            <History className="text-purple-500 mb-3" size={24} />
-            <h4 className="font-bold dark:text-white mb-1">Job History</h4>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Review completed work and client relationships</p>
-          </button>
-
-          <button
-            onClick={() => setActiveTab('profile')}
-            className="bg-white dark:bg-[#2c2e36] p-6 rounded-xl border dark:border-gray-700 shadow-sm hover:shadow-md transition-all text-left group hover:border-brand-blue dark:hover:border-brand-blue"
-          >
-            <UserCog className="text-orange-500 mb-3" size={24} />
-            <h4 className="font-bold dark:text-white mb-1">Edit Profile</h4>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Update your business information and settings</p>
-          </button>
+      {filteredJobs.length === 0 ? (
+        <div className="bg-white dark:bg-[#1f2128] rounded-3xl border border-gray-200 dark:border-gray-800 p-12 text-center space-y-4 shadow-xs">
+          <div className="w-16 h-16 rounded-full bg-orange-50 dark:bg-orange-950/40 text-orange-500 flex items-center justify-center mx-auto">
+            <Wrench size={28} />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold dark:text-white">No work orders found</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 max-w-sm mx-auto mt-1">
+              {statusFilter === 'all'
+                ? "You currently have no repair tickets claimed or in progress. Check the Job Board to claim new contracts."
+                : `No work orders currently match status "${statusFilter}".`}
+            </p>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredJobs.map((job) => (
+            <div
+              key={job._id}
+              className="bg-white dark:bg-[#1f2128] rounded-3xl border border-gray-200 dark:border-gray-800 p-6 space-y-4 shadow-xs"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400">
+                      {job.status}
+                    </span>
+                    <span className="text-xs text-gray-400 font-semibold">{job.category}</span>
+                  </div>
+                  <h4 className="font-bold text-base dark:text-white">{job.title}</h4>
+                </div>
+
+                <div className="text-right shrink-0">
+                  <span className="text-lg font-black text-orange-500">${job.budget}</span>
+                  <p className="text-[10px] text-gray-400">Agreed Payout</p>
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-[#252830] p-3 rounded-2xl">
+                {job.issueDescription}
+              </p>
+
+              <div className="flex items-center justify-between pt-2 text-xs">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <UserAvatar src={job.requesterAvatar} name={job.requesterName} size="xs" />
+                  <span>Studio: {job.requesterName}</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {job.status !== 'completed' && (
+                    <button
+                      onClick={() => handleMarkComplete(job._id)}
+                      className="px-4 py-2 rounded-xl bg-emerald-500 text-white text-xs font-bold hover:bg-emerald-600 transition shadow-xs flex items-center gap-1.5"
+                    >
+                      <CheckCircle2 size={14} />
+                      <span>Mark Work Complete</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Home, LayoutGrid, Image, Clock, FileText, Calendar,
-  Package, Settings, ChevronRight, Briefcase, Users, TrendingUp, LucideIcon, Loader2
+  Package, Settings, ChevronRight, Briefcase, Users, TrendingUp, LucideIcon, Loader2, Building2
 } from 'lucide-react';
 import { useQuery } from 'convex/react';
 import { api } from '../../convex/_generated/api';
@@ -92,11 +92,6 @@ const TABS: Tab[] = [
  */
 export default function StudioManager({ user, userData }: StudioManagerProps): JSX.Element {
   const [activeTab, setActiveTab] = useState<TabId>('overview');
-  const [stats, setStats] = useState<StudioStats>({
-    pendingBookings: 0,
-    recentBookings: [],
-    totalRevenue: 0
-  });
   const [localUserData, setLocalUserData] = useState(userData);
 
   // Get user by clerk ID to get the Convex user ID
@@ -108,48 +103,46 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
   // Fetch studio data — only query when we have a valid Convex user ID
   const studio = useStudioByOwner(userRecord?._id);
 
-  // Fetch booking stats
-  useEffect(() => {
-    const calculateStats = (): void => {
-      if (!studio) return;
+  // Fetch bookings for live stats
+  const studioBookings = useBookingsByStudio(studio?._id);
 
-      try {
-        // For now, set empty stats until bookings are properly integrated
-        // TODO: Replace with actual booking query when studio._id is available
-        const bookings: Booking[] = [];
+  // Compute live booking stats reactively
+  const stats: StudioStats = useMemo(() => {
+    if (!studioBookings) {
+      return { pendingBookings: 0, recentBookings: [], totalRevenue: 0 };
+    }
 
-        const pending = bookings.filter(b => b.status === 'Pending' || b.status === 'pending').length;
-        const recent = bookings
-          .filter(b => {
-            const bookingDate = b.date ? new Date(b.date) : new Date(b.created_at);
-            return bookingDate >= new Date();
-          })
-          .sort((a, b) => {
-            const dateA = a.date ? new Date(a.date) : new Date(a.created_at);
-            const dateB = b.date ? new Date(b.date) : new Date(b.created_at);
-            return dateA.getTime() - dateB.getTime();
-          })
-          .slice(0, 5);
-        const revenue = bookings
-          .filter(b => b.status === 'Completed' || b.status === 'completed')
-          .reduce((sum, b) => sum + (Number(b.total_price) || Number(b.offer_amount) || 0), 0);
+    const pending = studioBookings.filter(
+      (b: any) => (b.status || '').toLowerCase() === 'pending'
+    ).length;
 
-        setStats({
-          pendingBookings: pending,
-          recentBookings: recent,
-          totalRevenue: revenue
-        });
-      } catch (error) {
-        console.error('Error calculating stats:', error);
-      }
+    const recent = studioBookings
+      .filter((b: any) => {
+        const bookingDate = b.date ? new Date(b.date) : new Date(b.createdAt || Date.now());
+        return bookingDate >= new Date();
+      })
+      .sort((a: any, b: any) => {
+        const dateA = a.date ? new Date(a.date) : new Date(a.createdAt || Date.now());
+        const dateB = b.date ? new Date(b.date) : new Date(b.createdAt || Date.now());
+        return dateA.getTime() - dateB.getTime();
+      })
+      .slice(0, 5)
+      .map((b: any) => ({
+        ...b,
+        id: b._id,
+        date: b.date ? new Date(b.date) : new Date(b.createdAt || Date.now()),
+      }));
+
+    const revenue = studioBookings
+      .filter((b: any) => (b.status || '').toLowerCase() === 'completed')
+      .reduce((sum: number, b: any) => sum + (Number(b.totalAmount) || Number(b.total_price) || Number(b.offer_amount) || 0), 0);
+
+    return {
+      pendingBookings: pending,
+      recentBookings: recent,
+      totalRevenue: revenue,
     };
-
-    calculateStats();
-
-    // Refresh stats every 30 seconds
-    const interval = setInterval(calculateStats, 30000);
-    return () => clearInterval(interval);
-  }, [studio]);
+  }, [studioBookings]);
 
   // Handle updates from child components
   const handleUpdate = (updates: Partial<UserData>): void => {
@@ -198,7 +191,7 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
 
     switch (activeTab) {
       case 'overview':
-        return <StudioOverview {...commonProps} stats={stats} onNavigate={handleNavigate} />;
+        return <StudioOverview {...commonProps} stats={stats as any} onNavigate={handleNavigate} />;
       case 'rooms':
         return <StudioRooms {...commonProps} />;
       case 'equipment':
@@ -210,7 +203,7 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
       case 'policies':
         return <StudioPolicies {...commonProps} />;
       case 'bookings':
-        return <StudioBookings {...commonProps} userData={localUserData} />;
+        return <StudioBookings {...commonProps} studio={studio} userData={localUserData} />;
       case 'clients':
         return <StudioClients {...commonProps} />;
       case 'staff':
@@ -220,7 +213,7 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
       case 'settings':
         return <StudioSettings {...commonProps} />;
       default:
-        return <StudioOverview {...commonProps} stats={stats} onNavigate={handleNavigate} />;
+        return <StudioOverview {...commonProps} stats={stats as any} onNavigate={handleNavigate} />;
     }
   };
 
@@ -249,22 +242,6 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
     );
   }
 
-  // Show retry wizard when studio exists but has no Clerk org linked
-  // (org creation failed on first attempt — user can retry linking)
-  if (studio && !studio.clerkOrgId && studio.slug && userRecord?._id) {
-    return (
-      <div className="max-w-7xl mx-auto pb-20">
-        <StudioSetupWizard
-          clerkId={userData?.clerkId || user?.id}
-          existingStudioId={studio._id}
-          existingStudioName={studio.name}
-          existingSlug={studio.slug}
-          onComplete={() => {/* Convex real-time query will auto-update studio */}}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="max-w-7xl mx-auto pb-20">
       {/* Header */}
@@ -282,6 +259,29 @@ export default function StudioManager({ user, userData }: StudioManagerProps): J
           {localUserData?.studioName || localUserData?.profileName || 'Studio Manager'}
         </h1>
       </div>
+
+      {/* Non-blocking Clerk Org linking notification if pending */}
+      {studio && !studio.clerkOrgId && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <Building2 className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" size={20} />
+            <div>
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                Clerk Organization link pending
+              </p>
+              <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                Link or create your Clerk Organization to manage staff roles, team permissions, and automated client billing.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setActiveTab('settings')}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg shrink-0 transition shadow-sm"
+          >
+            Configure in Settings
+          </button>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 mb-6 overflow-hidden">

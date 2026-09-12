@@ -2,7 +2,7 @@
 <html lang="en" style="background-color: #1f2128;">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name='impact-site-verification' value='9b2480e1-6736-416c-b3b5-bc153a135d1c'>
     
     <!-- SEO Meta Tags -->
@@ -31,6 +31,32 @@
     <link rel="apple-touch-icon" href="/src/assets/Fevicon.png" />
     
     <title>SeshNx | Connect. Create. Collaborate.</title>
+    
+    <!-- Immediate DPI Font Sizing for Zero-Flicker App Startup -->
+    <script>
+      (function() {
+        try {
+          var dpr = window.devicePixelRatio || 1;
+          var w = window.screen ? window.screen.width : window.innerWidth;
+          var base = 13;
+          if (w < 640) {
+            base = dpr >= 2.5 ? 13.5 : 13;
+          } else if (w >= 3200 || (dpr >= 2.2 && w >= 2560)) {
+            base = 17;
+          } else if (dpr >= 1.8 || w >= 2560) {
+            base = 16;
+          } else if (dpr > 1.1 || w >= 2000) {
+            base = 14.5;
+          }
+          var pref = localStorage.getItem('fontSize');
+          var offset = pref === 'small' ? -2 : pref === 'large' ? 2 : pref === 'xlarge' ? 4 : 0;
+          var finalSize = Math.max(10, Math.min(22, base + offset));
+          document.documentElement.style.fontSize = finalSize + 'px';
+          document.documentElement.style.setProperty('--seshnx-base-font-size', finalSize + 'px');
+          document.documentElement.style.setProperty('--seshnx-dpr', String(dpr));
+        } catch(e) {}
+      })();
+    </script>
     
     <style>
       html, body {

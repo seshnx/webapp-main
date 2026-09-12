@@ -1,28 +1,10 @@
 /**
- * Data Distribution Strategy
+ * Data Distribution & Schema Definitions
  *
- * Defines which data goes to which database for optimal performance.
- *
- * NEON (PostgreSQL) - Immutable Core Data
- *   - Legal identity (first_name, last_name)
- *   - Addresses (billing, shipping)
- *   - Financial records (payments, invoices)
- *   - Audit trail (status changes, timestamps)
- *   - Compliance data (KYC, tax info)
- *
- * MONGODB - Flexible Profile Data
- *   - Display identity (artist name, username)
- *   - Active profiles (role switching)
- *   - Preferences (notifications, theme)
- *   - Social & creative (bio, genres, portfolio)
- *   - Dynamic data (equipment, availability, custom fields)
- *
- * CONVEX - Real-Time Data
- *   - Presence status (online/offline)
- *   - Typing indicators
- *   - Live chat messages
- *   - Real-time notifications
- *   - Active sessions & collaboration
+ * SeshNx Architecture:
+ * - Clerk: User authentication and primary identity
+ * - Convex: Real-time database (profiles, bookings, social, messaging, marketplace)
+ * - Neon / PostgreSQL: Relational records via Convex backend sync
  */
 
 // ============================================================

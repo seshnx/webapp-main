@@ -97,7 +97,7 @@ export default function RepostModal({
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800">
             <div className="flex items-center gap-2.5">
-              <div className="p-2 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400">
+              <div className="p-2 rounded-xl bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400">
                 <Repeat2 size={18} />
               </div>
               <div>
@@ -129,7 +129,7 @@ export default function RepostModal({
                 placeholder="Add a comment to this repost..."
                 rows={3}
                 maxLength={500}
-                className="w-full p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500 transition resize-none"
+                className="w-full p-3.5 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-sky-500 transition resize-none"
               />
               <div className="flex justify-end">
                 <span className="text-[11px] text-gray-400">{comment.length}/500</span>
@@ -146,7 +146,7 @@ export default function RepostModal({
                       {originalAuthorName}
                     </span>
                     {post.role && (
-                      <span className="text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 px-1.5 py-0.2 rounded-md">
+                      <span className="text-[10px] font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-300 border border-sky-500/20 px-1.5 py-0.2 rounded-md">
                         {post.role}
                       </span>
                     )}
@@ -196,7 +196,7 @@ export default function RepostModal({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 rounded-xl shadow-sm transition flex items-center gap-2 disabled:opacity-50"
+                className="px-5 py-2 text-xs sm:text-sm font-semibold text-white bg-brand-blue hover:bg-blue-600 rounded-xl shadow-sm transition flex items-center gap-2 disabled:opacity-50"
               >
                 {isSubmitting ? (
                   <>

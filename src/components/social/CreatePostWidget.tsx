@@ -313,7 +313,7 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                         exit={{ opacity: 0, height: 0 }}
                         className="mb-4 overflow-hidden"
                     >
-                        <div className="bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/20 dark:to-purple-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/50">
+                        <div className="bg-gradient-to-r from-blue-50 to-sky-50 dark:from-blue-900/20 dark:to-sky-900/20 rounded-xl p-4 border border-blue-100 dark:border-blue-800/50">
                             <div className="flex items-center gap-3 mb-3">
                                 <div className="relative">
                                     <Loader2 className="animate-spin text-brand-blue" size={24} />
@@ -331,7 +331,7 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                             {/* Progress Bar */}
                             <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
                                 <motion.div
-                                    className="h-full bg-gradient-to-r from-brand-blue to-purple-500 rounded-full"
+                                    className="h-full bg-gradient-to-r from-brand-blue to-sky-400 rounded-full"
                                     initial={{ width: 0 }}
                                     animate={{ width: `${uploadProgress.percent}%` }}
                                     transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -402,8 +402,8 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                             {/* Tagged Studio & Boost Badges */}
                             <div className="flex items-center gap-2 flex-wrap mb-2.5">
                                 {taggedStudio && (
-                                    <div className="flex items-center gap-1.5 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 text-purple-700 dark:text-purple-300 px-3 py-1 rounded-xl text-xs font-semibold">
-                                        <Building2 size={13} className="text-purple-500 shrink-0" />
+                                    <div className="flex items-center gap-1.5 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/40 text-sky-700 dark:text-sky-300 px-3 py-1 rounded-xl text-xs font-semibold">
+                                        <Building2 size={13} className="text-sky-500 shrink-0" />
                                         <span>Recorded at: <strong>{taggedStudio.name}</strong></span>
                                         <button
                                             type="button"
@@ -468,12 +468,12 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
 
                             {/* Studio Tagging Selector Popover */}
                             {showStudioPicker && (
-                                <div className="bg-purple-50/70 dark:bg-purple-950/30 p-3 rounded-2xl mb-3 border border-purple-200/80 dark:border-purple-800/40 animate-in slide-in-from-top-2">
+                                <div className="bg-sky-50/70 dark:bg-sky-950/30 p-3 rounded-2xl mb-3 border border-sky-200/80 dark:border-sky-800/40 animate-in slide-in-from-top-2">
                                     <div className="flex justify-between items-center mb-2">
-                                        <span className="text-xs font-bold text-purple-600 dark:text-purple-300 flex items-center gap-1.5">
+                                        <span className="text-xs font-bold text-sky-600 dark:text-sky-300 flex items-center gap-1.5">
                                             <Building2 size={14} /> Tag Recording Studio / Facility
                                         </span>
-                                        <button onClick={() => setShowStudioPicker(false)}><X size={14} className="text-gray-400 hover:text-purple-600" /></button>
+                                        <button onClick={() => setShowStudioPicker(false)}><X size={14} className="text-gray-400 hover:text-sky-600" /></button>
                                     </div>
 
                                     {/* Search Input */}
@@ -484,7 +484,7 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                                             value={studioSearch}
                                             onChange={(e) => setStudioSearch(e.target.value)}
                                             placeholder="Search studios or enter name..."
-                                            className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-1 focus:ring-purple-500"
+                                            className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-gray-800 border dark:border-gray-700 rounded-xl text-xs outline-none focus:ring-1 focus:ring-sky-500"
                                         />
                                     </div>
 
@@ -497,10 +497,10 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                                                     setTaggedStudio({ id: s.clerkId, name: s.displayName });
                                                     setShowStudioPicker(false);
                                                 }}
-                                                className="flex items-center justify-between p-2 rounded-xl bg-white/80 dark:bg-gray-800/80 hover:bg-purple-100 dark:hover:bg-purple-900/40 cursor-pointer transition text-xs border border-purple-100 dark:border-purple-900/30"
+                                                className="flex items-center justify-between p-2 rounded-xl bg-white/80 dark:bg-gray-800/80 hover:bg-sky-100 dark:hover:bg-sky-900/40 cursor-pointer transition text-xs border border-sky-100 dark:border-sky-900/30"
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <div className="w-6 h-6 rounded-full bg-purple-500/20 flex items-center justify-center text-purple-600">
+                                                    <div className="w-6 h-6 rounded-full bg-sky-500/20 flex items-center justify-center text-sky-600">
                                                         <Building2 size={12} />
                                                     </div>
                                                     <span className="font-semibold dark:text-white">{s.displayName}</span>
@@ -516,7 +516,7 @@ export default function CreatePostWidget({ user, userData, subProfiles = {}, onP
                                                     setTaggedStudio({ name: studioSearch.trim() });
                                                     setShowStudioPicker(false);
                                                 }}
-                                                className="p-2 rounded-xl bg-purple-100 dark:bg-purple-900/40 hover:opacity-90 cursor-pointer transition text-xs font-semibold text-purple-700 dark:text-purple-300 flex items-center gap-1.5"
+                                                className="p-2 rounded-xl bg-sky-100 dark:bg-sky-900/40 hover:opacity-90 cursor-pointer transition text-xs font-semibold text-sky-700 dark:text-sky-300 flex items-center gap-1.5"
                                             >
                                                 <Building2 size={12} />
                                                 <span>Tag custom studio: "{studioSearch.trim()}"</span>

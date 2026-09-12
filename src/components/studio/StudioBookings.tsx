@@ -8,6 +8,8 @@ import {
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useBookingsByStudio, useBlockedDates, useConfirmBooking, useCancelBooking, useUpdateBooking } from '@/hooks/useConvex';
 import RecurringBookingModal from './RecurringBookingModal';
 import MultiRoomBookingModal from './MultiRoomBookingModal';
@@ -104,6 +106,7 @@ interface BlockedDate {
 export interface StudioBookingsProps {
     user?: any;
     userData?: any;
+    studio?: any;
     onNavigateToChat?: (clientId: string) => void;
 }
 
@@ -120,13 +123,16 @@ function getStatusConfig(status?: string): StatusConfig {
  * StudioBookings - Manage incoming bookings for the studio
  * Phase 2: Includes templates, waitlist, payments, and calendar sync
  */
-export default function StudioBookings({ user, userData, onNavigateToChat }: StudioBookingsProps) {
+export default function StudioBookings({ user, userData, studio, onNavigateToChat }: StudioBookingsProps) {
+    const studioId = studio?._id;
     // Convex hooks for real-time data
-    const studioBookings = useBookingsByStudio(userData?.id || '');
-    const blockedDatesData = useBlockedDates(userData?.id || '');
+    const studioBookings = useBookingsByStudio(studioId);
+    const blockedDatesData = useBlockedDates(studioId);
     const confirmBooking = useConfirmBooking();
     const cancelBooking = useCancelBooking();
     const updateBooking = useUpdateBooking();
+    const addBlockedDateMutation = useMutation(api.sbookings.addBlockedDate);
+    const removeBlockedDateMutation = useMutation(api.sbookings.removeBlockedDate);
 
     const [activeTab, setActiveTab] = useState<string>('bookings'); // 'bookings', 'templates', 'waitlist', 'payments', 'calendar-sync'
     const [filter, setFilter] = useState<string>('all');
@@ -220,62 +226,40 @@ export default function StudioBookings({ user, userData, onNavigateToChat }: Stu
 
     // Handle blocking a date (off-platform booking)
     const handleBlockDate = async (): Promise<void> => {
-        if (!selectedDate || !userData?.id) return;
+        if (!selectedDate || !studioId) {
+            toast.error('No studio or date selected');
+            return;
+        }
 
         const toastId = toast.loading('Blocking time slot...');
-
         try {
-            const response = await fetch('/api/studio-ops/blocked-dates', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    studioId: userData?.id,
-                    date: selectedDate.toISOString(),
-                    reason: blockReason || 'Off-platform booking',
-                    timeSlot: blockTimeSlot,
-                    startTime: blockTimeSlot === 'custom' ? customStartTime : null,
-                    endTime: blockTimeSlot === 'custom' ? customEndTime : null
-                })
+            await addBlockedDateMutation({
+                studioId,
+                date: selectedDate.toISOString().split('T')[0],
+                reason: blockReason || 'Off-platform booking',
             });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to block time slot');
-            }
-
             toast.success('Time slot blocked!', { id: toastId });
             setShowBlockModal(false);
             setBlockReason('');
             setBlockTimeSlot('full');
             setSelectedDate(null);
-            await loadBlockedDates();
         } catch (error: any) {
-            console.error('Error blocking date:', error);
-            toast.error(error.message || 'Failed to block time slot. Please try again.', { id: toastId });
+            console.error('Failed to block date:', error);
+            toast.error(error.message || 'Failed to block date', { id: toastId });
         }
     };
 
     // Handle unblocking a date
     const handleUnblockDate = async (blockedId: string): Promise<void> => {
         const toastId = toast.loading('Removing block...');
-
         try {
-            const response = await fetch(`/api/studio-ops/blocked-dates/${blockedId}`, {
-                method: 'DELETE'
+            await removeBlockedDateMutation({
+                blockedDateId: blockedId as any,
             });
-
-            const data = await response.json();
-
-            if (!response.ok || !data.success) {
-                throw new Error(data.error || 'Failed to remove block');
-            }
-
             toast.success('Block removed!', { id: toastId });
-            await loadBlockedDates();
-        } catch (error) {
-            console.error('Error unblocking date:', error);
-            toast.error('Failed to remove block', { id: toastId });
+        } catch (error: any) {
+            console.error('Failed to remove block:', error);
+            toast.error(error.message || 'Failed to remove block', { id: toastId });
         }
     };
 

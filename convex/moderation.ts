@@ -1,5 +1,6 @@
 import { query, mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { checkRateLimit } from "./rateLimit";
 
 // =============================================================================
 // CONTENT MODERATION
@@ -18,6 +19,13 @@ export const submitReport = mutation({
     description: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // 1. Rate limit: max 10 reports per minute per user
+    await checkRateLimit(ctx, {
+      key: `report:${args.reporterId}`,
+      limit: 10,
+      windowMs: 60 * 1000,
+    });
+
     // Get the reporter's user record
     const reporter = await ctx.db
       .query("users")
@@ -66,12 +74,27 @@ export const submitReport = mutation({
  */
 export const getReports = query({
   args: {
+    adminClerkId: v.optional(v.string()), // Required Clerk ID of platform admin
     status: v.optional(v.string()), // pending, reviewing, resolved, dismissed
     targetType: v.optional(v.string()), // post, comment, user
     limit: v.optional(v.number()),
     cursor: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    if (!args.adminClerkId) {
+      return [];
+    }
+
+    // Verify admin privileges
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.adminClerkId!))
+      .first();
+
+    if (!admin || (admin.activeRole !== "PlatformAdmin" && !admin.accountTypes?.includes("PlatformAdmin"))) {
+      return [];
+    }
+
     let reports;
 
     // Filter by status if provided
@@ -111,14 +134,28 @@ export const getReports = query({
 });
 
 /**
- * Get reports for a specific content item
+ * Get reports for a specific content item (Admin only)
  */
 export const getReportsByContent = query({
   args: {
+    adminClerkId: v.optional(v.string()),
     targetId: v.string(),
     targetType: v.string(),
   },
   handler: async (ctx, args) => {
+    if (!args.adminClerkId) {
+      return [];
+    }
+
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.adminClerkId!))
+      .first();
+
+    if (!admin || (admin.activeRole !== "PlatformAdmin" && !admin.accountTypes?.includes("PlatformAdmin"))) {
+      return [];
+    }
+
     const reports = await ctx.db
       .query("contentReports")
       .withIndex("by_target", (q) =>
@@ -200,14 +237,14 @@ export const updateReportStatus = mutation({
     actionTaken: v.optional(v.string()), // hidden, removed, warned, none
   },
   handler: async (ctx, args) => {
-    // Get the admin user
+    // Get the admin user and verify PlatformAdmin permissions
     const admin = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.reviewedBy))
       .first();
 
-    if (!admin) {
-      return { success: false, error: "Admin not found" };
+    if (!admin || (admin.activeRole !== "PlatformAdmin" && !admin.accountTypes?.includes("PlatformAdmin"))) {
+      return { success: false, error: "Unauthorized: PlatformAdmin privileges required" };
     }
 
     // Update the report
@@ -253,11 +290,26 @@ export const updateReportStatus = mutation({
 });
 
 /**
- * Get moderation statistics
+ * Get moderation statistics (Admin only)
  */
 export const getModerationStats = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    adminClerkId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    if (!args.adminClerkId) {
+      return null;
+    }
+
+    const admin = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.adminClerkId!))
+      .first();
+
+    if (!admin || (admin.activeRole !== "PlatformAdmin" && !admin.accountTypes?.includes("PlatformAdmin"))) {
+      return null;
+    }
+
     const allReports = await ctx.db.query("contentReports").collect();
 
     return {

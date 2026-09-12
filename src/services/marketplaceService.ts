@@ -109,11 +109,13 @@ export function useMarketItemsBySeller(
 export function useSearchMarketItems(filters: {
   searchQuery?: string;
   category?: string;
+  brand?: string;
   condition?: string;
   minPrice?: number;
   maxPrice?: number;
   location?: string;
   itemType?: string;
+  sortBy?: string;
   limit?: number;
 }) {
   return useQuery(api.marketplace.searchMarketItems, filters);
@@ -223,16 +225,21 @@ export function useTransactionMutations() {
   const complete = useMutation(api.marketplace.completeTransaction);
   const cancel = useMutation(api.marketplace.cancelTransaction);
   const addTracking = useMutation(api.marketplace.addTrackingNumber);
+  const updateTx = useMutation(api.marketplace.updateMarketTransaction);
 
   const updateTransaction = useCallback(async (transactionId: string, updates: any) => {
-    console.warn('updateTransaction: Not yet implemented in Convex');
-    return { success: true };
-  }, []);
+    return await updateTx({
+      transactionId: transactionId as any,
+      ...updates,
+    });
+  }, [updateTx]);
 
-  const addPhoto = useCallback(async (transactionId: string, photoUrl: string) => {
-    console.warn('addPhoto: Not yet implemented in Convex');
-    return { success: true };
-  }, []);
+  const addPhoto = useCallback(async (transactionId: string, photoUrl: string, type: string = 'packaging') => {
+    return await updateTx({
+      transactionId: transactionId as any,
+      packagingPhotos: [{ url: photoUrl, timestamp: Date.now(), type }],
+    });
+  }, [updateTx]);
 
   return useMemo(() => ({
     create,

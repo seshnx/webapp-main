@@ -4,8 +4,6 @@
 
 import { isConvexAvailable } from '../config/convex';
 
-const isMongoDbAvailable = () => false;
-
 const DEBUG_SOCIAL = import.meta.env.DEBUG_SOCIAL === 'true' || 
                       typeof window !== 'undefined' && localStorage.getItem('DEBUG_SOCIAL') === 'true';
 
@@ -96,7 +94,6 @@ export function getDebugStats() {
     performanceMetrics: performanceMetrics.filter(m => m.duration),
     errorLog,
     apiCalls,
-    mongoAvailable: isMongoDbAvailable(),
     summary: {
       totalErrors: errorLog.length,
       totalApiCalls: apiCalls.length,
@@ -112,7 +109,6 @@ export function printDebugSummary() {
   const stats = getDebugStats();
   console.group('🐛 Social Debug Summary');
   console.log('Debug Mode:', stats.enabled ? 'ON' : 'OFF');
-  console.log('MongoDB Available:', stats.mongoAvailable);
   
   console.group('📊 Performance Metrics');
   stats.performanceMetrics.forEach(m => {

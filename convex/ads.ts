@@ -6,20 +6,15 @@ import { v } from "convex/values";
 // =============================================================================
 
 /**
- * Get all active sponsored posts matching user's tier
+ * Get all active sponsored posts matching user's tier (Feed Image/Post Ads)
  */
 export const getActiveSponsoredPosts = query({
   args: {
-    userTier: v.optional(v.string()), // "free" | "basic" | "pro"
+    userTier: v.optional(v.string()), // "free" | "basic" | "pro" | "studio"
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const tier = (args.userTier || "free").toLowerCase();
-
-    // Pro / Studio accounts are ad-free
-    if (["pro", "studio", "enterprise"].includes(tier)) {
-      return [];
-    }
 
     const now = Date.now();
     const activeAds = await ctx.db
@@ -29,15 +24,147 @@ export const getActiveSponsoredPosts = query({
       .take(args.limit || 10);
 
     return activeAds.filter((ad) => {
+      // Exclude dedicated shorts from standard static feed if marked as short
+      if (ad.isShort === true) return false;
       // Check date bounds if configured
       if (ad.startDate && ad.startDate > now) return false;
       if (ad.endDate && ad.endDate < now) return false;
-      // Check tier targeting
-      if (ad.targetTiers && ad.targetTiers.length > 0 && !ad.targetTiers.includes(tier)) {
+      // Check tier targeting if configured
+      if (
+        ad.targetTiers &&
+        ad.targetTiers.length > 0 &&
+        !ad.targetTiers.map((t) => t.toLowerCase()).includes(tier)
+      ) {
         return false;
       }
       return true;
     });
+  },
+});
+
+/**
+ * Get active sponsored video shorts / reels
+ */
+export const getActiveSponsoredShorts = query({
+  args: {
+    userTier: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const tier = (args.userTier || "free").toLowerCase();
+    const now = Date.now();
+
+    const activeAds = await ctx.db
+      .query("sponsoredPosts")
+      .withIndex("by_status", (q) => q.eq("status", "active"))
+      .order("desc")
+      .take(args.limit || 10);
+
+    return activeAds.filter((ad) => {
+      // Must be marked as short or video
+      if (!ad.isShort && ad.mediaType !== "video") return false;
+      if (ad.startDate && ad.startDate > now) return false;
+      if (ad.endDate && ad.endDate < now) return false;
+      if (
+        ad.targetTiers &&
+        ad.targetTiers.length > 0 &&
+        !ad.targetTiers.map((t) => t.toLowerCase()).includes(tier)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  },
+});
+
+/**
+ * Seed "Your Brand Here" placeholder ads for Feed, Shorts, and Gear listings
+ */
+export const seedPlaceholderAds = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const now = Date.now();
+
+    // 1. Check or seed Feed Sponsored Post
+    const existingFeedAd = await ctx.db
+      .query("sponsoredPosts")
+      .filter((q) => q.eq(q.field("sponsorName"), "Your Brand Here"))
+      .first();
+
+    if (!existingFeedAd) {
+      await ctx.db.insert("sponsoredPosts", {
+        title: "Your Brand Here • Elevate Your Music & Studio Reach",
+        content:
+          "Put your recording studio, audio plugins, hardware gear, or music services directly in front of thousands of creators and producers on SeshNx.",
+        mediaUrl:
+          "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?w=1200&auto=format&fit=crop&q=80",
+        sponsorName: "Your Brand Here",
+        sponsorLogo:
+          "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120&auto=format&fit=crop&q=80",
+        sponsorUrl: "https://seshnx.com/business-center",
+        ctaText: "Promote Your Brand ↗",
+        category: "Studio & Production",
+        targetTiers: ["free", "basic", "pro", "studio"],
+        status: "active",
+        impressionsCount: 0,
+        clicksCount: 0,
+        startDate: now - 86400000,
+        createdAt: now,
+        isShort: false,
+        mediaType: "image",
+      });
+
+      // 2. Seed Sponsored Video Short
+      await ctx.db.insert("sponsoredPosts", {
+        title: "Your Brand Here • Featured Studio Showcase",
+        content:
+          "Showcase your plugins, mic shootouts, and workflow highlights in full-screen sponsored video shorts across the creator community.",
+        mediaUrl:
+          "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-man-playing-the-piano-41772-large.mp4",
+        videoUrl:
+          "https://assets.mixkit.co/videos/preview/mixkit-hands-of-a-man-playing-the-piano-41772-large.mp4",
+        sponsorName: "Your Brand Here",
+        sponsorLogo:
+          "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=120&auto=format&fit=crop&q=80",
+        sponsorUrl: "https://seshnx.com/business-center",
+        ctaText: "Advertise in Shorts ↗",
+        category: "Video Showcase",
+        targetTiers: ["free", "basic", "pro", "studio"],
+        status: "active",
+        impressionsCount: 0,
+        clicksCount: 0,
+        startDate: now - 86400000,
+        createdAt: now,
+        isShort: true,
+        mediaType: "video",
+      });
+    }
+
+    // 3. Check or seed Gear Listing
+    const existingGearDeal = await ctx.db
+      .query("affiliateGearDeals")
+      .filter((q) => q.eq(q.field("brand"), "Your Brand Here"))
+      .first();
+
+    if (!existingGearDeal) {
+      await ctx.db.insert("affiliateGearDeals", {
+        retailer: "Your Brand Here",
+        title: "Your Brand Flagship Studio Condenser Microphone & Interface",
+        brand: "Your Brand Here",
+        category: "Microphones",
+        price: 299,
+        originalPrice: 399,
+        imageUrl:
+          "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=800&auto=format&fit=crop&q=80",
+        productUrl: "https://seshnx.com/marketplace",
+        affiliateCode: "YOURBRAND2026",
+        status: "active",
+        clicksCount: 0,
+        createdAt: now,
+      });
+    }
+
+    return { success: true };
   },
 });
 
@@ -122,14 +249,21 @@ export const trackAdClick = mutation({
 
 /**
  * Subscribe or activate Creator Priority Visibility pass ("Blue Checkmark")
+ * Protected by webhook secret — must be invoked following a verified payment webhook.
  */
 export const subscribeToPriorityVisibility = mutation({
   args: {
     clerkId: v.string(),
     tier: v.optional(v.string()), // "creator_priority" | "studio_pro"
     durationDays: v.optional(v.number()), // e.g. 30 days
+    secret: v.string(),
   },
   handler: async (ctx, args) => {
+    const expectedSecret = process.env.CONVEX_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+    if (!expectedSecret || args.secret !== expectedSecret) {
+      throw new Error("Unauthorized: Invalid webhook secret");
+    }
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))

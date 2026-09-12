@@ -73,13 +73,14 @@ export interface PostCardProps {
     isFollowingAuthor?: boolean;
     onToggleFollow?: () => void;
     autoPlayVideos?: boolean;
+    tipButtonPlacement?: 'always_visible' | 'post_menu' | 'public_profile' | 'always_hidden';
 }
 
 const renderText = (text: string | undefined) => {
     if (!text) return null;
     return text.split(/(\s+)/).map((part, i) => {
         if (part.match(/^#\w+/)) return <span key={i} className="text-brand-blue font-bold cursor-pointer hover:underline">{part}</span>;
-        if (part.match(/^@\w+/)) return <span key={i} className="text-purple-600 font-bold cursor-pointer hover:underline">{part}</span>;
+        if (part.match(/^@\w+/)) return <span key={i} className="text-sky-500 font-bold cursor-pointer hover:underline">{part}</span>;
         return part;
     });
 };
@@ -183,7 +184,8 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
     onDelete,
     isFollowingAuthor,
     onToggleFollow,
-    autoPlayVideos = false
+    autoPlayVideos = false,
+    tipButtonPlacement = 'public_profile'
 }, ref) {
     const navigate = useNavigate();
     const [showComments, setShowComments] = useState<boolean>(false);
@@ -391,8 +393,8 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
         >
             {/* Repost Header Indicator */}
             {isRepost && (
-                <div className="px-4 py-2 flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 font-semibold border-b border-purple-100 dark:border-purple-950/60 bg-purple-50/40 dark:bg-purple-950/20">
-                    <Repeat2 size={14} className="shrink-0 text-purple-500" />
+                <div className="px-4 py-2 flex items-center gap-1.5 text-xs text-sky-600 dark:text-sky-400 font-semibold border-b border-sky-100 dark:border-sky-950/60 bg-sky-50/40 dark:bg-sky-950/20">
+                    <Repeat2 size={14} className="shrink-0 text-sky-500" />
                     <span>Reposted by <strong className="hover:underline cursor-pointer" onClick={() => post.userId && openPublicProfile?.(post.userId)}>{post.displayName || 'User'}</strong></span>
                 </div>
             )}
@@ -453,8 +455,8 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                         {/* Tagged Studio & Boost Badges */}
                         <div className="flex items-center gap-1.5 flex-wrap mt-1">
                             {(post.customFields?.taggedStudio || (post as any).taggedStudio) && (
-                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-purple-600 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/40 px-2 py-0.5 rounded-full">
-                                    <Building2 size={11} className="text-purple-500" />
+                                <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-600 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/40 border border-sky-200 dark:border-sky-800/40 px-2 py-0.5 rounded-full">
+                                    <Building2 size={11} className="text-sky-500" />
                                     <span>
                                         Recorded at {post.customFields?.taggedStudio?.name || (post as any).taggedStudio?.name || post.customFields?.taggedStudio || (post as any).taggedStudio}
                                     </span>
@@ -498,6 +500,15 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
 
                                 {!isOwnPost && (
                                     <>
+                                        {tipButtonPlacement === 'post_menu' && !isRepost && (
+                                            <button
+                                                onClick={() => { setShowTipModal(true); setShowMoreMenu(false); }}
+                                                className="w-full px-4 py-2.5 text-left text-sm flex items-center gap-3 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 transition font-medium"
+                                            >
+                                                <DollarSign size={16} />
+                                                <span>Tip Creator</span>
+                                            </button>
+                                        )}
                                         {onToggleFollow && (
                                             <button
                                                 onClick={() => { onToggleFollow(); setShowMoreMenu(false); }}
@@ -640,7 +651,7 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                     <div className="mt-3 p-3.5 rounded-xl bg-gray-50/90 dark:bg-gray-800/60 border border-gray-200/80 dark:border-gray-700/70 space-y-2.5">
                         {!resolvedOriginalPost ? (
                             <div className="text-xs text-gray-400 italic py-2 flex items-center gap-2">
-                                <Repeat2 size={13} className="animate-spin text-purple-400" />
+                                <Repeat2 size={13} className="animate-spin text-sky-400" />
                                 <span>Loading reposted content...</span>
                             </div>
                         ) : resolvedOriginalPost.isDeleted ? (
@@ -664,7 +675,7 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                             />
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                             <div className="flex items-center gap-1.5 flex-wrap">
                                                 <span
                                                     className="font-bold text-xs dark:text-white hover:underline cursor-pointer truncate"
                                                     onClick={() => (resolvedOriginalPost.authorId || resolvedOriginalPost.userId) && openPublicProfile?.(resolvedOriginalPost.authorId || resolvedOriginalPost.userId)}
@@ -672,7 +683,7 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                                     {resolvedOriginalPost.displayName || resolvedOriginalPost.authorName || 'Creator'}
                                                 </span>
                                                 {resolvedOriginalPost.role && (
-                                                    <span className="text-[10px] font-semibold bg-purple-500/10 text-purple-600 dark:text-purple-300 border border-purple-500/20 px-1.5 py-0.2 rounded-md">
+                                                    <span className="text-[10px] font-semibold bg-sky-500/10 text-sky-600 dark:text-sky-300 border border-sky-500/20 px-1.5 py-0.2 rounded-md">
                                                         {resolvedOriginalPost.role}
                                                     </span>
                                                 )}
@@ -839,7 +850,7 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
 
             {/* Action Buttons */}
             <div className="px-4 py-3 border-t dark:border-gray-700 flex items-center justify-between relative">
-                <div className="flex gap-2 sm:gap-4">
+                <div className="flex items-center gap-2 sm:gap-4">
                     {/* Reaction Button */}
                     <div className="relative">
                         <motion.button
@@ -925,19 +936,20 @@ const PostCard = React.memo(React.forwardRef<HTMLDivElement, PostCardProps>(func
                                 </motion.div>
                             )}
                         </AnimatePresence>
-                        {/* Tip Button - Disallowed on Reposts */}
-                        {!isOwnPost && !isRepost && (
-                            <motion.button
-                                whileTap={{ scale: 0.95 }}
-                                onClick={() => setShowTipModal(true)}
-                                className="flex items-center gap-1 sm:gap-1.5 text-xs font-bold text-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border border-emerald-500/30 transition px-2.5 py-1 rounded-lg"
-                                title="Tip Creator"
-                            >
-                                <DollarSign size={16} />
-                                <span>Tip</span>
-                            </motion.button>
-                        )}
                     </div>
+
+                    {/* Tip Button - In line with action buttons (when Always Visible) */}
+                    {!isOwnPost && !isRepost && tipButtonPlacement === 'always_visible' && (
+                        <motion.button
+                            whileTap={{ scale: 0.95 }}
+                            onClick={() => setShowTipModal(true)}
+                            className="flex items-center gap-1.5 text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300 transition px-2 py-1 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+                            title="Tip Creator"
+                        >
+                            <DollarSign size={18} />
+                            <span className="hidden sm:inline">Tip</span>
+                        </motion.button>
+                    )}
                 </div>
 
                 {/* Save Button */}

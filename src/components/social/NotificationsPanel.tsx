@@ -98,7 +98,7 @@ const NotificationIcon = ({ type }: NotificationIconProps) => {
         like: 'bg-red-100 text-red-500 dark:bg-red-900/30 dark:text-red-400',
         comment: 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400',
         message: 'bg-brand-blue/10 text-brand-blue dark:bg-brand-blue/20',
-        mention: 'bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400',
+        mention: 'bg-sky-100 text-sky-600 dark:bg-sky-900/30 dark:text-sky-400',
         reply: 'bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400',
         save: 'bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400',
         booking: 'bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400',
@@ -452,7 +452,7 @@ export default function NotificationsPanel({
                                         <motion.div
                                             className={`h-full ${
                                                 task.status === 'processing'
-                                                    ? 'bg-gradient-to-r from-purple-500 to-brand-blue animate-pulse'
+                                                    ? 'bg-gradient-to-r from-sky-400 to-brand-blue animate-pulse'
                                                     : 'bg-brand-blue'
                                             }`}
                                             initial={{ width: 0 }}

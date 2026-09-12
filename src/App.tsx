@@ -10,12 +10,19 @@ import { useStudioSubdomain } from './hooks/useStudioSubdomain';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { UploadManagerProvider } from './contexts/UploadManagerContext';
 import { queryClient } from './config/queryClient';
+import { applyDpiAwareFontSize, initDpiFontListener } from './utils/dpiFontManager';
+
+// Immediate zero-flicker font size calibration on app module load
+if (typeof window !== 'undefined') {
+  applyDpiAwareFontSize(localStorage.getItem('fontSize'));
+}
 
 const AuthWizard = lazy(() => import('./components/AuthWizard'));
 const AppRoutes = lazy(() => import('./routes/AppRoutes'));
 const MainLayout = lazy(() => import('./components/MainLayout'));
 const SubdomainRouter = lazy(() => import('./components/SubdomainRouter'));
 const SharedPostModal = lazy(() => import('./components/social/SharedPostModal'));
+import DevDemoToolbar from './components/dev/DevDemoToolbar';
 
 export default function App(): JSX.Element {
   const navigate = useNavigate();
@@ -60,6 +67,12 @@ export default function App(): JSX.Element {
     document.documentElement.classList.toggle('dark', darkMode);
   }, [darkMode]);
 
+  // 3. Dynamic Screen DPI & Resolution Listener
+  useEffect(() => {
+    const cleanup = initDpiFontListener();
+    return cleanup;
+  }, []);
+
   const handleLogout = useCallback(async () => {
     await clerk?.signOut();
     navigate('/login', { replace: true });
@@ -101,12 +114,16 @@ export default function App(): JSX.Element {
   const isTestLoginPage = location.pathname === '/test-login';
 
   // ── Public Routes Bypass ────────────────────────────────
-  // Public studio profiles (/s/:slug), kiosk (/kiosk/:id), legal (/legal), and not-found pages
+  // Public studio profiles (/s/:slug), kiosk (/kiosk/:id), legal (/legal), pitch deck (/pitch, /deck), and not-found pages
   // do not require authentication and must render AppRoutes directly.
   const isPublicRoute =
     location.pathname.startsWith('/s/') ||
     location.pathname.startsWith('/kiosk/') ||
     location.pathname === '/legal' ||
+    location.pathname === '/pitch' ||
+    location.pathname.startsWith('/pitch/') ||
+    location.pathname === '/deck' ||
+    location.pathname.startsWith('/deck/') ||
     location.pathname === '/studio-not-found';
 
   if (isPublicRoute) {
@@ -291,6 +308,7 @@ export default function App(): JSX.Element {
                   loading={userData === undefined} // Pass loading state to MainLayout
                 />
               )}
+              {import.meta.env.DEV && <DevDemoToolbar user={user} />}
             </Suspense>
           </div>
         </UploadManagerProvider>

@@ -6,9 +6,111 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import * as SentryVitePlugin from "@sentry/vite-plugin"
 
+import fs from 'fs'
+import dotenv from 'dotenv'
+
 // Derive __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+
+// Preload local environment variables for dev API handlers
+dotenv.config({ path: path.resolve(__dirname, '.env.local') })
+dotenv.config({ path: path.resolve(__dirname, '.env') })
+
+// Vite plugin to execute Vercel serverless functions in api/ directory during local development
+function apiDevServerPlugin() {
+  return {
+    name: 'api-dev-server',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url || !req.url.startsWith('/api/')) {
+          return next();
+        }
+
+        const urlObj = new URL(req.url, 'http://localhost');
+        const pathname = urlObj.pathname;
+        const relativePath = pathname.replace(/^\/api\//, '');
+
+        const candidatePaths = [
+          path.resolve(__dirname, 'api', `${relativePath}.js`),
+          path.resolve(__dirname, 'api', `${relativePath}.ts`),
+          path.resolve(__dirname, 'api', relativePath, 'index.js'),
+          path.resolve(__dirname, 'api', relativePath, 'index.ts'),
+        ];
+
+        let matchedFile = null;
+        for (const p of candidatePaths) {
+          if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+            matchedFile = p;
+            break;
+          }
+        }
+
+        if (!matchedFile) {
+          return next();
+        }
+
+        try {
+          let body = {};
+          if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method || '')) {
+            const chunks = [];
+            for await (const chunk of req) {
+              chunks.push(chunk);
+            }
+            const rawBody = Buffer.concat(chunks).toString();
+            if (rawBody) {
+              try {
+                body = JSON.parse(rawBody);
+              } catch {
+                body = rawBody;
+              }
+            }
+          }
+
+          req.body = body;
+          req.query = Object.fromEntries(urlObj.searchParams.entries());
+
+          res.status = (code) => {
+            res.statusCode = code;
+            return res;
+          };
+          res.json = (data) => {
+            if (!res.writableEnded) {
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify(data));
+            }
+            return res;
+          };
+          res.send = (data) => {
+            if (!res.writableEnded) {
+              if (typeof data === 'object') {
+                return res.json(data);
+              }
+              res.end(data);
+            }
+            return res;
+          };
+
+          const module = await server.ssrLoadModule(matchedFile);
+          const handler = module.default || module;
+          if (typeof handler === 'function') {
+            await handler(req, res);
+          } else {
+            res.status(500).json({ error: 'Handler not found in API module' });
+          }
+        } catch (err) {
+          console.error(`❌ Error in dev API route ${pathname}:`, err);
+          if (!res.writableEnded) {
+            res.status(500).json({
+              error: 'Internal dev server error',
+              message: err.message,
+            });
+          }
+        }
+      });
+    },
+  };
+}
 
 // Conditionally get visualizer plugin (only when ANALYZE=true and package is installed)
 function getVisualizerPlugin() {
@@ -119,6 +221,7 @@ export default defineConfig({
     },
   },
   plugins: [
+    apiDevServerPlugin(),
     react(),
     // Sentry for error tracking and performance monitoring
     SentryVitePlugin.sentryVitePlugin({

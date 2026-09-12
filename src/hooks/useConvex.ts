@@ -1371,6 +1371,14 @@ export function useActiveSponsoredPosts(userTier?: string) {
   return useQuery(api.ads.getActiveSponsoredPosts, { userTier });
 }
 
+export function useActiveSponsoredShorts(userTier?: string) {
+  return useQuery(api.ads.getActiveSponsoredShorts, { userTier });
+}
+
+export function useSeedPlaceholderAds() {
+  return useMutation(api.ads.seedPlaceholderAds);
+}
+
 export function useActiveAffiliateDeals(category?: string) {
   return useQuery(api.ads.getActiveAffiliateDeals, { category });
 }
@@ -1387,11 +1395,20 @@ export function useTrackAdClick() {
 // VISIBILITY & PRIORITY BOOST
 // =====================================================
 
-export function useSubscribeToPriorityVisibility() {
-  return useMutation(api.ads.subscribeToPriorityVisibility);
-}
-
 export function useBoostPost() {
   return useMutation(api.ads.boostPost);
 }
+
+// =====================================================
+// LOCAL DEV DEMO SEEDER HOOKS
+// =====================================================
+
+export function useSeedDemoEnvironment() {
+  return useMutation(api.demoSeeder.seedDemoEnvironment);
+}
+
+export function useClearDemoEnvironment() {
+  return useMutation(api.demoSeeder.clearDemoEnvironment);
+}
+
 

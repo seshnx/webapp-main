@@ -43,7 +43,7 @@ export const getWallet = query({
 
 /**
  * Add tokens to a user's wallet (Called by Stripe webhook)
- * Securing this is important - in production, use a shared secret in args.
+ * Protected by shared webhook secret to prevent unauthorized public invocation.
  */
 export const topUpBalance = mutation({
   args: {
@@ -51,8 +51,18 @@ export const topUpBalance = mutation({
     amount: v.number(), // Number of tokens
     stripePaymentIntentId: v.string(),
     description: v.optional(v.string()),
+    secret: v.string(),
   },
   handler: async (ctx, args) => {
+    const expectedSecret = process.env.CONVEX_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+    if (!expectedSecret || args.secret !== expectedSecret) {
+      throw new Error("Unauthorized: Invalid webhook secret");
+    }
+
+    if (args.amount <= 0) {
+      throw new Error("Invalid top-up amount");
+    }
+
     const wallet = await ctx.db
       .query("wallets")
       .withIndex("by_user", (q) => q.eq("userId", args.clerkId))

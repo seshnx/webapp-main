@@ -454,9 +454,9 @@ export default function LiveRoomModal({
 
               {/* Hand-Raise Approval Queue (Host View) */}
               {isHost && handRaisers.length > 0 && (
-                <div className="bg-purple-950/40 border border-purple-500/40 rounded-2xl p-3.5 animate-in fade-in duration-200">
+                <div className="bg-sky-950/40 border border-sky-500/40 rounded-2xl p-3.5 animate-in fade-in duration-200">
                   <div className="flex items-center justify-between mb-2">
-                    <h5 className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                    <h5 className="text-xs font-bold text-sky-300 flex items-center gap-1.5">
                       <Hand size={14} className="text-amber-400" />
                       Speaking Requests ({handRaisers.length})
                     </h5>
@@ -466,7 +466,7 @@ export default function LiveRoomModal({
                     {handRaisers.map((hr) => (
                       <div
                         key={hr._id}
-                        className="flex items-center justify-between bg-gray-900/80 rounded-xl p-2 px-3 border border-purple-500/20"
+                        className="flex items-center justify-between bg-gray-900/80 rounded-xl p-2 px-3 border border-sky-500/20"
                       >
                         <div className="flex items-center gap-2">
                           <UserAvatar src={hr.avatarUrl} name={hr.name} size="xs" />
@@ -541,7 +541,7 @@ export default function LiveRoomModal({
             <div className="bg-gray-950/80 rounded-2xl p-3.5 border border-gray-800 flex flex-col justify-between overflow-hidden">
               <div className="flex items-center justify-between pb-2 border-b border-gray-800 mb-2">
                 <h4 className="text-xs font-bold text-gray-300 flex items-center gap-1.5">
-                  <MessageSquare size={14} className="text-purple-400" /> Space Chat ({messages.length})
+                  <MessageSquare size={14} className="text-sky-400" /> Space Chat ({messages.length})
                 </h4>
               </div>
 
@@ -555,7 +555,7 @@ export default function LiveRoomModal({
                   messages.map((m) => (
                     <div key={m._id} className="text-xs flex flex-col gap-0.5">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-bold text-purple-400">{m.senderName}:</span>
+                        <span className="font-bold text-sky-400">{m.senderName}:</span>
                         <span className="text-[10px] text-gray-500">
                           {new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
@@ -575,12 +575,12 @@ export default function LiveRoomModal({
                   value={chatMessage}
                   onChange={(e) => setChatMessage(e.target.value)}
                   maxLength={160}
-                  className="flex-1 bg-gray-900 border border-gray-800 focus:border-purple-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none transition"
+                  className="flex-1 bg-gray-900 border border-gray-800 focus:border-sky-500 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 outline-none transition"
                 />
                 <button
                   type="submit"
                   disabled={!chatMessage.trim()}
-                  className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition flex items-center gap-1"
+                  className="px-3.5 py-2 bg-gradient-to-r from-sky-500 to-blue-600 hover:opacity-90 disabled:opacity-40 text-white rounded-xl text-xs font-bold transition flex items-center gap-1"
                 >
                   <Send size={12} />
                 </button>
@@ -623,7 +623,7 @@ export default function LiveRoomModal({
                 onClick={() => setIsAudioSettingsOpen(true)}
                 className={`flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl font-bold text-xs shadow-md transition border ${
                   studioAudioMode
-                    ? 'bg-purple-950/60 border-purple-500/40 text-purple-300 hover:bg-purple-900/60'
+                    ? 'bg-sky-950/60 border-sky-500/40 text-sky-300 hover:bg-sky-900/60'
                     : 'bg-gray-800 border-gray-700/60 text-gray-300 hover:bg-gray-700 hover:text-white'
                 }`}
                 title="Audio Interfaces, Inputs, Outputs & Studio Mode"
@@ -631,7 +631,7 @@ export default function LiveRoomModal({
                 <Volume2 size={15} />
                 <span className="hidden sm:inline">Audio Settings</span>
                 {studioAudioMode && (
-                  <span className="w-2 h-2 rounded-full bg-purple-400 animate-pulse" title="Pro Studio Audio Active" />
+                  <span className="w-2 h-2 rounded-full bg-sky-400 animate-pulse" title="Pro Studio Audio Active" />
                 )}
               </button>
             </div>

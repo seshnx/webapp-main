@@ -40,34 +40,63 @@ export default async function handler(req, res) {
     switch (event.type) {
       case 'payment_intent.succeeded': {
         const pi = event.data.object;
-        const { userId, packId } = pi.metadata;
+        const { userId, packId, secondaryTransfers } = pi.metadata || {};
 
+        // 1. Process token top-up if this is a token package purchase
         if (userId && packId) {
           const tokenAmount = TOKEN_PACKS[packId] || 0;
           console.log(`Processing top-up for ${userId}: ${tokenAmount} tokens`);
 
-          // Call Convex to record the payment and top up balance
+          // Call Convex with webhook secret validation
           await httpClient.mutation(api.wallets.topUpBalance, {
             clerkId: userId,
             amount: tokenAmount,
             stripePaymentIntentId: pi.id,
-            description: `Purchased ${packId} package`
+            description: `Purchased ${packId} package`,
+            secret: webhookSecret,
           });
+        }
+
+        // 2. Process deferred secondary split transfers (verified after payment success)
+        if (secondaryTransfers) {
+          try {
+            const transfersList = JSON.parse(secondaryTransfers);
+            if (Array.isArray(transfersList)) {
+              console.log(`Executing ${transfersList.length} split transfers for payment intent ${pi.id}`);
+              const transferPromises = transfersList.map((t) =>
+                stripe.transfers.create({
+                  amount: Math.round(t.amount * 100),
+                  currency: 'usd',
+                  destination: t.recipientId,
+                  source_transaction: pi.latest_charge,
+                  metadata: {
+                    role: t.role || 'Creative',
+                    parentPaymentIntent: pi.id,
+                  },
+                })
+              );
+              await Promise.all(transferPromises);
+              console.log(`✅ Completed secondary split transfers for payment intent ${pi.id}`);
+            }
+          } catch (splitErr) {
+            console.error(`❌ Failed to process split transfers for ${pi.id}:`, splitErr);
+          }
         }
         break;
       }
 
       case 'checkout.session.completed': {
         const session = event.data.object;
-        const { userId, packId, mode } = session.metadata;
+        const { userId, packId, mode } = session.metadata || {};
 
         // If it was a subscription (membership plan)
         if (session.mode === 'subscription' && userId && packId) {
           console.log(`Subscription ${packId} completed for user: ${userId}`);
-          // Call Convex to update user tier
+          // Call Convex with webhook secret validation
           await httpClient.mutation(api.users.updateUserTier, {
             clerkId: userId,
             tier: packId, // Assuming packId is the tier name like 'PRO' or 'STUDIO'
+            secret: webhookSecret,
           });
         }
         break;

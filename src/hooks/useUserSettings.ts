@@ -6,6 +6,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
+import { applyDpiAwareFontSize } from '../utils/dpiFontManager';
 
 export interface UserSettings {
   theme?: 'light' | 'dark' | 'system';
@@ -50,6 +51,9 @@ const DEFAULT_SETTINGS: UserSettings = {
     fontSize: 'medium',
     reducedMotion: false,
     highContrast: false,
+  },
+  social: {
+    tipButtonPlacement: 'public_profile',
   },
 };
 
@@ -165,17 +169,8 @@ export function applySettingsToDom(settings: UserSettings): void {
     }
   }
 
-  // Apply font size
-  if (settings.accessibility?.fontSize) {
-    const fontSizes: Record<string, string> = {
-      small: '10px',
-      medium: '12px',
-      large: '14px',
-      xlarge: '16px',
-    };
-    root.style.fontSize = fontSizes[settings.accessibility.fontSize] || fontSizes.medium;
-    localStorage.setItem('fontSize', settings.accessibility.fontSize);
-  }
+  // Apply DPI-aware font size with user accessibility offset
+  applyDpiAwareFontSize(settings.accessibility?.fontSize || 'medium');
 
   // Apply reduced motion
   if (settings.accessibility?.reducedMotion !== undefined) {
@@ -203,6 +198,23 @@ export function applySettingsToDom(settings: UserSettings): void {
   if (settings.language) {
     document.documentElement.lang = settings.language;
     localStorage.setItem('language', settings.language);
+  }
+
+  // Apply format & locale persistence (extracted from useSettings)
+  if (settings.timezone && settings.timezone !== 'auto') {
+    localStorage.setItem('timezone', settings.timezone);
+  }
+  if (settings.currency) {
+    localStorage.setItem('currency', settings.currency);
+  }
+  if (settings.dateFormat) {
+    localStorage.setItem('dateFormat', settings.dateFormat);
+  }
+  if (settings.timeFormat) {
+    localStorage.setItem('timeFormat', settings.timeFormat);
+  }
+  if (settings.numberFormat) {
+    localStorage.setItem('numberFormat', settings.numberFormat);
   }
 
   // Store all settings in localStorage for persistence

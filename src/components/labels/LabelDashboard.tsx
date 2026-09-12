@@ -17,10 +17,16 @@ import {
     Activity,
     UserPlus,
     Briefcase,
-    ChevronRight,
-    Building2
+    Building2,
+    FileText,
+    Search,
+    Trash2,
+    Shield,
+    User,
+    X
 } from 'lucide-react';
 import ExternalArtistManager from './ExternalArtistManager';
+import ContractManager from './ContractManager';
 
 /**
  * Metrics data interface
@@ -98,6 +104,8 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
     const [rosterData, setRosterData] = useState<ArtistRosterData[]>([]);
     const [upcomingReleases, setUpcomingReleases] = useState<ReleaseData[]>([]);
     const [artistView, setArtistView] = useState<'platform' | 'external'>('platform');
+    const [showSignArtistModal, setShowSignArtistModal] = useState<boolean>(false);
+    const [showContractsModal, setShowContractsModal] = useState<boolean>(false);
 
     const userId = user?.id || user?.uid || user?.userId;
 
@@ -259,15 +267,23 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <button
-                        onClick={() => navigate('/labels/roster')}
+                        onClick={() => setShowSignArtistModal(true)}
                         className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
                         <UserPlus className="h-5 w-5 mr-2 text-blue-600 dark:text-blue-400" />
-                        <span className="font-medium text-gray-700 dark:text-gray-200">Add Artist</span>
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Add / Sign Artist</span>
                     </button>
 
                     <button
-                        onClick={() => navigate('/labels/releases')}
+                        onClick={() => setShowContractsModal(true)}
+                        className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                    >
+                        <FileText className="h-5 w-5 mr-2 text-amber-500" />
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Contracts & Legal</span>
+                    </button>
+
+                    <button
+                        onClick={() => navigate('/distribution')}
                         className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
                         <Plus className="h-5 w-5 mr-2 text-purple-600 dark:text-purple-400" />
@@ -275,19 +291,11 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                     </button>
 
                     <button
-                        onClick={() => navigate('/labels/royalties')}
+                        onClick={() => navigate('/distribution')}
                         className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                     >
                         <Upload className="h-5 w-5 mr-2 text-green-600 dark:text-green-400" />
-                        <span className="font-medium text-gray-700 dark:text-gray-200">Upload Royalties</span>
-                    </button>
-
-                    <button
-                        onClick={() => navigate('/labels/campaigns')}
-                        className="flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                        <BarChart3 className="h-5 w-5 mr-2 text-orange-600 dark:text-orange-400" />
-                        <span className="font-medium text-gray-700 dark:text-gray-200">New Campaign</span>
+                        <span className="font-medium text-gray-700 dark:text-gray-200">Royalties & Splits</span>
                     </button>
                 </div>
             </div>
@@ -326,11 +334,11 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                                 </button>
                             </div>
                             <button
-                                onClick={() => navigate('/labels/roster')}
-                                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-sm flex items-center"
+                                onClick={() => setShowSignArtistModal(true)}
+                                className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-medium text-sm flex items-center gap-1 bg-blue-50 dark:bg-blue-900/20 px-3 py-1.5 rounded-lg transition"
                             >
-                                View All
-                                <ArrowRight className="h-4 w-4 ml-1" />
+                                <UserPlus size={14} />
+                                Sign Artist
                             </button>
                         </div>
                     </div>
@@ -482,6 +490,145 @@ export default function LabelDashboard({ user, userData }: LabelDashboardProps) 
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* Sign Artist Modal */}
+            {showSignArtistModal && (
+                <SignArtistModal
+                    user={user || { id: userId }}
+                    onClose={() => setShowSignArtistModal(false)}
+                />
+            )}
+
+            {/* Contract Manager Modal */}
+            {showContractsModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+                    <div className="bg-white dark:bg-[#1e2024] w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 relative">
+                        <button
+                            onClick={() => setShowContractsModal(false)}
+                            className="absolute top-5 right-5 p-2 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                            aria-label="Close"
+                        >
+                            <X size={20} />
+                        </button>
+                        <ContractManager user={user || { id: userId }} />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+/**
+ * Self-contained Sign Platform Artist & Roster Manager Modal
+ * Extracted from LabelManager.tsx
+ */
+function SignArtistModal({ user, onClose }: { user: any; onClose: () => void }) {
+    const [view, setView] = useState<'search' | 'list'>('search');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [signedArtists, setSignedArtists] = useState<any[]>([]);
+
+    const handleSign = (artistName: string) => {
+        setSignedArtists(prev => [...prev, {
+            id: 'signed_' + Date.now(),
+            name: artistName,
+            status: 'Active',
+            signedDate: new Date().toLocaleDateString()
+        }]);
+        alert(`Signed ${artistName} to label roster!`);
+        setView('list');
+    };
+
+    const handleRelease = (id: string, name: string) => {
+        if (!confirm(`Release ${name} from your label roster?`)) return;
+        setSignedArtists(prev => prev.filter(a => a.id !== id));
+    };
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in">
+            <div className="bg-white dark:bg-[#1e2024] w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-700 p-6 sm:p-8 space-y-6 relative">
+                <button
+                    onClick={onClose}
+                    className="absolute top-5 right-5 p-2 rounded-xl text-gray-500 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-800 transition"
+                    aria-label="Close"
+                >
+                    <X size={20} />
+                </button>
+
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
+                    <div>
+                        <h3 className="text-2xl font-bold dark:text-white flex items-center gap-2">
+                            <Shield className="text-purple-600" /> Platform Artist Management
+                        </h3>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm mt-0.5">
+                            Search creative talent across SeshNx to sign to your record label roster.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => setView(view === 'search' ? 'list' : 'search')}
+                        className="px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs transition flex items-center gap-1.5 shrink-0"
+                    >
+                        {view === 'search' ? <><Users size={14}/> View Signed Roster</> : <><UserPlus size={14}/> Find Talent to Sign</>}
+                    </button>
+                </div>
+
+                {view === 'search' ? (
+                    <div className="space-y-4">
+                        <div className="relative">
+                            <Search className="absolute left-4 top-3 text-gray-400" size={18} />
+                            <input
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Search platform artists, producers, or vocalists by name..."
+                                className="w-full pl-12 pr-4 py-3 rounded-2xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-sm dark:text-white outline-none focus:ring-2 focus:ring-purple-500/30"
+                            />
+                        </div>
+
+                        {searchQuery.trim() ? (
+                            <div className="p-6 rounded-2xl border border-dashed dark:border-gray-700 text-center space-y-3">
+                                <p className="text-sm dark:text-white">Ready to sign artist: <strong className="text-purple-600">{searchQuery}</strong></p>
+                                <button
+                                    onClick={() => handleSign(searchQuery)}
+                                    className="px-5 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-700 transition"
+                                >
+                                    Sign to Roster
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="text-center py-12 text-gray-400">
+                                <Users className="mx-auto mb-2 opacity-30" size={40} />
+                                <p className="text-sm">Type an artist name to search talent directory</p>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <h4 className="text-xs font-bold uppercase text-gray-400">Signed Label Roster ({signedArtists.length})</h4>
+                        {signedArtists.length === 0 ? (
+                            <div className="text-center py-12 text-gray-400 border border-dashed dark:border-gray-700 rounded-2xl">
+                                <p className="text-sm">No new artists signed yet in this session.</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y dark:divide-gray-800">
+                                {signedArtists.map(artist => (
+                                    <div key={artist.id} className="py-3 flex items-center justify-between">
+                                        <div>
+                                            <p className="font-bold text-sm dark:text-white">{artist.name}</p>
+                                            <p className="text-xs text-gray-400">Signed: {artist.signedDate}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => handleRelease(artist.id, artist.name)}
+                                            className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-xl transition"
+                                            title="Release Artist"
+                                        >
+                                            <Trash2 size={16} />
+                                        </button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );

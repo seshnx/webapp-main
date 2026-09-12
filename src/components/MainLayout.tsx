@@ -135,7 +135,7 @@ export default function MainLayout({
     if (path.startsWith('/edu-staff')) return 'edu-staff';
     if (path.startsWith('/edu-admin')) return 'edu-admin';
     if (path.startsWith('/edu')) return 'edu-overview';
-    if (path.startsWith('/feed') || path === '/social' || path === '/' || path.startsWith('/post/') || path.startsWith('/p/')) return 'feed';
+    if (path.startsWith('/feed') || path.startsWith('/social') || path === '/' || path.startsWith('/post/') || path.startsWith('/p/')) return 'feed';
     return 'feed';
   };
 
@@ -265,7 +265,16 @@ export default function MainLayout({
       case 'tech':
         return (
           <Suspense fallback={<Loader2 className="animate-spin m-auto" size={32} />}>
-            <TechServices user={user} userData={userData} openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })} />
+            <TechServices
+              user={user}
+              userData={userData}
+              openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })}
+              openChat={(uid: string, name?: string) => {
+                setPendingChatTarget({ uid, name: name || '' });
+                setActiveTab('messages');
+                navigate('/messages');
+              }}
+            />
           </Suspense>
         );
       case 'payments':
@@ -290,7 +299,11 @@ export default function MainLayout({
               user={user}
               userData={userData}
               openPublicProfile={(uid: string) => setViewingProfile({ uid, name: '' })}
-              setPendingChatTarget={setPendingChatTarget}
+              setPendingChatTarget={(target) => {
+                setPendingChatTarget(target);
+                setActiveTab('messages');
+                navigate('/messages');
+              }}
             />
           </Suspense>
         );

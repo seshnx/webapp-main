@@ -61,17 +61,17 @@ export interface UserData {
   effectiveDisplayName?: string;
   email?: string;
   photoURL?: string | null;
-  banner_url?: string | null; // MongoDB field
+  banner_url?: string | null;
   accountTypes?: AccountType[];
   activeProfileRole?: AccountType;
   preferredRole?: AccountType;
   talentSubRole?: TalentSubRole;
 
-  // Profile fields (MongoDB)
+  // Profile fields
   bio?: string;
   profileName?: string;
-  website?: string; // MongoDB field
-  location?: string; // MongoDB field
+  website?: string;
+  location?: string;
   genres?: string[];
   instruments?: Record<string, string[]>;
   rates?: number;
@@ -87,7 +87,7 @@ export interface UserData {
   // Settings
   settings?: UserSettings;
 
-  // MongoDB subprofiles by role
+  // Subprofiles by role
   subprofiles?: Record<string, any>;
 
   // Timestamps
@@ -469,3 +469,23 @@ export type ConvexId<T extends TableNames> = Id<T>;
 
 export type { Doc, Id, TableNames } from '../../convex/_generated/dataModel';
 
+// =====================================================
+// DYNAMIC FORM FIELD DEFINITIONS (Custom Questionnaires)
+// =====================================================
+
+export interface FormFieldDefinition {
+  id: string;
+  label: string;
+  fieldType: 'text' | 'textarea' | 'number' | 'select' | 'checkbox' | 'radio' | 'date';
+  required?: boolean;
+  options?: Array<{ label: string; value: string }>;
+  validation?: {
+    minLength?: number;
+    maxLength?: number;
+    min?: number;
+    max?: number;
+    pattern?: string;
+  };
+  placeholder?: string;
+  helpText?: string;
+}

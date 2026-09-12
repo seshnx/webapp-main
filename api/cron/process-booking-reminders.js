@@ -2,6 +2,7 @@
  * Cron job endpoint to process booking reminders
  * Should be called periodically (e.g., every hour) via Vercel Cron or similar
  */
+import crypto from 'crypto';
 import { neon } from '@neondatabase/serverless';
 import { query as neonQuery } from '../../_config/neon.js';
 
@@ -9,9 +10,24 @@ const databaseUrl = process.env.DATABASE_URL || process.env.NEON_DATABASE_URL ||
 const sql = neon(databaseUrl);
 
 export default async function handler(req, res) {
-  // Verify cron secret (if using Vercel Cron)
-  if (req.headers['authorization'] !== `Bearer ${process.env.CRON_SECRET}`) {
-    return res.status(401).json({ error: 'Unauthorized' });
+  // Verify cron secret (timing-safe, strictly requiring non-empty secret)
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret || typeof cronSecret !== 'string' || cronSecret.trim() === '') {
+    console.error('CRON_SECRET is not configured on server');
+    return res.status(500).json({ error: 'Server misconfiguration: CRON_SECRET not configured' });
+  }
+
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+  if (!authHeader || typeof authHeader !== 'string') {
+    return res.status(401).json({ error: 'Unauthorized: Missing authorization header' });
+  }
+
+  const expectedHeader = `Bearer ${cronSecret}`;
+  const authBuffer = Buffer.from(authHeader);
+  const expectedBuffer = Buffer.from(expectedHeader);
+
+  if (authBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(authBuffer, expectedBuffer)) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid credentials' });
   }
 
   try {

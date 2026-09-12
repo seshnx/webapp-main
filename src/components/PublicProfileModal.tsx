@@ -2,13 +2,15 @@ import React, { useState, useEffect } from 'react';
 import {
     X, MapPin, MessageCircle, Shield, User,
     Briefcase, Music, Award, AlertTriangle, CheckCircle,
-    DollarSign, Camera, Loader2, CalendarCheck
+    DollarSign, Camera, Loader2, CalendarCheck, Building2
 } from 'lucide-react';
 import StarRating from './shared/StarRating';
 import { useImageUpload } from '../hooks/useUpload';
 import { useFollowSystem, useUserSocialStats } from '../hooks/useFollowSystem';
 import FollowButton from './social/FollowButton';
 import FollowersListModal, { FollowStats } from './social/FollowersListModal';
+import TipModal from './social/TipModal';
+import UserAvatar from './shared/UserAvatar';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../convex/_generated/api';
 import { STORAGE_FOLDERS } from '../config/storage';
@@ -109,10 +111,12 @@ export default function PublicProfileModal({
     const [bannerUploading, setBannerUploading] = useState<boolean>(false);
     const [showFollowersModal, setShowFollowersModal] = useState<boolean>(false);
     const [followersModalTab, setFollowersModalTab] = useState<string>('followers');
+    const [showTipModal, setShowTipModal] = useState<boolean>(false);
 
     // Determine if the viewer is the owner
     const currentUserId = currentUser?.id || currentUser?.uid;
     const isOwner = currentUserId === userId;
+    const viewerTipPlacement = (currentUserData?.settings as any)?.social?.tipButtonPlacement || 'public_profile';
 
     const { uploadImage } = useImageUpload();
 
@@ -120,6 +124,10 @@ export default function PublicProfileModal({
     const convexProfile = useQuery(
         api.users.getUserByClerkId,
         userId ? { clerkId: userId } : "skip"
+    );
+    const studio = useQuery(
+        api.studios.getStudioByOwner,
+        convexProfile?._id ? { ownerId: convexProfile._id } : "skip"
     );
     const updateProfileMutation = useMutation(api.users.updateProfile);
 
@@ -183,7 +191,7 @@ export default function PublicProfileModal({
                 firstName: convexProfile.firstName || (convexProfile as any).first_name,
                 lastName: convexProfile.lastName || (convexProfile as any).last_name,
                 displayName: isDeletedOrMissing ? '[Deleted User]' : resolvedName,
-                photoURL: convexProfile.imageUrl || (convexProfile as any).avatar_url || (convexProfile as any).photo_url,
+                photoURL: convexProfile.imageUrl || (convexProfile as any).avatarUrl || (convexProfile as any).avatar_url || (convexProfile as any).photoURL || (convexProfile as any).photo_url || (isOwner ? (currentUser as any)?.imageUrl : undefined),
                 bannerURL: convexProfile.bannerUrl || (convexProfile as any).banner_url,
                 rate: convexProfile.hourlyRate || (convexProfile as any).rate || (convexProfile as any).hourly_rate,
                 zip: convexProfile.zipCode || (convexProfile as any).zip
@@ -275,19 +283,28 @@ export default function PublicProfileModal({
                                 {profile.bannerURL ? (
                                     <img src={profile.bannerURL} alt="Cover" className="w-full h-full object-cover" />
                                 ) : (
-                                    <div className="w-full h-full bg-gradient-to-r from-brand-blue to-purple-600">
+                                    <div className="w-full h-full bg-gradient-to-r from-brand-blue to-sky-500">
                                         <div className="absolute inset-0 opacity-30 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')]"></div>
                                     </div>
                                 )}
 
-                                {/* Edit Banner Trigger */}
-                                {isOwner && (
+                                {/* Top Left Action: Edit Banner for Owner / Tip Creator for Visitors */}
+                                {isOwner ? (
                                     <label className="absolute top-4 left-4 cursor-pointer bg-black/40 hover:bg-black/60 text-white px-3 py-1.5 rounded-lg text-xs font-bold backdrop-blur-md transition-all flex items-center gap-2 border border-white/10">
                                         {bannerUploading ? <Loader2 size={14} className="animate-spin"/> : <Camera size={14}/>}
                                         {bannerUploading ? 'Uploading...' : 'Edit Cover'}
                                         <input type="file" className="hidden" accept="image/*" onChange={handleBannerUpload} disabled={bannerUploading} />
                                     </label>
-                                )}
+                                ) : viewerTipPlacement !== 'always_hidden' ? (
+                                    <button
+                                        onClick={() => setShowTipModal(true)}
+                                        className="absolute top-4 left-4 z-20 cursor-pointer bg-emerald-600/90 hover:bg-emerald-600 text-white px-3.5 py-1.5 rounded-full text-xs font-bold backdrop-blur-md transition-all flex items-center gap-1.5 shadow-lg shadow-emerald-950/40 border border-emerald-400/30 active:scale-95"
+                                        title="Tip this creator"
+                                    >
+                                        <DollarSign size={14} />
+                                        <span>Tip</span>
+                                    </button>
+                                ) : null}
 
                                 {/* Badges Overlay */}
                                 <div className="absolute bottom-4 right-6 flex gap-3 opacity-90">
@@ -309,15 +326,14 @@ export default function PublicProfileModal({
                                 <div className="flex justify-between items-end -mt-14 mb-6">
                                     {/* Avatar */}
                                     <div className="relative z-10 group">
-                                        <div className="h-32 w-32 rounded-full border-[5px] border-white dark:border-[#1f2128] bg-gray-200 dark:bg-gray-700 overflow-hidden shadow-xl">
-                                            {profile.photoURL ? (
-                                                <img src={profile.photoURL} alt="Profile" className="h-full w-full object-cover" />
-                                            ) : (
-                                                <div className="h-full w-full flex items-center justify-center bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400">
-                                                    <User size={48} />
-                                                </div>
-                                            )}
-                                        </div>
+                                        <UserAvatar
+                                            src={profile.photoURL}
+                                            userData={convexProfile || profile}
+                                            user={isOwner ? currentUser : undefined}
+                                            name={profile.displayName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim()}
+                                            size="3xl"
+                                            className="h-32 w-32 rounded-full border-[5px] border-white dark:border-[#1f2128] shadow-xl text-3xl"
+                                        />
                                     </div>
 
                                     {/* CTA Actions */}
@@ -325,7 +341,7 @@ export default function PublicProfileModal({
                                         <div className="flex gap-2 mb-2 flex-wrap">
                                             <FollowButton
                                                 isFollowing={isFollowing(userId)}
-                                                onToggle={() => toggleFollow(userId)}
+                                                onToggle={async () => { await toggleFollow(userId); }}
                                                 size="md"
                                             />
                                             <button
@@ -342,12 +358,30 @@ export default function PublicProfileModal({
                                                     <CalendarCheck size={18} /> Book Now
                                                 </button>
                                             )}
+                                            {studio && (
+                                                <a
+                                                    href={`/s/${studio.slug || studio._id}`}
+                                                    className="bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 px-5 py-2.5 rounded-xl font-bold text-sm hover:bg-purple-200 dark:hover:bg-purple-900/60 transition flex items-center gap-2"
+                                                >
+                                                    <Building2 size={18} /> View Studio
+                                                </a>
+                                            )}
                                         </div>
                                     )}
 
                                     {isOwner && (
-                                        <div className="mb-2 px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold rounded-lg border border-green-200 dark:border-green-800">
-                                            Public View Mode
+                                        <div className="flex items-center gap-2 mb-2">
+                                            {studio && (
+                                                <a
+                                                    href={`/s/${studio.slug || studio._id}`}
+                                                    className="px-3 py-1.5 bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-lg border border-purple-200 dark:border-purple-800 flex items-center gap-1.5"
+                                                >
+                                                    <Building2 size={13} /> View Studio Page
+                                                </a>
+                                            )}
+                                            <div className="px-3 py-1.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs font-bold rounded-lg border border-green-200 dark:border-green-800">
+                                                Public View Mode
+                                            </div>
                                         </div>
                                     )}
                                 </div>
@@ -488,12 +522,26 @@ export default function PublicProfileModal({
                     currentUser={currentUser}
                     currentUserData={currentUserData}
                     isFollowing={isFollowing}
-                    toggleFollow={toggleFollow}
+                    toggleFollow={async (targetId: string, profileData?: any) => {
+                        await toggleFollow(targetId, profileData);
+                    }}
                     onClose={() => setShowFollowersModal(false)}
                     openPublicProfile={(targetId) => {
                         setShowFollowersModal(false);
                         // Re-open with new user - handled by parent
                     }}
+                />
+            )}
+
+            {/* Tip Modal */}
+            {showTipModal && profile && (
+                <TipModal
+                    creatorName={profile.displayName || 'Creator'}
+                    creatorPhoto={profile.photoURL}
+                    creatorUserId={userId}
+                    creatorSettings={(profile as any).settings}
+                    currentUser={currentUser}
+                    onClose={() => setShowTipModal(false)}
                 />
             )}
         </div>

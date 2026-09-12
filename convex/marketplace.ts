@@ -66,45 +66,76 @@ export const searchMarketItems = query({
   args: {
     searchQuery: v.optional(v.string()),
     category: v.optional(v.string()),
+    brand: v.optional(v.string()),
     condition: v.optional(v.string()),
     minPrice: v.optional(v.number()),
     maxPrice: v.optional(v.number()),
     location: v.optional(v.string()),
-    itemType: v.optional(v.string()), // 'gear', 'instrument', 'equipment', 'service'
+    itemType: v.optional(v.string()),
+    verifiedOnly: v.optional(v.boolean()),
+    shippingFilter: v.optional(v.string()), // 'all', 'shipping_only', 'local_pickup_only', 'free_shipping'
+    sortBy: v.optional(v.string()), // 'newest', 'price_asc', 'price_desc', 'featured'
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let items = await ctx.db
-      .query("marketItems")
-      .withIndex("by_created")
-      .filter((q) =>
-        q.and(
-          q.eq(q.field("deletedAt"), undefined),
-          q.eq(q.field("status"), "available")
-        )
-      )
-      .collect();
+    let items: any[] = [];
 
-    // Filter by search query
-    if (args.searchQuery) {
-      const query = args.searchQuery.toLowerCase();
-      items = items.filter(
-        (item) =>
-          item.title.toLowerCase().includes(query) ||
-          item.description?.toLowerCase().includes(query) ||
-          item.brand?.toLowerCase().includes(query) ||
-          item.model?.toLowerCase().includes(query)
-      );
+    if (args.searchQuery && args.searchQuery.trim().length > 0) {
+      // Use Convex Full-Text Search Index
+      const searchTerms = args.searchQuery.trim();
+      let searchQ = ctx.db
+        .query("marketItems")
+        .withSearchIndex("search_gear", (q) => {
+          let builder = q.search("title", searchTerms);
+          if (args.category && args.category !== 'all') {
+            builder = builder.eq("category", args.category);
+          }
+          if (args.condition && args.condition !== 'all') {
+            builder = builder.eq("condition", args.condition);
+          }
+          if (args.brand && args.brand !== 'all') {
+            builder = builder.eq("brand", args.brand);
+          }
+          return builder;
+        });
+
+      items = await searchQ.take(args.limit || 50);
+      items = items.filter(i => !i.deletedAt && (i.status === 'available' || i.status === 'active'));
+    } else {
+      let q = ctx.db
+        .query("marketItems")
+        .withIndex("by_created")
+        .filter((q) =>
+          q.and(
+            q.eq(q.field("deletedAt"), undefined),
+            q.or(
+              q.eq(q.field("status"), "available"),
+              q.eq(q.field("status"), "active")
+            )
+          )
+        );
+
+      items = await q.collect();
+    }
+
+    // Filter by verified condition
+    if (args.verifiedOnly) {
+      items = items.filter((item) => item.isConditionVerified === true);
     }
 
     // Filter by category
-    if (args.category) {
-      items = items.filter((item) => item.category === args.category);
+    if (args.category && args.category !== 'all') {
+      items = items.filter((item) => item.category?.toLowerCase() === args.category!.toLowerCase() || item.itemType?.toLowerCase() === args.category!.toLowerCase());
+    }
+
+    // Filter by brand
+    if (args.brand && args.brand !== 'all') {
+      items = items.filter((item) => item.brand?.toLowerCase() === args.brand!.toLowerCase());
     }
 
     // Filter by condition
-    if (args.condition) {
-      items = items.filter((item) => item.condition === args.condition);
+    if (args.condition && args.condition !== 'all') {
+      items = items.filter((item) => item.condition?.toLowerCase() === args.condition!.toLowerCase());
     }
 
     // Filter by price range
@@ -122,19 +153,95 @@ export const searchMarketItems = query({
       );
     }
 
-    // Filter by item type
-    if (args.itemType) {
-      items = items.filter((item) => item.itemType === args.itemType);
+    // Filter by shipping & fulfillment method
+    if (args.shippingFilter && args.shippingFilter !== 'all') {
+      if (args.shippingFilter === 'local_pickup_only') {
+        items = items.filter((item) => item.localPickup && !item.shippingAvailable);
+      } else if (args.shippingFilter === 'shipping_only') {
+        items = items.filter((item) => item.shippingAvailable);
+      } else if (args.shippingFilter === 'free_shipping') {
+        items = items.filter((item) => item.shippingAvailable && item.shippingCost === 0);
+      }
     }
 
-    // Sort by created date (newest first)
-    items.sort((a, b) => b.createdAt - a.createdAt);
+    // Apply Sorting
+    const sort = args.sortBy || 'newest';
+    if (sort === 'price_asc') {
+      items.sort((a, b) => a.price - b.price);
+    } else if (sort === 'price_desc') {
+      items.sort((a, b) => b.price - a.price);
+    } else if (sort === 'featured') {
+      items.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0) || b.createdAt - a.createdAt);
+    } else {
+      // Default: newest
+      items.sort((a, b) => b.createdAt - a.createdAt);
+    }
 
     if (args.limit) {
       items = items.slice(0, args.limit);
     }
 
-    return items;
+    // Enrich with seller profile info
+    const enriched = await Promise.all(
+      items.map(async (item) => {
+        let sellerUser = null;
+        if (item.sellerId) {
+          sellerUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerk_id", (q) => q.eq("clerkId", item.sellerId))
+            .first();
+        }
+
+        return {
+          ...item,
+          sellerName: sellerUser?.displayName || sellerUser?.profileName || sellerUser?.firstName || 'Verified Studio Creator',
+          sellerAvatar: sellerUser?.avatarUrl || null,
+          sellerRating: 5.0,
+          sellerLocation: item.location || sellerUser?.location || 'Austin, TX',
+        };
+      })
+    );
+
+    return enriched;
+  },
+});
+
+export const getMarketplaceMeta = query({
+  args: {},
+  handler: async (ctx) => {
+    const items = await ctx.db
+      .query("marketItems")
+      .filter((q) =>
+        q.and(
+          q.eq(q.field("deletedAt"), undefined),
+          q.or(
+            q.eq(q.field("status"), "available"),
+            q.eq(q.field("status"), "active")
+          )
+        )
+      )
+      .collect();
+
+    const categoryCounts: Record<string, number> = {};
+    const brandSet = new Set<string>();
+    let minPrice = Infinity;
+    let maxPrice = 0;
+
+    for (const item of items) {
+      const cat = item.category || item.itemType || 'Other';
+      categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+      if (item.brand) brandSet.add(item.brand);
+      if (item.price < minPrice) minPrice = item.price;
+      if (item.price > maxPrice) maxPrice = item.price;
+    }
+
+    return {
+      totalItems: items.length,
+      categoryCounts,
+      brands: Array.from(brandSet).sort(),
+      minPrice: minPrice === Infinity ? 0 : minPrice,
+      maxPrice: maxPrice || 5000,
+    };
   },
 });
 
@@ -167,36 +274,52 @@ export const getFeaturedItems = query({
 export const createMarketItem = mutation({
   args: {
     sellerId: v.string(),
-    sellerName: v.string(),
-    sellerEmail: v.string(),
+    sellerName: v.optional(v.string()),
+    sellerEmail: v.optional(v.string()),
     sellerPhone: v.optional(v.string()),
     sellerPhoto: v.optional(v.string()),
     title: v.string(),
     description: v.optional(v.string()),
-    itemType: v.string(), // 'gear', 'instrument', 'equipment', 'service'
+    itemType: v.optional(v.string()), // 'gear', 'instrument', 'equipment', 'service'
     category: v.string(),
     brand: v.optional(v.string()),
     model: v.optional(v.string()),
     year: v.optional(v.number()),
-    condition: v.string(), // 'new', 'like-new', 'good', 'fair', 'poor'
+    condition: v.optional(v.string()), // 'Mint', 'Excellent', 'Good', 'Fair'
     price: v.number(),
     negotiable: v.optional(v.boolean()),
     location: v.optional(v.string()),
     photos: v.optional(v.array(v.string())),
-    specifications: v.optional(v.object({})), // Flexible object for item-specific specs
+    images: v.optional(v.array(v.string())),
+    specifications: v.optional(v.any()),
     featured: v.optional(v.boolean()),
     shippingAvailable: v.optional(v.boolean()),
     shippingCost: v.optional(v.number()),
     localPickup: v.optional(v.boolean()),
-    dimensions: v.optional(v.string()), // e.g., "20x10x5 inches"
-    weight: v.optional(v.string()), // e.g., "15 lbs"
+    dimensions: v.optional(v.string()),
+    weight: v.optional(v.string()),
+    packageDimensions: v.optional(v.string()),
+    packageWeight: v.optional(v.string()),
+    shippingCarrier: v.optional(v.string()),
+    handlingTime: v.optional(v.string()),
+    shippingInsuranceIncluded: v.optional(v.boolean()),
+    requireSignature: v.optional(v.boolean()),
+    shippingNotes: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
+    isConditionVerified: v.optional(v.boolean()),
+    conditionCategory: v.optional(v.string()),
+    conditionNotes: v.optional(v.string()),
+    verificationBadge: v.optional(v.string()),
+    conditionChecklist: v.optional(v.any()),
+    verificationPhotos: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
+    const images = args.images || args.photos || [];
 
     const itemId = await ctx.db.insert("marketItems", {
       ...args,
+      images,
       negotiable: args.negotiable || false,
       featured: args.featured || false,
       shippingAvailable: args.shippingAvailable || false,
@@ -204,7 +327,7 @@ export const createMarketItem = mutation({
       status: "available",
       viewCount: 0,
       favoriteCount: 0,
-      currency: "USD", // Default to USD
+      currency: "USD",
       createdAt: now,
       updatedAt: now,
     });
@@ -216,6 +339,7 @@ export const createMarketItem = mutation({
 export const updateMarketItem = mutation({
   args: {
     itemId: v.id("marketItems"),
+    sellerId: v.optional(v.string()),
     title: v.optional(v.string()),
     description: v.optional(v.string()),
     category: v.optional(v.string()),
@@ -238,11 +362,15 @@ export const updateMarketItem = mutation({
     status: v.optional(v.string()), // 'available', 'pending', 'sold', 'removed'
   },
   handler: async (ctx, args) => {
-    const { itemId, ...updates } = args;
+    const { itemId, sellerId, ...updates } = args;
     const item = await ctx.db.get(itemId);
 
     if (!item) {
       throw new Error("Item not found");
+    }
+
+    if (sellerId && item.sellerId !== sellerId) {
+      throw new Error("Unauthorized: You do not own this listing");
     }
 
     await ctx.db.patch(itemId, {
@@ -255,12 +383,19 @@ export const updateMarketItem = mutation({
 });
 
 export const deleteMarketItem = mutation({
-  args: { itemId: v.id("marketItems") },
+  args: {
+    itemId: v.id("marketItems"),
+    sellerId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const item = await ctx.db.get(args.itemId);
 
     if (!item) {
       throw new Error("Item not found");
+    }
+
+    if (args.sellerId && item.sellerId !== args.sellerId) {
+      throw new Error("Unauthorized: You do not own this listing");
     }
 
     // Soft delete
@@ -370,6 +505,70 @@ export const getTransactionsByItem = query({
   },
 });
 
+export const createMarketOffer = mutation({
+  args: {
+    itemId: v.id("marketItems"),
+    buyerId: v.string(),
+    offerAmount: v.number(),
+    message: v.optional(v.string()),
+    shippingRequired: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const item = await ctx.db.get(args.itemId);
+    if (!item) throw new Error("Item not found");
+    if (item.sellerId === args.buyerId) throw new Error("Cannot make an offer on your own item");
+    if (item.status !== "available" && item.status !== "active") {
+      throw new Error("Item is not currently available for offers");
+    }
+
+    const buyer = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.buyerId))
+      .first();
+
+    const buyerName = buyer?.displayName || buyer?.profileName || `${buyer?.firstName || ''} ${buyer?.lastName || ''}`.trim() || "Buyer";
+
+    const seller = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", item.sellerId))
+      .first();
+
+    const now = Date.now();
+    const transactionId = await ctx.db.insert("marketTransactions", {
+      itemId: args.itemId,
+      buyerId: args.buyerId,
+      sellerId: item.sellerId,
+      offerAmount: args.offerAmount,
+      amount: args.offerAmount,
+      currency: item.currency || "USD",
+      status: "pending",
+      paymentMethod: "escrow",
+      shippingRequired: args.shippingRequired ?? Boolean(item.shippingAvailable),
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Notify the seller
+    if (seller) {
+      await ctx.db.insert("notifications", {
+        userId: seller._id,
+        type: "market_offer",
+        title: "New Gear Offer Received",
+        message: `${buyerName} submitted an offer of $${args.offerAmount} on ${item.title}`,
+        actorId: buyer?._id || seller._id,
+        actorName: buyerName,
+        actorPhoto: buyer?.avatarUrl,
+        targetId: transactionId.toString(),
+        targetType: "transaction",
+        read: false,
+        createdAt: now,
+      });
+    }
+
+    return { success: true, transactionId };
+  },
+});
+
 export const createTransaction = mutation({
   args: {
     itemId: v.id("marketItems"),
@@ -392,6 +591,10 @@ export const createTransaction = mutation({
 
     if (!item) {
       throw new Error("Item not found");
+    }
+
+    if (item.sellerId !== args.sellerId) {
+      throw new Error("Invalid seller for this item");
     }
 
     if (item.status !== "available") {
@@ -425,6 +628,25 @@ export const createTransaction = mutation({
       updatedAt: now,
     });
 
+    // Notify seller
+    const seller = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.sellerId))
+      .first();
+
+    if (seller) {
+      await ctx.db.insert("notifications", {
+        userId: seller._id,
+        type: "market_offer",
+        title: "New Gear Order / Offer",
+        message: `${args.buyerName} started a transaction on ${item.title} ($${args.offerAmount || item.price})`,
+        targetId: transactionId.toString(),
+        targetType: "transaction",
+        read: false,
+        createdAt: now,
+      });
+    }
+
     return { success: true, transactionId };
   },
 });
@@ -432,6 +654,7 @@ export const createTransaction = mutation({
 export const acceptOffer = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
+    actorId: v.optional(v.string()),
     counterOffer: v.optional(v.number()),
     message: v.optional(v.string()),
   },
@@ -442,7 +665,21 @@ export const acceptOffer = mutation({
       throw new Error("Transaction not found");
     }
 
-    if (transaction.status !== "pending") {
+    if (args.actorId) {
+      const isSeller = transaction.sellerId === args.actorId;
+      const isBuyer = transaction.buyerId === args.actorId;
+      if (!isSeller && !isBuyer) {
+        throw new Error("Unauthorized: You are not a party to this transaction");
+      }
+      if (transaction.status === "countered" && !isBuyer && args.counterOffer === undefined) {
+        throw new Error("Unauthorized: Only buyer can accept a counter-offer");
+      }
+      if (transaction.status === "pending" && !isSeller) {
+        throw new Error("Unauthorized: Only seller can accept an initial offer");
+      }
+    }
+
+    if (transaction.status !== "pending" && transaction.status !== "countered") {
       throw new Error("Cannot accept this transaction");
     }
 
@@ -463,6 +700,30 @@ export const acceptOffer = mutation({
 
     await ctx.db.patch(args.transactionId, updates);
 
+    // Notify buyer
+    const buyer = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", transaction.buyerId))
+      .first();
+
+    const item = await ctx.db.get(transaction.itemId);
+
+    if (buyer) {
+      const isCounter = updates.status === "countered";
+      await ctx.db.insert("notifications", {
+        userId: buyer._id,
+        type: isCounter ? "market_counter_offer" : "market_offer_accepted",
+        title: isCounter ? "Counter-Offer Received" : "Gear Offer Accepted! 🎉",
+        message: isCounter
+          ? `Seller proposed a counter-offer of $${updates.offerAmount} on ${item?.title || "gear"}`
+          : `Your offer of $${updates.offerAmount || transaction.offerAmount} on ${item?.title || "gear"} was accepted.`,
+        targetId: args.transactionId.toString(),
+        targetType: "transaction",
+        read: false,
+        createdAt: Date.now(),
+      });
+    }
+
     return { success: true };
   },
 });
@@ -470,6 +731,7 @@ export const acceptOffer = mutation({
 export const rejectOffer = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
+    actorId: v.optional(v.string()),
     reason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -477,6 +739,10 @@ export const rejectOffer = mutation({
 
     if (!transaction) {
       throw new Error("Transaction not found");
+    }
+
+    if (args.actorId && transaction.sellerId !== args.actorId && transaction.buyerId !== args.actorId) {
+      throw new Error("Unauthorized: You are not a party to this transaction");
     }
 
     if (transaction.status !== "pending" && transaction.status !== "countered") {
@@ -496,6 +762,27 @@ export const rejectOffer = mutation({
       updatedAt: Date.now(),
     });
 
+    // Notify buyer
+    const buyer = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", transaction.buyerId))
+      .first();
+
+    const item = await ctx.db.get(transaction.itemId);
+
+    if (buyer) {
+      await ctx.db.insert("notifications", {
+        userId: buyer._id,
+        type: "market_offer_rejected",
+        title: "Gear Offer Declined",
+        message: `Your offer on ${item?.title || "gear"} was declined.`,
+        targetId: args.transactionId.toString(),
+        targetType: "transaction",
+        read: false,
+        createdAt: Date.now(),
+      });
+    }
+
     return { success: true };
   },
 });
@@ -503,6 +790,7 @@ export const rejectOffer = mutation({
 export const confirmPurchase = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
+    actorId: v.optional(v.string()),
     paymentConfirmed: v.boolean(),
     trackingNumber: v.optional(v.string()),
   },
@@ -511,6 +799,10 @@ export const confirmPurchase = mutation({
 
     if (!transaction) {
       throw new Error("Transaction not found");
+    }
+
+    if (args.actorId && transaction.sellerId !== args.actorId && transaction.buyerId !== args.actorId) {
+      throw new Error("Unauthorized: You are not a party to this transaction");
     }
 
     if (transaction.status !== "accepted") {
@@ -547,13 +839,64 @@ export const confirmPurchase = mutation({
 export const addTrackingNumber = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
+    actorId: v.optional(v.string()),
     trackingNumber: v.string(),
+    carrier: v.optional(v.string()),
+    trackingUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const transaction = await ctx.db.get(args.transactionId);
     if (!transaction) throw new Error("Transaction not found");
+
+    if (args.actorId && transaction.sellerId !== args.actorId) {
+      throw new Error("Unauthorized: Only seller can add tracking information");
+    }
+
+    let trackingUrl = args.trackingUrl;
+    if (!trackingUrl && args.carrier) {
+      const c = args.carrier.toLowerCase();
+      if (c.includes('usps')) trackingUrl = `https://tools.usps.com/go/TrackConfirmAction?tLabels=${encodeURIComponent(args.trackingNumber)}`;
+      else if (c.includes('ups')) trackingUrl = `https://www.ups.com/track?tracknum=${encodeURIComponent(args.trackingNumber)}`;
+      else if (c.includes('fedex')) trackingUrl = `https://www.fedex.com/fedextrack/?trknbr=${encodeURIComponent(args.trackingNumber)}`;
+      else if (c.includes('dhl')) trackingUrl = `https://www.dhl.com/en/express/tracking.html?AWB=${encodeURIComponent(args.trackingNumber)}`;
+    }
+
     await ctx.db.patch(args.transactionId, {
       trackingNumber: args.trackingNumber,
+      carrier: args.carrier || transaction.carrier || "USPS",
+      trackingUrl,
+      status: "shipped",
+      shippingStatus: "in_transit",
+      updatedAt: Date.now(),
+    });
+    return { success: true };
+  },
+});
+
+export const updateMarketTransaction = mutation({
+  args: {
+    transactionId: v.id("marketTransactions"),
+    actorId: v.optional(v.string()),
+    carrier: v.optional(v.string()),
+    trackingNumber: v.optional(v.string()),
+    trackingUrl: v.optional(v.string()),
+    shippingStatus: v.optional(v.string()),
+    packagingPhotos: v.optional(v.array(v.any())),
+    inspectionPhotos: v.optional(v.array(v.any())),
+    inspectionStatus: v.optional(v.string()),
+    status: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { transactionId, actorId, ...updates } = args;
+    const transaction = await ctx.db.get(transactionId);
+    if (!transaction) throw new Error("Transaction not found");
+
+    if (actorId && transaction.sellerId !== actorId && transaction.buyerId !== actorId) {
+      throw new Error("Unauthorized: You are not a party to this transaction");
+    }
+
+    await ctx.db.patch(transactionId, {
+      ...updates,
       updatedAt: Date.now(),
     });
     return { success: true };
@@ -563,6 +906,7 @@ export const addTrackingNumber = mutation({
 export const completeTransaction = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
+    actorId: v.optional(v.string()),
     buyerRating: v.optional(v.number()),
     buyerReview: v.optional(v.string()),
     sellerRating: v.optional(v.number()),
@@ -573,6 +917,10 @@ export const completeTransaction = mutation({
 
     if (!transaction) {
       throw new Error("Transaction not found");
+    }
+
+    if (args.actorId && transaction.sellerId !== args.actorId && transaction.buyerId !== args.actorId) {
+      throw new Error("Unauthorized: You are not a party to this transaction");
     }
 
     if (transaction.status !== "confirmed") {
@@ -607,6 +955,7 @@ export const completeTransaction = mutation({
 export const cancelTransaction = mutation({
   args: {
     transactionId: v.id("marketTransactions"),
+    actorId: v.optional(v.string()),
     cancelledBy: v.string(), // 'buyer' or 'seller'
     reason: v.optional(v.string()),
   },
@@ -615,6 +964,10 @@ export const cancelTransaction = mutation({
 
     if (!transaction) {
       throw new Error("Transaction not found");
+    }
+
+    if (args.actorId && transaction.sellerId !== args.actorId && transaction.buyerId !== args.actorId) {
+      throw new Error("Unauthorized: You are not a party to this transaction");
     }
 
     if (transaction.status === "completed" || transaction.status === "cancelled") {

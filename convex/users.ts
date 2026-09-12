@@ -1,5 +1,5 @@
 import { query, mutation } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 
 // =====================================================
@@ -31,15 +31,18 @@ export const getUserByClerkId = query({
       }
     }
 
-    // 3. Fallback: filter all users by clerkId, _id, username, or email match
+    // 3. Fallback: indexed lookup by username or email
     if (!user) {
-      const allUsers = await ctx.db.query("users").collect();
-      user = allUsers.find((u: any) =>
-        u.clerkId === args.clerkId ||
-        u._id === args.clerkId ||
-        u.username === args.clerkId ||
-        u.email === args.clerkId
-      ) || null;
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_username", (q) => q.eq("username", args.clerkId))
+        .first();
+    }
+    if (!user) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", args.clerkId))
+        .first();
     }
 
     if (!user) return null;
@@ -623,7 +626,7 @@ export const updateProfile = mutation({
         // Delete images older than the last 2 from R2
         const toDelete = combined.slice(2);
         for (const oldUrl of toDelete) {
-          await ctx.scheduler.runAfter(0, api.storage.deleteFileByUrl, { url: oldUrl });
+          await ctx.scheduler.runAfter(0, internal.storage.deleteFileByUrl, { url: oldUrl });
         }
       }
     }
@@ -639,7 +642,7 @@ export const updateProfile = mutation({
         // Delete images older than the last 2 from R2
         const toDelete = combined.slice(2);
         for (const oldUrl of toDelete) {
-          await ctx.scheduler.runAfter(0, api.storage.deleteFileByUrl, { url: oldUrl });
+          await ctx.scheduler.runAfter(0, internal.storage.deleteFileByUrl, { url: oldUrl });
         }
       }
     }
@@ -845,11 +848,23 @@ export const updateLastActive = mutation({
 });
 
 /**
- * Delete user (admin only or self-deletion)
+ * Delete user (account owner or authorized webhook only)
  */
 export const deleteUser = mutation({
-  args: { clerkId: v.string() },
+  args: {
+    clerkId: v.string(),
+    requestingClerkId: v.optional(v.string()),
+    secret: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
+    const expectedSecret = process.env.CONVEX_WEBHOOK_SECRET || process.env.CLERK_WEBHOOK_SECRET;
+    const isWebhook = args.secret && expectedSecret && args.secret === expectedSecret;
+    const isSelf = args.requestingClerkId && args.requestingClerkId === args.clerkId;
+
+    if (!isWebhook && !isSelf) {
+      throw new Error("Unauthorized: Only the account owner or authorized webhook can delete this account");
+    }
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
@@ -859,9 +874,41 @@ export const deleteUser = mutation({
       throw new Error("User not found");
     }
 
-    // TODO: Add admin check or ownership check
+    // Soft delete user record to preserve relational integrity
+    await ctx.db.patch(user._id, {
+      deletedAt: Date.now(),
+      displayName: "[Deleted User]",
+      profileName: "[Deleted User]",
+      updatedAt: Date.now(),
+    });
 
-    await ctx.db.delete(user._id);
+    return { success: true };
+  },
+});
+
+/**
+ * Soft delete user (called by Clerk user.deleted webhook)
+ */
+export const softDeleteUser = mutation({
+  args: {
+    clerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))
+      .first();
+
+    if (!user) {
+      return { success: false, error: "User not found" };
+    }
+
+    await ctx.db.patch(user._id, {
+      deletedAt: Date.now(),
+      displayName: "[Deleted User]",
+      profileName: "[Deleted User]",
+      updatedAt: Date.now(),
+    });
 
     return { success: true };
   },
@@ -2173,14 +2220,21 @@ export const getSimilarUsers = query({
 
 /**
  * Update user subscription tier
- * Called by Stripe webhook upon checkout session or subscription completion
+ * Called by Stripe webhook upon checkout session or subscription completion.
+ * Protected by shared webhook secret.
  */
 export const updateUserTier = mutation({
   args: {
     clerkId: v.string(),
     tier: v.string(), // e.g., 'BASIC', 'PRO', 'STUDIO'
+    secret: v.string(),
   },
   handler: async (ctx, args) => {
+    const expectedSecret = process.env.CONVEX_WEBHOOK_SECRET || process.env.STRIPE_WEBHOOK_SECRET;
+    if (!expectedSecret || args.secret !== expectedSecret) {
+      throw new Error("Unauthorized: Invalid webhook secret");
+    }
+
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_id", (q) => q.eq("clerkId", args.clerkId))

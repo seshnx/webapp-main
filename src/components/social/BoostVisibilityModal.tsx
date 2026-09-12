@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Sparkles, ShieldCheck, MapPin, Zap, Check, ArrowRight, RadioTower, Award } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useSubscribeToPriorityVisibility } from '../../hooks/useConvex';
 import toast from 'react-hot-toast';
 
 interface BoostVisibilityModalProps {
@@ -19,7 +18,6 @@ export default function BoostVisibilityModal({
 }: BoostVisibilityModalProps) {
   const [selectedPlan, setSelectedPlan] = useState<'creator' | 'studio'>('creator');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const subscribeToBoost = useSubscribeToPriorityVisibility();
   const clerkId = user?.id || user?.uid || '';
 
   if (!isOpen) return null;
@@ -27,20 +25,11 @@ export default function BoostVisibilityModal({
   const handleActivate = async () => {
     setIsSubmitting(true);
     try {
-      await subscribeToBoost({
-        clerkId,
-        tier: selectedPlan === 'creator' ? 'creator_priority' : 'studio_local',
-        durationDays: 30,
-      });
-      toast.success(
-        selectedPlan === 'creator'
-          ? '🎉 Creator Priority Pass Activated! Your verified badge is live.'
-          : '🎉 Studio Local Geo-Boost Activated!'
-      );
-      onClose();
+      // Route user to secure Stripe billing flow in PaymentsManager
+      window.location.assign(`/payments?plan=${selectedPlan}&boost=true`);
     } catch (e) {
       console.error(e);
-      toast.error('Failed to activate boost.');
+      toast.error('Failed to redirect to billing.');
     } finally {
       setIsSubmitting(false);
     }

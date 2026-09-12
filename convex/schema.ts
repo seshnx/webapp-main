@@ -582,6 +582,7 @@ export default defineSchema({
     phoneLand: v.optional(v.string()),
     website: v.optional(v.string()),
     hours: v.optional(v.string()), // Hours of operation
+    policies: v.optional(v.any()), // Studio policies (booking rules, pricing, deposit, cancellation, house rules, waiver)
 
     // Location details
     zip: v.optional(v.string()),
@@ -779,7 +780,11 @@ export default defineSchema({
   // Studio Clients CRM
   studioClients: defineTable({
     studioId: v.id("studios"),
-    userId: v.id("users"), // Linked user account
+    userId: v.optional(v.id("users")), // Linked user account (optional for direct/offline clients)
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    phone: v.optional(v.string()),
+    company: v.optional(v.string()),
 
     // Client classification
     clientType: v.string(), // 'Regular', 'VIP', 'Corporate'
@@ -1325,6 +1330,18 @@ export default defineSchema({
     viewCount: v.optional(v.number()),
     favoriteCount: v.optional(v.number()), // Number of users who favorited this item
 
+    // Condition & Verification
+    isConditionVerified: v.optional(v.boolean()),
+    conditionCategory: v.optional(v.string()),
+    conditionNotes: v.optional(v.string()),
+    verificationBadge: v.optional(v.string()),
+    conditionChecklist: v.optional(v.any()),
+    verificationPhotos: v.optional(v.any()), // 3-section structured photos (chassis, details, damage, accessories)
+    photos: v.optional(v.array(v.string())), // Array compatibility
+    sellerName: v.optional(v.string()),
+    sellerEmail: v.optional(v.string()),
+    sellerPhoto: v.optional(v.string()),
+
     // Status
     status: v.string(), // Active, Sold, Pending, Removed
     soldAt: v.optional(v.number()), // When the item was sold
@@ -1333,6 +1350,15 @@ export default defineSchema({
     shippingAvailable: v.optional(v.boolean()),
     shippingCost: v.optional(v.number()),
     localPickup: v.optional(v.boolean()), // Whether local pickup is available
+    shippingCarrier: v.optional(v.string()), // USPS, UPS, FedEx, DHL, Freight, etc.
+    handlingTime: v.optional(v.string()), // e.g. "1-2 business days"
+    packageDimensions: v.optional(v.string()), // e.g. "16x12x6 in"
+    packageWeight: v.optional(v.string()), // e.g. "8.5 lbs"
+    dimensions: v.optional(v.string()),
+    weight: v.optional(v.string()),
+    shippingInsuranceIncluded: v.optional(v.boolean()),
+    requireSignature: v.optional(v.boolean()),
+    shippingNotes: v.optional(v.string()),
 
     // Soft delete
     deletedAt: v.optional(v.number()),
@@ -1345,7 +1371,11 @@ export default defineSchema({
     .index("by_seller", ["sellerId", "createdAt"])
     .index("by_category", ["category", "createdAt"])
     .index("by_status", ["status", "createdAt"])
-    .index("by_price", ["price", "createdAt"]),
+    .index("by_price", ["price", "createdAt"])
+    .searchIndex("search_gear", {
+      searchField: "title",
+      filterFields: ["category", "brand", "condition", "status"],
+    }),
 
   // Market transactions
   marketTransactions: defineTable({
@@ -1355,13 +1385,19 @@ export default defineSchema({
     offerAmount: v.optional(v.number()), // Initial offer amount
     amount: v.number(),
     currency: v.string(),
-    status: v.string(), // Pending, Completed, Cancelled, Refunded
+    status: v.string(), // Pending, Completed, Cancelled, Refunded, Shipped
     paymentMethod: v.optional(v.string()), // stripe, paypal, local, etc.
     rejectionReason: v.optional(v.string()), // Reason for cancellation/rejection
     cancellationReason: v.optional(v.string()), // Alias for rejectionReason
     cancelledBy: v.optional(v.string()), // Clerk ID of user who cancelled
     shippingRequired: v.optional(v.boolean()), // Whether shipping is required
+    carrier: v.optional(v.string()), // USPS, UPS, FedEx, DHL, etc.
     trackingNumber: v.optional(v.string()), // Shipping tracking number
+    trackingUrl: v.optional(v.string()), // Direct link to tracking portal
+    shippingStatus: v.optional(v.string()), // 'label_created' | 'in_transit' | 'out_for_delivery' | 'delivered'
+    packagingPhotos: v.optional(v.array(v.any())),
+    inspectionPhotos: v.optional(v.array(v.any())),
+    inspectionStatus: v.optional(v.string()),
     paymentConfirmed: v.optional(v.boolean()),
     paymentConfirmedAt: v.optional(v.number()),
     stripePaymentIntentId: v.optional(v.string()),
@@ -1392,6 +1428,76 @@ export default defineSchema({
     .index("by_user", ["userId", "createdAt"])
     .index("by_item", ["itemId"])
     .index("by_user_item", ["userId", "itemId"]),
+
+  // Technical Service Requests & Repair Job Board
+  serviceRequests: defineTable({
+    requesterId: v.string(), // Clerk ID of client/studio
+    requesterName: v.string(),
+    requesterAvatar: v.optional(v.string()),
+    title: v.string(),
+    category: v.string(), // 'Tube & Amp Repair', 'Console & Outboard', 'Acoustics & Tuning', 'Patchbay & Wiring', 'Tape & Vintage'
+    equipmentBrand: v.optional(v.string()),
+    equipmentModel: v.optional(v.string()),
+    issueDescription: v.string(),
+    location: v.string(),
+    budget: v.number(),
+    urgency: v.string(), // 'standard', 'urgent_24h', 'scheduled'
+    logistics: v.string(), // 'on_site', 'bench_dropoff', 'remote'
+    status: v.string(), // 'open', 'assigned', 'in_progress', 'completed', 'cancelled'
+    assignedTechId: v.optional(v.string()),
+    assignedTechName: v.optional(v.string()),
+    proposalsCount: v.optional(v.number()),
+    proposals: v.optional(v.array(v.object({
+      techId: v.string(),
+      techName: v.string(),
+      techAvatar: v.optional(v.string()),
+      message: v.optional(v.string()),
+      proposedRate: v.optional(v.number()),
+      createdAt: v.number(),
+    }))),
+    repairLogs: v.optional(v.array(v.object({
+      id: v.string(),
+      authorId: v.string(),
+      authorName: v.string(),
+      text: v.string(),
+      isPrivate: v.boolean(),
+      imageUrl: v.optional(v.string()),
+      createdAt: v.number(),
+    }))),
+    preInspection: v.optional(v.any()),
+    postInspection: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_created", ["createdAt"])
+    .index("by_category", ["category", "createdAt"])
+    .index("by_status", ["status", "createdAt"])
+    .index("by_requester", ["requesterId", "createdAt"])
+    .searchIndex("search_services", {
+      searchField: "title",
+      filterFields: ["category", "status", "urgency"],
+    }),
+
+  // Equipment Database Submissions & Community Verification
+  equipmentSubmissions: defineTable({
+    brand: v.string(),
+    model: v.string(),
+    category: v.string(),
+    subcategory: v.optional(v.string()),
+    specs: v.string(),
+    submittedBy: v.string(),
+    submitterName: v.string(),
+    status: v.string(), // 'pending', 'approved', 'rejected'
+    votes: v.object({
+      yes: v.array(v.string()),
+      fake: v.array(v.string()),
+      duplicate: v.array(v.string()),
+    }),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_status", ["status", "createdAt"])
+    .index("by_submitter", ["submittedBy", "createdAt"]),
 
   // User wallets for tokens and earnings
   wallets: defineTable({
@@ -2019,17 +2125,20 @@ export default defineSchema({
     .index("by_receiver", ["receiverId", "createdAt"])
     .index("by_post", ["postId"]),
 
-  // Native Sponsored Feed Posts (For Free & Basic tiers)
+  // Native Sponsored Feed Posts & Shorts (For Free & Basic tiers)
   sponsoredPosts: defineTable({
     title: v.string(),
     content: v.string(),
     mediaUrl: v.optional(v.string()),
+    videoUrl: v.optional(v.string()),
+    mediaType: v.optional(v.string()), // "image" | "video"
+    isShort: v.optional(v.boolean()),
     sponsorName: v.string(),
     sponsorLogo: v.optional(v.string()),
     sponsorUrl: v.string(),
     ctaText: v.string(), // e.g. "Shop Deal ↗", "Learn More", "Claim 20% Off"
     category: v.optional(v.string()),
-    targetTiers: v.array(v.string()), // ["free", "basic"]
+    targetTiers: v.array(v.string()), // ["free", "basic", "pro", "studio"]
     status: v.string(), // "active" | "paused"
     impressionsCount: v.number(),
     clicksCount: v.number(),
@@ -2056,4 +2165,12 @@ export default defineSchema({
   })
     .index("by_status", ["status", "createdAt"])
     .index("by_status_category", ["status", "category"]),
+
+  // Rate Limiting (for DDoS, spam, and bot prevention)
+  rateLimits: defineTable({
+    key: v.string(), // identifier e.g., "sendMsg:<clerkId>" or "report:<clerkId>"
+    count: v.number(),
+    resetAt: v.number(),
+  })
+    .index("by_key", ["key"]),
 });

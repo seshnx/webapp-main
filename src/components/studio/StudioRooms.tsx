@@ -1,4 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import type { Id } from '../../../convex/_generated/dataModel';
 import {
     Plus, Edit2, Trash2, Users, DollarSign, Mic,
     LayoutGrid, Save, Loader2, ChevronDown, ChevronUp,
@@ -84,6 +87,7 @@ interface Room {
 export interface StudioRoomsProps {
     user?: any;
     userData?: any;
+    studio?: any;
     onUpdate?: (data: {
         rooms?: Room[];
         floorplanWalls?: Wall[];
@@ -94,8 +98,26 @@ export interface StudioRoomsProps {
 /**
  * StudioRooms - Complete room management interface
  */
-export default function StudioRooms({ user, userData, onUpdate }: StudioRoomsProps) {
+export default function StudioRooms({ user, userData, studio, onUpdate }: StudioRoomsProps) {
     const { t } = useLanguage();
+    const studioId = studio?._id;
+
+    // Convex queries for live rooms and floorplan
+    const convexRooms = useQuery(
+        api.sbookings.getRoomsByStudio,
+        studioId ? { studioId } : "skip"
+    );
+    const convexFloorplan = useQuery(
+        api.studioManager.getFloorplanByStudio,
+        studioId ? { studioId } : "skip"
+    );
+
+    // Convex mutations
+    const createRoomMutation = useMutation(api.sbookings.createRoom);
+    const updateRoomMutation = useMutation(api.sbookings.updateRoom);
+    const deleteRoomMutation = useMutation(api.sbookings.deleteRoom);
+    const saveFloorplanMutation = useMutation(api.studioManager.saveFloorplan);
+
     const [rooms, setRooms] = useState<Room[]>(userData?.rooms || []);
     const [walls, setWalls] = useState<Wall[]>(userData?.floorplanWalls || []);
     const [structures, setStructures] = useState<Structure[]>(userData?.floorplanStructures || []);
@@ -104,6 +126,53 @@ export default function StudioRooms({ user, userData, onUpdate }: StudioRoomsPro
     const [saving, setSaving] = useState<boolean>(false);
     const [expandedRoom, setExpandedRoom] = useState<number | null>(null);
     const [viewMode, setViewMode] = useState<'list' | 'floorplan'>('list');
+
+    // Synchronize rooms from Convex
+    useEffect(() => {
+        if (convexRooms) {
+            setRooms(convexRooms.map((r: any) => ({
+                id: r._id,
+                _id: r._id,
+                name: r.name,
+                description: r.description || '',
+                rate: r.hourlyRate || 50,
+                capacity: r.capacity || 4,
+                equipment: [],
+                amenities: r.amenities || [],
+                minBookingHours: 1,
+                active: r.isActive ?? true,
+                color: '#3B82F6',
+                panorama360Url: null,
+            })));
+        }
+    }, [convexRooms]);
+
+    // Synchronize floorplan from Convex
+    useEffect(() => {
+        if (convexFloorplan) {
+            if (convexFloorplan.walls) {
+                setWalls(convexFloorplan.walls.map((w: any, idx: number) => ({
+                    id: w.id || `wall_${idx}`,
+                    startX: w.startX,
+                    startY: w.startY,
+                    endX: w.endX,
+                    endY: w.endY,
+                    thickness: w.thickness || 4,
+                })));
+            }
+            if (convexFloorplan.structures) {
+                setStructures(convexFloorplan.structures.map((s: any, idx: number) => ({
+                    id: s.id || `struct_${idx}`,
+                    type: s.type || 'door',
+                    x: s.x,
+                    y: s.y,
+                    width: s.width || 30,
+                    height: s.height || 30,
+                    rotation: s.rotation || 0,
+                })));
+            }
+        }
+    }, [convexFloorplan]);
 
     const emptyRoom: Room = {
         name: '',
@@ -118,40 +187,50 @@ export default function StudioRooms({ user, userData, onUpdate }: StudioRoomsPro
         panorama360Url: null
     };
 
-    const handleSave = async (
-        updatedRooms: Room[],
+    const handleSaveFloorplan = async (
         updatedWalls: Wall[] = walls,
         updatedStructures: Structure[] = structures
     ): Promise<void> => {
+        if (!studioId) return;
         setSaving(true);
-        const toastId = toast.loading('Saving rooms...');
-        const userId = userData?.id || user?.id || user?.uid;
-
+        const toastId = toast.loading('Saving floorplan...');
         try {
-            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    rooms: updatedRooms,
-                    floorplanWalls: updatedWalls,
-                    floorplanStructures: updatedStructures
-                })
+            const callerClerkId = user?.id || userData?.clerkId;
+            await saveFloorplanMutation({
+                studioId,
+                clerkId: callerClerkId,
+                walls: updatedWalls.map(w => ({
+                    id: w.id,
+                    startX: w.startX,
+                    startY: w.startY,
+                    endX: w.endX,
+                    endY: w.endY,
+                    thickness: w.thickness,
+                })),
+                structures: updatedStructures.map(s => ({
+                    id: s.id,
+                    type: s.type,
+                    x: s.x,
+                    y: s.y,
+                    width: s.width,
+                    height: s.height,
+                    rotation: s.rotation,
+                })),
+                rooms: rooms.map(r => ({
+                    id: String(r._id || r.id || ''),
+                    name: r.name,
+                    description: r.description,
+                    rate: r.rate,
+                    capacity: r.capacity,
+                })),
             });
-
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(result.error || 'Failed to save');
-            }
-
-            setRooms(updatedRooms);
             setWalls(updatedWalls);
             setStructures(updatedStructures);
-            toast.success('Rooms saved!', { id: toastId });
-            if (onUpdate) onUpdate({ rooms: updatedRooms, floorplanWalls: updatedWalls, floorplanStructures: updatedStructures });
-        } catch (error) {
-            console.error('Save failed:', error);
-            toast.error('Failed to save', { id: toastId });
+            toast.success('Floorplan saved to database!', { id: toastId });
+            if (onUpdate) onUpdate({ rooms, floorplanWalls: updatedWalls, floorplanStructures: updatedStructures });
+        } catch (error: any) {
+            console.error('Failed to save floorplan:', error);
+            toast.error(error.message || 'Failed to save floorplan', { id: toastId });
         } finally {
             setSaving(false);
         }
@@ -167,42 +246,12 @@ export default function StudioRooms({ user, userData, onUpdate }: StudioRoomsPro
 
     const handleWallsChange = async (newWalls: Wall[]): Promise<void> => {
         setWalls(newWalls);
-        const userId = userData?.id || user?.id || user?.uid;
-        // Auto-save walls
-        try {
-            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ floorplanWalls: newWalls })
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to save walls');
-            }
-        } catch (error) {
-            console.error('Error saving walls:', error);
-        }
+        if (onUpdate) onUpdate({ floorplanWalls: newWalls });
     };
 
     const handleStructuresChange = async (newStructures: Structure[]): Promise<void> => {
         setStructures(newStructures);
-        const userId = userData?.id || user?.id || user?.uid;
-        // Auto-save structures
-        try {
-            const response = await fetch(`/api/studio-ops/profiles/${userId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ floorplanStructures: newStructures })
-            });
-
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || 'Failed to save structures');
-            }
-        } catch (error) {
-            console.error('Error saving structures:', error);
-        }
+        if (onUpdate) onUpdate({ floorplanStructures: newStructures });
     };
 
     const handleRoomClick = (roomIndex: number): void => {
@@ -227,25 +276,65 @@ export default function StudioRooms({ user, userData, onUpdate }: StudioRoomsPro
             toast.error('Room name is required');
             return;
         }
-
-        let updatedRooms: Room[];
-        if (isAdding) {
-            updatedRooms = [...rooms, editingRoom];
-        } else {
-            updatedRooms = rooms.map((r, i) => i === expandedRoom ? editingRoom : r);
+        if (!studioId) {
+            toast.error('No active studio found');
+            return;
         }
 
-        await handleSave(updatedRooms);
-        setEditingRoom(null);
-        setIsAdding(false);
-        setExpandedRoom(null);
+        setSaving(true);
+        const toastId = toast.loading(isAdding ? 'Creating room...' : 'Updating room...');
+        try {
+            if (isAdding) {
+                await createRoomMutation({
+                    studioId,
+                    name: editingRoom.name,
+                    description: editingRoom.description,
+                    capacity: editingRoom.capacity,
+                    hourlyRate: editingRoom.rate,
+                    amenities: editingRoom.amenities,
+                });
+                toast.success('Room created successfully!', { id: toastId });
+            } else if (editingRoom._id || editingRoom.id) {
+                await updateRoomMutation({
+                    roomId: (editingRoom._id || editingRoom.id) as Id<"rooms">,
+                    name: editingRoom.name,
+                    description: editingRoom.description,
+                    capacity: editingRoom.capacity,
+                    hourlyRate: editingRoom.rate,
+                    amenities: editingRoom.amenities,
+                    isActive: editingRoom.active,
+                });
+                toast.success('Room updated successfully!', { id: toastId });
+            }
+            setEditingRoom(null);
+            setIsAdding(false);
+            setExpandedRoom(null);
+        } catch (error: any) {
+            console.error('Save room error:', error);
+            toast.error(error.message || 'Failed to save room', { id: toastId });
+        } finally {
+            setSaving(false);
+        }
     };
 
     const handleDeleteRoom = async (index: number): Promise<void> => {
-        if (!confirm(`Delete "${rooms[index].name}"? This cannot be undone.`)) return;
+        const room = rooms[index];
+        if (!confirm(`Delete "${room.name}"? This cannot be undone.`)) return;
 
-        const updatedRooms = rooms.filter((_, i) => i !== index);
-        await handleSave(updatedRooms);
+        const toastId = toast.loading('Deleting room...');
+        try {
+            if (room._id || room.id) {
+                const callerClerkId = user?.id || userData?.clerkId;
+                await deleteRoomMutation({
+                    roomId: (room._id || room.id) as Id<"rooms">,
+                    clerkId: callerClerkId,
+                });
+            }
+            toast.success('Room deleted successfully!', { id: toastId });
+        } catch (error: any) {
+            console.error('Delete room error:', error);
+            toast.error(error.message || 'Failed to delete room', { id: toastId });
+        }
     };
 
     const handleDuplicateRoom = async (index: number): Promise<void> => {
@@ -343,6 +432,16 @@ export default function StudioRooms({ user, userData, onUpdate }: StudioRoomsPro
             {/* Floorplan View */}
             {viewMode === 'floorplan' && !isAdding && (
                 <div className="bg-white dark:bg-[#2c2e36] rounded-xl border dark:border-gray-700 overflow-hidden">
+                    <div className="p-4 border-b dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-[#23262f]">
+                        <span className="text-sm font-semibold dark:text-white">Interactive Floorplan Designer</span>
+                        <button
+                            onClick={() => handleSaveFloorplan(walls, structures)}
+                            disabled={saving}
+                            className="bg-brand-blue text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-600 transition flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                            <Save size={15} /> Save Floorplan
+                        </button>
+                    </div>
                     <FloorplanEditor
                         rooms={roomsWithLayout}
                         walls={walls}

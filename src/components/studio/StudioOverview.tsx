@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import {
     Home, MapPin, DollarSign, Users, Calendar,
     AlertCircle, CheckCircle, Star, ChevronLeft, ChevronRight
@@ -20,6 +22,7 @@ interface Room {
 interface StudioStats {
     pendingBookings?: number;
     recentBookings?: Booking[];
+    totalRevenue?: number;
 }
 
 /**
@@ -57,7 +60,9 @@ interface MiniCalendarProps {
  * StudioOverview props
  */
 export interface StudioOverviewProps {
+    user?: any;
     userData?: UserData;
+    studio?: any;
     stats?: StudioStats;
     onNavigate?: (tab: string) => void;
 }
@@ -65,11 +70,21 @@ export interface StudioOverviewProps {
 /**
  * StudioOverview - Dashboard view for studio stats and quick actions
  */
-export default function StudioOverview({ userData, stats, onNavigate }: StudioOverviewProps) {
+export default function StudioOverview({ user, userData, studio, stats, onNavigate }: StudioOverviewProps) {
     const [currentDate, setCurrentDate] = useState<Date>(new Date());
-    const studioName = userData?.studioName || userData?.profileName || 'My Studio';
-    const rooms = userData?.rooms || [];
-    const amenities = userData?.amenities || [];
+    const studioId = studio?._id;
+
+    // Live rooms query
+    const liveRooms = useQuery(
+        api.sbookings.getRoomsByStudio,
+        studioId ? { studioId } : "skip"
+    );
+
+    const studioName = studio?.name || userData?.studioName || userData?.profileName || 'My Studio';
+    const rooms = liveRooms && liveRooms.length > 0
+        ? liveRooms.map(r => ({ name: r.name, capacity: r.capacity || 4, rate: r.hourlyRate || 50 }))
+        : userData?.rooms || [];
+    const amenities = studio?.amenities || userData?.amenities || [];
 
     // Calculate stats
     const totalCapacity = rooms.reduce((sum: number, r: Room) => sum + (r.capacity || 0), 0);
@@ -121,15 +136,17 @@ export default function StudioOverview({ userData, stats, onNavigate }: StudioOv
                             <h1 className="text-2xl font-bold">{studioName}</h1>
                             <p className="text-blue-100 text-sm flex items-center gap-1">
                                 <MapPin size={14} />
-                                {userData?.city && userData?.state
+                                {(studio?.city && studio?.state)
+                                    ? `${studio.city}, ${studio.state}`
+                                    : userData?.city && userData?.state
                                     ? `${userData.city}, ${userData.state}`
                                     : 'Location not set'}
                             </p>
                         </div>
                     </div>
-                    {userData?.studioDescription && (
+                    {(studio?.description || userData?.studioDescription) && (
                         <p className="text-blue-100 text-sm mt-4 max-w-2xl line-clamp-2">
-                            {userData.studioDescription}
+                            {studio?.description || userData?.studioDescription}
                         </p>
                     )}
                 </div>
