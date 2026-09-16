@@ -1309,7 +1309,7 @@ export default function PitchDeck(): JSX.Element {
                 <div className="pt-3 border-t border-gray-700 flex justify-between items-center text-xs font-mono text-gray-400">
                   <div className="flex items-center gap-2">
                     <img src={AmaliaMediaLogo} alt="Amalia Media LLC" className="h-4 w-auto object-contain" />
-                    <span>Amalia Media LLC • SeshNx Creative OS</span>
+                    <span>Amalia Media LLC • SeshNx</span>
                   </div>
                   <span>Confidential Investor Deck • $500K–$1M SAFE</span>
                 </div>
