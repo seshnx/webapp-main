@@ -944,6 +944,7 @@ export default function PitchDeck(): JSX.Element {
                   </span>
                   <p className="text-base text-white font-bold">Amalia Media LLC</p>
                   <p className="text-sm text-brand-blue font-mono font-medium mt-1">Founder & CEO: Ricardo Herrera-Delgado</p>
+                  <p className="text-sm text-brand-blue font-mono font-medium mt-1">Email: ricardohd1991@gmail.com</p>
                 </div>
               </div>
             ) : (
